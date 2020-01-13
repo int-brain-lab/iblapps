@@ -1,0 +1,4 @@
+flake8
+ibllib>=1.4.3
+pytest
+PyQt5
