@@ -25,4 +25,4 @@ What to look for:
 [image + def of columns]
 
 
-Close one of the GUI window to exit.
+Close one of the GUI window containing the sheet to exit.
