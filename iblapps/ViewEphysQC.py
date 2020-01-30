@@ -4,7 +4,7 @@ from PyQt5 import QtCore, QtWidgets
 import matplotlib.pyplot as plt
 import pandas as pd
 
-import qt
+import iblapps.qt as qt
 
 _logger = logging.getLogger('ibllib')
 
