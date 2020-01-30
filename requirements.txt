@@ -1,4 +1,6 @@
 flake8
-ibllib>=1.4.3
-pytest
-PyQt5
+ibllib
+matplotlib==3.1.1
+pandas
+pyqt5
+ipython
