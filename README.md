@@ -5,12 +5,14 @@ pyqt5 dependent applications for IBL sessions
 This will download the sync pulses and behaviour raw data and plot the results alongside
 an interactive table.
 The UUID is the session id. 
-Needs ibllib and ONE installed properly.
+Needs ibllib and ONE installed properly. Follow this guide for setup: https://readthedocs.org/projects/ibllib/downloads/pdf/latest/ 
 
-If on the server PC, activate the environment by:
+If on the server PC, activate the environment by typing:
 ```
 iblscripts
 ```
+Otherwise, activate the iblenv as described in the guide above.
+
 Go into the iblapps directory that you cloned:
 ```
 cd /home/olivier/Documents/PYTHON/iblapps
@@ -18,6 +20,11 @@ cd /home/olivier/Documents/PYTHON/iblapps
 Launch the Viewer by typing `ipython choiceworld_ephys_qc.py session_UUID` , example:
 ```
 ipython choiceworld_ephys_qc.py c9fec76e-7a20-4da4-93ad-04510a89473b
+```
+
+If you encouter the error `ModuleNotFoundError: No module named 'PyQt5'`, write in (conda) terminal (with iblenv activated):
+```
+pip install pyqt5
 ```
 
 Close the GUI window containing the sheet to exit.
