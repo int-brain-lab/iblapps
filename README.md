@@ -5,6 +5,8 @@ pyqt5 dependent applications for IBL sessions
 This will download the sync pulses and behaviour raw data and plot the results alongside
 an interactive table.
 The UUID is the session id. 
+
+### Setup
 Needs ibllib and ONE installed properly. Follow this guide for setup: https://readthedocs.org/projects/ibllib/downloads/pdf/latest/ 
 
 If on the server PC, activate the environment by typing:
@@ -26,8 +28,6 @@ If you encouter the error `ModuleNotFoundError: No module named 'PyQt5'`, write 
 ```
 pip install pyqt5
 ```
-
-Close the GUI window containing the sheet to exit.
 
 ### Plots
 1) Synch pulse display :
@@ -54,3 +54,6 @@ If test containin the wording `_nan` is FALSE (e.g. `goCue_times_nan`), it means
 If test containing the wording `_before_` or `_delay_` (e.g. `stim_freeze_before_feedback`) is FALSE, it means order / delay between events is not respected.
 
 Some tests check for the number of output detected, in which case the output is not TRUE/FALSE but an integer. E.g. `n_feedback` should always be = 1 given our implementation. 
+
+### Exit
+Close the GUI window containing the interactive table to exit.
