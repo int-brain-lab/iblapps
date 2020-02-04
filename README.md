@@ -20,9 +20,15 @@ Launch the Viewer by typing `ipython choiceworld_ephys_qc.py session_UUID` , exa
 ipython choiceworld_ephys_qc.py c9fec76e-7a20-4da4-93ad-04510a89473b
 ```
 
-What to look for:
-
-[image + def of columns]
-
-
 Close the GUI window containing the sheet to exit.
+
+## What to look for
+Tests are defined here : https://github.com/int-brain-lab/ibllib/blob/90163a40eb970cf0282b651667dd8ba341ff2044/ibllib/ephys/ephysqc.py#L419
+You can search in this code `ephysqc.py` for a specific test name (e.g. `stimOff_delay_valve` - which is a column in the GUI table) to find the corresponding explanation as comment (e.g. `# stimOff 1 sec after valve, with 0.1 as acceptable jitter`) and test implementation.
+
+Generally speaking, look for FALSE output. More precisely:
+
+If test containin the wording `_nan` is FALSE (e.g. `goCue_times_nan`), it means the corresponding TTL pulse is not detected within the trial.
+
+If test containing the wording `_before_` or `_delay_` (e.g. `stim_freeze_before_feedback`) is FALSE, it means order / delay between events is not respected.
+
