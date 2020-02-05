@@ -90,13 +90,16 @@ if __name__ == "__main__":
                                                  'choice world ephys sessions.')
     parser.add_argument('session', help='session uuid')
     args = parser.parse_args()  # returns data from the options specified (echo)
-    assert alf.io.is_uuid_string(args.session)
-    eid = args.session
-    files = one.load(eid, dataset_types=dtypes, download_only=True)
-    if not any(files):
-        raise ValueError("Session doesn't seem to have any data")
-    sess_path = alf.io.get_session_path(files[0])
-    _logger.info(f"{eid} {sess_path}")
+    if alf.io.is_uuid_string(args.session):
+        eid = args.session
+        files = one.load(eid, dataset_types=dtypes, download_only=True)
+        if not any(files):
+            raise ValueError("Session doesn't seem to have any data")
+        sess_path = alf.io.get_session_path(files[0])
+        _logger.info(f"{eid} {sess_path}")
+    elif alf.io.is_session_path(args.session):
+        sess_path = Path(args.session)
+        _logger.info(f"{sess_path}")
     qc_frame = _qc_from_path(sess_path, display=True)
     w = ViewEphysQC.viewqc(qc_frame)
     w.show()
