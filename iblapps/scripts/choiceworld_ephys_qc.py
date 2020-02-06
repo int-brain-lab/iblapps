@@ -12,8 +12,8 @@ from ibllib.ephys import ephysqc
 from ibllib.io.extractors import ephys_fpga, training_wheel, ephys_trials
 import ibllib.io.raw_data_loaders as rawio
 
-import ViewEphysQC
-import qt
+import iblapps.ViewEphysQC as ViewEphysQC
+import iblapps.qt as qt
 
 _logger = logging.getLogger('ibllib')
 
