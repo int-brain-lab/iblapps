@@ -100,7 +100,10 @@ if __name__ == "__main__":
     elif alf.io.is_session_path(args.session):
         sess_path = Path(args.session)
         _logger.info(f"{sess_path}")
-    qc_frame = _qc_from_path(sess_path, display=True)
-    w = ViewEphysQC.viewqc(qc_frame)
-    w.show()
+
+    w = ViewEphysQC.viewqc()
+    qc_frame = _qc_from_path(sess_path, display=w.wplot.canvas.ax)
+    w.update_df(qc_frame)
+    # w = ViewEphysQC.viewqc(qc_frame)
+
     qt.run_app()

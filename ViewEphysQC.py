@@ -2,6 +2,8 @@ import logging
 
 from PyQt5 import QtCore, QtWidgets
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 import pandas as pd
 
 import qt
@@ -73,7 +75,34 @@ class DataFrameModel(QtCore.QAbstractTableModel):
         return roles
 
 
-class Widget(QtWidgets.QWidget):
+class PlotCanvas(FigureCanvasQTAgg):
+
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = fig.add_subplot(111)
+
+        FigureCanvasQTAgg.__init__(self, fig)
+        self.setParent(parent)
+
+        FigureCanvasQTAgg.setSizePolicy(
+            self,
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Expanding)
+        FigureCanvasQTAgg.updateGeometry(self)
+        self.ax = self.figure.add_subplot(111)
+        self.draw()
+
+
+class PlotWindow(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        QtWidgets.QWidget.__init__(self, parent=None)
+        self.canvas = PlotCanvas()
+        self.vbl = QtWidgets.QVBoxLayout()         # Set box for plotting
+        self.vbl.addWidget(self.canvas)
+        self.setLayout(self.vbl)
+        self.vbl.addWidget(NavigationToolbar2QT(self.canvas, self))
+
+class GraphWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
         QtWidgets.QWidget.__init__(self, parent=None)
         vLayout = QtWidgets.QVBoxLayout(self)
@@ -88,6 +117,9 @@ class Widget(QtWidgets.QWidget):
         self.loadBtn.clicked.connect(self.loadFile)
         self.pandasTv.setSortingEnabled(True)
         self.pandasTv.doubleClicked.connect(self.tv_double_clicked)
+        self.wplot = PlotWindow()
+        self.wplot.show()
+        print("toto")
 
     def loadFile(self):
         fileName, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open File", "",
@@ -99,26 +131,21 @@ class Widget(QtWidgets.QWidget):
     def update_df(self, df):
         model = DataFrameModel(df)
         self.pandasTv.setModel(model)
+        self.wplot.canvas.draw()
 
     def tv_double_clicked(self):
         df = self.pandasTv.model()._dataframe
         ind = self.pandasTv.currentIndex()
-        fignum = [i for i, lab in zip(plt.get_fignums(), plt.get_figlabels())
-                  if lab == 'Ephys FPGA Sync']
-        if not fignum:
-            return
-        fig = plt.figure(fignum[0])
-        ax = fig.axes[0]
         start = df.loc[ind.row()]['intervals_0']
         finish = df.loc[ind.row()]['intervals_1']
         dt = finish - start
-        ax.set_xlim(start - dt / 10, finish + dt / 10)
-        plt.draw()
+        self.wplot.canvas.ax.set_xlim(start - dt / 10, finish + dt / 10)
+        self.wplot.canvas.draw()
 
 
 def viewqc(qc=None, title=None):
     qt.create_app()
-    qcw = Widget()
+    qcw = GraphWindow()
     qcw.setWindowTitle(title)
     if qc is not None:
         qcw.update_df(qc)
