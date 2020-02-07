@@ -17,7 +17,7 @@ Otherwise, activate the iblenv as described in the guide above.
 
 Go into the iblapps directory that you cloned:
 ```
-cd /home/olivier/Documents/PYTHON/iblapps
+cd /home/olivier/Documents/PYTHON/iblapps/choice_world_ephys_qc
 ```
 Launch the Viewer by typing `ipython choiceworld_ephys_qc.py session_UUID` , example:
 ```
