@@ -318,7 +318,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_fig_size_changed(self, exporter, button):
         fig_width = exporter.getTargetRect().width() 
-        button_width = button.width()
+        button_width = 0.2 * fig_width
+        button.setFixedWidth(button_width)
+        #button_width = button.width()
         button.move(fig_width - button_width, 0)
 
     def check_n_trials(self):

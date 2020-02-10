@@ -9,19 +9,18 @@ class DataGroup:
     def __init__(self):
 
         self.waveform_button = QtWidgets.QPushButton('Generate Waveform')
-        self.waveform_button.setFixedSize(110, 30)
         self.waveform_list = QtWidgets.QListWidget()
         self.waveform_list.SingleSelection
         self.waveform_text = QtWidgets.QLabel('No. of spikes =')
 
         waveform_layout = QtWidgets.QGridLayout()
-        waveform_layout.addWidget(self.waveform_button, 0 , 0)
+        waveform_layout.addWidget(self.waveform_button, 0, 0)
         waveform_layout.addWidget(self.waveform_text, 1, 0)
         waveform_layout.addWidget(self.waveform_list, 0, 1, 3, 1)
 
         self.waveform_group = QtWidgets.QGroupBox()
         self.waveform_group.setLayout(waveform_layout)
-        #self.waveform_group.setFixedSize(250, 80)
+
 
         #For peths and rasters
         self.t_before = 0.4

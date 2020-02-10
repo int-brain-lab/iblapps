@@ -46,7 +46,7 @@ class ScatterGroup:
         self.clust_ids = clust_ids
         self.scatter_plot.setData(x=self.clust_amps, y=self.clust_depths, size=8)
         self.scatter_plot.setBrush(clust_color)
-        self.scatter_plot.setPen(QtGui.QColor(30,50,2))
+        self.scatter_plot.setPen(QtGui.QColor(30, 50, 2))
         self.x_min = self.clust_amps.min() - 2
         self.x_max = self.clust_amps.max() - 2
         self.fig_scatter.setXRange(min=self.x_min, max=self.x_max)

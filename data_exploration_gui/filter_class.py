@@ -49,6 +49,7 @@ class FilterGroup:
 
     def group_buttons_V(self, button1, button2, button3, group):
         button_layout = QtWidgets.QVBoxLayout()
+        button_layout.setSpacing(8)
         button_layout.addWidget(button1)
         button_layout.addWidget(button2)
         button_layout.addWidget(button3)

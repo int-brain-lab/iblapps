@@ -43,9 +43,9 @@ class MiscGroup:
 
         self.terminal = QtWidgets.QTextBrowser() 
         self.terminal_button = QtWidgets.QPushButton('Clear')
-        self.terminal_button.setFixedSize(50, 30)
+        self.terminal_button.setFixedSize(70, 30)
         self.terminal_button.setParent(self.terminal)
-        self.terminal_button.move(600, 0)
+        self.terminal_button.move(580, 0)
         
     
     def on_save_button_clicked(self, gui_path):
