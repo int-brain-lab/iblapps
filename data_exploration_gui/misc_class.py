@@ -29,7 +29,7 @@ class MiscGroup:
         self.save_clust_button = QtWidgets.QPushButton('Save Clusters')
         
         clust_interest_layout = QtWidgets.QGridLayout()
-        clust_interest_layout.addWidget(clust_list1_title, 0 , 0)
+        clust_interest_layout.addWidget(clust_list1_title, 0, 0)
         clust_interest_layout.addWidget(self.remove_clust_button1, 0, 1)
         clust_interest_layout.addWidget(self.clust_list1, 1, 0, 1, 2)
         clust_interest_layout.addWidget(clust_list2_title, 2, 0)

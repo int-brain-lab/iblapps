@@ -3,6 +3,7 @@ import numpy as np
 import os
 import brainbox as bb
 import alf.io as aio
+from pathlib import Path
 
 
 class DataGroup:
@@ -74,13 +75,13 @@ class DataGroup:
         if os.path.isdir(self.gui_path):
             for i in os.listdir(self.gui_path):
                 if 'depth' in i:
-                    self.depths = np.load((self.gui_path + '\cluster_depths.npy'))
+                    self.depths = np.load(Path(self.gui_path + '/cluster_depths.npy'))
                     file_count += 1
                 elif 'amp' in i:
-                    self.amps = np.load((self.gui_path + '\cluster_amps.npy'))
+                    self.amps = np.load(Path(self.gui_path + '/cluster_amps.npy'))
                     file_count += 1
                 elif 'nspikes' in i:
-                    self.nspikes = np.load((self.gui_path + '\cluster_nspikes.npy'))
+                    self.nspikes = np.load(Path(self.gui_path + '/cluster_nspikes.npy'))
                     file_count += 1
             if file_count != 3:
                 self.compute_depth_and_amplitudes()
