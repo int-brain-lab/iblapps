@@ -134,7 +134,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.reset_gui()
         folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
         
-        print(str(folder_path)[-12:-1])
         if str(folder_path) == '.':
             self.misc.terminal.append('>> Cancelling loading')
         else:

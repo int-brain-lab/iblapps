@@ -44,6 +44,7 @@ class FilterGroup:
         self.trial_option2 = QtWidgets.QRadioButton('correct vs incorrect')
         self.trial_option3 = QtWidgets.QRadioButton('left vs right')
         self.trial_option4 = QtWidgets.QRadioButton('correct vs incorrect and left vs right')
+        self.trial_option1.setChecked(True)
         self.group_buttons_H(self.trial_option1, self.trial_option2, self.trial_option3, self.trial_option4, self.trial_options)
 
     def group_buttons_V(self, button1, button2, button3, group):
