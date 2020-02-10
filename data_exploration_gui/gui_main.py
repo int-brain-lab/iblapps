@@ -132,6 +132,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_folder_button_clicked(self):
     
         self.reset_gui()
+        self.cluster.cluster_option1.setChecked(True)
         folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
         
         if str(folder_path) == '.':

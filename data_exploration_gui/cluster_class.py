@@ -46,7 +46,7 @@ class ClusterGroup:
 
     def reset(self):
         self.cluster_list.clear()
-        self.cluster_option1.setChecked(True)
+        #self.cluster_option1.setChecked(True)
         self.clust_colour = []
         self.clust_ids = []
         self.clust = []
