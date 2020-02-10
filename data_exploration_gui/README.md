@@ -17,14 +17,18 @@ pip install pyqt5
 pip install pyqtgraph
 ```
 
-Clone the iblapps repository onto your computer and checkout the develop branch
+Clone the iblapps repository onto your computer where you have IBL packages installed and checkout the develop branch
 
 ```
 git clone https://github.com/int-brain-lab/iblapps.git
 git checkout develop
 ```
 
-Navigate to the ```data_exploration_gui``` folder
+Go to the ```data_exploration_gui``` folder
+
+```
+cd iblapps/data_exploration_gui
+```
 
 ## Usage
 ### Getting Data
