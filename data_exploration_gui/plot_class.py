@@ -74,22 +74,28 @@ class PlotGroup:
         if len(trial_id) != 0:
             [x, y, errbar] = data.compute_peth('goCue_times', clust, trial_id)
             self.fig1_peth.plot_errbar(x, y, errbar)
+            self.fig1_peth.fig.plotItem.addLine(x = 0, pen = 'm')
             [x, y, errbar] = data.compute_peth('feedback_times', clust, trial_id)
             self.fig2_peth.plot_errbar(x, y, errbar)
+            self.fig2_peth.fig.plotItem.addLine(x = 0, pen = 'm')
+
+            raster_x = x
 
             self.fig3_raster.remove_lines()
             [x, y, n_trials] = data.compute_rasters('goCue_times', clust, trial_id)
             if len(x) != 0:
-                self.fig3_raster.plot(x, y, n_trials)
+                self.fig3_raster.plot(x, y, n_trials, raster_x)
                 self.fig3_raster.add_lines(line, line_colour)
+                self.fig3_raster.fig.plotItem.addLine(x = 0, pen = 'm')
             else:
                 self.fig3_raster.reset()
 
             self.fig4_raster.remove_lines()
             [x, y, n_trials] = data.compute_rasters('feedback_times', clust, trial_id)
             if len(x) != 0:
-                self.fig4_raster.plot(x, y, n_trials)
+                self.fig4_raster.plot(x, y, n_trials, raster_x)
                 self.fig4_raster.add_lines(line, line_colour)
+                self.fig4_raster.fig.plotItem.addLine(x = 0, pen = 'm')
             else:
                 self.fig4_raster.reset()
 
@@ -103,22 +109,28 @@ class PlotGroup:
         if len(trial_id) !=0:
             [x, y, errbar] = data.compute_peth('goCue_times', clust, trial_id)
             self.fig1_peth.plot_errbar(x, y, errbar)
+            self.fig1_peth.fig.plotItem.addLine(x = 0, pen = 'm')
             [x, y, errbar] = data.compute_peth('feedback_times', clust, trial_id)
             self.fig2_peth.plot_errbar(x, y, errbar)
+            self.fig2_peth.fig.plotItem.addLine(x = 0, pen = 'm')
+
+            raster_x = x
 
             self.fig3_raster.remove_lines()
             [x, y, n_trials] = data.compute_rasters('goCue_times', clust, trial_id)
             if len(x) != 0:
-                self.fig3_raster.plot(x, y, n_trials)
+                self.fig3_raster.plot(x, y, n_trials, raster_x)
                 self.fig3_raster.add_lines(line, line_colour)
+                self.fig3_raster.fig.plotItem.addLine(x = 0, pen = 'm')
             else:
                 self.fig3_raster.reset()
 
             self.fig4_raster.remove_lines()
             [x, y, n_trials] = data.compute_rasters('feedback_times', clust, trial_id)
             if len(x) != 0:
-                self.fig4_raster.plot(x, y, n_trials)
+                self.fig4_raster.plot(x, y, n_trials, raster_x)
                 self.fig4_raster.add_lines(line, line_colour)
+                self.fig4_raster.fig.plotItem.addLine(x = 0, pen = 'm')
             else:
                 self.fig3_raster.reset()
 
@@ -190,8 +202,8 @@ class ScatterTemplate:
     def reset(self):
         self.scatter.setData()
     
-    def plot(self, x, y, n_trials):
-        self.fig.setXRange(min=x.min(), max=x.max())
+    def plot(self, x, y, n_trials, x_axis):
+        self.fig.setXRange(min=x_axis.min(), max=x_axis.max())
         self.fig.setYRange(min=0, max=(1.05 * n_trials * 10))
         self.scatter.setData(x=x, y=y, size=1, symbol='s')
         self.scatter.setPen('k')

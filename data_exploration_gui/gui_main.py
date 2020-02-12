@@ -224,11 +224,11 @@ class MainWindow(QtWidgets.QMainWindow):
         [self.trials_id, self.lines, self.line_colours] = self.filter.filter_and_sort_trials(
             self.stim_contrast, self.stim_side, self.stim_choice, self.sort_method)
 
-        self.plots.change_all_plots(self.data, self.clust, self.trials_id, self.lines, self.line_colours)
+        self.plots.change_all_plots(self.data, self.clust, self.trials_id, self.lines,
+                                    self.line_colours)
         self.update_display_string()
         self.misc.terminal.append('>> Clusters sorted by ' + str(option))
-                 
-
+              
     def on_mouse_hover(self, pos):
         self.scatter.on_mouse_hover(pos)
 
