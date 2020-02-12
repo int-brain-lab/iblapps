@@ -93,6 +93,7 @@ if __name__ == "__main__":
     if alf.io.is_uuid_string(args.session):
         eid = args.session
         files = one.load(eid, dataset_types=dtypes, download_only=True)
+        files = [x for x in files if x]  # Remove None / empty entries
         if not any(files):
             raise ValueError("Session doesn't seem to have any data")
         sess_path = alf.io.get_session_path(files[0])
