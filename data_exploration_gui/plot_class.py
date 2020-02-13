@@ -1,4 +1,4 @@
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
 import pyqtgraph.dockarea
 
@@ -22,9 +22,15 @@ class PlotGroup:
         self.fig2_area.addWidget(self.fig2_peth.fig)
 
         self.fig3_raster = ScatterTemplate('Time After Event (s)', 'No. of Trials')
+        self.fig3_button = QtWidgets.QPushButton('Reset Axis')
+        self.fig3_button.setParent(self.fig3_raster.fig)
+        self.fig3_button.setFixedSize(60, 30)
         self.fig3_area.addWidget(self.fig3_raster.fig)
 
         self.fig4_raster = ScatterTemplate('Time After Event (s)', 'No. of Trials')
+        self.fig4_button = QtWidgets.QPushButton('Reset Axis')
+        self.fig4_button.setParent(self.fig4_raster.fig)
+        self.fig4_button.setFixedSize(60, 30)
         self.fig4_area.addWidget(self.fig4_raster.fig)
         
         self.fig5_autocorr = BarTemplate('Time (ms)', 'Corr')
@@ -106,7 +112,7 @@ class PlotGroup:
             self.fig4_raster.reset()
         
     def change_all_plots(self, data, clust, trial_id, line, line_colour):
-        if len(trial_id) !=0:
+        if len(trial_id) != 0:
             [x, y, errbar] = data.compute_peth('goCue_times', clust, trial_id)
             self.fig1_peth.plot_errbar(x, y, errbar)
             self.fig1_peth.fig.plotItem.addLine(x = 0, pen = 'm')
@@ -189,8 +195,12 @@ class PlotTemplate:
 
 class ScatterTemplate:
     def __init__(self, xlabel, ylabel):
-        self.fig = pg.PlotWidget(background='w')
+
+        self.viewbox = pg.ViewBox()
+        self.viewbox.setMouseMode(self.viewbox.RectMode)
+        self.fig = pg.PlotWidget(background='w', viewBox=self.viewbox)
         self.fig.setMouseEnabled(x=False, y=False)
+        #self.fig.setMouseEnabled(y=False)
         self.fig.setLabel('bottom', xlabel)
         self.fig.setLabel('left', ylabel)
         self.scatter = pg.ScatterPlotItem()
@@ -198,16 +208,27 @@ class ScatterTemplate:
         self.axis = self.fig.plotItem.getAxis('left')
         self.axis.setScale(0.1)
         self.line_item = []
+        self.x = []
+        self.n_trials = []
+
  
     def reset(self):
         self.scatter.setData()
     
+    def reset_axis(self):
+        self.fig.setXRange(min=self.x.min(), max=self.x.max())
+        self.fig.setYRange(min=0, max=(1.00 * self.n_trials * 10))
+    
     def plot(self, x, y, n_trials, x_axis):
         self.fig.setXRange(min=x_axis.min(), max=x_axis.max())
-        self.fig.setYRange(min=0, max=(1.05 * n_trials * 10))
+        self.fig.setYRange(min=0, max=(1.00 * n_trials * 10))
         self.scatter.setData(x=x, y=y, size=1, symbol='s')
         self.scatter.setPen('k')
-    
+        self.x = x
+        self.n_trials = n_trials
+
+        return self.x, self.n_trials
+
     def add_lines(self, lines, line_colour):
         for idx, val in enumerate(lines):
             self.line_item.append(self.fig.plotItem.addLine(y=(val * 10), pen= line_colour[idx]))
@@ -233,4 +254,6 @@ class BarTemplate:
         self.fig.setXRange(min=x.min(), max=x.max())
         self.fig.setYRange(min=0, max=1.05 * y.max())
         self.bar.setOpts(x=x, height=y, width=0.0009, brush='b')
+
+
 

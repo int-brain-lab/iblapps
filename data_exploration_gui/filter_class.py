@@ -171,7 +171,7 @@ class FilterGroup:
                 idx = np.where((self.trials[contrast] == c) & (self.trials['feedbackType'] == outcome))[0]
                 trials_id = np.append(trials_id, idx)
             trials_id = np.setdiff1d(trials_id, self.nan_trials)
-        
+
         return trials_id, lines, line_colour
    
     def compute_trial_options(self, trials):

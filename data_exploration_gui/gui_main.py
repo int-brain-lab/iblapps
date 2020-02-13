@@ -73,12 +73,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plots = plt.PlotGroup()
         self.plots.fig1_button.clicked.connect(self.on_fig1_button_clicked)
         self.plots.fig2_button.clicked.connect(self.on_fig2_button_clicked)
+        self.plots.fig3_button.clicked.connect(lambda: self.on_raster_button_clicked(self.plots.fig3_raster))
+        self.plots.fig4_button.clicked.connect(lambda: self.on_raster_button_clicked(self.plots.fig4_raster))
         
         self.fig1_exporter = pg.exporters.ImageExporter(self.plots.fig1_peth.fig.plotItem)
         self.plots.fig1_peth.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig1_exporter, self.plots.fig1_button))
         self.fig2_exporter = pg.exporters.ImageExporter(self.plots.fig2_peth.fig.plotItem)
         self.plots.fig2_peth.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig2_exporter, self.plots.fig2_button))
-
+        self.fig3_exporter = pg.exporters.ImageExporter(self.plots.fig3_raster.fig.plotItem)
+        self.plots.fig3_raster.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig3_exporter, self.plots.fig3_button))
+        self.fig4_exporter = pg.exporters.ImageExporter(self.plots.fig4_raster.fig.plotItem)
+        self.plots.fig4_raster.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig4_exporter, self.plots.fig4_button))
+        
         # Intitialise data group
         self.data = dat.DataGroup()
         self.data.waveform_list.clicked.connect(self.on_waveform_list_clicked)
@@ -292,6 +298,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_fig2_button_clicked(self):
         item = QtWidgets.QListWidgetItem('Cluster ' + str(self.clust_ids[self.clust]))
         self.misc.clust_list2.addItem(item)
+    
+    def on_raster_button_clicked(self, fig):
+        fig.reset_axis()
     
     def on_remove_cluster_button_clicked(self, clust_list):
         item = clust_list.currentRow()

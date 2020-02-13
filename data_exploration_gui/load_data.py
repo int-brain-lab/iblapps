@@ -8,4 +8,5 @@ data_path = one.load(eid, clobber=False, download_only=True)
 
 # Uncomment to also load ephys.bin files for waveform plots
 #ephys_types = ['ephysData.raw.ch', 'ephysData.raw.meta', 'ephysData.raw.ap']
+#ephys_types = ['sync.channels', 'sync.polarities', 'sync.times']
 #ephys_path = one.load(eid, dataset_types=ephys_types, clobber=False, download_only=True)
