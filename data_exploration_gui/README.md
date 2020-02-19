@@ -32,15 +32,15 @@ cd iblapps/data_exploration_gui
 
 ## Usage
 ### Getting Data
-To download the data run (change the subject, date and session number according to the data you want to download)
+To download the data run (change the subject (s), date (d) and session number (n) according to the data you want to download)
 
 ```
-python load_data.py
+python load_data.py -s SWC_014 -d 2019-12-10 -n 1 
 ```
 
 The GUI can run with or without the ephys.bin data. 
 
-If you want to dowload the ephys data uncomment lines 10 and 11 in ```load_data.py```. **N.B. Downloading ephys.bin data can take a long time!**
+If you want to dowload the ephys data parse an extra argument ``` -e True ```  to load_data.py **N.B. Downloading ephys.bin data can take a long time!**
 
 
 
