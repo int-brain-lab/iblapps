@@ -1,5 +1,6 @@
 import glob
 import os
+import numpy as np
 
 from phy.apps.template import TemplateController, template_gui
 from phy.gui.qt import create_app, run_app
@@ -33,9 +34,9 @@ def launch_phy(eid, probe_name, one=None):
         'clusters.depths',
         'clusters.amps',
         'clusters.channels',
-        'clusters.probes',
         'channels.probes',
-        'channels.rawInd'
+        'channels.rawInd',
+        'channels.localCoordinates',
         #'ephysData.raw.ap'
         #'_phy_spikes_subset.waveforms'
         #'_phy_spikes_subset.spikes'
