@@ -12,8 +12,8 @@ from ibllib.ephys import ephysqc
 from ibllib.io.extractors import ephys_fpga, training_wheel, ephys_trials
 import ibllib.io.raw_data_loaders as rawio
 
-import ViewEphysQC as ViewEphysQC
-import qt as qt
+import choiceworld_ephys_qc.ViewEphysQC as ViewEphysQC
+import choiceworld_ephys_qc.qt as qt
 
 _logger = logging.getLogger('ibllib')
 
@@ -65,7 +65,7 @@ def _qc_from_path(sess_path, display=True):
 
     # do the wheel part
     if WHEEL:
-        bpod_wheel = training_wheel.get_wheel_data(sess_path, save=False)
+        bpod_wheel = training_wheel.get_wheel_position(sess_path, save=False)
         fpga_wheel = ephys_fpga.extract_wheel_sync(sync, chmap=chmap, save=False)
 
         if display:

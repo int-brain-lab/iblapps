@@ -6,7 +6,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 import pandas as pd
 
-import qt as qt
+import choiceworld_ephys_qc.qt as qt
 
 _logger = logging.getLogger('ibllib')
 
