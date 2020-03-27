@@ -164,7 +164,8 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     if save_video:
         out = cv2.VideoWriter('%s_trials_%s_%s.mp4' % (eid,
                                                        trial_range[0],
-                                                       trial_range[-1]),
+                                                       trial_range[-1],
+                                                       video_type),
                               cv2.VideoWriter_fourcc(*'mp4v'),
                               fps,
                               size)  # put , 0 if grey scale
