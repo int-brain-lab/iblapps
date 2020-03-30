@@ -10,7 +10,10 @@ eids = one.search(subject='ZM_2407', task_protocol='ephys')
 #
 ses = one.alyx.rest('sessions', 'read', id=eids[0])
 iprobe = 0
-_channels = ses['probe_insertion'][iprobe]['trajectory_estimate'][0]['channels']
+
+te = [te for te in ses['probe_insertion'][iprobe]['trajectory_estimate']
+      if te['provenance'] == 'Histology track']
+_channels = te[0]['channels']
 channels = {
     'atlas_id': np.array([ch['brain_region']['id'] for ch in _channels]),
     'acronym': np.array([ch['brain_region']['acronym'] for ch in _channels]),
