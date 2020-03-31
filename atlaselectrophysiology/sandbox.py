@@ -1,25 +1,10 @@
 import numpy as np
 
-from brainbox.io.one import load_spike_sorting
+from brainbox.io.one import load_spike_sorting, load_channel_locations
 from oneibl.one import ONE
 
 one = ONE(base_url="https://dev.alyx.internationalbrainlab.org")
-
 eids = one.search(subject='ZM_2407', task_protocol='ephys')
 
-#
-ses = one.alyx.rest('sessions', 'read', id=eids[0])
-iprobe = 0
-
-te = [te for te in ses['probe_insertion'][iprobe]['trajectory_estimate']
-      if te['provenance'] == 'Histology track']
-_channels = te[0]['channels']
-channels = {
-    'atlas_id': np.array([ch['brain_region']['id'] for ch in _channels]),
-    'acronym': np.array([ch['brain_region']['acronym'] for ch in _channels]),
-    'x': np.array([ch['x'] for ch in _channels]) / 1e6,
-    'y': np.array([ch['y'] for ch in _channels]) / 1e6,
-    'z': np.array([ch['z'] for ch in _channels]) / 1e6,
-}
-
+channels = load_channel_locations(eids[0], one=one)
 spikes, clusters = load_spike_sorting(eids[0], one=one)
