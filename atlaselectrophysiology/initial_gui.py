@@ -1,4 +1,4 @@
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import pyqtgraph.exporters
 from pathlib import Path
@@ -25,6 +25,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #--> to do: functionality to scroll through session
         t = len(np.where(scatter_data['times'] < 60)[0])
         fig_scatter = pg.PlotWidget(background='w')
+        fig_scatter.setMouseEnabled(x=False, y=False)
         fig_scatter.setFixedSize(800, 800)
         scatter_plot = pg.ScatterPlotItem()
         scatter_plot.setData(x=scatter_data['times'][0:t], y=scatter_data['depths'][0:t], size=2,
@@ -33,15 +34,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
         #Create histology figure
         #--> to do: incorporate actual data into plot
-        #--> to do: add unique colours and y-label for each region
         fig_histology = pg.PlotWidget(background='w')
+        fig_histology.setMouseEnabled(x=False, y=False)
+        axis = fig_histology.plotItem.getAxis('left')
+        axis.setTicks([histology_data['boundary_label']])
+        axis.setPen('k')
         fig_histology.setFixedSize(400, 800)
 
-        for bound in histology_data['boundaries']:
+        for idx, bound in enumerate(histology_data['boundary']):
             x, y = self.create_data(bound, histology_data['chan_int'])
             curve_item = pg.PlotCurveItem()
             curve_item.setData(x=x, y=y, fillLevel=50)
-            curve_item.setBrush('b')
+            colour = QtGui.QColor(histology_data['boundary_colour'][idx])
+            curve_item.setBrush(colour)
             fig_histology.addItem(curve_item)
 
         main_widget_layout.addWidget(fig_scatter)
@@ -49,8 +54,7 @@ class MainWindow(QtWidgets.QMainWindow):
         main_widget.setLayout(main_widget_layout)
 
     def create_data(self, bound, chan_int):
-
-        y = np.arange(bound[0], bound[1] + 1, chan_int, dtype=int)
+        y = np.arange(bound[0], bound[1] + chan_int, chan_int, dtype=int)
         x = np.ones(len(y), dtype=int)
         x = np.insert(x, 0, 0)
         x = np.append(x, 0)

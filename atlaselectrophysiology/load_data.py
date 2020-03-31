@@ -1,7 +1,8 @@
+
 import numpy as np
 from brainbox.io.one import load_spike_sorting
 from oneibl.one import ONE
-
+import random
 
 def get_session(subj, date, sess=None):
     if not sess:
@@ -16,12 +17,12 @@ def get_session(subj, date, sess=None):
 def get_scatter_data(eid, one=None, probe_id=None):
     if not one:
         one = ONE(base_url="https://dev.alyx.internationalbrainlab.org")
-    
+
     if not probe_id:
         probe_id = 0
-    
+       
     probe = 'probe_0' + str(probe_id)
-    
+ 
     #Extra datasets that we want to download
     dtypes_extra = [
         'spikes.depths',
@@ -41,7 +42,7 @@ def get_scatter_data(eid, one=None, probe_id=None):
 def get_histology_data(eid, one=None, probe_id=None):
     if not one:
         one = ONE(base_url="https://dev.alyx.internationalbrainlab.org")
-  
+ 
     if not probe_id:
         probe_id = 0
 
@@ -60,11 +61,15 @@ def get_histology_data(eid, one=None, probe_id=None):
     #Load coordinates of channels
     channel_coord = one.load_dataset(eid=eid, dataset_type='channels.localCoordinates')
     acronym = np.flip(channels['acronym'])
+    
+    colour = create_random_hex_colours(np.unique(acronym))
 
     #Find all boundaries from histology
     boundaries = np.where((acronym[1:] == acronym[:-1]) == False)[0]
   
     region = []
+    region_label = []
+    region_colour = []
     for idx in range(len(boundaries) + 1):
         if idx == 0:
             _region = [0, boundaries[idx]]
@@ -73,13 +78,31 @@ def get_histology_data(eid, one=None, probe_id=None):
         else: 
             _region = [boundaries[idx - 1], boundaries[idx]]
 
+        _region_label = acronym[_region][1]
+        _region_colour = colour[_region_label]
         _region = channel_coord[:, 1][_region]
+        _region_mean = np.mean(_region, dtype=int)
+
+        region_label.append((_region_mean, _region_label))
+        region_colour.append(_region_colour)
         region.append(_region)
 
     histology = {
-        'boundaries': region,
+        'boundary': region,
+        'boundary_label': region_label,
+        'boundary_colour': region_colour,
         'acronym': acronym,
         'chan_int': 20
     }
 
     return histology
+
+
+def create_random_hex_colours(unique_regions):
+
+    colour = {}
+    random.seed(8)
+    for reg in unique_regions:
+        colour[reg] = "#" + ''.join([random.choice('0123456789ABCDEF') for j in range(6)])
+
+    return colour
