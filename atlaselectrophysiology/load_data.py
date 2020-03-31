@@ -1,13 +1,15 @@
 
 import numpy as np
-from brainbox.io.one import load_spike_sorting
+from brainbox.io.one import load_spike_sorting, load_channel_locations
 from oneibl.one import ONE
 import random
+
+ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
 
 def get_session(subj, date, sess=None):
     if not sess:
         sess = 1
-    one = ONE(base_url="https://dev.alyx.internationalbrainlab.org")
+    one = ONE(base_url=ONE_BASE_URL)
     eids = one.search(subject=subj, date=date, number=sess, task_protocol='ephys')
     eid = eids[0]
 
@@ -16,7 +18,7 @@ def get_session(subj, date, sess=None):
 
 def get_scatter_data(eid, one=None, probe_id=None):
     if not one:
-        one = ONE(base_url="https://dev.alyx.internationalbrainlab.org")
+        one = ONE(base_url=ONE_BASE_URL)
 
     if not probe_id:
         probe_id = 0
@@ -41,31 +43,25 @@ def get_scatter_data(eid, one=None, probe_id=None):
 
 def get_histology_data(eid, one=None, probe_id=None):
     if not one:
-        one = ONE(base_url="https://dev.alyx.internationalbrainlab.org")
+        one = ONE(base_url=ONE_BASE_URL)
  
     if not probe_id:
         probe_id = 0
 
     ses = one.alyx.rest('sessions', 'read', id=eid)
-    te = [te for te in ses['probe_insertion'][probe_id]['trajectory_estimate']
-              if te['provenance'] == 'Histology track']
-    _channels = te[0]['channels']
-    channels = {
-        'atlas_id': np.array([ch['brain_region']['id'] for ch in _channels]),
-        'acronym': np.array([ch['brain_region']['acronym'] for ch in _channels]),
-        'x': np.array([ch['x'] for ch in _channels]) / 1e6,
-        'y': np.array([ch['y'] for ch in _channels]) / 1e6,
-        'z': np.array([ch['z'] for ch in _channels]) / 1e6,
-    }
+    probe_label = ses['probe_insertion'][0]['name']
 
-    #Load coordinates of channels
+    channels = load_channel_locations(ses, one=one, probe=probe_label)[probe_label]
+
+    # Load coordinates of channels
     channel_coord = one.load_dataset(eid=eid, dataset_type='channels.localCoordinates')
-    acronym = np.flip(channels['acronym'])
-    
-    colour = create_random_hex_colours(np.unique(acronym))
+    assert np.all( np.c_[channels.lateral_um, channels.axial_um ] == channel_coord)
 
-    #Find all boundaries from histology
-    boundaries = np.where((acronym[1:] == acronym[:-1]) == False)[0]
+    acronym = np.flip(channels['acronym'])
+    colour = create_random_hex_colours(np.unique(acronym))  # TODO: ibllib.atlas get colours from Allen
+
+    # Find all boundaries from histology
+    boundaries = np.where(np.diff(np.flip(channels.atlas_id)))[0]
   
     region = []
     region_label = []
