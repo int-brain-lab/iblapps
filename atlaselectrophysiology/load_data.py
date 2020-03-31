@@ -59,9 +59,10 @@ def get_histology_data(eid, one=None, probe_id=None):
 
     #Load coordinates of channels
     channel_coord = one.load_dataset(eid=eid, dataset_type='channels.localCoordinates')
+    acronym = np.flip(channels['acronym'])
 
     #Find all boundaries from histology
-    boundaries = np.where((channels['acronym'][1:] == channels['acronym'][:-1]) == False)[0]
+    boundaries = np.where((acronym[1:] == acronym[:-1]) == False)[0]
   
     region = []
     for idx in range(len(boundaries) + 1):
@@ -77,7 +78,7 @@ def get_histology_data(eid, one=None, probe_id=None):
 
     histology = {
         'boundaries': region,
-        'acronym': channels['acronym'][boundaries],
+        'acronym': acronym,
         'chan_int': 20
     }
 
