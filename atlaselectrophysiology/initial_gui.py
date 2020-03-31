@@ -23,23 +23,27 @@ class MainWindow(QtWidgets.QMainWindow):
 
         #Create scatter plot (for now only plot first 60s)
         #--> to do: functionality to scroll through session
-        t = len(np.where(scatter_data['times'] < 60)[0])
-        fig_scatter = pg.PlotWidget(background='w')
-        fig_scatter.setMouseEnabled(x=False, y=False)
-        fig_scatter.setFixedSize(800, 800)
-        scatter_plot = pg.ScatterPlotItem()
-        scatter_plot.setData(x=scatter_data['times'][0:t], y=scatter_data['depths'][0:t], size=2,
+        t = len(np.where((scatter_data['times'] > 60) & (scatter_data['times'] < 120))[0])
+        self.fig_scatter = pg.PlotWidget(background='w')
+        self.fig_scatter.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
+        self.fig_scatter.setMouseEnabled(x=False, y=False)
+        self.fig_scatter.setFixedSize(800, 800)
+        self.scatter_plot = pg.ScatterPlotItem()
+        self.scatter_plot.setData(x=scatter_data['times'][0:t], y=scatter_data['depths'][0:t], size=2,
                              color='k')
-        fig_scatter.addItem(scatter_plot)
+        self.fig_scatter.addItem(self.scatter_plot)
+
+
 
         #Create histology figure
         #--> to do: incorporate actual data into plot
-        fig_histology = pg.PlotWidget(background='w')
-        fig_histology.setMouseEnabled(x=False, y=False)
-        axis = fig_histology.plotItem.getAxis('left')
+        self.fig_histology = pg.PlotWidget(background='w')
+        self.fig_histology.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
+        self.fig_histology.setMouseEnabled(x=False, y=False)
+        axis = self.fig_histology.plotItem.getAxis('left')
         axis.setTicks([histology_data['boundary_label']])
         axis.setPen('k')
-        fig_histology.setFixedSize(400, 800)
+        self.fig_histology.setFixedSize(400, 800)
 
         for idx, bound in enumerate(histology_data['boundary']):
             x, y = self.create_data(bound, histology_data['chan_int'])
@@ -47,11 +51,12 @@ class MainWindow(QtWidgets.QMainWindow):
             curve_item.setData(x=x, y=y, fillLevel=50)
             colour = QtGui.QColor(histology_data['boundary_colour'][idx])
             curve_item.setBrush(colour)
-            fig_histology.addItem(curve_item)
+            self.fig_histology.addItem(curve_item)
 
-        main_widget_layout.addWidget(fig_scatter)
-        main_widget_layout.addWidget(fig_histology)
+        main_widget_layout.addWidget(self.fig_scatter)
+        main_widget_layout.addWidget(self.fig_histology)
         main_widget.setLayout(main_widget_layout)
+
 
     def create_data(self, bound, chan_int):
         y = np.arange(bound[0], bound[1] + chan_int, chan_int, dtype=int)
@@ -62,6 +67,16 @@ class MainWindow(QtWidgets.QMainWindow):
         y = np.append(y, bound[1])
 
         return x, y
+        
+    def on_mouse_double_clicked(self, event):
+        if event.double():
+            pos = self.scatter_plot.mapFromScene(event.scenePos())
+            line_scat = pg.InfiniteLine(pos=pos.y(), angle=0, pen='k', movable=True)
+            line_hist = pg.InfiniteLine(pos=pos.y(), angle=0, pen='k', movable=True)
+            self.fig_histology.addItem(line_scat)
+            self.fig_scatter.addItem(line_hist)
+            
+
 
 
 if __name__ == '__main__':
