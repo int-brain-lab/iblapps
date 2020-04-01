@@ -6,6 +6,7 @@ import random
 
 ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
 
+
 def get_session(subj, date, sess=None):
     if not sess:
         sess = 1
@@ -22,9 +23,7 @@ def get_scatter_data(eid, one=None, probe_id=None):
 
     if not probe_id:
         probe_id = 0
-       
-    probe = 'probe_0' + str(probe_id)
- 
+
     #Extra datasets that we want to download
     dtypes_extra = [
         'spikes.depths',
@@ -33,23 +32,22 @@ def get_scatter_data(eid, one=None, probe_id=None):
 
     spikes, _ = load_spike_sorting(eid=eid, one=one, dataset_types=dtypes_extra)
 
+    probe_label = [key for key in spikes.keys() if int(key[-1]) == probe_id][0]
+    
     scatter = {
-        'times': spikes[probe]['times'],
-        'depths': spikes[probe]['depths']
+        'times': spikes[probe_label]['times'],
+        'depths': spikes[probe_label]['depths']
     }
 
-    return scatter
+    return scatter, probe_label
 
 
-def get_histology_data(eid, one=None, probe_id=None):
+def get_histology_data(eid, probe_label, one=None):
     if not one:
         one = ONE(base_url=ONE_BASE_URL)
- 
-    if not probe_id:
-        probe_id = 0
 
     ses = one.alyx.rest('sessions', 'read', id=eid)
-    probe_label = ses['probe_insertion'][0]['name']
+    #probe_label = ses['probe_insertion'][0]['name'] 
 
     channels = load_channel_locations(ses, one=one, probe=probe_label)[probe_label]
 
@@ -62,7 +60,6 @@ def get_histology_data(eid, one=None, probe_id=None):
 
     # Find all boundaries from histology
     boundaries = np.where(np.diff(np.flip(channels.atlas_id)))[0]
-  
     region = []
     region_label = []
     region_colour = []

@@ -17,8 +17,8 @@ class MainWindow(QtWidgets.QMainWindow):
         main_widget_layout = QtWidgets.QHBoxLayout()
 
         eid, one = ld.get_session('ZM_2407', '2019-11-07')
-        scatter_data = ld.get_scatter_data(eid, one, probe_id=0)
-        histology_data = ld.get_histology_data(eid, one, probe_id=0)
+        scatter_data, probe_label = ld.get_scatter_data(eid, one, probe_id=0)
+        histology_data = ld.get_histology_data(eid, probe_label, one)
 
 
         #Create scatter plot (for now only plot first 60s)
@@ -67,7 +67,7 @@ class MainWindow(QtWidgets.QMainWindow):
         y = np.append(y, bound[1])
 
         return x, y
-        
+
     def on_mouse_double_clicked(self, event):
         if event.double():
             pos = self.scatter_plot.mapFromScene(event.scenePos())
