@@ -23,14 +23,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
         #Create scatter plot (for now only plot first 60s)
         #--> to do: functionality to scroll through session
-        t = len(np.where((scatter_data['times'] > 60) & (scatter_data['times'] < 120))[0])
+        print(len(scatter_data['times']))
         self.fig_scatter = pg.PlotWidget(background='w')
         self.fig_scatter.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
         self.fig_scatter.setMouseEnabled(x=False, y=False)
         self.fig_scatter.setFixedSize(800, 800)
-        self.scatter_plot = pg.ScatterPlotItem()
-        self.scatter_plot.setData(x=scatter_data['times'][0:t], y=scatter_data['depths'][0:t], size=2,
-                             color='k')
+        connect = np.zeros(len(scatter_data['times']), dtype=int)
+        self.scatter_plot = pg.PlotDataItem()
+        self.scatter_plot.setData(x=scatter_data['times'], y=scatter_data['depths'], connect = connect, symbol = 'o',symbolSize = 2)
+        #self.scatter_plot = pg.ScatterPlotItem()
+        #self.scatter_plot.setData(x=scatter_data['times'][:], y=scatter_data['depths'][:], size = 2, color = 'k')
         self.fig_scatter.addItem(self.scatter_plot)
 
 

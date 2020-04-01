@@ -35,9 +35,11 @@ def get_scatter_data(eid, one=None, probe_id=None):
     probe_label = [key for key in spikes.keys() if int(key[-1]) == probe_id][0]
     
     scatter = {
-        'times': spikes[probe_label]['times'],
-        'depths': spikes[probe_label]['depths']
+        'times': spikes[probe_label]['times'][0:-1:100],
+        'depths': spikes[probe_label]['depths'][0:-1:100]
     }
+
+
 
     return scatter, probe_label
 
