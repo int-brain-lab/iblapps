@@ -1,4 +1,4 @@
-from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
 import pyqtgraph.exporters
 
@@ -10,9 +10,6 @@ import data_class as dat
 import misc_class as misc
 
 from pathlib import Path
-import os
-import sys
-
 import numpy as np
 
 
@@ -25,12 +22,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cluster.cluster_list.clicked.connect(self.on_cluster_list_clicked)
         self.cluster.cluster_next_button.clicked.connect(self.on_next_cluster_clicked)
         self.cluster.cluster_previous_button.clicked.connect(self.on_previous_cluster_clicked)
-        self.cluster.cluster_option1.clicked.connect(lambda: self.on_cluster_sort_clicked(
-            self.cluster.cluster_option1))
-        self.cluster.cluster_option2.clicked.connect(lambda: self.on_cluster_sort_clicked(
-            self.cluster.cluster_option2))
-        self.cluster.cluster_option3.clicked.connect(lambda: self.on_cluster_sort_clicked(
-            self.cluster.cluster_option3))
+        self.cluster.cluster_buttons.buttonClicked.connect(self.on_cluster_sort_clicked)
 
         # Initialise scatter group
         self.scatter = scatt.ScatterGroup()
@@ -45,29 +37,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filter = filt.FilterGroup()
         self.filter.reset_filter_button.clicked.connect(self.on_reset_filter_button_clicked)
         self.filter.contrast_options.itemClicked.connect(self.on_contrast_list_changed)
-
-        self.filter.choice_option1.clicked.connect(lambda: self.on_choice_list_change(
-            self.filter.choice_option1))
-        self.filter.choice_option2.clicked.connect(lambda: self.on_choice_list_change(
-            self.filter.choice_option2))
-        self.filter.choice_option3.clicked.connect(lambda: self.on_choice_list_change(
-            self.filter.choice_option3))
-
-        self.filter.stim_option1.clicked.connect(lambda: self.on_stim_list_change(
-            self.filter.stim_option1))
-        self.filter.stim_option2.clicked.connect(lambda: self.on_stim_list_change(
-            self.filter.stim_option2))
-        self.filter.stim_option3.clicked.connect(lambda: self.on_stim_list_change(
-            self.filter.stim_option3))
-
-        self.filter.trial_option1.clicked.connect(lambda: self.on_trial_sort_change(
-            self.filter.trial_option1))
-        self.filter.trial_option2.clicked.connect(lambda: self.on_trial_sort_change(
-            self.filter.trial_option2))
-        self.filter.trial_option3.clicked.connect(lambda: self.on_trial_sort_change(
-            self.filter.trial_option3))
-        self.filter.trial_option4.clicked.connect(lambda: self.on_trial_sort_change(
-            self.filter.trial_option4))
+        self.filter.hold_button.stateChanged.connect(self.hold_button_clicked)
+        self.filter.filter_buttons.buttonToggled.connect(self.on_button)
+        self.filter.trial_buttons.buttonClicked.connect(self.on_trial_sort_change)
 
         # Initialise figure group
         self.plots = plt.PlotGroup()
@@ -116,29 +88,37 @@ class MainWindow(QtWidgets.QMainWindow):
         main_widget_layout.addWidget(self.filter.filter_options_group, 1, 1, 3, 1)
         main_widget_layout.addWidget(self.misc.clust_interest, 4, 1, 3, 1)
         main_widget_layout.addWidget(self.plots.fig_area, 0, 2, 7, 8)
-        main_widget_layout.addWidget(self.filter.trial_options, 7, 6)
+        main_widget_layout.addWidget(self.filter.trial_group, 7, 6)
         main_widget_layout.addWidget(self.data.waveform_group, 7, 9)
         main_widget.setLayout(main_widget_layout)
+    
+
 
     def reset_gui(self):
+        self.filter.filter_buttons.blockSignals(True)
+        [self.stim_contrast, self.case, self.sort_method] = \
+            self.filter.reset_filters()
+        self.filter.filter_buttons.blockSignals(False)
+        self.filter.hold_button.setCheckState(QtCore.Qt.Checked)
+        self.filter.filter_buttons.setExclusive(False)
         self.cluster.reset()
         self.scatter.reset()
         self.plots.reset()
         self.data.reset()
-        [self.stim_contrast, self.stim_side, self.stim_choice, self.sort_method] = \
-            self.filter.reset_filters()
 
     def initialise_gui(self):
         self.cluster.populate(self.clust_ids, self.clust_colours)
         [self.clust, self.clust_prev] = self.cluster.initialise_cluster_index()
-        self.scatter.populate(self.clust_amps, self.clust_depths, self.clust_ids, self.clust_colours)
+        self.scatter.populate(self.clust_amps, self.clust_depths, self.clust_ids,
+                              self.clust_colours)
         self.scatter.initialise_scatter_index()
         self.data.populate(self.clust)
+        self.plot_status = np.zeros(9, dtype=bool)
+        self.hold = True
 
     def on_folder_button_clicked(self):
     
         self.reset_gui()
-        self.cluster.cluster_option1.setChecked(True)
         folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
         
         if str(folder_path) == '.':
@@ -160,10 +140,11 @@ class MainWindow(QtWidgets.QMainWindow):
             nan_trials = self.filter.compute_trial_options(self.data.trials)
             self.misc.terminal.append('>> Found ' + str(len(nan_trials)) + ' nan trials in data ...... these will be removed')
 
-            [self.trials_id, self.lines, self.line_colours] = self.filter.filter_and_sort_trials(
-                self.stim_contrast, self.stim_side, self.stim_choice, self.sort_method)
+            self.trials = self.filter.compute_and_sort_trials(self.stim_contrast)
+            self.trials_id = self.trials[self.case][self.sort_method]['trials']
 
-            self.plots.change_all_plots(self.data, self.clust, self.trials_id, self.lines, self.line_colours)
+            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+
             self.update_display_string()
 
     # All commands associated with cluster list
@@ -181,11 +162,47 @@ class MainWindow(QtWidgets.QMainWindow):
         # Repopulate spike list for current cluster
         self.data.populate(self.clust)
         # Change plots
-        self.plots.change_all_plots(self.data, self.clust, self.trials_id, self.lines, self.line_colours)
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+
         self.update_display_string()
     
+
+    def hold_button_clicked(self, state):
+        if state == QtCore.Qt.Checked:
+            self.hold = True
+            self.filter.filter_buttons.setExclusive(False)
+        else:
+            self.hold = False
+            self.filter.filter_buttons.blockSignals(True)
+            [ _, self.case, self.sort_method] = \
+            self.filter.reset_filters(stim=False)
+            self.filter.filter_buttons.setExclusive(True)
+            self.plots.reset()
+            self.filter.filter_buttons.blockSignals(False)
+
+
+            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+
+            
+    def on_button(self, button, signal):
+        
+        if self.hold is False:
+            self.case = button.text()
+            self.plots.change_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+        else:
+            if signal is True:
+                self.case  = button.text()
+                [self.sort_method, id] = self.filter.get_sort_method(self.case)
+                self.filter.trial_buttons.button(id).setChecked(True)
+                self.plots.change_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+                self.update_display_string()
+            else:
+                #if self.filter.filter_buttons.checkedButton():
+                self.case = button.text()
+                self.plots.remove_plot_item(self.case)
+
     def on_next_cluster_clicked(self):
-        #print(len(self.clust_ids))
+
         if self.clust != len(self.clust_ids) - 1:
             self.clust = self.cluster.on_next_cluster_clicked()
             self.cluster.update_list_icon()
@@ -194,12 +211,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.scatter.update_prev_point()
             self.clust_prev = self.cluster.update_cluster_index()
             self.data.populate(self.clust)
-            self.plots.change_all_plots(self.data, self.clust, self.trials_id, self.lines, self.line_colours)
+            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
             self.update_display_string()
         else:
             self.misc.terminal.append('>> Already on last cluster ... cannot move to next cluster')
 
     def on_previous_cluster_clicked(self):
+
         if self.clust != 0:
             self.clust = self.cluster.on_previous_cluster_clicked()
             self.cluster.update_list_icon()
@@ -208,16 +226,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.scatter.update_prev_point()
             self.clust_prev = self.cluster.update_cluster_index()
             self.data.populate(self.clust)
-            self.plots.change_all_plots(self.data, self.clust, self.trials_id, self.lines, self.line_colours)
+            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
             self.update_display_string()
         else:
             self.misc.terminal.append('>> Already on first cluster ... cannot move to previous cluster')
 
     def on_cluster_sort_clicked(self, button):
-        option = str(button.text())
-        if option == self.cluster.cluster_option1.text():
+
+        option = button.text()
+        if option == 'cluster no.':
             order = self.data.sort_by_id
-        elif option == self.cluster.cluster_option2.text():
+        elif option == 'no. of spikes':
             order = self.data.sort_by_nspikes
         else:
             order = self.data.sort_by_good
@@ -227,11 +246,12 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.reset_gui()
         self.initialise_gui()
-        [self.trials_id, self.lines, self.line_colours] = self.filter.filter_and_sort_trials(
-            self.stim_contrast, self.stim_side, self.stim_choice, self.sort_method)
 
-        self.plots.change_all_plots(self.data, self.clust, self.trials_id, self.lines,
-                                    self.line_colours)
+        self.trials = self.filter.compute_and_sort_trials(self.stim_contrast)
+        self.trials_id = self.trials[self.case][self.sort_method]['trials']
+
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+
         self.update_display_string()
         self.misc.terminal.append('>> Clusters sorted by ' + str(option))
               
@@ -239,6 +259,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scatter.on_mouse_hover(pos)
 
     def on_scatter_plot_clicked(self, scatter, point):
+
         self.clust = self.scatter.on_scatter_plot_clicked(point)
         self.cluster.update_current_row(self.clust)
         self.cluster.update_list_icon()
@@ -247,47 +268,35 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scatter.update_prev_point()
         self.clust_prev = self.cluster.update_cluster_index()
         self.data.populate(self.clust)
-        self.plots.change_all_plots(self.data, self.clust, self.trials_id, self.lines, self.line_colours)
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
         self.update_display_string()
     
     def on_scatter_reset_button_clicked(self):
         self.scatter.on_scatter_plot_reset()
 
     def on_contrast_list_changed(self):
+
         self.stim_contrast = self.filter.get_checked_contrasts()
-        [self.trials_id, self.lines, self.line_colours] = self.filter.filter_and_sort_trials(
-            self.stim_contrast, self.stim_side, self.stim_choice, self.sort_method)
-        self.plots.change_plots(self.data, self.clust, self.trials_id, self.lines, self.line_colours)
+        self.trials = self.filter.compute_and_sort_trials(self.stim_contrast)
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
         self.check_n_trials()
         self.update_display_string()
 
-    def on_choice_list_change(self, button):
-        self.stim_choice = str(button.text())
-        [self.trials_id, self.lines, self.line_colours]=self.filter.filter_and_sort_trials(
-            self.stim_contrast, self.stim_side, self.stim_choice, self.sort_method)
-        self.plots.change_plots(self.data, self.clust, self.trials_id, self.lines, self.line_colours)
-        self.check_n_trials()
-        self.update_display_string()
-
-    def on_stim_list_change(self, button):
-        self.stim_side = str(button.text())
-        [self.trials_id, self.lines, self.line_colours] = self.filter.filter_and_sort_trials(
-            self.stim_contrast, self.stim_side, self.stim_choice, self.sort_method)
-        self.plots.change_plots(self.data, self.clust, self.trials_id, self.lines, self.line_colours)
-        self.check_n_trials()
-        self.update_display_string()
 
     def on_trial_sort_change(self, button):
-        self.sort_method = str(button.text())
-        [self.trials_id, self.lines, self.line_colours] = self.filter.filter_and_sort_trials(
-            self.stim_contrast, self.stim_side, self.stim_choice, self.sort_method)
-        self.plots.change_plots(self.data, self.clust, self.trials_id, self.lines, self.line_colours)
+
+        self.sort_method = button.text()
+        if self.hold == False:
+            self.plots.change_rasters(self.data, self.clust, self.trials, self.case, self.sort_method)
+        else:
+            self.plots.change_rasters(self.data, self.clust, self.trials, 'all', self.sort_method)
+        
 
     def on_reset_filter_button_clicked(self):
-        [self.stim_contrast, self.stim_side, self.stim_choice, self.sort_method] = self.filter.reset_filters()
-        [self.trials_id, self.lines, self.line_colours] = self.filter.filter_and_sort_trials(
-            self.stim_contrast, self.stim_side, self.stim_choice, self.sort_method)
-        self.plots.change_plots(self.data, self.clust, self.trials_id, self.lines, self.line_colours)
+
+        [self.stim_contrast, self.case, self.sort_method] = self.filter.reset_filters()
+        self.trials = self.filter.compute_and_sort_trials(self.stim_contrast)
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
         self.update_display_string()
         self.misc.terminal.append('>> All filters reset')
 
@@ -333,10 +342,12 @@ class MainWindow(QtWidgets.QMainWindow):
         button.move(fig_width - button_width, 0)
 
     def check_n_trials(self):
+        self.trials_id = self.trials[self.case][self.sort_method]['trials']
         if len(self.trials_id) == 0:
             self.misc.terminal.append('>> No trials for this filter combination')
     
     def update_display_string(self):
+        self.trials_id = self.trials[self.case][self.sort_method]['trials']
         self.filter.ntrials_text.setText('No. of trials = ' + str(len(self.trials_id)))
         self.data.waveform_text.setText('No. of spikes = ' + str(len(self.data.clus_idx)))
 

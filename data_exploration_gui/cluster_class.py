@@ -4,13 +4,21 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class ClusterGroup:
 
     def __init__(self):
-
-        self.cluster_options = QtWidgets.QGroupBox('Sort Clusters By:')
-        self.cluster_option1 = QtWidgets.QRadioButton('cluster no.')
-        self.cluster_option2 = QtWidgets.QRadioButton('no. of spikes')
-        self.cluster_option3 = QtWidgets.QRadioButton('good units')
-        self.cluster_option1.setChecked(True)
-        self.group_buttons()
+        
+        self.cluster_buttons = QtWidgets.QButtonGroup()
+        self.cluster_group = QtWidgets.QGroupBox('Sort Clusters By:')
+        self.cluster_layout = QtWidgets.QHBoxLayout()
+        cluster_options = ['cluster no.', 'no. of spikes', 'good units']
+        for i, val in enumerate(cluster_options):
+            button = QtWidgets.QRadioButton(val)
+            if i == 0:
+                button.setChecked(True)
+            else:
+                button.setChecked(False)
+            self.cluster_buttons.addButton(button, id=i)
+            self.cluster_layout.addWidget(button)
+        
+        self.cluster_group.setLayout(self.cluster_layout)
 
         self.cluster_list = QtWidgets.QListWidget()
         self.cluster_list.SingleSelection
@@ -29,16 +37,10 @@ class ClusterGroup:
         self.clust = []
         self.clust_prev = []
 
-    def group_buttons(self):
-        button_layout = QtWidgets.QHBoxLayout()
-        button_layout.addWidget(self.cluster_option1)
-        button_layout.addWidget(self.cluster_option2)
-        button_layout.addWidget(self.cluster_option3)
-        self.cluster_options.setLayout(button_layout)
 
     def group_widget(self):
         group_layout = QtWidgets.QGridLayout()
-        group_layout.addWidget(self.cluster_options, 0, 0, 1, 3)
+        group_layout.addWidget(self.cluster_group, 0, 0, 1, 3)
         group_layout.addWidget(self.cluster_list, 1, 0, 3, 3)
         group_layout.addWidget(self.cluster_previous_button, 4, 0)
         group_layout.addWidget(self.cluster_next_button, 4, 2)
