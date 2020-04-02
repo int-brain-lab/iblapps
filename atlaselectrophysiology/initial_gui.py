@@ -81,7 +81,9 @@ class MainWindow(QtWidgets.QMainWindow):
             print(pos)       
             print(pos_atlas)
             #todo: map atlas y position to same coordinate system as scatter y position
-            #this needs to 
+            #then take click positions into 3 y values on each, and fit line to 3 points. 
+            # [histology_data['boundary_label']]
+            # [scatter_data['depths']]
 
 
 
