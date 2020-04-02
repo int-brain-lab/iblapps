@@ -73,11 +73,15 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_mouse_double_clicked(self, event):
         if event.double():
             pos = self.scatter_plot.mapFromScene(event.scenePos())
+            pos_atlas = self.fig_histology.mapFromScene(event.scenePos())
             line_scat = pg.InfiniteLine(pos=pos.y(), angle=0, pen='k', movable=True)
             line_hist = pg.InfiniteLine(pos=pos.y(), angle=0, pen='k', movable=True)
             self.fig_histology.addItem(line_scat)
             self.fig_scatter.addItem(line_hist)
-            
+            print(pos)       
+            print(pos_atlas)
+            #todo: map atlas y position to same coordinate system as scatter y position
+            #this needs to 
 
 
 
