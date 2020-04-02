@@ -84,7 +84,8 @@ class MainWindow(QtWidgets.QMainWindow):
             #then take click positions into 3 y values on each, and fit line to 3 points. 
             # [histology_data['boundary_label']]
             # [scatter_data['depths']]
-
+            #a = pos.y() b=pos_atlas.y()
+            #z = np.polyfit(a,b,1)
 
 
 if __name__ == '__main__':
