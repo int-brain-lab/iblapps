@@ -26,13 +26,14 @@ def figure():
     fig.scene.add_actor(actor)
 
     mlab.view(azimuth=180, elevation=0)
+    mlab.pitch(10)
     mlab.view(azimuth=210, elevation=210, reset_roll=False)
 
     return fig
 
 
 def rotating_video(output_file, mfig, fps=12, secs=6):
-
+    # ffmpeg -i input.webm -pix_fmt rgb24 output.gif
     file_video = Path(output_file)
     if file_video.suffix == '.avi':
         fourcc = cv2.VideoWriter_fourcc(*'XVID')

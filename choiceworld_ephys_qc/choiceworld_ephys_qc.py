@@ -11,9 +11,10 @@ import alf.io
 from ibllib.ephys import ephysqc
 from ibllib.io.extractors import ephys_fpga, training_wheel, ephys_trials
 import ibllib.io.raw_data_loaders as rawio
+from iblapps import qt
 
 import choiceworld_ephys_qc.ViewEphysQC as ViewEphysQC
-import choiceworld_ephys_qc.qt as qt
+
 
 _logger = logging.getLogger('ibllib')
 
