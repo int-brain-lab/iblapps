@@ -107,14 +107,15 @@ class MainWindow(QtWidgets.QMainWindow):
             #a = pos.y() b=pos_atlas.y()
             #z = np.polyfit(a,b,1)
 
-    def on_enter_clicked(self):
-        if len(self.added_lines) == 3:
-            scatter_line_pos = [line[0].pos().y() for line in self.added_lines]
-            print(scatter_line_pos)
-            hist_line_pos = [line[1].pos().y() for line in self.added_lines]
-            print(hist_line_pos)
-        else:
-            print('need to add 3 lines')
+    def on_enter_clicked(self, event):
+        if event == QtCore.Qt.Key_Return:
+            if len(self.added_lines) == 3:
+                scatter_line_pos = [line[0].pos().y() for line in self.added_lines]
+                print(scatter_line_pos)
+                hist_line_pos = [line[1].pos().y() for line in self.added_lines]
+                print(hist_line_pos)
+            else:
+                print('need to add 3 lines')
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication([])
