@@ -28,10 +28,14 @@ class MainWindow(QtWidgets.QMainWindow):
         #Menu options --> Still need to work on this
         menuBar = QtWidgets.QMenuBar(self)
         menu_options = menuBar.addMenu("Plot Options")
+
         menuBar.setGeometry(QtCore.QRect(0, 0, 1002, 22))
+
         menu_options.addAction('Scatter Plot')
-        menu_options.addAction('Depth Plot')
+        menu_options.addAction('Depth plot')
         menu_options.addAction('LFP Plot')
+        menuBar.triggered.connect(self.on_menu_clicked)
+
         self.setMenuBar(menuBar)
 
         #Holds the infiniteLine objects added to plot
@@ -75,6 +79,10 @@ class MainWindow(QtWidgets.QMainWindow):
         main_widget_layout.addWidget(self.fig_histology)
         main_widget.setLayout(main_widget_layout)
 
+
+    def on_menu_clicked(self, action):
+        print(action.text())
+    
 
     def create_data(self, bound, chan_int):
         y = np.arange(bound[0], bound[1] + chan_int, chan_int, dtype=int)
