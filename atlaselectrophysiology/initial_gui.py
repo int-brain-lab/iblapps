@@ -1,12 +1,13 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import pyqtgraph.exporters
-from pathlib import Path
 
+#Import custom QtGui.QWidget that allows keyPressEvents
 from CustomEventWidget import CustomEventWidget
 
 import numpy as np
 import load_data as ld
+from random import randrange
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -14,7 +15,6 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
 
         self.resize(1000, 800)
-        self.menuBar
         main_widget = CustomEventWidget()
         self.setCentralWidget(main_widget)
         main_widget_layout = QtWidgets.QHBoxLayout()
@@ -27,10 +27,11 @@ class MainWindow(QtWidgets.QMainWindow):
       
         #Menu options --> Still need to work on this
         menuBar = QtWidgets.QMenuBar(self)
-        options = menuBar.addMenu("Plot Options")
+        menu_options = menuBar.addMenu("Plot Options")
         menuBar.setGeometry(QtCore.QRect(0, 0, 1002, 22))
-        options.addAction('Scatter Plot')
-        options.addAction('Depth Plot')
+        menu_options.addAction('Scatter Plot')
+        menu_options.addAction('Depth Plot')
+        menu_options.addAction('LFP Plot')
         self.setMenuBar(menuBar)
 
         #Holds the infiniteLine objects added to plot
@@ -38,7 +39,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
         #Create scatter plot
-        print(len(scatter_data['times']))
         self.fig_scatter = pg.PlotWidget(background='w')
         self.fig_scatter.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
         self.fig_scatter.setMouseEnabled(x=False, y=False)
@@ -90,8 +90,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if event.double():
             pos = self.scatter_plot.mapFromScene(event.scenePos())
             pos_atlas = self.fig_histology.mapFromScene(event.scenePos())
-            line_scat = pg.InfiniteLine(pos=pos.y(), angle=0, pen='k', movable=True)
-            line_hist = pg.InfiniteLine(pos=pos.y(), angle=0, pen='k', movable=True)
+            marker, pen = self.create_line_style()
+            line_scat = pg.InfiniteLine(pos=pos.y(), angle=0, pen=pen, movable=True)
+            #line_scat.addMarker(marker[0], position=0.98, size=marker[1]) #requires latest pyqtgraph
+            line_hist = pg.InfiniteLine(pos=pos.y(), angle=0, pen=pen, movable=True)
+            #line_hist.addMarker(marker[0], position=0.98, size=marker[1]) #requires latest pyqtgraph
             self.fig_histology.addItem(line_scat)
             self.fig_scatter.addItem(line_hist)
 
@@ -109,13 +112,24 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_enter_clicked(self, event):
         if event == QtCore.Qt.Key_Return:
-            if len(self.added_lines) == 3:
+            if len(self.added_lines) >= 3:
                 scatter_line_pos = [line[0].pos().y() for line in self.added_lines]
                 print(scatter_line_pos)
                 hist_line_pos = [line[1].pos().y() for line in self.added_lines]
                 print(hist_line_pos)
             else:
                 print('need to add 3 lines')
+    
+    def create_line_style(self):
+        #Create random choice of line colour and style for infiniteLine
+        markers = [['o', 10], ['v', 15]]
+        mark = markers[randrange(len(markers))]
+        colours = ['#000000', '#cc0000', '#6aa84f', '#1155cc', '#a64d79'] 
+        style = [QtCore.Qt.SolidLine, QtCore.Qt.DashLine, QtCore.Qt.DashDotLine]
+        col = QtGui.QColor(colours[randrange(len(colours))])
+        sty = style[randrange(len(style))]
+        pen = pg.mkPen(color=col, style=sty, width=3)
+        return mark, pen
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication([])
