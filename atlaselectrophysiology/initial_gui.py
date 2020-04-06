@@ -6,6 +6,7 @@ import pyqtgraph.exporters
 from CustomEventWidget import CustomEventWidget
 
 import numpy as np
+#import load_data as ld
 import load_data as ld
 from random import randrange
 
@@ -20,9 +21,10 @@ class MainWindow(QtWidgets.QMainWindow):
         main_widget_layout = QtWidgets.QHBoxLayout()
         
         #Load the data
-        eid, one = ld.get_session('ZM_2407', '2019-11-07')
-        scatter_data, probe_label = ld.get_scatter_data(eid, one, probe_id=0)
-        histology_data = ld.get_histology_data(eid, probe_label, one)
+        data = ld.LoadData('ZM_2407', '2019-11-07', probe_id=0)
+        self.scatter_data = data.get_scatter_data()
+        histology_data = data.get_histology_data()
+        self.amplitude_data = data.get_amplitude_data()
 
       
         #Menu options --> Still need to work on this
@@ -32,7 +34,7 @@ class MainWindow(QtWidgets.QMainWindow):
         menuBar.setGeometry(QtCore.QRect(0, 0, 1002, 22))
 
         menu_options.addAction('Scatter Plot')
-        menu_options.addAction('Depth plot')
+        menu_options.addAction('Depth Plot')
         menu_options.addAction('LFP Plot')
         menuBar.triggered.connect(self.on_menu_clicked)
 
@@ -42,17 +44,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.added_lines = []
 
 
-        #Create scatter plot
-        self.fig_scatter = pg.PlotWidget(background='w')
-        self.fig_scatter.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
-        self.fig_scatter.setMouseEnabled(x=False, y=False)
-        self.fig_scatter.setFixedSize(800, 800)
-        connect = np.zeros(len(scatter_data['times']), dtype=int)
-        self.scatter_plot = pg.PlotDataItem()
-        self.scatter_plot.setData(x=scatter_data['times'], y=scatter_data['depths'], connect = connect, symbol = 'o',symbolSize = 2)
-        #self.scatter_plot = pg.ScatterPlotItem()
-        #self.scatter_plot.setData(x=scatter_data['times'][:], y=scatter_data['depths'][:], size = 2, color = 'k')
-        self.fig_scatter.addItem(self.scatter_plot)
+        self.fig_data = pg.PlotWidget(background='w')
+        self.fig_data.setMouseEnabled(x=False, y=False)
+        self.fig_data.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
+        self.fig_data.setFixedSize(800, 800)
+        
+        #Initialise with depth scatter plot
+        self.current_plot = []
+        self.current_plot = self.plot_scatter()
+
+
 
         #Create histology figure
         #--> to do: incorporate actual data into plot
@@ -75,13 +76,49 @@ class MainWindow(QtWidgets.QMainWindow):
         #When you hit enter key and three Infinitelines added -> print y position of lines
         main_widget.keyPressed.connect(self.on_enter_clicked)
 
-        main_widget_layout.addWidget(self.fig_scatter)
+        main_widget_layout.addWidget(self.fig_data)
         main_widget_layout.addWidget(self.fig_histology)
         main_widget.setLayout(main_widget_layout)
 
 
+    def plot_scatter(self):
+        
+        connect = np.zeros(len(self.scatter_data['times']), dtype=int)
+        scatter_plot = pg.PlotDataItem()
+        scatter_plot.setData(x=self.scatter_data['times'], y=self.scatter_data['depths'], connect = connect, symbol = 'o',symbolSize = 2)
+        self.fig_data.addItem(scatter_plot)
+        self.fig_data.setYRange(min=0, max=3840)
+        return scatter_plot
+
+    
+    def plot_bar(self):
+    
+        bar_plot = pg.BarGraphItem()
+        bar_plot.setOpts(x=self.amplitude_data['bins'], height=self.amplitude_data['amps'], width=40, brush='b')
+        bar_plot.rotate(90)
+        self.fig_data.getPlotItem().invertX(True)
+        self.fig_data.addItem(bar_plot)
+        self.fig_data.setYRange(min=0, max=3840)
+        
+        return bar_plot
+    
+    def plot_image(self):
+        image_plot = pg.ImageItem()
+        image_plot.setImage(self.amplitude_data['corr'])
+        self.fig_data.addItem(image_plot)
+  
+        return image_plot
+   
+
     def on_menu_clicked(self, action):
-        print(action.text())
+        self.fig_data.removeItem(self.current_plot)
+        if action.text() == 'Scatter Plot':
+            self.current_plot = self.plot_scatter()
+        if action.text() == 'Depth Plot':
+            self.current_plot = self.plot_bar()
+        if action.text() == 'LFP Plot':
+            self.current_plot = self.plot_image()
+        #print(action.text())
     
 
     def create_data(self, bound, chan_int):
@@ -96,15 +133,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_mouse_double_clicked(self, event):
         if event.double():
-            pos = self.scatter_plot.mapFromScene(event.scenePos())
-            pos_atlas = self.fig_histology.mapFromScene(event.scenePos())
+            #pos = self.scatter_plot.mapFromScene(event.scenePos())
+            pos = self.current_plot.mapFromScene(event.scenePos())
+            #print(pos)
+            #pos_atlas = self.fig_histology.mapFromScene(event.scenePos())
+
+            #print(pos_atlas)
             marker, pen = self.create_line_style()
             line_scat = pg.InfiniteLine(pos=pos.y(), angle=0, pen=pen, movable=True)
             #line_scat.addMarker(marker[0], position=0.98, size=marker[1]) #requires latest pyqtgraph
             line_hist = pg.InfiniteLine(pos=pos.y(), angle=0, pen=pen, movable=True)
             #line_hist.addMarker(marker[0], position=0.98, size=marker[1]) #requires latest pyqtgraph
             self.fig_histology.addItem(line_scat)
-            self.fig_scatter.addItem(line_hist)
+            #self.fig_scatter.addItem(line_hist)
+            self.fig_data.addItem(line_hist)
 
             lines = [line_scat, line_hist]
             self.added_lines.append(lines)
@@ -125,6 +167,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 print(scatter_line_pos)
                 hist_line_pos = [line[1].pos().y() for line in self.added_lines]
                 print(hist_line_pos)
+                self.z = np.polyfit(scatter_line_pos, hist_line_pos, 1)
+                print(z)
             else:
                 print('need to add 3 lines')
     
@@ -138,6 +182,11 @@ class MainWindow(QtWidgets.QMainWindow):
         sty = style[randrange(len(style))]
         pen = pg.mkPen(color=col, style=sty, width=3)
         return mark, pen
+
+    #def update_boundaries(self):
+
+
+
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication([])
