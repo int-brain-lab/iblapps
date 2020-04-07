@@ -1,6 +1,13 @@
 import glob
 import os
 import numpy as np
+import sys
+sys.path.extend(['C:\\Users\\Jai\\int-brain-lab\\ibllib'])
+# sys.path.extend(
+#     ['C:\\Users\\Jai\\int-brain-lab\\analysis', 'C:\\Users\\Jai\\int-brain-lab\\iblapps',
+#      'C:\\Users\\Jai\\int-brain-lab\\ibllib', 'C:\\Users\\Jai\\int-brain-lab\\iblscripts',
+#      'C:\\Users\\Jai\\int-brain-lab\\phy', 'C:\\Users\\Jai\\int-brain-lab\\phylib',
+#      'C:/Users/Jai/int-brain-lab/analysis'])
 
 from phy.apps.template import TemplateController, template_gui
 from phy.gui.qt import create_app, run_app
@@ -10,6 +17,8 @@ from oneibl.one import ONE
 def launch_phy(eid, probe_name, one=None):
     """
     Launch phy given an eid and probe name.
+
+    TODO calculate metrics and save as .tsvs to include in GUI when launching
     """
 
     # Load data from probe #
@@ -62,6 +71,17 @@ def launch_phy(eid, probe_name, one=None):
     controller.model.close()
 
 if __name__ == '__main__':
-    eid = '5cf2b2b7-1a88-40cd-adfc-f4a031ff7412'
-    probe_name = 'probe_right'
-    launch_phy(eid, probe_name)
+    import sys
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument('eid', nargs=1, type=str)
+    parser.add_argument('probe_name', nargs=1, type=str)
+    # parser.add_argument('ibllib_path', nargs=1, type=str)
+    args = parser.parse_args()
+    # sys.path.extend(args.ibllib_path)
+    from oneibl.one import ONE
+    launch_phy(args.eid[0], args.probe_name[0])
+    #
+    # eid = '5cf2b2b7-1a88-40cd-adfc-f4a031ff7412'
+    # probe_name = 'probe_right'
+    # launch_phy(eid, probe_name)
