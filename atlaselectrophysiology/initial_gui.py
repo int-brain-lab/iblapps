@@ -23,8 +23,8 @@ class MainWindow(QtWidgets.QMainWindow):
         #Load the data
         data = ld.LoadData('ZM_2407', '2019-11-07', probe_id=0)
         self.scatter_data = data.get_scatter_data()
-        histology_data = data.get_histology_data()
-        self.amplitude_data = data.get_amplitude_data()
+        self.histology_data = data.get_histology_data()
+        #self.amplitude_data = data.get_amplitude_data()
 
       
         #Menu options --> Still need to work on this
@@ -42,12 +42,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         #Holds the infiniteLine objects added to plot
         self.added_lines = []
+        self.z = [1.0, 0.0]
 
 
         self.fig_data = pg.PlotWidget(background='w')
         self.fig_data.setMouseEnabled(x=False, y=False)
         self.fig_data.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
         self.fig_data.setFixedSize(800, 800)
+        pen = pg.mkPen(color='k', style=QtCore.Qt.DotLine, width=2)
+        self.fig_data.addLine(y=0, pen=pen)
+        self.fig_data.addLine(y=3840, pen=pen)
+
         
         #Initialise with depth scatter plot
         self.current_plot = []
@@ -60,26 +65,77 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_histology = pg.PlotWidget(background='w')
         self.fig_histology.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
         self.fig_histology.setMouseEnabled(x=False, y=False)
-        axis = self.fig_histology.plotItem.getAxis('left')
-        axis.setTicks([histology_data['boundary_label']])
-        axis.setPen('k')
         self.fig_histology.setFixedSize(400, 800)
+        self.fig_histology.setYRange(min=-500, max=4340)
+        self.plot_histology(self.histology_data['boundary'], self.histology_data['boundary_label'])
+        self.add_text()
 
-        for idx, bound in enumerate(histology_data['boundary']):
-            x, y = self.create_data(bound, histology_data['chan_int'])
-            curve_item = pg.PlotCurveItem()
-            curve_item.setData(x=x, y=y, fillLevel=50)
-            colour = QtGui.QColor(histology_data['boundary_colour'][idx])
-            curve_item.setBrush(colour)
-            self.fig_histology.addItem(curve_item)
+
+        self.fig_histology_ref = pg.PlotWidget(background='w')
+        #self.fig_histology.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
+        self.fig_histology_ref.setMouseEnabled(x=False, y=False)
+        self.fig_histology_ref.setFixedSize(400, 800)
+        self.fig_histology_ref.setYRange(min=-500, max=4340)
+
+        self.plot_histology_ref(self.histology_data['boundary'], self.histology_data['boundary_label'])
 
         #When you hit enter key and three Infinitelines added -> print y position of lines
         main_widget.keyPressed.connect(self.on_enter_clicked)
 
         main_widget_layout.addWidget(self.fig_data)
         main_widget_layout.addWidget(self.fig_histology)
+        main_widget_layout.addWidget(self.fig_histology_ref)
         main_widget.setLayout(main_widget_layout)
 
+    def plot_histology(self, boundary, boundary_label):
+        axis = self.fig_histology.plotItem.getAxis('left')
+        axis.setTicks([boundary_label])
+        axis.setPen('k')
+
+        for idx, bound in enumerate(boundary):
+            x, y = self.create_data(bound, self.histology_data['chan_int'])
+            curve_item = pg.PlotCurveItem()
+            curve_item.setData(x=x, y=y, fillLevel=50)
+            colour = QtGui.QColor(self.histology_data['boundary_colour'][idx])
+            curve_item.setBrush(colour)
+            self.fig_histology.addItem(curve_item)
+
+        pen = pg.mkPen(color='k', style=QtCore.Qt.DotLine, width= 2)
+        self.fig_histology.addLine(y=0, pen=pen)
+        self.fig_histology.addLine(y=3840, pen=pen)
+    
+    def plot_histology_ref(self, boundary, boundary_label):
+        axis = self.fig_histology_ref.plotItem.getAxis('left')
+        axis.setTicks([boundary_label])
+        axis.setPen('k')
+
+        for idx, bound in enumerate(boundary):
+            x, y = self.create_data(bound, self.histology_data['chan_int'])
+            curve_item = pg.PlotCurveItem()
+            curve_item.setData(x=x, y=y, fillLevel=50)
+            colour = QtGui.QColor(self.histology_data['boundary_colour'][idx])
+            curve_item.setBrush(colour)
+            self.fig_histology_ref.addItem(curve_item)
+
+        pen = pg.mkPen(color='k', style=QtCore.Qt.DotLine, width=2)
+        self.fig_histology_ref.addLine(y=0, pen=pen)
+        self.fig_histology_ref.addLine(y=3840, pen=pen)
+        
+    
+    def add_text(self):
+        font = QtGui.QFont()
+        font.setPointSize(10)
+        font.setBold(True)
+        self.scale_text = pg.TextItem(color='k')
+        self.scale_text.setText('Scale: ' + str(round(self.z[0], 2)))
+        self.scale_text.setPos(0.1, 4540)
+        self.scale_text.setFont(font)
+        self.offset_text = pg.TextItem(color='k')
+        self.offset_text.setText('Offset: ' + str(round(self.z[1], 2)))
+        self.offset_text.setPos(0.6, 4540)
+        self.offset_text.setFont(font)
+        self.fig_histology.addItem(self.scale_text)
+        self.fig_histology.addItem(self.offset_text)
 
     def plot_scatter(self):
         
@@ -87,18 +143,18 @@ class MainWindow(QtWidgets.QMainWindow):
         scatter_plot = pg.PlotDataItem()
         scatter_plot.setData(x=self.scatter_data['times'], y=self.scatter_data['depths'], connect = connect, symbol = 'o',symbolSize = 2)
         self.fig_data.addItem(scatter_plot)
-        self.fig_data.setYRange(min=0, max=3840)
+        self.fig_data.setYRange(min=-500, max=4340)
         return scatter_plot
 
     
     def plot_bar(self):
     
         bar_plot = pg.BarGraphItem()
-        bar_plot.setOpts(x=self.amplitude_data['bins'], height=self.amplitude_data['amps'], width=40, brush='b')
+        bar_plot.setOpts(x=self.amplitude_data['bins'], height=self.amplitude_data['amps'], width=40)
         bar_plot.rotate(90)
         self.fig_data.getPlotItem().invertX(True)
         self.fig_data.addItem(bar_plot)
-        self.fig_data.setYRange(min=0, max=3840)
+        self.fig_data.setYRange(min=-500, max=4340)
         
         return bar_plot
     
@@ -114,10 +170,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_data.removeItem(self.current_plot)
         if action.text() == 'Scatter Plot':
             self.current_plot = self.plot_scatter()
+            self.remove_lines()
+            self.add_lines()
         if action.text() == 'Depth Plot':
             self.current_plot = self.plot_bar()
+            self.remove_lines()
+            self.add_lines()
         if action.text() == 'LFP Plot':
             self.current_plot = self.plot_image()
+            self.remove_lines()
+            self.add_lines()
         #print(action.text())
     
 
@@ -133,34 +195,35 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_mouse_double_clicked(self, event):
         if event.double():
-            #pos = self.scatter_plot.mapFromScene(event.scenePos())
             pos = self.current_plot.mapFromScene(event.scenePos())
-            #print(pos)
-            #pos_atlas = self.fig_histology.mapFromScene(event.scenePos())
-
-            #print(pos_atlas)
             marker, pen = self.create_line_style()
             line_scat = pg.InfiniteLine(pos=pos.y(), angle=0, pen=pen, movable=True)
             #line_scat.addMarker(marker[0], position=0.98, size=marker[1]) #requires latest pyqtgraph
             line_hist = pg.InfiniteLine(pos=pos.y(), angle=0, pen=pen, movable=True)
             #line_hist.addMarker(marker[0], position=0.98, size=marker[1]) #requires latest pyqtgraph
-            self.fig_histology.addItem(line_scat)
-            #self.fig_scatter.addItem(line_hist)
-            self.fig_data.addItem(line_hist)
+            self.fig_histology.addItem(line_hist)
+
+            #self.fig_histology.removeItem(line_scat)
+            self.fig_data.addItem(line_scat)
 
             lines = [line_scat, line_hist]
             self.added_lines.append(lines)
       
-            #print(pos)       
-            #print(pos_atlas)
-            #todo: map atlas y position to same coordinate system as scatter y position
-            #then take click positions into 3 y values on each, and fit line to 3 points. 
-            # [histology_data['boundary_label']]
-            # [scatter_data['depths']]
-            #a = pos.y() b=pos_atlas.y()
-            #z = np.polyfit(a,b,1)
+    
+    def add_lines(self):
+        for lines in self.added_lines:
+            self.fig_data.addItem(lines[0])
+            self.fig_histology.addItem(lines[1])
+
+    def remove_lines(self):
+        for lines in self.added_lines:
+            self.fig_data.removeItem(lines[0])
+            self.fig_histology.removeItem(lines[1])
+
 
     def on_enter_clicked(self, event):
+        #print(self.fig_histology.items())
+
         if event == QtCore.Qt.Key_Return:
             if len(self.added_lines) >= 3:
                 scatter_line_pos = [line[0].pos().y() for line in self.added_lines]
@@ -168,7 +231,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 hist_line_pos = [line[1].pos().y() for line in self.added_lines]
                 print(hist_line_pos)
                 self.z = np.polyfit(scatter_line_pos, hist_line_pos, 1)
-                print(z)
+                print(self.z)
+                self.update_boundaries()
             else:
                 print('need to add 3 lines')
     
@@ -183,7 +247,32 @@ class MainWindow(QtWidgets.QMainWindow):
         pen = pg.mkPen(color=col, style=sty, width=3)
         return mark, pen
 
-    #def update_boundaries(self):
+    def update_boundaries(self):
+        boundary = self.histology_data['boundary']
+        boundary_label = self.histology_data['boundary_label']
+        p = np.poly1d(self.z)
+        print(p)
+        boundary_new = []
+        boundary_label_new = []
+        for idx, bound in enumerate(boundary):
+            bound_new = p(bound)
+            boundary_new.append(bound_new)
+            boundary_label_new.append((np.mean(bound_new), boundary_label[idx][1]))
+        
+        self.histology_data['boundary'] = boundary_new
+        self.histology_data['boundary_label'] = boundary_label_new
+    
+        
+        self.fig_histology.clear()
+        self.plot_histology(boundary_new, boundary_label_new)
+        self.add_text()
+        self.remove_lines()
+        self.added_lines = []
+        #self.add_lines()
+
+
+
+
 
 
 

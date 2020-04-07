@@ -4,6 +4,8 @@ from brainbox.io.one import load_spike_sorting, load_channel_locations
 from oneibl.one import ONE
 import random
 
+from ibllib.atlas import AllenAtlas
+
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 one = ONE(base_url=ONE_BASE_URL)
 
@@ -18,6 +20,7 @@ class LoadData:
 
         eids = one.search(subject=subj, date=date, number=sess, task_protocol='ephys')
         self.eid = eids[0]
+        print(self.eid)
         self.probe_id = probe_id
         self.get_data()
 
@@ -35,7 +38,11 @@ class LoadData:
         self.spikes = spikes[probe_label]
 
         ses = one.alyx.rest('sessions', 'read', id=self.eid)
+
+        #colours = ba.regions['rgb']
         self.channels = load_channel_locations(ses, one=one, probe=probe_label)[probe_label]
+
+
 
         self.channel_coord = one.load_dataset(eid=self.eid, dataset_type='channels.localCoordinates')
         assert np.all(np.c_[self.channels.lateral_um, self.channels.axial_um] == self.channel_coord)
@@ -81,14 +88,13 @@ class LoadData:
 
 
 
-        region_label.append((-250, 'extra'))
+        region_label.insert(0, (-230, 'extra'))
         region_label.append((4090, 'extra'))
+        region_colour.insert(0, '#808080')
         region_colour.append('#808080')
-        region_colour.append('#808080')
-        region.append([-500, 0])
+        region.insert(0,[-480, 20])
         region.append([3840, 3840 + 500])
 
-        #print(region)
         histology = {
             'boundary': region,
             'boundary_label': region_label,
@@ -101,6 +107,8 @@ class LoadData:
 
 
     def create_random_hex_colours(self, unique_regions):
+
+        ##load the allen structure tree from ibllib/atlas
     
         colour = {}
         random.seed(8)
