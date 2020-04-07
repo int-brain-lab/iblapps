@@ -41,6 +41,21 @@ class LoadData:
 
         #colours = ba.regions['rgb']
         self.channels = load_channel_locations(ses, one=one, probe=probe_label)[probe_label]
+        import ibllib.atlas as atlas
+        self.brain_atlas = atlas.AllenAtlas(res_um=25)
+        xyz = np.c_[self.channels.x, self.channels.y, self.channels.z]
+        # this insertion is the best fit of the channel positions
+        ins = atlas.Insertion.from_track(xyz, brain_atlas=self.brain_atlas)
+        npoints = np.ceil(ins.depth / 20 * 1e6)
+        xyz = np.c_[np.linspace(*ins.xyz[:, 0], npoints),
+                    np.linspace(*ins.xyz[:, 1], npoints),
+                    np.linspace(*ins.xyz[:, 2], npoints)]
+
+        cax = self.brain_atlas.plot_cslice(xyz[0, 1], volume='annotation')
+        cax.plot(xyz[:, 0] * 1e6, xyz[:, 2] * 1e6, 'k*')
+
+        region_ids = self.brain_atlas.get_labels(xyz)
+        regions = self.brain_atlas.regions.get(region_ids)
 
 
 
