@@ -7,6 +7,7 @@ import vtk
 import mayavi.mlab as mlab
 
 
+
 def color_cycle(ind=None):
     """
     Gets the matplotlib color-cycle as RGB numpy array of floats between 0 and 1
@@ -39,9 +40,9 @@ def figure(grid=False):
     fig = mlab.figure(bgcolor=(1, 1, 1))
 
     # engine = mlab.get_engine() # Returns the running mayavi engine.
-    obj_file = "/home/olivier/.brainrender/Data/Meshes/Mouse/root.obj"
+    obj_file = Path(__file__).parent.joinpath("root.obj")
     reader = vtk.vtkOBJReader()
-    reader.SetFileName(obj_file)
+    reader.SetFileName(str(obj_file))
     reader.Update()
     mapper = vtk.vtkPolyDataMapper()
     mapper.SetInputConnection(reader.GetOutputPort())
@@ -88,17 +89,18 @@ def rotating_video(output_file, mfig, fps=12, secs=6):
 
     mlab.view(azimuth=180, elevation=0)
     mfig.scene.render()
-    frame = mlab.screenshot(figure=mfig, mode='rgb', antialiased=False)
-    w, h, _ = frame.shape
+    mfig.scene._lift()
+    frame = mlab.screenshot(figure=mfig, mode='rgb', antialiased=True)
+    w, h, _= frame.shape
     video = cv2.VideoWriter(str(file_video), fourcc, float(fps), (h, w))
 
     # import time
     for e in np.linspace(-180, 180, secs * fps):
         # frame = np.random.randint(0, 256, (w, h, 3), dtype=np.uint8)
-        print(e)
         mlab.view(azimuth=0, elevation=e, reset_roll=False)
         mfig.scene.render()
-        frame = mlab.screenshot(figure=mfig, mode='rgb', antialiased=False)
+        frame = mlab.screenshot(figure=mfig, mode='rgb', antialiased=True)
+        print(e, (h, w), frame.shape)
         video.write(frame)
         # time.sleep(0.05)
 
