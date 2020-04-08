@@ -24,6 +24,7 @@ class MainWindow(QtWidgets.QMainWindow):
         data = ld.LoadData('ZM_2407', '2019-11-07', probe_id=0)
         self.scatter_data = data.get_scatter_data()
         self.histology_data = data.get_histology_data()
+        self.histology_data2 = data.get_histology_data2()
         #self.amplitude_data = data.get_amplitude_data()
 
       
@@ -67,7 +68,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_histology.setMouseEnabled(x=False, y=False)
         self.fig_histology.setFixedSize(400, 800)
         self.fig_histology.setYRange(min=-500, max=4340)
-        self.plot_histology(self.histology_data['boundary'], self.histology_data['boundary_label'])
+        self.plot_histology(self.histology_data2['boundary'], self.histology_data2['boundary_label'])
         self.add_text()
 
 
@@ -96,7 +97,7 @@ class MainWindow(QtWidgets.QMainWindow):
             x, y = self.create_data(bound, self.histology_data['chan_int'])
             curve_item = pg.PlotCurveItem()
             curve_item.setData(x=x, y=y, fillLevel=50)
-            colour = QtGui.QColor(self.histology_data['boundary_colour'][idx])
+            colour = QtGui.QColor(*self.histology_data2['boundary_colour'][idx])
             curve_item.setBrush(colour)
             self.fig_histology.addItem(curve_item)
 
@@ -113,7 +114,7 @@ class MainWindow(QtWidgets.QMainWindow):
             x, y = self.create_data(bound, self.histology_data['chan_int'])
             curve_item = pg.PlotCurveItem()
             curve_item.setData(x=x, y=y, fillLevel=50)
-            colour = QtGui.QColor(self.histology_data['boundary_colour'][idx])
+            colour = QtGui.QColor(*self.histology_data2['boundary_colour'][idx])
             curve_item.setBrush(colour)
             self.fig_histology_ref.addItem(curve_item)
 
