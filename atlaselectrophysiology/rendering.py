@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 import numpy as np
 import cv2
 import vtk
@@ -32,12 +31,13 @@ def color_cycle(ind=None):
         return tuple(c[ind % c.shape[0], :])
 
 
-def figure():
+def figure(grid=False):
     """
     Creates a mayavi figure with the brain atlas mesh
     :return: mayavi figure
     """
     fig = mlab.figure(bgcolor=(1, 1, 1))
+
     # engine = mlab.get_engine() # Returns the running mayavi engine.
     obj_file = "/home/olivier/.brainrender/Data/Meshes/Mouse/root.obj"
     reader = vtk.vtkOBJReader()
@@ -50,8 +50,27 @@ def figure():
     actor.GetProperty().SetOpacity(0.6)
     fig.scene.add_actor(actor)
 
+    if grid:
+        # https://vtk.org/Wiki/VTK/Examples/Python/Visualization/CubeAxesActor
+        cubeAxesActor = vtk.vtkCubeAxesActor()
+        cubeAxesActor.SetMapper(mapper)
+        cubeAxesActor.SetBounds(mapper.GetBounds())
+        cubeAxesActor.SetCamera(fig.scene.renderer._vtk_obj.GetActiveCamera())
+        cubeAxesActor.SetXTitle("AP (um)")
+        cubeAxesActor.SetYTitle("DV (um)")
+        cubeAxesActor.SetZTitle("ML (um)")
+        cubeAxesActor.GetTitleTextProperty(0).SetColor(1.0, 0.0, 0.0)
+        cubeAxesActor.GetLabelTextProperty(0).SetColor(1.0, 0.0, 0.0)
+        cubeAxesActor.GetTitleTextProperty(1).SetColor(0.0, 1.0, 0.0)
+        cubeAxesActor.GetLabelTextProperty(1).SetColor(0.0, 1.0, 0.0)
+        cubeAxesActor.GetTitleTextProperty(2).SetColor(0.0, 0.0, 1.0)
+        cubeAxesActor.GetLabelTextProperty(2).SetColor(0.0, 0.0, 1.0)
+        cubeAxesActor.DrawXGridlinesOn()
+        cubeAxesActor.DrawYGridlinesOn()
+        cubeAxesActor.DrawZGridlinesOn()
+        fig.scene.add_actor(cubeAxesActor)
+
     mlab.view(azimuth=180, elevation=0)
-    mlab.pitch(10)
     mlab.view(azimuth=210, elevation=210, reset_roll=False)
 
     return fig
