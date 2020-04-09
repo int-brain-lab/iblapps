@@ -20,9 +20,10 @@ class LoadData:
 
         eids = one.search(subject=subj, date=date, number=sess, task_protocol='ephys')
         self.eid = eids[0]
-        print(self.eid)
         self.probe_id = probe_id
-        self.get_data()
+        
+        self.brain_atlas, self.probe_coord = self.get_data()
+
 
 
 
@@ -83,6 +84,8 @@ class LoadData:
         #xyz_flip = np.flip(xyz, axis=0)
         region_ids = brain_atlas.get_labels(np.flip(xyz_ext, axis=0))
         self.region_info = brain_atlas.regions.get(region_ids)
+
+        return brain_atlas, xyz
     
 
     def get_scatter_data(self):
@@ -97,9 +100,9 @@ class LoadData:
     def get_histology_data(self):
         boundaries = np.where(np.diff(self.region_info.id))[0]
 
-        region = np.empty((5, len(boundaries)+ 1,2))
+        region = np.empty((11, len(boundaries)+ 1,2))
         region_label = np.empty((len(boundaries)+1,1), dtype=object)
-        region_axis_label = np.empty((5 ,len(boundaries)+ 1,2), dtype=object)
+        region_axis_label = np.empty((11 ,len(boundaries)+ 1,2), dtype=object)
         region_colour = np.empty((len(boundaries)+1,3), dtype=int)
       
 
