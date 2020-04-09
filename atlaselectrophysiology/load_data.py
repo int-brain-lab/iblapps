@@ -46,52 +46,43 @@ class LoadData:
 
         brain_atlas = atlas.AllenAtlas(res_um=25)
         xyz = np.c_[channels.x, channels.y, channels.z]
+        #Find the unique non-sorted channels
+        idx = []
+        for pos in np.unique(channels.axial_um):
+            idx.append(np.where(channels.axial_um == pos)[0][0])
+
+        xyz = xyz[idx]
         traj = atlas.Trajectory.fit(xyz)
-        top = atlas.Insertion.get_brain_entry(traj, brain_atlas)
-        bottom = atlas.Insertion.get_brain_exit(traj, brain_atlas)
+        entry = atlas.Insertion.get_brain_entry(traj, brain_atlas)
+        exit = atlas.Insertion.get_brain_exit(traj, brain_atlas)
         tip = xyz[np.argmin(xyz[:, 2]), :]
-        depth, _, _ = atlas.cart2sph(*(top - bottom))
-        depth1, _, _ = atlas.cart2sph(*(top - tip))
-        depth2, _, _ = atlas.cart2sph(*(tip - bottom))
-        
-        ## this insertion is the best fit of the channel positions
-        npoints = np.ceil(depth / 20 * 1e6).astype(int)
-        npoints1 = np.ceil(depth1 / 20 * 1e6).astype(int)
-        npoints2 = np.ceil(depth2 / 20 * 1e6).astype(int)
-        #xyz_ext = np.c_[np.linspace(*ins.xyz[:, 0], npoints),
-        #                np.linspace(*ins.xyz[:, 1], npoints),
-        #                np.linspace(*ins.xyz[:, 2], npoints)]
+        top = xyz[np.argmax(xyz[:, 2]), :]
 
-        xyz_ext = np.c_[np.linspace(top[0], bottom[0], npoints),
-                        np.linspace(top[1], bottom[1], npoints),
-                        np.linspace(top[2], bottom[2], npoints)]
-        
-        xyz1 = np.c_[np.linspace(top[0], tip[0], npoints1),
-                     np.linspace(top[1], tip[1], npoints1),
-                     np.linspace(top[2], tip[2], npoints1)]
-        xyz2 = np.c_[np.linspace(tip[0], bottom[0], npoints2),
-                     np.linspace(tip[1], bottom[1], npoints2),
-                     np.linspace(tip[2], bottom[2], npoints2)]
+        self.interval = 20
 
-        xyz_ext = np.r_[xyz1[:-1], xyz2]
-        xyz_ext = xyz1
-        #self.offset = np.argmin(np.linalg.norm((np.flip(xyz_ext, axis=0) - tip), axis=1)) - 2
-        #print(self.offset)
-        self.offset = len(xyz2)
-        print(self.offset)
-        self.offset=0
-        #self.offset = npoints - np.argmin(np.linalg.norm((xyz_ext - tip), axis=1))
-#
+        depth_t, _, _ = atlas.cart2sph(*(entry - top))
+        npoints_t = np.ceil(depth_t / self.interval * 1e6).astype(int)
+        depth_b, _, _ = atlas.cart2sph(*(tip - exit))
+        npoints_b = np.ceil(depth_b / self.interval * 1e6).astype(int)
+
+        xyz_t = np.c_[np.linspace(entry[0], top[0], npoints_t),
+                      np.linspace(entry[1], top[1], npoints_t),
+                      np.linspace(entry[2], top[2], npoints_t)]
+        xyz_b = np.c_[np.linspace(tip[0], exit[0], npoints_b),
+                      np.linspace(tip[1], exit[1], npoints_b),
+                      np.linspace(tip[2], exit[2], npoints_b)]
+
+        xyz_ext = np.r_[xyz_t[:-1], np.flip(xyz, axis=0), xyz_b[1:]]
+
+        region_ids = brain_atlas.get_labels(np.flip(xyz_ext, axis=0))
+        self.region_info = brain_atlas.regions.get(region_ids)
+        self.offset = np.argmin(np.linalg.norm((np.flip(xyz_ext, axis=0) - tip), axis=1))
+
         #cax = self.brain_atlas.plot_cslice(xyz[0, 1], volume='annotation')
         #cax.plot(xyz[:, 0] * 1e6, xyz[:, 2] * 1e6, 'k*')
         #xyz_flip = np.flip(xyz, axis=0)
         region_ids = brain_atlas.get_labels(np.flip(xyz_ext, axis=0))
         self.region_info = brain_atlas.regions.get(region_ids)
-
-        self.channels=channels
-
-        self.channel_coord = one.load_dataset(eid=self.eid, dataset_type='channels.localCoordinates')
-        #assert np.all(np.c_[self.channels.lateral_um, self.channels.axial_um] == self.channel_coord)
     
 
     def get_scatter_data(self):
@@ -103,17 +94,18 @@ class LoadData:
         return scatter
 
 
-    def get_histology_data2(self):
+    def get_histology_data(self):
         boundaries = np.where(np.diff(self.region_info.id))[0]
 
-        #region = np.empty((len(boundaries)+ 1,5,2))
-        #region_label = np.empty((5 ,len(boundaries)+ 1,2))
-        #region_colour = np.empty((len(boundaries)+1,3), dtype=int)
+        region = np.empty((5, len(boundaries)+ 1,2))
+        region_label = np.empty((len(boundaries)+1,1), dtype=object)
+        region_axis_label = np.empty((5 ,len(boundaries)+ 1,2), dtype=object)
+        region_colour = np.empty((len(boundaries)+1,3), dtype=int)
       
 
-        region = np.empty((len(boundaries)+1,2))
-        region_label = np.empty((len(boundaries)+1, 2), dtype=object)
-        region_colour = np.empty((len(boundaries)+1,3), dtype=int)
+        #region = np.empty((len(boundaries) + 1, 2))
+        #region_label = np.empty((len(boundaries) + 1, 2), dtype=object)
+        #region_colour = np.empty((len(boundaries) + 1, 3), dtype=int)
 
 
         for idx in range(len(boundaries) + 1):
@@ -125,88 +117,31 @@ class LoadData:
                 _region = np.array([boundaries[idx - 1], boundaries[idx]])
 
             
-            
             _region_colour = self.region_info.rgb[_region[1]]
             _region_label = self.region_info.acronym[_region[1]]
-            #print(_region)
-            _region = (_region * 20) - self.offset * 20
-            #print(_region)
+            _region = (_region * self.interval) - self.offset * self.interval
             _region_mean = np.mean(_region, dtype=int)
         
-            #region[idx,0,:] = _region
-            #region_colour[idx,:] = _region_colour 
-            #region_label[0,idx,:] = (_region_mean, _region_label)
-
-            region[idx,:] = _region
-            region_colour[idx,:] = _region_colour
-            region_label[idx,:] = (_region_mean, _region_label)
-
-            histology = {
-                'boundary': region,
-                'boundary_label': region_label,
-                'boundary_colour': region_colour,
-                'chan_int': 20
-            }
-
-        return histology
-
-    
-    def get_histology_data(self):
-        #acronym = np.flip(self.channels['acronym'])
-        acronym = self.channels['acronym']
-        colour = self.create_random_hex_colours(np.unique(acronym))  # TODO: ibllib.atlas get colours from Allen
-
-        # Find all boundaries from histology
-        #boundaries = np.where(np.diff(np.flip(self.channels.atlas_id)))[0]
-        boundaries = np.where(np.diff(self.channels.atlas_id))[0]
-
-        #region = []
-        region = np.empty((len(boundaries)+1,2))
-        #region_label = []
-        region_label = np.empty((len(boundaries)+1, 2), dtype=object)
-        #region_colour = []
-        #region_colour = np.empty((len(boundaries)+1), dtype = '<U7')
-        region_colour = np.empty((len(boundaries)+1,3), dtype=int)
-
-        for idx in range(len(boundaries) + 1):
-            if idx == 0:
-                _region = [0, boundaries[idx]]
-            elif idx == len(boundaries):
-                _region = [boundaries[idx - 1], len(self.channel_coord) - 1]
-            else: 
-                _region = [boundaries[idx - 1], boundaries[idx]]
-
-            _region_label = acronym[_region][1]
-            _region_colour = colour[_region_label]
-            _region = self.channel_coord[:, 1][_region]
-            _region_mean = np.mean(_region, dtype=int)
-
-            region[idx,:] = _region
-            region_colour[idx,:] = [ 72, 200,  60]
-            region_label[idx,:] = (_region_mean, _region_label)
-            #region_label.append((_region_mean, _region_label))
-            #region_colour.append(_region_colour)
-            #region.append(_region)
+            region[0,idx,:] = _region
+            region_colour[idx,:] = _region_colour 
+            region_label[idx] = _region_label
+            region_axis_label[0, idx,:] = (_region_mean, _region_label)
 
 
 
-        #region_label.insert(0, (-230, 'extra'))
-        #region_label.append((4090, 'extra'))
-        #region_colour.insert(0, '#808080')
-        #region_colour.append('#808080')
-        #region.insert(0,[-480, 20])
-        #region.append([3840, 3840 + 500])
+            #region[idx,:] = _region
+            #region_colour[idx,:] = _region_colour
+            #region_label[idx,:] = (_region_mean, _region_label)
 
         histology = {
-            'boundary': region,
-            'boundary_label': region_label,
-            'boundary_colour': region_colour,
-            'acronym': acronym,
-            'chan_int': 20
+            'region': region,
+            'axis_label': region_axis_label,
+            'label': region_label,
+            'colour': region_colour,
+            'chan_int': self.interval
         }
 
         return histology
-
 
     def create_random_hex_colours(self, unique_regions):
 
