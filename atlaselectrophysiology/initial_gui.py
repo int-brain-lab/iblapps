@@ -241,7 +241,6 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.depth_fit[self.idx] = self.fit(self.depth_fit[self.idx - 1])
         
-        
         self.tot_fit[self.idx] = np.polyfit(self.depth, self.depth_fit[self.idx], 1)
         print(self.tot_fit[self.idx])
         
@@ -289,6 +288,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.idx <= self.max_idx:
             self.idx += 1
             self.scale_hist_data()
+            self.fig_hist.clear()
             self.plot_histology(self.fig_hist)
             self.plot_fit()
             self.remove_lines_points()
