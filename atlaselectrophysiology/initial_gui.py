@@ -18,8 +18,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.init_variables()
         self.init_layout()
 
-        subj = 'ZM_2407'
-        date = '2019-11-07'
+        subj = 'ZM_2406'
+        date = '2019-11-12'
         probe = 0
         data = ld.LoadData(subj, date, probe_id=probe)
         self.sdata = data.get_scatter_data()
@@ -156,14 +156,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_hist.setMouseEnabled(x=False, y=False)
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra)
         axis = self.fig_hist.plotItem.getAxis('bottom')
-        axis.setTicks([[(0, ''), (1, '')]])
+        axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
+        axis.setLabel('')
  
         #Create reference histology figure
         self.fig_hist_ref = pg.PlotWidget(background='w')
         self.fig_hist_ref.setMouseEnabled(x=False, y=False)
         self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra)
         axis = self.fig_hist_ref.plotItem.getAxis('bottom')
-        axis.setTicks([[(0, ''), (1, '')]])
+        axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
+        axis.setLabel('')
 
         #Create figure showing fit line
         self.fig_fit = pg.PlotWidget(background='w')
@@ -227,24 +229,30 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def scale_hist_data(self):
     
-        line_pos_d = [line[0].pos().y() for line in self.lines]
-        line_pos_h = [line[1].pos().y() for line in self.lines]
-        coeff = np.polyfit(line_pos_d, line_pos_h, 1)
+        line_pos_h = [line[0].pos().y() for line in self.lines]
+        line_pos_d = [line[1].pos().y() for line in self.lines]
+        coeff = np.polyfit(line_pos_h, line_pos_d, 1)
         self.fit = np.poly1d(coeff)
-        
+        print(self.fit)
         for ir, reg in enumerate(self.hist_data['region'][self.idx - 1]):
             new_reg = self.fit(reg)
             self.hist_data['region'][self.idx, ir, :] = new_reg
             self.hist_data['axis_label'][self.idx, ir, :] = (np.mean(new_reg), self.hist_data['label'][ir][0])
         
         self.depth_fit[self.idx] = self.fit(self.depth_fit[self.idx - 1])
+        
+        
         self.tot_fit[self.idx] = np.polyfit(self.depth, self.depth_fit[self.idx], 1)
+        print(self.tot_fit[self.idx])
+        
 
     def plot_fit(self):
         if self.idx != 0:
             self.fit_plot.setData(x=self.depth_fit[self.idx - 1], y=self.depth_fit[self.idx])
             fit = np.poly1d(self.tot_fit[self.idx])
             self.tot_fit_plot.setData(x=self.depth, y=fit(self.depth))
+
+
         else:
             self.fit_plot.setData()
             self.tot_fit_plot.setData()
@@ -284,6 +292,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.plot_histology(self.fig_hist)
             self.plot_fit()
             self.remove_lines_points()
+            self.add_lines_points()
             self.total_idx = self.idx
             self.update_string()
 
@@ -319,23 +328,31 @@ class MainWindow(QtWidgets.QMainWindow):
             line_h = pg.InfiniteLine(pos=pos.y(), angle=0, pen=pen, movable=True)
             line_h.sigPositionChangeFinished.connect(self.update_fit)
             point = pg.PlotDataItem()
-            point.setData(x=[line_d.pos().y()], y=[line_h.pos().y()], symbolBrush=brush, symbol = 'o',symbolSize = 10)
-
+            #point.setData(x=[line_d.pos().y()], y=[line_h.pos().y()], symbolBrush=brush, symbol = 'o',symbolSize = 10)
+            point.setData(x=[line_h.pos().y()], y=[line_d.pos().y()], symbolBrush=brush, symbol = 'o',symbolSize = 10)
             self.fig_fit.addItem(point)
          
             #line_hist.addMarker(marker[0], position=0.98, size=marker[1]) #requires latest pyqtgraph
             self.fig_data.addItem(line_d)
             self.fig_hist.addItem(line_h)
-            self.lines = np.vstack([self.lines, [line_d, line_h]])
+            self.lines = np.vstack([self.lines, [line_h, line_d]])
             self.points = np.vstack([self.points, point])
 
     def remove_lines_points(self):
         for idx, lines in enumerate(self.lines):
-            self.fig_data.removeItem(lines[0])
-            self.fig_hist.removeItem(lines[1])
+            self.fig_hist.removeItem(lines[0])
+            self.fig_data.removeItem(lines[1])
             self.fig_fit.removeItem(self.points[idx][0])
-        self.lines = np.empty((0, 2))
-        self.points = np.empty((0, 1))
+        #self.lines = np.empty((0, 2))
+        #self.points = np.empty((0, 1))
+
+    def add_lines_points(self):
+        for idx, lines in enumerate(self.lines):
+            self.fig_hist.addItem(lines[0])
+            self.fig_data.addItem(lines[1])
+            self.fig_fit.addItem(self.points[idx][0])
+        #self.lines = np.empty((0, 2))
+        #self.points = np.empty((0, 1))
 
     def create_line_style(self):
         #Create random choice of line colour and style for infiniteLine
