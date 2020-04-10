@@ -18,8 +18,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.init_variables()
         self.init_layout()
 
-        subj = 'ZM_2406'
-        date = '2019-11-12'
+        subj = 'ZM_2407'
+        date = '2019-11-07'
         probe = 0
         data = ld.LoadData(subj, date, probe_id=probe)
         self.sdata = data.get_scatter_data()
@@ -200,7 +200,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 ##Plot functions
     def plot_histology(self, fig):
-
+        fig.clear()
         axis = fig.plotItem.getAxis('left')
         axis.setTicks([self.hist_data['axis_label'][self.idx]])
         axis.setPen('k')
@@ -288,7 +288,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.idx <= self.max_idx:
             self.idx += 1
             self.scale_hist_data()
-            self.fig_hist.clear()
             self.plot_histology(self.fig_hist)
             self.plot_fit()
             self.remove_lines_points()
@@ -299,14 +298,22 @@ class MainWindow(QtWidgets.QMainWindow):
     def next_button_pressed(self):
         if self.idx < self.total_idx:
             self.idx += 1
+            self.remove_lines_points()
+            self.add_lines_points()
             self.plot_histology(self.fig_hist)
+            self.remove_lines_points()
+            self.add_lines_points()
             self.plot_fit()
             self.update_string()
 
     def prev_button_pressed(self):
         if self.idx > 0:
             self.idx -= 1
+            self.remove_lines_points()
+            self.add_lines_points()
             self.plot_histology(self.fig_hist)
+            self.remove_lines_points()
+            self.add_lines_points()
             self.plot_fit()
             self.update_string()
 
@@ -336,6 +343,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.fig_data.addItem(line_d)
             self.fig_hist.addItem(line_h)
             self.lines = np.vstack([self.lines, [line_h, line_d]])
+            print(self.lines)
             self.points = np.vstack([self.points, point])
 
     def remove_lines_points(self):
