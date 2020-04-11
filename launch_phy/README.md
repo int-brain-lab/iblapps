@@ -1,6 +1,6 @@
 ## Launch phy with an eid and probe_name
 
-To launch phy, first follow [these instructions](github.com/int-brain-lab/iblenv) for setting up a unified IBL conda environment.
+To launch phy, first follow [these instructions](https://github.com//int-brain-lab/iblenv) for setting up a unified IBL conda environment.
 
 Then in your terminal, checkout the 'launch_phy' branch of 'iblapps' (this branch will soon be merged into 'develop' but will continue to exist), activate your unified conda environment, and run:
 
