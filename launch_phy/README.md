@@ -6,4 +6,4 @@ Then in your terminal, checkout the 'launch_phy' branch of 'iblapps' (this branc
 
 `python '<path/to/phy_launcher.py>' '<eid>' '<probe_name>'`
 
-e.g. `python '~/int-brain-lab/iblapps/phy_launcher.py' 'a3df91c8-52a6-4afa-957b-3479a7d0897c' 'probe00'`
+e.g. `python '~/int-brain-lab/iblapps/launch_phy/phy_launcher.py' 'a3df91c8-52a6-4afa-957b-3479a7d0897c' 'probe00'`
