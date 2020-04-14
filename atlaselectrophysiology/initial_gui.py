@@ -1,9 +1,12 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 from pyqtgraph.widgets import MatplotlibWidget as matplot
+from pyqtgraph.graphicsItems import GradientLegend as glegend
 import pyqtgraph as pg
+from matplotlib import cm
 
 import numpy as np
 import atlaselectrophysiology.load_data as ld
+import atlaselectrophysiology.ColorBar as cb
 from random import randrange
 
 
@@ -24,6 +27,7 @@ class MainWindow(QtWidgets.QMainWindow):
         data = ld.LoadData(subj, date, probe_id=probe)
         self.sdata = data.get_scatter_data()
         self.hist_data = data.get_histology_data()
+        self.amplitude_data = data.get_amplitude_data()
         self.title_string.setText(f"{subj} {date} probe0{probe}")
         
         self.brain_atlas = data.brain_atlas
@@ -31,18 +35,25 @@ class MainWindow(QtWidgets.QMainWindow):
                 
         #Initialise with scatter plot
         self.data_plot = self.plot_scatter()
+        print(self.fig_data.viewRange())
         self.plot_histology(self.fig_hist)
+        print(self.fig_hist.viewRange())
         self.plot_histology(self.fig_hist_ref)
         self.brain_atlas.plot_cslice(self.probe_coord[0, 1], volume='annotation', ax=self.fig_slice_ax)
         self.fig_slice_ax.plot(self.probe_coord[:, 0] * 1e6, self.probe_coord[:, 2] * 1e6, 'k*')
         self.fig_slice.draw()
 
     def init_layout(self):
-        #Main Widget    
-        main_widget = QtGui.QWidget()
-        self.setCentralWidget(main_widget)
 
         #Make menu bar
+        menu_bar = QtWidgets.QMenuBar(self)
+        menu_options = menu_bar.addMenu("Plot Options")
+        menu_bar.setGeometry(QtCore.QRect(0, 0, 1002, 22))
+        menu_options.addAction('Scatter Plot')
+        menu_options.addAction('Depth Plot')
+        menu_options.addAction('Correlation Plot')
+        menu_bar.triggered.connect(self.on_menu_clicked)
+        self.setMenuBar(menu_bar)
 
         #Fit associated items
         hlayout_fit = QtWidgets.QHBoxLayout()
@@ -137,6 +148,11 @@ class MainWindow(QtWidgets.QMainWindow):
         #Variables to keep track of number of lines added
         self.lines = np.empty((0, 2))
         self.points = np.empty((0, 1))
+        self.scale = 1
+
+        #Variables for colour bar
+        self.color_bar = []
+        self.data_plot = []
     
     def init_figures(self):
 
@@ -146,15 +162,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_data = pg.PlotWidget(background='w')
         self.fig_data.setMouseEnabled(x=False, y=False)
         self.fig_data.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
+        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, update=False)
         self.fig_data.addLine(y=self.probe_tip, pen=self.kpen_dot)
         self.fig_data.addLine(y=self.probe_top, pen=self.kpen_dot)
+        self.fig_data_vb = self.fig_data.getViewBox()
         self.set_axis(self.fig_data)
 
         #Create histology figure
         self.fig_hist = pg.PlotWidget(background='w')
         self.fig_hist.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
         self.fig_hist.setMouseEnabled(x=False, y=False)
-        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra)
+        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, update=False)
         axis = self.fig_hist.plotItem.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
         axis.setLabel('')
@@ -162,7 +180,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #Create reference histology figure
         self.fig_hist_ref = pg.PlotWidget(background='w')
         self.fig_hist_ref.setMouseEnabled(x=False, y=False)
-        self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra)
+        self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, update=False)
         axis = self.fig_hist_ref.plotItem.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
         axis.setLabel('')
@@ -189,6 +207,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def set_axis(self, fig, label=None):
+        """
+        Adds label to x and y axis of figure and sets pen of axis to black
+        :param fig: pg.PlotWidget() to add labels to
+        :param label: 2d array of axis labels [xlabel, ylabel]
+        """
         if not label:
             label = ['', '']
         ax_x = fig.plotItem.getAxis('bottom')
@@ -200,6 +223,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
 ##Plot functions
     def plot_histology(self, fig):
+        """
+        Plots brain regions along the probe
+        :param fig: pg.PlotWidget() 
+        """
         fig.clear()
         axis = fig.plotItem.getAxis('left')
         axis.setTicks([self.hist_data['axis_label'][self.idx]])
@@ -251,7 +278,6 @@ class MainWindow(QtWidgets.QMainWindow):
             fit = np.poly1d(self.tot_fit[self.idx])
             self.tot_fit_plot.setData(x=self.depth, y=fit(self.depth))
 
-
         else:
             self.fit_plot.setData()
             self.tot_fit_plot.setData()
@@ -267,10 +293,36 @@ class MainWindow(QtWidgets.QMainWindow):
             
         connect = np.zeros(len(self.sdata['times']), dtype=int)
         plot = pg.PlotDataItem()
-        plot.setData(x=self.sdata['times'], y=self.sdata['depths'], connect = connect, symbol = 'o',symbolSize = 2)
+        plot.setData(x=self.sdata['times'], y=self.sdata['depths'], connect=connect, symbol='o',symbolSize=2)
         self.fig_data.addItem(plot)
-        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra)
+        self.fig_data.setXRange(min=self.sdata['times'].min(), max=self.sdata['times'].max())
+        self.scale = 1
         return plot
+
+    def plot_image(self):
+        self.color_bar = cb.ColorBar('cividis')
+        lut = self.color_bar.getColourMap()
+        
+        image_plot = pg.ImageItem()
+        #img = np.flip(self.amplitude_data['corr'],axis=0)
+        img = self.amplitude_data['corr']
+        bins = self.amplitude_data['bins']
+        self.scale = (bins[-1] - bins[0])/img.shape[0]
+        #image_plot.setImage(img, autoLevels=True)
+        image_plot.setImage(img)
+        image_plot.scale(self.scale, self.scale)
+        image_plot.setLookupTable(lut)
+        image_plot.setLevels((img.min(), img.max()))
+
+     
+        self.color_bar.makeColourBar(3000, 150, min=img.min(), max=img.max(), label='Correlation')
+        
+        #Make this so it automatically sets based on size of colourbar!!
+        self.color_bar.setPos(500, 4500)
+        self.fig_data.addItem(image_plot)
+        self.fig_data.addItem(self.color_bar)
+        self.fig_data.setXRange(min=self.probe_tip, max=self.probe_top)
+        return image_plot
 
 ##Interaction functions
     def keyPressEvent(self, event):
@@ -329,10 +381,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if event.double():
             pos = self.data_plot.mapFromScene(event.scenePos())
             marker, pen, brush = self.create_line_style()
-            line_d = pg.InfiniteLine(pos=pos.y(), angle=0, pen=pen, movable=True)
+            line_d = pg.InfiniteLine(pos=pos.y() * self.scale, angle=0, pen=pen, movable=True)
             line_d.sigPositionChangeFinished.connect(self.update_fit)
             #line_scat.addMarker(marker[0], position=0.98, size=marker[1]) #requires latest pyqtgraph
-            line_h = pg.InfiniteLine(pos=pos.y(), angle=0, pen=pen, movable=True)
+            line_h = pg.InfiniteLine(pos=pos.y() * self.scale, angle=0, pen=pen, movable=True)
             line_h.sigPositionChangeFinished.connect(self.update_fit)
             point = pg.PlotDataItem()
             #point.setData(x=[line_d.pos().y()], y=[line_h.pos().y()], symbolBrush=brush, symbol = 'o',symbolSize = 10)
@@ -343,8 +395,27 @@ class MainWindow(QtWidgets.QMainWindow):
             self.fig_data.addItem(line_d)
             self.fig_hist.addItem(line_h)
             self.lines = np.vstack([self.lines, [line_h, line_d]])
-            print(self.lines)
             self.points = np.vstack([self.points, point])
+
+    def on_menu_clicked(self, action):
+        self.fig_data.removeItem(self.data_plot)
+        self.fig_data.removeItem(self.color_bar)
+
+        if action.text() == 'Scatter Plot':
+            self.data_plot = self.plot_scatter()
+            self.remove_lines_points()
+            self.add_lines_points()
+            print(self.fig_data.viewRange())
+
+        if action.text() == 'Depth Plot':
+            self.data_plot = self.plot_bar()
+            self.remove_lines_points()
+            self.add_lines_points()
+        if action.text() == 'Correlation Plot':
+            self.data_plot = self.plot_image()
+            self.remove_lines_points()
+            self.add_lines_points()
+        #print(action.text())
 
     def remove_lines_points(self):
         for idx, lines in enumerate(self.lines):

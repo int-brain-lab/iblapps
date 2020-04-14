@@ -20,6 +20,7 @@ class LoadData:
 
         eids = one.search(subject=subj, date=date, number=sess, task_protocol='ephys')
         self.eid = eids[0]
+        print(self.eid)
         self.probe_id = probe_id
         
         self.brain_atlas, self.probe_coord = self.get_data()
@@ -32,15 +33,20 @@ class LoadData:
         dtypes_extra = [
             'spikes.depths',
             'spikes.amps',
+            'clusters.peakToTrough',
             'channels.localCoordinates'
         ]
 
         spikes, _ = load_spike_sorting(eid=self.eid, one=one, dataset_types=dtypes_extra)
         probe_label = [key for key in spikes.keys() if int(key[-1]) == self.probe_id][0]
+        self.channel_coord = one.load_dataset(eid=self.eid, dataset_type='channels.localCoordinates')
 
         self.spikes = spikes[probe_label]
 
         ses = one.alyx.rest('sessions', 'read', id=self.eid)
+
+        #insertions = one.alyx.rest('insertions', 'list', session = eid, name=probe_label)
+        
 
         #colours = ba.regions['rgb']
         channels = load_channel_locations(ses, one=one, probe=probe_label)[probe_label]
@@ -162,7 +168,6 @@ class LoadData:
         depths = self.spikes['depths']
         depth_int = 40
         depth_bins = np.arange(0, max(self.channel_coord[:, 1]) + depth_int, depth_int)
-        #depth_bins = np.flip(depth_bins)
         depth_bins_cnt = depth_bins[:-1] + depth_int / 2
 
         amps = self.spikes['amps'] * 1e6 * 2.54  ##Check that this scaling factor is correct!!
@@ -193,13 +198,13 @@ class LoadData:
         corr = np.corrcoef(depth_hist)
         #print(corr)
         corr[np.isnan(corr)] = 0
-
+    
         amplitude = {
             'amps': depth_amps,
             'fr': depth_fr,
             'amps_fr': depth_amps_fr,
             'corr': corr,
-            'bins': depth_bins_cnt
+            'bins': depth_bins
         }
 
         return amplitude
