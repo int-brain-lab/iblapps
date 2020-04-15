@@ -11,16 +11,17 @@ def launch_phy(eid, probe_name, one=None):
     """
     Launch phy given an eid and probe name.
 
-    TODO calculate metrics and save as .tsvs to include in GUI when launching
+    TODO calculate metrics and save as .tsvs to include in GUI when launching?
     """
+
+    # This is a first draft, no error handling and a draft dataset list.
 
     # Load data from probe #
     # -------------------- #
 
     if one is None:
         one = ONE()
-    # This is a first draft, no error handling and a draft dataset list.
-    session_path = one.path_from_eid(eid)
+
     dtypes = [
         'spikes.times',
         'spikes.clusters',
@@ -39,13 +40,12 @@ def launch_phy(eid, probe_name, one=None):
         'channels.probes',
         'channels.rawInd',
         'channels.localCoordinates',
-        #'ephysData.raw.ap'
-        #'_phy_spikes_subset.waveforms'
-        #'_phy_spikes_subset.spikes'
-        #'_phy_spikes_subset.channels'
+        # 'ephysData.raw.ap'
+        # '_phy_spikes_subset.waveforms'
+        # '_phy_spikes_subset.spikes'
+        # '_phy_spikes_subset.channels'
     ]
     _ = one.load(eid, dataset_types=dtypes, download_only=True)
-
     ses_path = one.path_from_eid(eid)
     alf_probe_dir = os.path.join(ses_path, 'alf', probe_name)
     ephys_file_dir = os.path.join(ses_path, 'raw_ephys_data', probe_name)
@@ -54,8 +54,11 @@ def launch_phy(eid, probe_name, one=None):
 
     # TODO download ephys meta-data, and extract TemplateController input arg params
 
+    # Launch phy #
+    # -------------------- #
     create_app()
-    controller = TemplateController(dat_path=raw_file, dir_path=alf_probe_dir, dtype=np.int16, n_channels_dat=384,
+    controller = TemplateController(dat_path=raw_file, dir_path=alf_probe_dir, dtype=np.int16,
+                                    n_channels_dat=384,
                                     sample_rate=3e4)
     gui = controller.create_gui()
     gui.show()
@@ -63,8 +66,10 @@ def launch_phy(eid, probe_name, one=None):
     gui.close()
     controller.model.close()
 
+
 if __name__ == '__main__':
     from argparse import ArgumentParser
+
     parser = ArgumentParser()
     parser.add_argument('eid', nargs=1, type=str)
     parser.add_argument('probe_name', nargs=1, type=str)
