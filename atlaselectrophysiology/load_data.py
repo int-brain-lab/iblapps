@@ -69,7 +69,7 @@ class LoadData:
                           np.linspace(entry[1], top[1], npoints_t),
                           np.linspace(entry[2], top[2], npoints_t)]
 
-            xyz_ext = np.r_[xyz_t[:-1], xyz_picks]
+            xyz_ext = np.r_[xyz_t[1], xyz_picks]
         else:
             xyz_ext = xyz_picks
 
@@ -80,7 +80,7 @@ class LoadData:
             xyz_b = np.c_[np.linspace(tip[0], exit[0], npoints_b),
                           np.linspace(tip[1], exit[1], npoints_b),
                           np.linspace(tip[2], exit[2], npoints_b)]
-            xyz_ext = np.r_[xyz_ext, xyz_b[1:]]
+            xyz_ext = np.r_[xyz_ext, xyz_b[-1]]
         else:
             xyz_ext = xyz_ext
    
@@ -100,7 +100,87 @@ class LoadData:
             idx -= 1
         bot_ext = [xyz_ext[-1, :] - 2*diff]
 
-        xyz_ext = np.r_[top_ext, xyz_ext, bot_ext]
+        original_track = {
+            'xyz': xyz_ext,
+            'distance': distance
+        }
+        
+        xyz_ext = np.r_[top_ext, xyz_picks, bot_ext]
+
+        xyz_ext = np.flip(xyz_ext, axis=0)
+
+
+        #check going from bottom to top
+        distance = np.sqrt(np.sum((np.diff(xyz_ext, axis=0) ** 2), axis=1))
+        
+        distance = np.cumsum(np.r_[[0],distance])
+
+        original_track = {
+            'xyz': xyz_ext,
+            'distance': distance
+        }
+
+        tip_origin = np.zeros((inter_distance.size,3))
+
+
+        inter_distance = original_track['distance'][1] + 200e-6
+        ##interpolation function
+        
+        def interpolate_along_track(inter_distance):
+            xyz_interp= np.zeros((inter_distance.size,3))
+            for m in np.arange(3):
+                xyz_interp[:,m] = np.interp(inter_distance, original_track['distance'], original_track['xyz'][:,m])
+        
+            return xyz_interp
+
+
+        tip_origin = interpolate_along_track(inter_distance)
+
+        total_distance = original_track['distance'][-1]
+        reference_sites = np.arange(0, total_distance, 10e-6)
+
+        reference_track = interpolate_along_track(reference_sites)
+
+
+        distance_relative_to_tip = np.sqrt(np.sum((np.diff(reference_track, axis=0) ** 2), axis=1))
+        distance_relative_to_tip = np.cumsum(np.r_[[0],distance_relative_to_tip])
+
+        ii =  np.argmin(np.sqrt(np.sum((reference_track-tip_origin[0]), axis=1) ** 2), axis=0)
+
+        #ii index of tip in vector
+        #Olivier to do parabolic interpolation to more accurately find tip
+
+        #positive going up
+        dist = distance_relative_to_tip - distance_relative_to_tip[ii]
+
+        region_ids = self.brain_atlas.get_labels(self.xyz_channels_ext)
+        region_info = self.brain_atlas.regions.get(region_ids)
+
+        
+
+        
+
+
+
+
+    
+    
+    #second interpolation function
+        for m in np.arange(3):
+            np.interp(reference_track, original_track['distance'], original_track['xyz'][:,m] )
+        
+        
+        def interpolate_along_track(self):
+
+            self.xyz_channels = np.zeros((self.chan_probe.shape[0], 3))
+            self.xyz_channels_ext = np.zeros((self.chan_probe_ext.shape[0], 3))
+            for m in np.arange(3):
+                self.xyz_channels[:, m] = np.interp(self.chan_probe_scale / 1e6, self.d, self.xyz_ext[:, m])
+                self.xyz_channels_ext[:, m] = np.interp(self.chan_probe_ext_scale / 1e6, self.d, self.xyz_ext[:, m])
+
+
+
+
 
         #self.d = atlas.cart2sph(xyz_ext[:, 0] - xyz_picks[-1, 0], xyz_ext[:, 1] - xyz_picks[-1, 1], xyz_ext[:, 2] - xyz_picks[-1, 2])[0]
         self.d = atlas.cart2sph(xyz_ext[:, 0] - tip[0], xyz_ext[:, 1] - tip[1], xyz_ext[:, 2] - tip[2])[0]
@@ -175,7 +255,12 @@ class LoadData:
         
         return self.xyz_channels
 
-    
+    #xyz, dist = keep original track with no scaling 
+    original_track = np.interp(self.chan_probe_ext_scale / 1e6, self.d, self.xyz_ext[:, m])
+
+    def interpolate_along_track(self):
+
+
 
     def get_scatter_data(self):
         scatter = {
