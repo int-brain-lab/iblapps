@@ -22,26 +22,30 @@ class MainWindow(QtWidgets.QMainWindow):
         self.init_layout()
 
         subj = 'ZM_2407'
-        date = '2019-11-07'
+        date = '2019-11-06'
         probe = 0
-        data = ld.LoadData(subj, date, probe_id=probe)
-        self.sdata = data.get_scatter_data()
-        self.hist_data = data.get_histology_data()
-        self.amplitude_data = data.get_amplitude_data()
+        self.LoadData = ld.LoadData(subj, date, sess=1, probe_id=probe)
+        self.sdata = self.LoadData.get_scatter_data()
+        #self.hist_data = self.LoadData.get_histology_regions()
+        self.amplitude_data = self.LoadData.get_amplitude_data()
         self.title_string.setText(f"{subj} {date} probe0{probe}")
+
+        region, label, colour = self.LoadData.get_histology_regions()
+        self.hist_data['region'][self.idx] = region
+        self.hist_data['axis_label'][self.idx] = label
+        self.hist_data['colour'][self.idx] = colour
         
-        self.brain_atlas = data.brain_atlas
-        self.probe_coord = data.probe_coord
+        self.brain_atlas = self.LoadData.brain_atlas
+        self.probe_coord = self.LoadData.xyz_channels
                 
         #Initialise with scatter plot
         self.data_plot = self.plot_scatter()
-        print(self.fig_data.viewRange())
         self.plot_histology(self.fig_hist)
-        print(self.fig_hist.viewRange())
         self.plot_histology(self.fig_hist_ref)
-        self.brain_atlas.plot_cslice(self.probe_coord[0, 1], volume='annotation', ax=self.fig_slice_ax)
-        self.fig_slice_ax.plot(self.probe_coord[:, 0] * 1e6, self.probe_coord[:, 2] * 1e6, 'k*')
-        self.fig_slice.draw()
+        self.plot_slice()
+        #self.brain_atlas.plot_cslice(self.probe_coord[0, 1], volume='annotation', ax=self.fig_slice_ax)
+        #self.fig_slice_ax.plot(self.probe_coord[:, 0] * 1e6, self.probe_coord[:, 2] * 1e6, 'k*')
+        #self.fig_slice.draw()
 
     def init_layout(self):
 
@@ -96,24 +100,40 @@ class MainWindow(QtWidgets.QMainWindow):
         main_widget = QtGui.QWidget()
         self.setCentralWidget(main_widget)
         #Add everything to the main widget
-        layout_main = QtWidgets.QGridLayout()
-        layout_main.addWidget(self.fig_data, 0, 0, 10, 4)
-        layout_main.addWidget(self.fig_hist, 0, 4, 10, 2)
-        layout_main.addWidget(self.fig_hist_ref, 0, 6, 10, 2)
-        layout_main.addWidget(self.title_string, 0, 8, 1, 2)
-        #layout_main.addWidget(self.fig_slice, 1, 8, 3, 2)
-        layout_main.addLayout(hlayout_fit, 2, 8, 1, 2)
-        layout_main.addWidget(self.fig_fit, 3, 8, 5, 2)
-        layout_main.addLayout(vlayout, 8, 8, 2, 2)
-        layout_main.setColumnStretch(0, 4)
-        layout_main.setColumnStretch(4, 2)
-        layout_main.setColumnStretch(6, 2)
-        layout_main.setColumnStretch(8, 2)
+        #Without coronal slice figure
+        #layout_main = QtWidgets.QGridLayout()
+        #layout_main.addWidget(self.fig_data, 0, 0, 10, 4)
+        #layout_main.addWidget(self.fig_hist, 0, 4, 10, 2)
+        #layout_main.addWidget(self.fig_hist_ref, 0, 6, 10, 2)
+        #layout_main.addWidget(self.title_string, 0, 8, 1, 2)
+        #layout_main.addLayout(hlayout_fit, 2, 8, 1, 2)
+        #layout_main.addWidget(self.fig_fit, 3, 8, 5, 2)
+        #layout_main.addLayout(vlayout, 8, 8, 2, 2)
+        #layout_main.setColumnStretch(0, 4)
+        #layout_main.setColumnStretch(4, 2)
+        #layout_main.setColumnStretch(6, 2)
+        #layout_main.setColumnStretch(8, 2)
         #layout_main.setRowStretch(0, 1)
         #layout_main.setRowStretch(2, 1)
         #layout_main.setRowStretch(4, 1)
         #layout_main.setRowStretch(5, 3)
         #layout_main.setRowStretch(8, 2)
+
+        #With coronal slice figure
+        layout_main = QtWidgets.QGridLayout()
+        layout_main.addWidget(self.fig_data, 0, 0, 10, 4)
+        layout_main.addWidget(self.fig_hist, 0, 4, 10, 2)
+        layout_main.addWidget(self.fig_hist_ref, 0, 6, 10, 2)
+        layout_main.addWidget(self.title_string, 0, 8, 1, 2)
+        layout_main.addWidget(self.fig_slice, 1, 8, 3, 2)
+        layout_main.addLayout(hlayout_fit, 4, 8, 1, 2)
+        layout_main.addWidget(self.fig_fit, 5, 8, 3, 2)
+        layout_main.addLayout(vlayout, 8, 8, 2, 2)
+        layout_main.setColumnStretch(0, 4)
+        layout_main.setColumnStretch(4, 2)
+        layout_main.setColumnStretch(6, 2)
+        layout_main.setColumnStretch(8, 2)
+
 
         main_widget.setLayout(layout_main)
 
@@ -132,7 +152,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.probe_tip = 0
         self.probe_top = 3840
         self.probe_extra = 500
-        self.depth = np.arange(self.probe_tip, self.probe_top, 20)
+        self.view_total = [-2000, 6000]
+        #self.depth = np.arange(self.probe_tip, self.probe_top, 20)
+        self.depth = np.arange(self.view_total[0], self.view_total[1], 20)
         
         #Variables to keep track of number of fits (max 10)
         self.idx = 0
@@ -140,10 +162,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.max_idx = 10
 
         #Variables to keep track of applied fits
-        self.depth_fit = np.empty((11, len(self.depth)))
-        self.depth_fit[0] = self.depth
-        self.tot_fit = np.empty((self.max_idx + 1, 2))
-        self.tot_fit[0] = [1, 0]
+        self.depth_fit_brain = np.empty(((self.max_idx + 1), len(self.depth)))
+        self.depth_fit_brain[0] = self.depth
+        self.depth_fit_probe = np.empty(((self.max_idx + 1), len(self.depth)))
+        self.depth_fit_probe[0] = self.depth
+        self.tot_fit_brain = np.empty((self.max_idx + 1, 2))
+        self.tot_fit_brain[0] = [1, 0]
+        self.tot_fit_probe = np.empty((self.max_idx + 1, 2))
+        self.tot_fit_probe[0] = [1, 0]
+
+        self.hist_data = {
+            'region': [0] * (self.max_idx + 1),
+            'axis_label': [0] * (self.max_idx + 1),
+            'colour': [0] * (self.max_idx + 1),
+            'chan_int': 20
+        }
+
 
         #Variables to keep track of number of lines added
         self.lines = np.empty((0, 2))
@@ -171,7 +205,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #Create histology figure
         self.fig_hist = pg.PlotWidget(background='w')
         self.fig_hist.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
-        self.fig_hist.setMouseEnabled(x=False, y=False)
+        self.fig_hist.setMouseEnabled(x=False)
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, update=False)
         axis = self.fig_hist.plotItem.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
@@ -179,7 +213,7 @@ class MainWindow(QtWidgets.QMainWindow):
  
         #Create reference histology figure
         self.fig_hist_ref = pg.PlotWidget(background='w')
-        self.fig_hist_ref.setMouseEnabled(x=False, y=False)
+        self.fig_hist_ref.setMouseEnabled(x=False)
         self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, update=False)
         axis = self.fig_hist_ref.plotItem.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
@@ -188,8 +222,10 @@ class MainWindow(QtWidgets.QMainWindow):
         #Create figure showing fit line
         self.fig_fit = pg.PlotWidget(background='w')
         self.fig_fit.setMouseEnabled(x=False, y=False)
-        self.fig_fit.setYRange(min=self.probe_tip, max=self.probe_top + 200)
-        self.fig_fit.setXRange(min=self.probe_tip, max=self.probe_top + 200)
+        #elf.fig_fit.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra)
+        #self.fig_fit.setXRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra)
+        self.fig_fit.setXRange(min=self.view_total[0], max=self.view_total[1])
+        self.fig_fit.setYRange(min=self.view_total[0], max=self.view_total[1])
         self.set_axis(self.fig_fit)
         plot = pg.PlotCurveItem()
         plot.setData(x=self.depth, y=self.depth, pen=self.kpen_dot)
@@ -199,11 +235,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_fit.addItem(self.fit_plot)
         self.fig_fit.addItem(self.tot_fit_plot)
 
+
         #Create figure to show coronal slice and probe
         self.fig_slice = matplot.MatplotlibWidget()
-        fig = self.fig_slice.getFigure()
-        fig.canvas.toolbar.hide()
-        self.fig_slice_ax = fig.gca()
+        self.fig = self.fig_slice.getFigure()
+        self.fig.canvas.toolbar.hide()
+        self.fig_slice_ax = self.fig.gca()
 
 
     def set_axis(self, fig, label=None):
@@ -236,7 +273,7 @@ class MainWindow(QtWidgets.QMainWindow):
             x, y = self.create_hist_data(reg, self.hist_data['chan_int'])
             curve_item = pg.PlotCurveItem()
             curve_item.setData(x=x, y=y, fillLevel=50)
-            colour = QtGui.QColor(*self.hist_data['colour'][ir])
+            colour = QtGui.QColor(*self.hist_data['colour'][self.idx][ir])
             curve_item.setBrush(colour)
             fig.addItem(curve_item)
 
@@ -258,24 +295,38 @@ class MainWindow(QtWidgets.QMainWindow):
     
         line_pos_h = [line[0].pos().y() for line in self.lines]
         line_pos_d = [line[1].pos().y() for line in self.lines]
-        coeff = np.polyfit(line_pos_h, line_pos_d, 1)
-        self.fit = np.poly1d(coeff)
-        print(self.fit)
-        for ir, reg in enumerate(self.hist_data['region'][self.idx - 1]):
-            new_reg = self.fit(reg)
-            self.hist_data['region'][self.idx, ir, :] = new_reg
-            self.hist_data['axis_label'][self.idx, ir, :] = (np.mean(new_reg), self.hist_data['label'][ir][0])
+        #coeff = np.polyfit(line_pos_h, line_pos_d, 1)
+        coeff_brain = np.polyfit(line_pos_h, line_pos_d, 1)
+        coeff_probe = np.polyfit(line_pos_d, line_pos_h, 1)
+        self.fit_brain = np.poly1d(coeff_brain)
+        self.fit_probe = np.poly1d(coeff_probe)
+        print(self.fit_brain)
+        print(self.fit_probe)
+        #for ir, reg in enumerate(self.hist_data['region'][self.idx - 1]):
+        #    new_reg = self.fit(reg)
+        #    self.hist_data['region'][self.idx, ir, :] = new_reg
+        #    self.hist_data['axis_label'][self.idx, ir, :] = (np.mean(new_reg), self.hist_data['label'][ir][0])
+               
+        self.depth_fit_brain[self.idx] = self.fit_brain(self.depth_fit_brain[self.idx - 1])
+        self.depth_fit_probe[self.idx] = self.fit_probe(self.depth_fit_probe[self.idx - 1])
+        self.tot_fit_brain[self.idx] = np.polyfit(self.depth, self.depth_fit_brain[self.idx], 1)
+        self.tot_fit_probe[self.idx] = np.polyfit(self.depth, self.depth_fit_probe[self.idx], 1)
+        print(self.tot_fit_brain[self.idx])
+        print(self.tot_fit_probe[self.idx])
+
+        self.probe_coord = self.LoadData.scale_data(self.tot_fit_probe[self.idx])
+
+        region, label, colour = self.LoadData.get_histology_regions()
+        self.hist_data['region'][self.idx] = region
+        self.hist_data['axis_label'][self.idx] = label
+        self.hist_data['colour'][self.idx] = colour
         
-        self.depth_fit[self.idx] = self.fit(self.depth_fit[self.idx - 1])
-        
-        self.tot_fit[self.idx] = np.polyfit(self.depth, self.depth_fit[self.idx], 1)
-        print(self.tot_fit[self.idx])
         
 
     def plot_fit(self):
         if self.idx != 0:
-            self.fit_plot.setData(x=self.depth_fit[self.idx - 1], y=self.depth_fit[self.idx])
-            fit = np.poly1d(self.tot_fit[self.idx])
+            self.fit_plot.setData(x=self.depth_fit_brain[self.idx - 1], y=self.depth_fit_brain[self.idx])
+            fit = np.poly1d(self.tot_fit_brain[self.idx])
             self.tot_fit_plot.setData(x=self.depth, y=fit(self.depth))
 
         else:
@@ -288,7 +339,12 @@ class MainWindow(QtWidgets.QMainWindow):
         idx = np.where(self.lines == line)[0][0]
         self.points[idx][0].setData(x=[self.lines[idx][0].pos().y()], y=[self.lines[idx][1].pos().y()])
 
-    
+    def plot_slice(self):
+        self.fig_slice_ax.cla()
+        self.brain_atlas.plot_cslice(self.probe_coord[0, 1], volume='annotation', ax=self.fig_slice_ax)
+        self.fig_slice_ax.plot(self.probe_coord[:, 0] * 1e6, self.probe_coord[:, 2] * 1e6, 'k*')
+        self.fig_slice.draw()
+
     def plot_scatter(self):
             
         connect = np.zeros(len(self.sdata['times']), dtype=int)
@@ -342,8 +398,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.scale_hist_data()
             self.plot_histology(self.fig_hist)
             self.plot_fit()
+            self.plot_slice()
             self.remove_lines_points()
-            self.add_lines_points()
+            self.lines = np.empty((0, 2))
+            self.points = np.empty((0, 1))
+            #self.add_lines_points()
+            self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, update=True)
+            print(self.fig_data.viewRange())
+            print(self.fig_hist.viewRange())
+            #self.fig_hist.setRange()
             self.total_idx = self.idx
             self.update_string()
 
@@ -449,7 +512,7 @@ class MainWindow(QtWidgets.QMainWindow):
             
         self.idx_string.setText(f"Current Index = {self.idx}")
         self.tot_idx_string.setText(f"Total Index = {self.total_idx}")
-        self.fit_string.setText(f"Scale = {round(self.tot_fit[self.idx][0],2)}, Offset = {round(self.tot_fit[self.idx][1],2)}")
+        self.fit_string.setText(f"Scale = {round(self.tot_fit_brain[self.idx][0],2)}, Offset = {round(self.tot_fit_brain[self.idx][1],2)}")
         
 
 
