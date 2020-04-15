@@ -26,7 +26,6 @@ class MainWindow(QtWidgets.QMainWindow):
         probe = 0
         self.LoadData = ld.LoadData(subj, date, sess=1, probe_id=probe)
         self.sdata = self.LoadData.get_scatter_data()
-        #self.hist_data = self.LoadData.get_histology_regions()
         self.amplitude_data = self.LoadData.get_amplitude_data()
         self.title_string.setText(f"{subj} {date} probe0{probe}")
 
@@ -43,9 +42,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plot_histology(self.fig_hist)
         self.plot_histology(self.fig_hist_ref)
         self.plot_slice()
-        #self.brain_atlas.plot_cslice(self.probe_coord[0, 1], volume='annotation', ax=self.fig_slice_ax)
-        #self.fig_slice_ax.plot(self.probe_coord[:, 0] * 1e6, self.probe_coord[:, 2] * 1e6, 'k*')
-        #self.fig_slice.draw()
+ 
 
     def init_layout(self):
 
@@ -147,6 +144,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.font.setPointSize(12)
         self.title_font = QtGui.QFont()
         self.title_font.setPointSize(18)
+        self.pad = 0.05
 
         #Constant variables
         self.probe_tip = 0
@@ -196,7 +194,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_data = pg.PlotWidget(background='w')
         self.fig_data.setMouseEnabled(x=False, y=False)
         self.fig_data.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
-        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, update=False)
+        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
         self.fig_data.addLine(y=self.probe_tip, pen=self.kpen_dot)
         self.fig_data.addLine(y=self.probe_top, pen=self.kpen_dot)
         self.fig_data_vb = self.fig_data.getViewBox()
@@ -206,7 +204,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_hist = pg.PlotWidget(background='w')
         self.fig_hist.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
         self.fig_hist.setMouseEnabled(x=False)
-        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, update=False)
+        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
         axis = self.fig_hist.plotItem.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
         axis.setLabel('')
@@ -214,7 +212,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #Create reference histology figure
         self.fig_hist_ref = pg.PlotWidget(background='w')
         self.fig_hist_ref.setMouseEnabled(x=False)
-        self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, update=False)
+        self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
         axis = self.fig_hist_ref.plotItem.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
         axis.setLabel('')
@@ -300,12 +298,6 @@ class MainWindow(QtWidgets.QMainWindow):
         coeff_probe = np.polyfit(line_pos_d, line_pos_h, 1)
         self.fit_brain = np.poly1d(coeff_brain)
         self.fit_probe = np.poly1d(coeff_probe)
-        print(self.fit_brain)
-        print(self.fit_probe)
-        #for ir, reg in enumerate(self.hist_data['region'][self.idx - 1]):
-        #    new_reg = self.fit(reg)
-        #    self.hist_data['region'][self.idx, ir, :] = new_reg
-        #    self.hist_data['axis_label'][self.idx, ir, :] = (np.mean(new_reg), self.hist_data['label'][ir][0])
                
         self.depth_fit_brain[self.idx] = self.fit_brain(self.depth_fit_brain[self.idx - 1])
         self.depth_fit_probe[self.idx] = self.fit_probe(self.depth_fit_probe[self.idx - 1])
@@ -352,6 +344,7 @@ class MainWindow(QtWidgets.QMainWindow):
         plot.setData(x=self.sdata['times'], y=self.sdata['depths'], connect=connect, symbol='o',symbolSize=2)
         self.fig_data.addItem(plot)
         self.fig_data.setXRange(min=self.sdata['times'].min(), max=self.sdata['times'].max())
+        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
         self.scale = 1
         return plot
 
@@ -378,6 +371,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_data.addItem(image_plot)
         self.fig_data.addItem(self.color_bar)
         self.fig_data.setXRange(min=self.probe_tip, max=self.probe_top)
+        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
         return image_plot
 
 ##Interaction functions
@@ -403,10 +397,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.lines = np.empty((0, 2))
             self.points = np.empty((0, 1))
             #self.add_lines_points()
-            self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, update=True)
-            print(self.fig_data.viewRange())
-            print(self.fig_hist.viewRange())
-            #self.fig_hist.setRange()
+            self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
             self.total_idx = self.idx
             self.update_string()
 
@@ -468,7 +459,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.data_plot = self.plot_scatter()
             self.remove_lines_points()
             self.add_lines_points()
-            print(self.fig_data.viewRange())
 
         if action.text() == 'Depth Plot':
             self.data_plot = self.plot_bar()

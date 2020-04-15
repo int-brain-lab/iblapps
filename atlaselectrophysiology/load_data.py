@@ -49,11 +49,17 @@ class LoadData:
         xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
 
         self.brain_atlas = atlas.AllenAtlas(res_um=25)
-        traj = atlas.Trajectory.fit(xyz_picks)
-        entry = atlas.Insertion.get_brain_entry(traj, self.brain_atlas)
-        exit = atlas.Insertion.get_brain_exit(traj, self.brain_atlas)
+        #traj = atlas.Trajectory.fit(xyz_picks)
+        #entry = atlas.Insertion.get_brain_entry(traj, self.brain_atlas)
+        #exit = atlas.Insertion.get_brain_exit(traj, self.brain_atlas)
         tip = xyz_picks[np.argmin(xyz_picks[:, 2]), :]
         top = xyz_picks[np.argmax(xyz_picks[:, 2]), :]
+
+        n_picks = round(xyz_picks.shape[0] / 4)
+        traj_entry = atlas.Trajectory.fit(xyz_picks[:n_picks, :])
+        entry = atlas.Insertion.get_brain_entry(traj_entry, self.brain_atlas)
+        traj_exit = atlas.Trajectory.fit(xyz_picks[-1 * n_picks:, :])
+        exit = atlas.Insertion.get_brain_exit(traj_exit, self.brain_atlas)
 
         if entry[2] > top[2]:
             print('extrapolating upwards')
@@ -77,6 +83,7 @@ class LoadData:
             xyz_ext = np.r_[xyz_ext, xyz_b[1:]]
         else:
             xyz_ext = xyz_ext
+   
 
         #Add in extra coordinate at top and bottom to make sure we are out of the brain
         idx = 1
@@ -84,14 +91,14 @@ class LoadData:
         while round(diff[2] * 1e6) == 0:
             diff = np.subtract(xyz_ext[idx, :], xyz_ext[0, :])
             idx += 1
-        top_ext = [xyz_ext[0, :] - 5*diff]
+        top_ext = [xyz_ext[0, :] - 2*diff]
 
         idx = -2
         diff = np.array([0, 0, 0])
         while round(diff[2] * 1e6) == 0:
             diff = np.subtract(xyz_ext[idx, :], xyz_ext[-1, :])
             idx -= 1
-        bot_ext = [xyz_ext[-1, :] - 5*diff]
+        bot_ext = [xyz_ext[-1, :] - 2*diff]
 
         xyz_ext = np.r_[top_ext, xyz_ext, bot_ext]
 
@@ -273,9 +280,9 @@ class LoadData:
             #print(len(depth_idx))
             depth_hist.append(np.histogram(times[depth_idx], time_bins)[0])
             #print(depth_hist)
-            depth_amps_fr.append(np.histogram(amps[depth_idx], amp_bins)[0]/ time_max)
-            depth_amps.append(np.mean(amps[depth_idx]))
-            depth_fr.append(len(depth_idx) / time_max)
+            #depth_amps_fr.append(np.histogram(amps[depth_idx], amp_bins)[0]/ time_max)
+            #depth_amps.append(np.mean(amps[depth_idx]))
+            #depth_fr.append(len(depth_idx) / time_max)
 
         #print(depth_hist)
         corr = np.corrcoef(depth_hist)
@@ -283,9 +290,9 @@ class LoadData:
         corr[np.isnan(corr)] = 0
     
         amplitude = {
-            'amps': depth_amps,
-            'fr': depth_fr,
-            'amps_fr': depth_amps_fr,
+            #'amps': depth_amps,
+            #'fr': depth_fr,
+            #'amps_fr': depth_amps_fr,
             'corr': corr,
             'bins': depth_bins
         }
