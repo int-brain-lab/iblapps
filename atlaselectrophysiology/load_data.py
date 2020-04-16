@@ -151,6 +151,7 @@ class LoadData:
             _region_colour = region_info.rgb[_region[1]]
             _region_label = region_info.acronym[_region[1]]
             _region = sampling_fts[_region]
+            #_region = sampling_trk[_region]
             _region_mean = np.mean(_region * 1e6, dtype=int)
 
             region[idx, :] = _region * 1e6

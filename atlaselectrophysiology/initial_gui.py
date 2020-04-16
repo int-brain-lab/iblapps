@@ -26,7 +26,7 @@ class MainWindow(QtWidgets.QMainWindow):
         probe = 0
         self.loaddata = ld.LoadData(subj, date, sess=1, probe_id=probe)
         self.sdata = self.loaddata.get_scatter_data()
-        self.amplitude_data = self.loaddata.get_amplitude_data()
+        #self.amplitude_data = self.loaddata.get_amplitude_data()
         self.title_string.setText(f"{subj} {date} probe0{probe}")
 
         region, label, colour = self.loaddata.get_histology_regions()
@@ -218,11 +218,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         #Create figure showing fit line
         self.fig_fit = pg.PlotWidget(background='w')
-        self.fig_fit.setMouseEnabled(x=False, y=False)
+        #self.fig_fit.setMouseEnabled(x=False, y=False)
         #elf.fig_fit.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra)
         #self.fig_fit.setXRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra)
-        self.fig_fit.setXRange(min=self.view_total[0], max=self.view_total[1])
-        self.fig_fit.setYRange(min=self.view_total[0], max=self.view_total[1])
+        #self.fig_fit.setXRange(min=self.view_total[0], max=self.view_total[1])
+        #self.fig_fit.setYRange(min=self.view_total[0], max=self.view_total[1])
         self.set_axis(self.fig_fit)
         plot = pg.PlotCurveItem()
         plot.setData(x=self.depth, y=self.depth, pen=self.kpen_dot)
@@ -298,8 +298,10 @@ class MainWindow(QtWidgets.QMainWindow):
         line_pos_d = np.array([line[1].pos().y() for line in self.lines]) / 1e6
 
         offset = np.mean(np.sort(line_pos_h) - np.sort(line_pos_d))
-        self.loaddata.depths_track = np.sort(np.r_[self.loaddata.depths_track[[0, -1]] - offset, line_pos_h])
+        self.loaddata.depths_track = np.sort(np.r_[self.loaddata.depths_track[[0, -1]], line_pos_h])
         self.loaddata.depths_features = np.sort(np.r_[self.loaddata.depths_features[[0, -1]], line_pos_d])
+
+        #print(self.loaddata.depths_track[0])
 
         region, label, colour = self.loaddata.get_histology_regions()
         self.hist_data['region'][self.idx] = region
@@ -309,13 +311,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def plot_fit(self):
         if self.idx != 0:
-            self.fit_plot.setData(x=self.loaddata.depths_features, y=self.loaddata.depths_track)
+            self.fit_plot.setData(x=self.loaddata.depths_features*1e6, y=self.loaddata.depths_track*1e6)
             # fit = np.poly1d(self.tot_fit_brain[self.idx])
             # self.tot_fit_plot.setData(x=self.depth, y=fit(self.depth))
 
-        else:
-            self.fit_plot.setData()
-            self.tot_fit_plot.setData()
+        #else:
+        #    self.fit_plot.setData()
+        #    self.tot_fit_plot.setData()
 
         self.update_string()
     
@@ -393,6 +395,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # self.lines = np.empty((0, 2))
             # self.points = np.empty((0, 1))
             self.add_lines_points()
+            self.change_feature_lines()
             self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
             self.total_idx = self.idx
             self.update_string()
@@ -481,6 +484,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.fig_fit.addItem(self.points[idx][0])
         #self.lines = np.empty((0, 2))
         #self.points = np.empty((0, 1))
+    
+    def change_feature_lines(self):
+        for lines in self.lines:
+            lines[0].setPos(lines[1].getYPos())
 
     def create_line_style(self):
         #Create random choice of line colour and style for infiniteLine
