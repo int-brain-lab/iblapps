@@ -31,7 +31,7 @@ class LoadData:
         
         #self.brain_atlas, self.probe_coord = self.get_data()
         self.get_data()
-        self.scale_data([1,0])
+        # self.scale_data([1,0])
 
 
 
@@ -75,19 +75,6 @@ class LoadData:
         self.depths_features = np.array([0, shank_height])
         self.depths_track = np.array([0, shank_height]) + tip_distance
 
-        """
-        now to get to the true channel coordinates after an user update we need 2 steps
-        1) interpolate from the electrophys features depths space to the probe depth space
-        2) interpolate from the probe depth space to the true 3D coordinates
-        TODO: make this as a function as it will be needed
-        """
-        # nb using scipy here so we can change to cubic spline if needed
-        fcn_forward = scipy.interpolate.interp1d(self.depths_features, self.depths_track)
-        channel_depths_track = fcn_forward(self.channel_coords[:, 1] / 1e6)
-        xyz_channels = histology.interpolate_along_track(self.xyz_track, channel_depths_track)
-        region_ids = self.brain_atlas.get_labels(xyz_channels)
-        region_info = self.brain_atlas.regions.get(region_ids)
-
 
     def scale_data(self, coeff):
         fit = np.poly1d(coeff)
@@ -114,10 +101,28 @@ class LoadData:
 
         return scatter
 
+    def get_channels_coordinates(self, depths=None):
+        """
+        Gets 3d coordinates from a depth along the electrophysiology feature. 2 steps
+        1) interpolate from the electrophys features depths space to the probe depth space
+        2) interpolate from the probe depth space to the true 3D coordinates
+        if depths is not provided, defaults to channels local coordinates depths
+        """
+        if depths is None:
+            depths = self.channel_coords[:, 1] / 1e6
+        # nb using scipy here so we can change to cubic spline if needed
+        fcn_forward = scipy.interpolate.interp1d(self.depths_features, self.depths_track)
+        channel_depths_track = fcn_forward(depths)
+        return histology.interpolate_along_track(self.xyz_track, channel_depths_track)
 
     def get_histology_regions(self):
-
-        region_ids = self.brain_atlas.get_labels(self.xyz_channels_ext)
+        """
+        Samples at 10um along the trajectory
+        :return:
+        """
+        sampling = np.arange(self.depths_track[0], self.depths_track[-1], 10 * 1e-6)
+        xyz_samples = histology.interpolate_along_track(self.xyz_track, sampling)
+        region_ids = self.brain_atlas.get_labels(xyz_samples)
         region_info = self.brain_atlas.regions.get(region_ids)
         #assert region_info.acronym[0] == 'void', "First boundary should be out of brain"
         #assert region_info.acronym[-1] == 'void', "Last boundary should be out of brain"
@@ -136,51 +141,26 @@ class LoadData:
         region_colour = np.empty((len(boundaries) + 1, 3), dtype=int)
 
 
-        for idx in range(len(boundaries) + 1):
+        for idx in np.arange(len(boundaries) + 1):
             if idx == 0:
                 _region = np.array([0, boundaries[idx]])
             elif idx == len(boundaries):
                 _region = np.array([boundaries[idx - 1], len(region_info.id) - 1])
             else: 
                 _region = np.array([boundaries[idx - 1], boundaries[idx]])
-
             
             _region_colour = region_info.rgb[_region[1]]
             _region_label = region_info.acronym[_region[1]]
             _region = self.chan_probe_ext[_region]
             #_region = (_region * self.interval) - self.offset * self.interval
             _region_mean = np.mean(_region, dtype=int)
-        
-            #region[0,idx,:] = _region
-            #region_colour[idx,:] = _region_colour 
-            #region_label[idx] = _region_label
-            #region_axis_label[0, idx,:] = (_region_mean, _region_label)
 
             region[idx, :] = _region
             region_colour[idx, :] = _region_colour
             region_label[idx, :] = (_region_mean, _region_label)
-    
-
-        #histology = {
-        #    'region': region,
-        #    'axis_label': region_axis_label,
-        #    'label': region_label,
-        #    'colour': region_colour,
-        #    'chan_int': self.interval
-        #}
 
         return region, region_label, region_colour
 
-    def create_random_hex_colours(self, unique_regions):
-
-        ##load the allen structure tree from ibllib/atlas
-    
-        colour = {}
-        random.seed(8)
-        for reg in unique_regions:
-            colour[reg] = "#" + ''.join([random.choice('0123456789ABCDEF') for j in range(6)])
-    
-        return colour
     
     def get_amplitude_data(self):
         
