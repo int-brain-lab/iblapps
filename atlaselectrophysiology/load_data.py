@@ -89,9 +89,6 @@ class LoadData:
         
         return self.xyz_channels
 
-        #xyz, dist = keep original track with no scaling
-        original_track = np.interp(self.chan_probe_ext_scale / 1e6, self.d, self.xyz_ext[:, m])
-
 
     def get_scatter_data(self):
         scatter = {
@@ -100,6 +97,14 @@ class LoadData:
         }
 
         return scatter
+
+    def feature2track(self, trk):
+        fcn = scipy.interpolate.interp1d(self.depths_features, self.depths_track)
+        return fcn(trk)
+
+    def track2feature(self, ft):
+        fcn = scipy.interpolate.interp1d(self.depths_track, self.depths_features)
+        return fcn(ft)
 
     def get_channels_coordinates(self, depths=None):
         """
@@ -111,8 +116,7 @@ class LoadData:
         if depths is None:
             depths = self.channel_coords[:, 1] / 1e6
         # nb using scipy here so we can change to cubic spline if needed
-        fcn_forward = scipy.interpolate.interp1d(self.depths_features, self.depths_track)
-        channel_depths_track = fcn_forward(depths)
+        channel_depths_track = self.feature2track(depths)
         return histology.interpolate_along_track(self.xyz_track, channel_depths_track)
 
     def get_histology_regions(self):
@@ -120,11 +124,12 @@ class LoadData:
         Samples at 10um along the trajectory
         :return:
         """
-        sampling = np.arange(self.depths_track[0], self.depths_track[-1], 10 * 1e-6)
-        xyz_samples = histology.interpolate_along_track(self.xyz_track, sampling)
+        sampling_trk = np.arange(self.depths_track[0], self.depths_track[-1] - 10 * 1e-6, 10 * 1e-6)
+        sampling_fts = self.track2feature(sampling_trk)
+        xyz_samples = histology.interpolate_along_track(self.xyz_track, sampling_trk)
         region_ids = self.brain_atlas.get_labels(xyz_samples)
         region_info = self.brain_atlas.regions.get(region_ids)
-        
+
         boundaries = np.where(np.diff(region_info.id))[0]
 
         region = np.empty((len(boundaries) + 1, 2))
@@ -141,16 +146,15 @@ class LoadData:
             
             _region_colour = region_info.rgb[_region[1]]
             _region_label = region_info.acronym[_region[1]]
-            _region = sampling[_region]
-            _region_mean = np.mean(_region, dtype=int)
+            _region = sampling_fts[_region]
+            _region_mean = np.mean(_region * 1e6, dtype=int)
 
-            region[idx, :] = _region
+            region[idx, :] = _region * 1e6
             region_colour[idx, :] = _region_colour
             region_label[idx, :] = (_region_mean, _region_label)
 
         return region, region_label, region_colour
 
-    
     def get_amplitude_data(self):
         
         depths = self.spikes['depths']

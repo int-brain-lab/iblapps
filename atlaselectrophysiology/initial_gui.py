@@ -312,7 +312,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.hist_data['axis_label'][self.idx] = label
         self.hist_data['colour'][self.idx] = colour
         
-        
 
     def plot_fit(self):
         if self.idx != 0:
@@ -344,7 +343,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def plot_scatter(self):
         connect = np.zeros(len(self.sdata['times']), dtype=int)
         plot = pg.PlotDataItem()
-        plot.setData(x=self.sdata['times'], y=self.sdata['depths'], connect=connect, symbol='o',symbolSize=2)
+        plot.setData(x=self.sdata['times'], y=self.sdata['depths'], connect=connect, symbol='o', symbolSize=2)
         self.fig_data.addItem(plot)
         self.fig_data.setXRange(min=self.sdata['times'].min(), max=self.sdata['times'].max())
         self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
