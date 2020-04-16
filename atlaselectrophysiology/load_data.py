@@ -124,22 +124,12 @@ class LoadData:
         xyz_samples = histology.interpolate_along_track(self.xyz_track, sampling)
         region_ids = self.brain_atlas.get_labels(xyz_samples)
         region_info = self.brain_atlas.regions.get(region_ids)
-        #assert region_info.acronym[0] == 'void', "First boundary should be out of brain"
-        #assert region_info.acronym[-1] == 'void', "Last boundary should be out of brain"
         
         boundaries = np.where(np.diff(region_info.id))[0]
 
-        #region = np.empty((11, len(boundaries)+ 1,2))
-        #region_label = np.empty((len(boundaries)+1,1), dtype=object)
-        #region_axis_label = np.empty((11 ,len(boundaries)+ 1,2), dtype=object)
-        #region_colour = np.empty((len(boundaries)+1,3), dtype=int)
-      
-
         region = np.empty((len(boundaries) + 1, 2))
-        #region_label = np.empty((len(boundaries) + 1, 1), dtype=object)
         region_label = np.empty((len(boundaries) + 1, 2), dtype=object)
         region_colour = np.empty((len(boundaries) + 1, 3), dtype=int)
-
 
         for idx in np.arange(len(boundaries) + 1):
             if idx == 0:
@@ -151,8 +141,7 @@ class LoadData:
             
             _region_colour = region_info.rgb[_region[1]]
             _region_label = region_info.acronym[_region[1]]
-            _region = self.chan_probe_ext[_region]
-            #_region = (_region * self.interval) - self.offset * self.interval
+            _region = sampling[_region]
             _region_mean = np.mean(_region, dtype=int)
 
             region[idx, :] = _region

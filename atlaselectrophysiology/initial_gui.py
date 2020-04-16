@@ -24,18 +24,17 @@ class MainWindow(QtWidgets.QMainWindow):
         subj = 'ZM_2407'
         date = '2019-11-06'
         probe = 0
-        self.LoadData = ld.LoadData(subj, date, sess=1, probe_id=probe)
-        self.sdata = self.LoadData.get_scatter_data()
-        self.amplitude_data = self.LoadData.get_amplitude_data()
+        self.loaddata = ld.LoadData(subj, date, sess=1, probe_id=probe)
+        self.sdata = self.loaddata.get_scatter_data()
+        self.amplitude_data = self.loaddata.get_amplitude_data()
         self.title_string.setText(f"{subj} {date} probe0{probe}")
 
-        region, label, colour = self.LoadData.get_histology_regions()
+        region, label, colour = self.loaddata.get_histology_regions()
         self.hist_data['region'][self.idx] = region
         self.hist_data['axis_label'][self.idx] = label
         self.hist_data['colour'][self.idx] = colour
         
-        self.brain_atlas = self.LoadData.brain_atlas
-        self.probe_coord = self.LoadData.xyz_channels
+        self.brain_atlas = self.loaddata.brain_atlas
                 
         #Initialise with scatter plot
         self.data_plot = self.plot_scatter()
@@ -306,9 +305,9 @@ class MainWindow(QtWidgets.QMainWindow):
         print(self.tot_fit_brain[self.idx])
         print(self.tot_fit_probe[self.idx])
 
-        self.probe_coord = self.LoadData.scale_data(self.tot_fit_probe[self.idx])
+        self.probe_coord = self.loaddata.scale_data(self.tot_fit_probe[self.idx])
 
-        region, label, colour = self.LoadData.get_histology_regions()
+        region, label, colour = self.loaddata.get_histology_regions()
         self.hist_data['region'][self.idx] = region
         self.hist_data['axis_label'][self.idx] = label
         self.hist_data['colour'][self.idx] = colour
@@ -333,12 +332,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def plot_slice(self):
         self.fig_slice_ax.cla()
-        self.brain_atlas.plot_cslice(self.probe_coord[0, 1], volume='annotation', ax=self.fig_slice_ax)
-        self.fig_slice_ax.plot(self.probe_coord[:, 0] * 1e6, self.probe_coord[:, 2] * 1e6, 'k*')
+        xyz_trk = self.loaddata.xyz_track
+        # recomputes from scratch, for hovering function it would have to be pre-computed
+        xyz_ch = self.loaddata.get_channels_coordinates()
+        self.brain_atlas.plot_tilted_slice(xyz_trk, axis=1, volume='annotation',
+                                           ax=self.fig_slice_ax)
+        self.fig_slice_ax.plot(xyz_trk[:, 0] * 1e6, xyz_trk[:, 2] * 1e6, 'b')
+        self.fig_slice_ax.plot(xyz_ch[:, 0] * 1e6, xyz_ch[:, 2] * 1e6, 'k*')
         self.fig_slice.draw()
 
     def plot_scatter(self):
-            
         connect = np.zeros(len(self.sdata['times']), dtype=int)
         plot = pg.PlotDataItem()
         plot.setData(x=self.sdata['times'], y=self.sdata['depths'], connect=connect, symbol='o',symbolSize=2)
