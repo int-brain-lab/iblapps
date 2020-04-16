@@ -297,9 +297,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # those are in the feature coordinate system
         line_pos_d = np.array([line[1].pos().y() for line in self.lines]) / 1e6
 
-        offset = np.mean(np.sort(line_pos_h) - np.sort(line_pos_d))
-        self.loaddata.depths_track = np.sort(np.r_[self.loaddata.depths_track[[0, -1]], line_pos_h])
+        # offset = np.mean(np.sort(line_pos_h) - np.sort(line_pos_d))
+        depths_track = np.sort(np.r_[self.loaddata.depths_track[[0, -1]], line_pos_h])
+        self.loaddata.depths_track = self.loaddata.feature2track(depths_track)
         self.loaddata.depths_features = np.sort(np.r_[self.loaddata.depths_features[[0, -1]], line_pos_d])
+
 
         #print(self.loaddata.depths_track[0])
 
@@ -307,7 +309,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.hist_data['region'][self.idx] = region
         self.hist_data['axis_label'][self.idx] = label
         self.hist_data['colour'][self.idx] = colour
-        
 
     def plot_fit(self):
         if self.idx != 0:

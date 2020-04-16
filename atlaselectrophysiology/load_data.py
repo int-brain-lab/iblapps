@@ -72,7 +72,8 @@ class LoadData:
         tip_distance = _cumulative_distance(self.xyz_track)[2] + TIP_SIZE_UM / 1e6
 
         track_length =_cumulative_distance(self.xyz_track)[-1]
-        self.depths_track = np.array([0, track_length]) - tip_distance
+        self.depths_track_init = np.array([0, track_length]) - tip_distance
+        self.depths_track = np.copy(self.depths_track_init)
         self.depths_features = np.copy(self.depths_track)
 
     def scale_data(self, coeff):
@@ -125,7 +126,6 @@ class LoadData:
         """
         sampling_trk = np.arange(self.depths_track[0],
                                  self.depths_track[-1] - 10 * 1e-6, 10 * 1e-6)
-        sampling_fts = self.track2feature(sampling_trk)
         xyz_samples = histology.interpolate_along_track(self.xyz_track,
                                                         sampling_trk - sampling_trk[0])
         region_ids = self.brain_atlas.get_labels(xyz_samples)
@@ -133,9 +133,7 @@ class LoadData:
 
         # ax = self.brain_atlas.plot_tilted_slice(xyz_samples, axis=1)
         # ax.plot(xyz_samples[:, 0] * 1e6, xyz_samples[:, 2] * 1e6, '*')
-
         boundaries = np.where(np.diff(region_info.id))[0]
-
         region = np.empty((boundaries.size + 1, 2))
         region_label = np.empty((boundaries.size + 1, 2), dtype=object)
         region_colour = np.empty((boundaries.size + 1, 3), dtype=int)
@@ -144,20 +142,22 @@ class LoadData:
             if idx == 0:
                 _region = np.array([0, boundaries[idx]])
             elif idx == boundaries.size:
-                _region = np.array([boundaries[idx - 1], boundaries.size - 1])
+                _region = np.array([boundaries[idx - 1], boundaries[boundaries.size - 1]])
             else: 
                 _region = np.array([boundaries[idx - 1], boundaries[idx]])
             
             _region_colour = region_info.rgb[_region[1]]
             _region_label = region_info.acronym[_region[1]]
-            _region = sampling_fts[_region]
-            #_region = sampling_trk[_region]
-            _region_mean = np.mean(_region * 1e6, dtype=int)
+            _region = sampling_trk[_region] * 1e6
+            _region_mean = np.mean(_region, dtype=int)
 
-            region[idx, :] = _region * 1e6
+            region[idx, :] = _region
             region_colour[idx, :] = _region_colour
             region_label[idx, :] = (_region_mean, _region_label)
 
+        track2feature = scipy.interpolate.interp1d(self.depths_track, self.depths_features)
+        region = track2feature(region / 1e6) * 1e6
+        region_label[:, 0] = np.int64(track2feature(np.float64(region_label[:, 0]) / 1e6) * 1e6)
         return region, region_label, region_colour
 
     def get_amplitude_data(self):
