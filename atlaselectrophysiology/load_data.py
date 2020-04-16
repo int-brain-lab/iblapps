@@ -70,11 +70,10 @@ class LoadData:
         # ax.plot(self.xyz_track[:, 0] * 1e6, self.xyz_track[:, 2] * 1e6, '-*')
 
         tip_distance = _cumulative_distance(self.xyz_track)[2] + TIP_SIZE_UM / 1e6
-        shank_height = np.max(self.channel_coords[:, 1]) / 1e6
 
-        self.depths_features = np.array([0, shank_height])
-        self.depths_track = np.array([0, shank_height]) + tip_distance
-
+        track_length =_cumulative_distance(self.xyz_track)[-1]
+        self.depths_track = np.array([0, track_length]) - tip_distance
+        self.depths_features = np.copy(self.depths_track)
 
     def scale_data(self, coeff):
         fit = np.poly1d(coeff)
@@ -124,23 +123,28 @@ class LoadData:
         Samples at 10um along the trajectory
         :return:
         """
-        sampling_trk = np.arange(self.depths_track[0], self.depths_track[-1] - 10 * 1e-6, 10 * 1e-6)
+        sampling_trk = np.arange(self.depths_track[0],
+                                 self.depths_track[-1] - 10 * 1e-6, 10 * 1e-6)
         sampling_fts = self.track2feature(sampling_trk)
-        xyz_samples = histology.interpolate_along_track(self.xyz_track, sampling_trk)
+        xyz_samples = histology.interpolate_along_track(self.xyz_track,
+                                                        sampling_trk - sampling_trk[0])
         region_ids = self.brain_atlas.get_labels(xyz_samples)
         region_info = self.brain_atlas.regions.get(region_ids)
 
+        # ax = self.brain_atlas.plot_tilted_slice(xyz_samples, axis=1)
+        # ax.plot(xyz_samples[:, 0] * 1e6, xyz_samples[:, 2] * 1e6, '*')
+
         boundaries = np.where(np.diff(region_info.id))[0]
 
-        region = np.empty((len(boundaries) + 1, 2))
-        region_label = np.empty((len(boundaries) + 1, 2), dtype=object)
-        region_colour = np.empty((len(boundaries) + 1, 3), dtype=int)
+        region = np.empty((boundaries.size + 1, 2))
+        region_label = np.empty((boundaries.size + 1, 2), dtype=object)
+        region_colour = np.empty((boundaries.size + 1, 3), dtype=int)
 
-        for idx in np.arange(len(boundaries) + 1):
+        for idx in np.arange(boundaries.size + 1):
             if idx == 0:
                 _region = np.array([0, boundaries[idx]])
-            elif idx == len(boundaries):
-                _region = np.array([boundaries[idx - 1], len(region_info.id) - 1])
+            elif idx == boundaries.size:
+                _region = np.array([boundaries[idx - 1], boundaries.size - 1])
             else: 
                 _region = np.array([boundaries[idx - 1], boundaries[idx]])
             

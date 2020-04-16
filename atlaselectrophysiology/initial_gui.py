@@ -276,6 +276,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         fig.addLine(y=self.probe_tip, pen=self.kpen_dot)
         fig.addLine(y=self.probe_top, pen=self.kpen_dot)
+        fig.addLine(y=self.probe_top, pen=self.kpen_dot)
+
     
     def create_hist_data(self, reg, chan_int):
         
@@ -289,23 +291,15 @@ class MainWindow(QtWidgets.QMainWindow):
         return x, y
 
     def scale_hist_data(self):
-    
-        line_pos_h = [line[0].pos().y() for line in self.lines]
-        line_pos_d = [line[1].pos().y() for line in self.lines]
-        #coeff = np.polyfit(line_pos_h, line_pos_d, 1)
-        coeff_brain = np.polyfit(line_pos_h, line_pos_d, 1)
-        coeff_probe = np.polyfit(line_pos_d, line_pos_h, 1)
-        self.fit_brain = np.poly1d(coeff_brain)
-        self.fit_probe = np.poly1d(coeff_probe)
-               
-        self.depth_fit_brain[self.idx] = self.fit_brain(self.depth_fit_brain[self.idx - 1])
-        self.depth_fit_probe[self.idx] = self.fit_probe(self.depth_fit_probe[self.idx - 1])
-        self.tot_fit_brain[self.idx] = np.polyfit(self.depth, self.depth_fit_brain[self.idx], 1)
-        self.tot_fit_probe[self.idx] = np.polyfit(self.depth, self.depth_fit_probe[self.idx], 1)
-        print(self.tot_fit_brain[self.idx])
-        print(self.tot_fit_probe[self.idx])
 
-        self.probe_coord = self.loaddata.scale_data(self.tot_fit_probe[self.idx])
+        # those are in the track coordinate system
+        line_pos_h = np.array([line[0].pos().y() for line in self.lines]) / 1e6
+        # those are in the feature coordinate system
+        line_pos_d = np.array([line[1].pos().y() for line in self.lines]) / 1e6
+
+        offset = np.mean(np.sort(line_pos_h) - np.sort(line_pos_d))
+        self.loaddata.depths_track = np.sort(np.r_[self.loaddata.depths_track[[0, -1]] - offset, line_pos_h])
+        self.loaddata.depths_features = np.sort(np.r_[self.loaddata.depths_features[[0, -1]], line_pos_d])
 
         region, label, colour = self.loaddata.get_histology_regions()
         self.hist_data['region'][self.idx] = region
@@ -315,9 +309,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def plot_fit(self):
         if self.idx != 0:
-            self.fit_plot.setData(x=self.depth_fit_brain[self.idx - 1], y=self.depth_fit_brain[self.idx])
-            fit = np.poly1d(self.tot_fit_brain[self.idx])
-            self.tot_fit_plot.setData(x=self.depth, y=fit(self.depth))
+            self.fit_plot.setData(x=self.loaddata.depths_features, y=self.loaddata.depths_track)
+            # fit = np.poly1d(self.tot_fit_brain[self.idx])
+            # self.tot_fit_plot.setData(x=self.depth, y=fit(self.depth))
 
         else:
             self.fit_plot.setData()
@@ -396,9 +390,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.plot_fit()
             self.plot_slice()
             self.remove_lines_points()
-            self.lines = np.empty((0, 2))
-            self.points = np.empty((0, 1))
-            #self.add_lines_points()
+            # self.lines = np.empty((0, 2))
+            # self.points = np.empty((0, 1))
+            self.add_lines_points()
             self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
             self.total_idx = self.idx
             self.update_string()
