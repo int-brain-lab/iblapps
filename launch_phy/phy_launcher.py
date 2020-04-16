@@ -58,8 +58,7 @@ def launch_phy(eid, probe_name, one=None):
     # -------------------- #
     create_app()
     controller = TemplateController(dat_path=raw_file, dir_path=alf_probe_dir, dtype=np.int16,
-                                    n_channels_dat=384,
-                                    sample_rate=3e4)
+                                    n_channels_dat=384, sample_rate=3e4)
     gui = controller.create_gui()
     gui.show()
     run_app()
