@@ -1,14 +1,20 @@
 
+import scipy
 import numpy as np
 from brainbox.io.one import load_spike_sorting, load_channel_locations
 from oneibl.one import ONE
 import random
 
+import ibllib.pipes.histology as histology
 import ibllib.atlas as atlas
 
+TIP_SIZE_UM = 200
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 one = ONE(base_url=ONE_BASE_URL)
 
+
+def _cumulative_distance(xyz):
+    return np.cumsum(np.r_[0, np.sqrt(np.sum(np.diff(xyz, axis=0) ** 2, axis=1))])
 
 
 class LoadData:
@@ -44,204 +50,45 @@ class LoadData:
         self.channel_coords = one.load_dataset(eid=self.eid, dataset_type='channels.localCoordinates')
 
         self.spikes = spikes[probe_label]
+        self.brain_atlas = atlas.AllenAtlas(res_um=25)
 
         insertion = one.alyx.rest('insertions', 'list', session=self.eid, name=probe_label)
         xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
-
-        self.brain_atlas = atlas.AllenAtlas(res_um=25)
-        #traj = atlas.Trajectory.fit(xyz_picks)
-        #entry = atlas.Insertion.get_brain_entry(traj, self.brain_atlas)
-        #exit = atlas.Insertion.get_brain_exit(traj, self.brain_atlas)
-        tip = xyz_picks[np.argmin(xyz_picks[:, 2]), :]
-        top = xyz_picks[np.argmax(xyz_picks[:, 2]), :]
-
+        # extrapolate to find the brain entry/exit using only the top/bottom 1/4 of picks
         n_picks = round(xyz_picks.shape[0] / 4)
         traj_entry = atlas.Trajectory.fit(xyz_picks[:n_picks, :])
         entry = atlas.Insertion.get_brain_entry(traj_entry, self.brain_atlas)
         traj_exit = atlas.Trajectory.fit(xyz_picks[-1 * n_picks:, :])
         exit = atlas.Insertion.get_brain_exit(traj_exit, self.brain_atlas)
 
-        if entry[2] > top[2]:
-            print('extrapolating upwards')
-            depth_t, _, _ = atlas.cart2sph(*(entry - top))
-            npoints_t = np.ceil(depth_t / 20 * 1e6).astype(int)
-            xyz_t = np.c_[np.linspace(entry[0], top[0], npoints_t),
-                          np.linspace(entry[1], top[1], npoints_t),
-                          np.linspace(entry[2], top[2], npoints_t)]
+        self.xyz_track = np.r_[exit[np.newaxis, :], xyz_picks, entry[np.newaxis, :]]
+        # by convention the deepest point is first
+        self.xyz_track = self.xyz_track[np.argsort(self.xyz_track[:, 2]), :]
 
-            xyz_ext = np.r_[xyz_t[1], xyz_picks]
-        else:
-            xyz_ext = xyz_picks
+        # plot on tilted coronal slice for sanity check
+        # ax = self.brain_atlas.plot_tilted_slice(self.xyz_track, axis=1)
+        # ax.plot(self.xyz_track[:, 0] * 1e6, self.xyz_track[:, 2] * 1e6, '-*')
 
-        if exit[2] < tip[2]:
-            print('extrapolating downwards')
-            depth_b, _, _ = atlas.cart2sph(*(tip - exit))
-            npoints_b = np.ceil(depth_b / 20 * 1e6).astype(int)
-            xyz_b = np.c_[np.linspace(tip[0], exit[0], npoints_b),
-                          np.linspace(tip[1], exit[1], npoints_b),
-                          np.linspace(tip[2], exit[2], npoints_b)]
-            xyz_ext = np.r_[xyz_ext, xyz_b[-1]]
-        else:
-            xyz_ext = xyz_ext
-   
+        tip_distance = _cumulative_distance(self.xyz_track)[2] + TIP_SIZE_UM / 1e6
+        shank_height = np.max(self.channel_coords[:, 1]) / 1e6
 
-        #Add in extra coordinate at top and bottom to make sure we are out of the brain
-        idx = 1
-        diff = np.array([0, 0, 0])
-        while round(diff[2] * 1e6) == 0:
-            diff = np.subtract(xyz_ext[idx, :], xyz_ext[0, :])
-            idx += 1
-        top_ext = [xyz_ext[0, :] - 2*diff]
+        self.depths_features = np.array([0, shank_height])
+        self.depths_track = np.array([0, shank_height]) + tip_distance
 
-        idx = -2
-        diff = np.array([0, 0, 0])
-        while round(diff[2] * 1e6) == 0:
-            diff = np.subtract(xyz_ext[idx, :], xyz_ext[-1, :])
-            idx -= 1
-        bot_ext = [xyz_ext[-1, :] - 2*diff]
-
-        original_track = {
-            'xyz': xyz_ext,
-            'distance': distance
-        }
-        
-        xyz_ext = np.r_[top_ext, xyz_picks, bot_ext]
-
-        xyz_ext = np.flip(xyz_ext, axis=0)
-
-
-        #check going from bottom to top
-        distance = np.sqrt(np.sum((np.diff(xyz_ext, axis=0) ** 2), axis=1))
-        
-        distance = np.cumsum(np.r_[[0],distance])
-
-        original_track = {
-            'xyz': xyz_ext,
-            'distance': distance
-        }
-
-        tip_origin = np.zeros((inter_distance.size,3))
-
-
-        inter_distance = original_track['distance'][1] + 200e-6
-        ##interpolation function
-        
-        def interpolate_along_track(inter_distance):
-            xyz_interp= np.zeros((inter_distance.size,3))
-            for m in np.arange(3):
-                xyz_interp[:,m] = np.interp(inter_distance, original_track['distance'], original_track['xyz'][:,m])
-        
-            return xyz_interp
-
-
-        tip_origin = interpolate_along_track(inter_distance)
-
-        total_distance = original_track['distance'][-1]
-        reference_sites = np.arange(0, total_distance, 10e-6)
-
-        reference_track = interpolate_along_track(reference_sites)
-
-
-        distance_relative_to_tip = np.sqrt(np.sum((np.diff(reference_track, axis=0) ** 2), axis=1))
-        distance_relative_to_tip = np.cumsum(np.r_[[0],distance_relative_to_tip])
-
-        ii =  np.argmin(np.sqrt(np.sum((reference_track-tip_origin[0]), axis=1) ** 2), axis=0)
-
-        #ii index of tip in vector
-        #Olivier to do parabolic interpolation to more accurately find tip
-
-        #positive going up
-        dist = distance_relative_to_tip - distance_relative_to_tip[ii]
-
-        region_ids = self.brain_atlas.get_labels(self.xyz_channels_ext)
+        """
+        now to get to the true channel coordinates after an user update we need 2 steps
+        1) interpolate from the electrophys features depths space to the probe depth space
+        2) interpolate from the probe depth space to the true 3D coordinates
+        TODO: make this as a function as it will be needed
+        """
+        # nb using scipy here so we can change to cubic spline if needed
+        fcn_forward = scipy.interpolate.interp1d(self.depths_features, self.depths_track)
+        channel_depths_track = fcn_forward(self.channel_coords[:, 1] / 1e6)
+        xyz_channels = histology.interpolate_along_track(self.xyz_track, channel_depths_track)
+        region_ids = self.brain_atlas.get_labels(xyz_channels)
         region_info = self.brain_atlas.regions.get(region_ids)
 
-        
 
-        
-
-
-
-
-    
-    
-    #second interpolation function
-        for m in np.arange(3):
-            np.interp(reference_track, original_track['distance'], original_track['xyz'][:,m] )
-        
-        
-        def interpolate_along_track(self):
-
-            self.xyz_channels = np.zeros((self.chan_probe.shape[0], 3))
-            self.xyz_channels_ext = np.zeros((self.chan_probe_ext.shape[0], 3))
-            for m in np.arange(3):
-                self.xyz_channels[:, m] = np.interp(self.chan_probe_scale / 1e6, self.d, self.xyz_ext[:, m])
-                self.xyz_channels_ext[:, m] = np.interp(self.chan_probe_ext_scale / 1e6, self.d, self.xyz_ext[:, m])
-
-
-
-
-
-        #self.d = atlas.cart2sph(xyz_ext[:, 0] - xyz_picks[-1, 0], xyz_ext[:, 1] - xyz_picks[-1, 1], xyz_ext[:, 2] - xyz_picks[-1, 2])[0]
-        self.d = atlas.cart2sph(xyz_ext[:, 0] - tip[0], xyz_ext[:, 1] - tip[1], xyz_ext[:, 2] - tip[2])[0]
-        orig = np.where(self.d == 0)[0][0]
-        self.d[orig + 1:] = -1 * self.d[orig + 1:]
-
-        self.d = np.flip(self.d)
-        self.xyz_ext = np.flip(xyz_ext, axis=0)
-        #assert np.all(np.diff(self.d) > 0), "Depths should be stricly increasing"
-
-        chan_int = 20
-        self.chan_probe = self.channel_coords[:, 1]
-        chan_below = np.arange(round(self.d.min() * 1e6, -1), self.chan_probe.min(), chan_int)
-        chan_above = np.arange(self.chan_probe.max() + chan_int, round(self.d.max() * 1e6, -1), chan_int)
-        self.chan_probe_ext = np.r_[chan_below, self.chan_probe, chan_above]
-        
-        #ses = one.alyx.rest('sessions', 'read', id=self.eid)
-        #channels = load_channel_locations(ses, one=one, probe=probe_label)[probe_label]
-#
-        #brain_atlas = atlas.AllenAtlas(res_um=25)
-        #xyz = np.c_[channels.x, channels.y, channels.z]
-        ##Find the unique non-sorted channels
-        #idx = []
-        #for pos in np.unique(channels.axial_um):
-        #    idx.append(np.where(channels.axial_um == pos)[0][0])
-#
-        #xyz = xyz[idx]
-        #traj = atlas.Trajectory.fit(xyz)
-        #entry = atlas.Insertion.get_brain_entry(traj, brain_atlas)
-        #exit = atlas.Insertion.get_brain_exit(traj, brain_atlas)
-        #tip = xyz[np.argmin(xyz[:, 2]), :]
-        #top = xyz[np.argmax(xyz[:, 2]), :]
-#
-        #self.interval = 20
-#
-        #depth_t, _, _ = atlas.cart2sph(*(entry - top))
-        #npoints_t = np.ceil(depth_t / self.interval * 1e6).astype(int)
-        #depth_b, _, _ = atlas.cart2sph(*(tip - exit))
-        #npoints_b = np.ceil(depth_b / self.interval * 1e6).astype(int)
-#
-        #xyz_t = np.c_[np.linspace(entry[0], top[0], npoints_t),
-        #              np.linspace(entry[1], top[1], npoints_t),
-        #              np.linspace(entry[2], top[2], npoints_t)]
-        #xyz_b = np.c_[np.linspace(tip[0], exit[0], npoints_b),
-        #              np.linspace(tip[1], exit[1], npoints_b),
-        #              np.linspace(tip[2], exit[2], npoints_b)]
-#
-        #xyz_ext = np.r_[xyz_t[:-1], np.flip(xyz, axis=0), xyz_b[1:]]
-#
-        #region_ids = brain_atlas.get_labels(np.flip(xyz_ext, axis=0))
-        #self.region_info = brain_atlas.regions.get(region_ids)
-        #self.offset = np.argmin(np.linalg.norm((np.flip(xyz_ext, axis=0) - tip), axis=1))
-#
-        ##cax = self.brain_atlas.plot_cslice(xyz[0, 1], volume='annotation')
-        ##cax.plot(xyz[:, 0] * 1e6, xyz[:, 2] * 1e6, 'k*')
-        ##xyz_flip = np.flip(xyz, axis=0)
-        #region_ids = brain_atlas.get_labels(np.flip(xyz_ext, axis=0))
-        #self.region_info = brain_atlas.regions.get(region_ids)
-#
-        #return brain_atlas, xyz
-    
     def scale_data(self, coeff):
         fit = np.poly1d(coeff)
         print(fit)
@@ -255,11 +102,8 @@ class LoadData:
         
         return self.xyz_channels
 
-    #xyz, dist = keep original track with no scaling 
-    original_track = np.interp(self.chan_probe_ext_scale / 1e6, self.d, self.xyz_ext[:, m])
-
-    def interpolate_along_track(self):
-
+        #xyz, dist = keep original track with no scaling
+        original_track = np.interp(self.chan_probe_ext_scale / 1e6, self.d, self.xyz_ext[:, m])
 
 
     def get_scatter_data(self):
