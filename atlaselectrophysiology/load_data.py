@@ -55,10 +55,10 @@ class LoadData:
         n_picks = round(xyz_picks.shape[0] / 4)
         traj_entry = atlas.Trajectory.fit(xyz_picks[:n_picks, :])
         entry = atlas.Insertion.get_brain_entry(traj_entry, self.brain_atlas)
-        entry[2] = entry[2] + 200/1e6
+        entry[2] = entry[2] + 200 / 1e6
         traj_exit = atlas.Trajectory.fit(xyz_picks[-1 * n_picks:, :])
         exit = atlas.Insertion.get_brain_exit(traj_exit, self.brain_atlas)
-        exit[2] = exit[2] - 200/1e6
+        exit[2] = exit[2] - 200 / 1e6
 
         self.xyz_track = np.r_[exit[np.newaxis, :], xyz_picks, entry[np.newaxis, :]]
         # by convention the deepest point is first
@@ -115,6 +115,7 @@ class LoadData:
 
         xyz_samples = histology.interpolate_along_track(self.xyz_track,
                                                         sampling_trk - sampling_trk[0])
+    
         region_ids = self.brain_atlas.get_labels(xyz_samples)
         region_info = self.brain_atlas.regions.get(region_ids)
 
@@ -145,6 +146,7 @@ class LoadData:
 
         track2feature = scipy.interpolate.interp1d(self.depths_track, self.depths_features)
         region = track2feature(region / 1e6) * 1e6
+
         region_label[:, 0] = np.int64(track2feature(np.float64(region_label[:, 0]) / 1e6) * 1e6)
         return region, region_label, region_colour
 

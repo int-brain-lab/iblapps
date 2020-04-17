@@ -136,7 +136,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #Variables to keep track of number of fits (max 10)
         self.idx = 0
         self.total_idx = 0
-        self.max_idx = 10
+        self.max_idx = 100
 
         #Variables to keep track of applied fits
         self.depth_fit_brain = np.empty(((self.max_idx + 1), len(self.depth)))
@@ -173,7 +173,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_data = pg.PlotWidget(background='w')
         self.fig_data.setMouseEnabled(x=False, y=False)
         self.fig_data.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
-        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
+        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                self.probe_extra, padding=self.pad)
         self.fig_data.addLine(y=self.probe_tip, pen=self.kpen_dot)
         self.fig_data.addLine(y=self.probe_top, pen=self.kpen_dot)
         self.fig_data_vb = self.fig_data.getViewBox()
@@ -183,7 +184,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_hist = pg.PlotWidget(background='w')
         self.fig_hist.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
         self.fig_hist.setMouseEnabled(x=False)
-        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
+        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                self.probe_extra, padding=self.pad)
         axis = self.fig_hist.plotItem.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
         axis.setLabel('')
@@ -191,7 +193,8 @@ class MainWindow(QtWidgets.QMainWindow):
         #Create reference histology figure
         self.fig_hist_ref = pg.PlotWidget(background='w')
         self.fig_hist_ref.setMouseEnabled(x=False)
-        self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
+        self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                    self.probe_extra, padding=self.pad)
         axis = self.fig_hist_ref.plotItem.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
         axis.setLabel('')
@@ -199,7 +202,6 @@ class MainWindow(QtWidgets.QMainWindow):
         #Create figure showing fit line
         self.fig_fit = pg.PlotWidget(background='w')
         #self.fig_fit.setMouseEnabled(x=False, y=False)
- 
         self.fig_fit.setXRange(min=self.view_total[0], max=self.view_total[1])
         self.fig_fit.setYRange(min=self.view_total[0], max=self.view_total[1])
         self.set_axis(self.fig_fit)
@@ -256,9 +258,17 @@ class MainWindow(QtWidgets.QMainWindow):
             curve_item.setBrush(colour)
             fig.addItem(curve_item)
 
-        self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot, movable=True)
+        self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot,
+                                       movable=True)
+        self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot,
+                                       movable=True)
+        offset = 1
+        self.tip_pos.setBounds((self.loaddata.depths_track[0] * 1e6 + offset,
+                                self.loaddata.depths_track[-1] * 1e6 - (self.probe_top + offset)))
+        #Still get interpolation range error
+        self.top_pos.setBounds((self.loaddata.depths_track[0] * 1e6 + (self.probe_top + offset),
+                                self.loaddata.depths_track[-1] * 1e6 - offset))
         self.tip_pos.sigPositionChanged.connect(self.tip_line_moved)
-        self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot, movable=True)
         self.top_pos.sigPositionChanged.connect(self.top_line_moved)
 
         fig.addItem(self.tip_pos)
@@ -282,9 +292,9 @@ class MainWindow(QtWidgets.QMainWindow):
         return x, y
     
     def offset_hist_data(self):
-    
-        self.loaddata.depths_track = self.loaddata.depths_track - self.tip_pos.value() / 1e6
-        self.loaddata.depths_features = self.loaddata.depths_features - self.tip_pos.value() / 1e6
+        
+        self.loaddata.depths_track -= self.tip_pos.value() / 1e6
+        self.loaddata.depths_features -= self.tip_pos.value() / 1e6
         region, label, colour = self.loaddata.get_histology_regions()
         self.hist_data['region'][self.idx] = region
         self.hist_data['axis_label'][self.idx] = label
@@ -318,7 +328,7 @@ class MainWindow(QtWidgets.QMainWindow):
             #                      y=depth_track * 1e6)
             self.fit_plot.setData(x=self.loaddata.depths_track_init * 1e6,
                                   y=depth_track * 1e6)
-        self.update_string()
+        #self.update_string()
     
     def update_fit(self, line):
         idx = np.where(self.lines == line)[0][0]
@@ -536,7 +546,7 @@ class MainWindow(QtWidgets.QMainWindow):
             
         self.idx_string.setText(f"Current Index = {self.idx}")
         self.tot_idx_string.setText(f"Total Index = {self.total_idx}")
-        self.fit_string.setText(f"Scale = {round(self.tot_fit_brain[self.idx][0],2)}, Offset = {round(self.tot_fit_brain[self.idx][1],2)}")
+        #self.fit_string.setText(f"Scale = {round(self.tot_fit_brain[self.idx][0],2)}, Offset = {round(self.tot_fit_brain[self.idx][1],2)}")
 
 
 if __name__ == '__main__':
