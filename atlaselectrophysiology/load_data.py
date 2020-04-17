@@ -98,7 +98,7 @@ class LoadData:
         if depths is None:
             depths = self.channel_coords[:, 1] / 1e6
         # nb using scipy here so we can change to cubic spline if needed
-        channel_depths_track = self.feature2track(depths)
+        channel_depths_track = self.feature2track(depths) - self.depths_track[0]
         return histology.interpolate_along_track(self.xyz_track, channel_depths_track)
 
     def get_histology_regions(self):
