@@ -309,14 +309,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def plot_fit(self):
         if self.idx != 0:
-            self.fit_plot.setData(x=self.loaddata.depths_features*1e6, y=self.loaddata.depths_track*1e6)
-            # fit = np.poly1d(self.tot_fit_brain[self.idx])
-            # self.tot_fit_plot.setData(x=self.depth, y=fit(self.depth))
-
-        #else:
-        #    self.fit_plot.setData()
-        #    self.tot_fit_plot.setData()
-
+            depth_track = self.loaddata.feature2track(self.loaddata.depths_track)
+            self.fit_plot.setData(x=self.loaddata.depths_features * 1e6,
+                                  y=depth_track * 1e6)
         self.update_string()
     
     def update_fit(self, line):
@@ -324,6 +319,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.points[idx][0].setData(x=[self.lines[idx][0].pos().y()], y=[self.lines[idx][1].pos().y()])
 
     def plot_slice(self):
+        """
+        Upper right widget containing tilted coronal slice of the Allen brain atlas annotation
+        volume overlayed with full track and channel positions
+        :return:
+        """
         self.fig_slice_ax.cla()
         xyz_trk = self.loaddata.xyz_track
         # recomputes from scratch, for hovering function it would have to be pre-computed
@@ -425,7 +425,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def reset_button_pressed(self):
         self.remove_lines_points()
-        self.init_variables()
+        self.lines = np.empty((0, 2))
+        # self.init_variables()
         self.scale_hist_data()
         self.plot_histology(self.fig_hist)
         self.tot_fit_plot.setData()
@@ -476,16 +477,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.fig_hist.removeItem(lines[0])
             self.fig_data.removeItem(lines[1])
             self.fig_fit.removeItem(self.points[idx][0])
-        #self.lines = np.empty((0, 2))
-        #self.points = np.empty((0, 1))
 
     def add_lines_points(self):
         for idx, lines in enumerate(self.lines):
             self.fig_hist.addItem(lines[0])
             self.fig_data.addItem(lines[1])
             self.fig_fit.addItem(self.points[idx][0])
-        #self.lines = np.empty((0, 2))
-        #self.points = np.empty((0, 1))
     
     def change_feature_lines(self):
         for lines in self.lines:
