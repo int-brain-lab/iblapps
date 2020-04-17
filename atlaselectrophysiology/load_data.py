@@ -72,6 +72,7 @@ class LoadData:
         self.depths_track = np.copy(self.depths_track_init)
         self.depths_features = np.copy(self.depths_track)
 
+
     def get_scatter_data(self):
         scatter = {
             'times': self.spikes['times'][0:-1:100],
@@ -108,6 +109,7 @@ class LoadData:
         """
         sampling_trk = np.arange(self.depths_track[0],
                                  self.depths_track[-1] - 10 * 1e-6, 10 * 1e-6)
+
         xyz_samples = histology.interpolate_along_track(self.xyz_track,
                                                         sampling_trk - sampling_trk[0])
         region_ids = self.brain_atlas.get_labels(xyz_samples)

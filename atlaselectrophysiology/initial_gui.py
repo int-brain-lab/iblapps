@@ -38,8 +38,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 
         #Initialise with scatter plot
         self.data_plot = self.plot_scatter()
-        self.plot_histology(self.fig_hist)
+        #Plot histology reference first, should add another argument
         self.plot_histology(self.fig_hist_ref)
+        self.plot_histology(self.fig_hist)
         self.plot_slice()
  
 
@@ -277,9 +278,21 @@ class MainWindow(QtWidgets.QMainWindow):
             curve_item.setBrush(colour)
             fig.addItem(curve_item)
 
-        fig.addLine(y=self.probe_tip, pen=self.kpen_dot)
-        fig.addLine(y=self.probe_top, pen=self.kpen_dot)
-        fig.addLine(y=self.probe_top, pen=self.kpen_dot)
+        self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot, movable=True)
+        self.tip_pos.sigPositionChanged.connect(self.tip_line_moved)
+        self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot, movable=True)
+        self.top_pos.sigPositionChanged.connect(self.top_line_moved)
+
+        fig.addItem(self.tip_pos)
+        fig.addItem(self.top_pos)
+
+    def tip_line_moved(self):
+        self.top_pos.setPos(self.tip_pos.value() + self.probe_top)
+    
+    def top_line_moved(self):
+        self.tip_pos.setPos(self.top_pos.value() - self.probe_top)
+
+    
     
     def create_hist_data(self, reg, chan_int):
         
@@ -291,6 +304,16 @@ class MainWindow(QtWidgets.QMainWindow):
         y = np.append(y, reg[1])
 
         return x, y
+    
+    def offset_hist_data(self):
+    
+        self.loaddata.depths_track = self.loaddata.depths_track - self.tip_pos.value()/1e6
+        self.loaddata.depths_features = self.loaddata.depths_features - self.tip_pos.value()/1e6
+        region, label, colour = self.loaddata.get_histology_regions()
+        self.hist_data['region'][self.idx] = region
+        self.hist_data['axis_label'][self.idx] = label
+        self.hist_data['colour'][self.idx] = colour
+
 
     def scale_hist_data(self):
         # those are in the track coordinate system
@@ -298,10 +321,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # those are in the feature coordinate system
         line_pos_d = np.array([line[1].pos().y() for line in self.lines]) / 1e6
         # offset = np.mean(np.sort(line_pos_h) - np.sort(line_pos_d))
+
         depths_track = np.sort(np.r_[self.loaddata.depths_track[[0, -1]], line_pos_h])
-        self.loaddata.depths_track = self.loaddata.feature2track(depths_track)
+        self.loaddata.depths_track = self.loaddata.feature2track(depths_track) 
         self.loaddata.depths_features = np.sort(np.r_[self.loaddata.depths_features[[0, -1]], line_pos_d])
-        #print(self.loaddata.depths_track[0])
+
         region, label, colour = self.loaddata.get_histology_regions()
         self.hist_data['region'][self.idx] = region
         self.hist_data['axis_label'][self.idx] = label
@@ -384,6 +408,26 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if event.key() == QtCore.Qt.Key_Right:
             self.next_button_pressed()
+        
+        if event.key() == QtCore.Qt.Key_O:
+            self.offset_button_pressed()
+
+    def offset_button_pressed(self):
+        if self.idx <= self.max_idx:
+            self.idx += 1
+            self.offset_hist_data()
+            self.plot_histology(self.fig_hist)
+            self.plot_fit()
+            self.plot_slice()
+            self.remove_lines_points()
+            # self.lines = np.empty((0, 2))
+            # self.points = np.empty((0, 1))
+            self.add_lines_points()
+            self.change_feature_lines()
+            self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
+            self.total_idx = self.idx
+            self.update_string()
+
 
     def fit_button_pressed(self):
         if self.idx <= self.max_idx:
