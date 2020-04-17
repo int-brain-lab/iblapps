@@ -4,7 +4,7 @@ import numpy as np
 from brainbox.io.one import load_spike_sorting, load_channel_locations
 from oneibl.one import ONE
 import random
-
+import matplotlib.pyplot as plt
 import ibllib.pipes.histology as histology
 import ibllib.atlas as atlas
 
@@ -55,16 +55,19 @@ class LoadData:
         n_picks = round(xyz_picks.shape[0] / 4)
         traj_entry = atlas.Trajectory.fit(xyz_picks[:n_picks, :])
         entry = atlas.Insertion.get_brain_entry(traj_entry, self.brain_atlas)
+        entry[2] = entry[2] + 200/1e6
         traj_exit = atlas.Trajectory.fit(xyz_picks[-1 * n_picks:, :])
         exit = atlas.Insertion.get_brain_exit(traj_exit, self.brain_atlas)
+        exit[2] = exit[2] - 200/1e6
 
         self.xyz_track = np.r_[exit[np.newaxis, :], xyz_picks, entry[np.newaxis, :]]
         # by convention the deepest point is first
         self.xyz_track = self.xyz_track[np.argsort(self.xyz_track[:, 2]), :]
 
         # plot on tilted coronal slice for sanity check
-        # ax = self.brain_atlas.plot_tilted_slice(self.xyz_track, axis=1)
-        # ax.plot(self.xyz_track[:, 0] * 1e6, self.xyz_track[:, 2] * 1e6, '-*')
+        #ax = self.brain_atlas.plot_tilted_slice(self.xyz_track, axis=1)
+        #ax.plot(self.xyz_track[:, 0] * 1e6, self.xyz_track[:, 2] * 1e6, '-*')
+        plt.show()
 
         tip_distance = _cumulative_distance(self.xyz_track)[2] + TIP_SIZE_UM / 1e6
         track_length = _cumulative_distance(self.xyz_track)[-1]
@@ -126,7 +129,8 @@ class LoadData:
             if idx == 0:
                 _region = np.array([0, boundaries[idx]])
             elif idx == boundaries.size:
-                _region = np.array([boundaries[idx - 1], boundaries[boundaries.size - 1]])
+                #_region = np.array([boundaries[idx - 1], boundaries[boundaries.size - 1]])
+                _region = np.array([boundaries[idx - 1], region_info.id.size - 1])
             else: 
                 _region = np.array([boundaries[idx - 1], boundaries[idx]])
             

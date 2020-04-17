@@ -89,7 +89,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.title_string = QtWidgets.QLabel(font=self.title_font)
         self.update_string()
 
-
         #Figure items
         self.init_figures()
 
@@ -97,25 +96,6 @@ class MainWindow(QtWidgets.QMainWindow):
         main_widget = QtGui.QWidget()
         self.setCentralWidget(main_widget)
         #Add everything to the main widget
-        #Without coronal slice figure
-        #layout_main = QtWidgets.QGridLayout()
-        #layout_main.addWidget(self.fig_data, 0, 0, 10, 4)
-        #layout_main.addWidget(self.fig_hist, 0, 4, 10, 2)
-        #layout_main.addWidget(self.fig_hist_ref, 0, 6, 10, 2)
-        #layout_main.addWidget(self.title_string, 0, 8, 1, 2)
-        #layout_main.addLayout(hlayout_fit, 2, 8, 1, 2)
-        #layout_main.addWidget(self.fig_fit, 3, 8, 5, 2)
-        #layout_main.addLayout(vlayout, 8, 8, 2, 2)
-        #layout_main.setColumnStretch(0, 4)
-        #layout_main.setColumnStretch(4, 2)
-        #layout_main.setColumnStretch(6, 2)
-        #layout_main.setColumnStretch(8, 2)
-        #layout_main.setRowStretch(0, 1)
-        #layout_main.setRowStretch(2, 1)
-        #layout_main.setRowStretch(4, 1)
-        #layout_main.setRowStretch(5, 3)
-        #layout_main.setRowStretch(8, 2)
-
         #With coronal slice figure
         layout_main = QtWidgets.QGridLayout()
         layout_main.addWidget(self.fig_data, 0, 0, 10, 4)
@@ -130,7 +110,6 @@ class MainWindow(QtWidgets.QMainWindow):
         layout_main.setColumnStretch(4, 2)
         layout_main.setColumnStretch(6, 2)
         layout_main.setColumnStretch(8, 2)
-
 
         main_widget.setLayout(layout_main)
 
@@ -220,10 +199,9 @@ class MainWindow(QtWidgets.QMainWindow):
         #Create figure showing fit line
         self.fig_fit = pg.PlotWidget(background='w')
         #self.fig_fit.setMouseEnabled(x=False, y=False)
-        #elf.fig_fit.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra)
-        #self.fig_fit.setXRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra)
-        #self.fig_fit.setXRange(min=self.view_total[0], max=self.view_total[1])
-        #self.fig_fit.setYRange(min=self.view_total[0], max=self.view_total[1])
+ 
+        self.fig_fit.setXRange(min=self.view_total[0], max=self.view_total[1])
+        self.fig_fit.setYRange(min=self.view_total[0], max=self.view_total[1])
         self.set_axis(self.fig_fit)
         plot = pg.PlotCurveItem()
         plot.setData(x=self.depth, y=self.depth, pen=self.kpen_dot)
@@ -291,9 +269,7 @@ class MainWindow(QtWidgets.QMainWindow):
     
     def top_line_moved(self):
         self.tip_pos.setPos(self.top_pos.value() - self.probe_top)
-
-    
-    
+ 
     def create_hist_data(self, reg, chan_int):
         
         y = np.arange(reg[0], reg[1] + chan_int, chan_int, dtype=int)
@@ -307,8 +283,8 @@ class MainWindow(QtWidgets.QMainWindow):
     
     def offset_hist_data(self):
     
-        self.loaddata.depths_track = self.loaddata.depths_track - self.tip_pos.value()/1e6
-        self.loaddata.depths_features = self.loaddata.depths_features - self.tip_pos.value()/1e6
+        self.loaddata.depths_track = self.loaddata.depths_track - self.tip_pos.value() / 1e6
+        self.loaddata.depths_features = self.loaddata.depths_features - self.tip_pos.value() / 1e6
         region, label, colour = self.loaddata.get_histology_regions()
         self.hist_data['region'][self.idx] = region
         self.hist_data['axis_label'][self.idx] = label
@@ -324,7 +300,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         depths_track = np.sort(np.r_[self.loaddata.depths_track[[0, -1]], line_pos_h])
         self.loaddata.depths_track = self.loaddata.feature2track(depths_track) 
-        self.loaddata.depths_features = np.sort(np.r_[self.loaddata.depths_features[[0, -1]], line_pos_d])
+        self.loaddata.depths_features = np.sort(np.r_[self.loaddata.depths_features[[0, -1]],
+                                                line_pos_d])
+
+        self.loaddata.depths_track_init = np.sort(np.r_[self.loaddata.depths_track_init[[0, -1]],
+                                                  line_pos_d - self.tip_pos.value() / 1e6])
 
         region, label, colour = self.loaddata.get_histology_regions()
         self.hist_data['region'][self.idx] = region
@@ -334,7 +314,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def plot_fit(self):
         if self.idx != 0:
             depth_track = self.loaddata.feature2track(self.loaddata.depths_track)
-            self.fit_plot.setData(x=self.loaddata.depths_features * 1e6,
+            #self.fit_plot.setData(x=self.loaddata.depths_features * 1e6,
+            #                      y=depth_track * 1e6)
+            self.fit_plot.setData(x=self.loaddata.depths_track_init * 1e6,
                                   y=depth_track * 1e6)
         self.update_string()
     
@@ -420,8 +402,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.plot_fit()
             self.plot_slice()
             self.remove_lines_points()
-            # self.lines = np.empty((0, 2))
-            # self.points = np.empty((0, 1))
             self.add_lines_points()
             self.change_feature_lines()
             self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
@@ -437,8 +417,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.plot_fit()
             self.plot_slice()
             self.remove_lines_points()
-            # self.lines = np.empty((0, 2))
-            # self.points = np.empty((0, 1))
             self.add_lines_points()
             self.change_feature_lines()
             self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
