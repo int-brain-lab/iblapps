@@ -255,7 +255,10 @@ class MainWindow(QtWidgets.QMainWindow):
         ax_y.setPen('k')
         ax_y.setLabel(label[1])
 
-##Plot functions
+    """
+    Plot updates functions
+    """
+
     def plot_histology(self, fig):
         """
         Plots brain regions along the probe
@@ -277,7 +280,6 @@ class MainWindow(QtWidgets.QMainWindow):
         fig.addLine(y=self.probe_tip, pen=self.kpen_dot)
         fig.addLine(y=self.probe_top, pen=self.kpen_dot)
         fig.addLine(y=self.probe_top, pen=self.kpen_dot)
-
     
     def create_hist_data(self, reg, chan_int):
         
@@ -291,20 +293,15 @@ class MainWindow(QtWidgets.QMainWindow):
         return x, y
 
     def scale_hist_data(self):
-
         # those are in the track coordinate system
         line_pos_h = np.array([line[0].pos().y() for line in self.lines]) / 1e6
         # those are in the feature coordinate system
         line_pos_d = np.array([line[1].pos().y() for line in self.lines]) / 1e6
-
         # offset = np.mean(np.sort(line_pos_h) - np.sort(line_pos_d))
         depths_track = np.sort(np.r_[self.loaddata.depths_track[[0, -1]], line_pos_h])
         self.loaddata.depths_track = self.loaddata.feature2track(depths_track)
         self.loaddata.depths_features = np.sort(np.r_[self.loaddata.depths_features[[0, -1]], line_pos_d])
-
-
         #print(self.loaddata.depths_track[0])
-
         region, label, colour = self.loaddata.get_histology_regions()
         self.hist_data['region'][self.idx] = region
         self.hist_data['axis_label'][self.idx] = label
@@ -373,7 +370,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
         return image_plot
 
-##Interaction functions
+    """
+    Interaction functions
+    """
+
     def keyPressEvent(self, event):
 
         if event.key() == QtCore.Qt.Key_Return:
@@ -426,6 +426,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def reset_button_pressed(self):
         self.remove_lines_points()
         self.init_variables()
+        self.scale_hist_data()
         self.plot_histology(self.fig_hist)
         self.tot_fit_plot.setData()
         self.fit_plot.setData()
@@ -507,7 +508,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.idx_string.setText(f"Current Index = {self.idx}")
         self.tot_idx_string.setText(f"Total Index = {self.total_idx}")
         self.fit_string.setText(f"Scale = {round(self.tot_fit_brain[self.idx][0],2)}, Offset = {round(self.tot_fit_brain[self.idx][1],2)}")
-        
 
 
 if __name__ == '__main__':

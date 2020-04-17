@@ -33,9 +33,6 @@ class LoadData:
         self.get_data()
         # self.scale_data([1,0])
 
-
-
-
     def get_data(self):
         #Load in all the data required
         dtypes_extra = [
@@ -70,25 +67,10 @@ class LoadData:
         # ax.plot(self.xyz_track[:, 0] * 1e6, self.xyz_track[:, 2] * 1e6, '-*')
 
         tip_distance = _cumulative_distance(self.xyz_track)[2] + TIP_SIZE_UM / 1e6
-
-        track_length =_cumulative_distance(self.xyz_track)[-1]
+        track_length = _cumulative_distance(self.xyz_track)[-1]
         self.depths_track_init = np.array([0, track_length]) - tip_distance
         self.depths_track = np.copy(self.depths_track_init)
         self.depths_features = np.copy(self.depths_track)
-
-    def scale_data(self, coeff):
-        fit = np.poly1d(coeff)
-        print(fit)
-        self.chan_probe_scale = fit(self.chan_probe)
-        self.chan_probe_ext_scale = fit(self.chan_probe_ext)
-        self.xyz_channels = np.zeros((self.chan_probe.shape[0], 3))
-        self.xyz_channels_ext = np.zeros((self.chan_probe_ext.shape[0], 3))
-        for m in np.arange(3):
-            self.xyz_channels[:, m] = np.interp(self.chan_probe_scale / 1e6, self.d, self.xyz_ext[:, m])
-            self.xyz_channels_ext[:, m] = np.interp(self.chan_probe_ext_scale / 1e6, self.d, self.xyz_ext[:, m])
-        
-        return self.xyz_channels
-
 
     def get_scatter_data(self):
         scatter = {
