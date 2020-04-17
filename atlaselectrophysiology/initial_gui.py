@@ -412,6 +412,16 @@ class MainWindow(QtWidgets.QMainWindow):
         if event.key() == QtCore.Qt.Key_O:
             self.offset_button_pressed()
 
+        if event.key() == QtCore.Qt.Key_Down:
+            self.loaddata.depths_features -= 50 / 1e6
+            self.loaddata.depths_track -= 50 / 1e6
+            self.offset_button_pressed()
+
+        if event.key() == QtCore.Qt.Key_Up:
+            self.loaddata.depths_features += 50 / 1e6
+            self.loaddata.depths_track += 50 / 1e6
+            self.offset_button_pressed()
+
     def offset_button_pressed(self):
         if self.idx <= self.max_idx:
             self.idx += 1
