@@ -292,7 +292,8 @@ class MainWindow(QtWidgets.QMainWindow):
         return x, y
     
     def offset_hist_data(self):
-        
+        print('tip')
+        print(self.tip_pos.value())
         self.loaddata.depths_track -= self.tip_pos.value() / 1e6
         self.loaddata.depths_features -= self.tip_pos.value() / 1e6
         region, label, colour = self.loaddata.get_histology_regions()
