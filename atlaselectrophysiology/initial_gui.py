@@ -262,6 +262,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                        movable=True)
         self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot,
                                        movable=True)
+        #Add offset of 1um to stop it reaching upper and lower bounds of interpolation
         offset = 1
         self.tip_pos.setBounds((self.loaddata.depths_track[0] * 1e6 + offset,
                                 self.loaddata.depths_track[-1] * 1e6 - (self.probe_top + offset)))
@@ -292,8 +293,6 @@ class MainWindow(QtWidgets.QMainWindow):
         return x, y
     
     def offset_hist_data(self):
-        print('tip')
-        print(self.tip_pos.value())
         self.loaddata.depths_track -= self.tip_pos.value() / 1e6
         self.loaddata.depths_features -= self.tip_pos.value() / 1e6
         region, label, colour = self.loaddata.get_histology_regions()
@@ -406,14 +405,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.offset_button_pressed()
 
         if event.key() == QtCore.Qt.Key_Down:
-            self.loaddata.depths_features -= 50 / 1e6
-            self.loaddata.depths_track -= 50 / 1e6
-            self.offset_button_pressed()
+            if self.loaddata.depths_track[-1] - 50 / 1e6 >= np.max(self.loaddata.channel_coords[:, 1]) / 1e6:
+                self.loaddata.depths_features -= 50 / 1e6
+                self.loaddata.depths_track -= 50 / 1e6
+                self.offset_button_pressed()
 
         if event.key() == QtCore.Qt.Key_Up:
-            self.loaddata.depths_features += 50 / 1e6
-            self.loaddata.depths_track += 50 / 1e6
-            self.offset_button_pressed()
+            if self.loaddata.depths_track[0] + 50 / 1e6 <= np.min(self.loaddata.channel_coords[:, 1]) / 1e6:
+                self.loaddata.depths_features += 50 / 1e6
+                self.loaddata.depths_track += 50 / 1e6
+                self.offset_button_pressed()
 
     def offset_button_pressed(self):
         if self.idx <= self.max_idx:

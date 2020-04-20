@@ -72,7 +72,6 @@ class LoadData:
         tip_distance = _cumulative_distance(self.xyz_track)[2] + TIP_SIZE_UM / 1e6
         track_length = _cumulative_distance(self.xyz_track)[-1]
         self.depths_track_init = np.array([0, track_length]) - tip_distance
-        print(type(self.depths_track_init[0]))
         self.depths_track = np.copy(self.depths_track_init)
         self.depths_features = np.copy(self.depths_track)
 
@@ -113,8 +112,6 @@ class LoadData:
         """
         sampling_trk = np.arange(self.depths_track[0],
                                  self.depths_track[-1] - 10 * 1e-6, 10 * 1e-6)
-        print(type(sampling_trk[0]))
-        print(sampling_trk[0])
 
         xyz_samples = histology.interpolate_along_track(self.xyz_track,
                                                         sampling_trk - sampling_trk[0])
@@ -126,7 +123,6 @@ class LoadData:
         # ax.plot(xyz_samples[:, 0] * 1e6, xyz_samples[:, 2] * 1e6, '*')
         boundaries = np.where(np.diff(region_info.id))[0]
         region = np.empty((boundaries.size + 1, 2))
-        print(type(region[0][0]))
         region_label = np.empty((boundaries.size + 1, 2), dtype=object)
         region_colour = np.empty((boundaries.size + 1, 3), dtype=int)
 
@@ -156,7 +152,6 @@ class LoadData:
         region = track2feature(region) * 1e6
 
         region_label[:, 0] = np.int64(track2feature(np.float64(region_label[:, 0])) * 1e6)
-        print(region_label)
         return region, region_label, region_colour
 
     def get_amplitude_data(self):
