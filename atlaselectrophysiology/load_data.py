@@ -76,12 +76,10 @@ class LoadData:
 
         tip_distance = _cumulative_distance(self.xyz_track)[2] + TIP_SIZE_UM / 1e6
         track_length = _cumulative_distance(self.xyz_track)[-1]
-        #self.depths_track_init = np.array([0, track_length]) - tip_distance
-        #self.depths_track = np.copy(self.track_init[0])
-        #self.depths_features = np.copy(self.depths_track)
-        self.track_init[0] = np.array([0, track_length]) - tip_distance
-        self.track[0] = np.copy(self.track_init[0])
-        self.features[0] = np.copy(self.track_init[0])
+        self.track_start = np.array([0, track_length]) - tip_distance
+        self.track_init[0] = np.copy(self.track_start)
+        self.track[0] = np.copy(self.track_start)
+        self.features[0] = np.copy(self.track_start)
 
     def get_scatter_data(self):
         scatter = {

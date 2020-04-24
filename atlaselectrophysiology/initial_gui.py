@@ -23,7 +23,7 @@ class MainWindow(QtWidgets.QMainWindow):
         probe = 0
         self.loaddata = ld.LoadData(subj, date, sess=1, probe_id=probe)
         self.sdata = self.loaddata.get_scatter_data()
-        #self.amplitude_data = self.loaddata.get_amplitude_data()
+        self.amplitude_data = self.loaddata.get_amplitude_data()
         self.title_string.setText(f"{subj} {date} probe0{probe}")
 
         region, label, colour = self.loaddata.get_histology_regions(self.idx)
@@ -33,7 +33,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.brain_atlas = self.loaddata.brain_atlas
 
         # Initialise with scatter plot
-        self.data_plot = self.plot_scatter()
+        self.plot_scatter()
         # Plot histology reference first, should add another argument
         self.plot_histology(self.fig_hist_ref)
         self.plot_histology(self.fig_hist)
@@ -45,40 +45,87 @@ class MainWindow(QtWidgets.QMainWindow):
         menu_bar = QtWidgets.QMenuBar(self)
         menu_options = menu_bar.addMenu("Plot Options")
         menu_bar.setGeometry(QtCore.QRect(0, 0, 1002, 22))
-        menu_options.addAction('Scatter Plot')
-        menu_options.addAction('Depth Plot')
-        menu_options.addAction('Correlation Plot')
-        menu_bar.triggered.connect(self.on_menu_clicked)
+        scatter_plot = QtGui.QAction('Scatter Plot', self)
+        scatter_plot.triggered.connect(self.plot_scatter)
+        corr_plot = QtGui.QAction('Correlation Plot', self)
+        corr_plot.triggered.connect(self.plot_image)
+        menu_options.addAction(scatter_plot)
+        menu_options.addAction(corr_plot)
+
+        shortcut_options = menu_bar.addMenu("Shortcut Keys")
+        fit_option = QtGui.QAction('Fit', self)
+        fit_option.setShortcut('Return')
+        fit_option.triggered.connect(self.fit_button_pressed)
+        offset_option = QtGui.QAction('Offset', self)
+        offset_option.setShortcut('Shift+O')
+        offset_option.triggered.connect(self.offset_button_pressed)
+        moveup_option = QtGui.QAction('Offset + 50um', self)
+        moveup_option.setShortcut('Up')
+        moveup_option.triggered.connect(self.moveup_button_pressed)
+        movedown_option = QtGui.QAction('Offset - 50um', self)
+        movedown_option.setShortcut('Down')
+        movedown_option.triggered.connect(self.movedown_button_pressed)
+        lines_option = QtGui.QAction('Hide/Show Lines', self)
+        lines_option.setShortcut('Shift+L')
+        lines_option.triggered.connect(self.toggle_line_button_pressed)
+        delete_option = QtGui.QAction('Remove Line', self)
+        delete_option.setShortcut('Shift+Del')
+        delete_option.triggered.connect(self.delete_line_button_pressed)
+        next_option = QtGui.QAction('Next', self)
+        next_option.setShortcut('Right')
+        next_option.triggered.connect(self.next_button_pressed)
+        prev_option = QtGui.QAction('Previous', self)
+        prev_option.setShortcut('Left')
+        prev_option.triggered.connect(self.prev_button_pressed)
+        reset_option = QtGui.QAction('Reset', self)
+        reset_option.setShortcut('Shift+R')
+        reset_option.triggered.connect(self.reset_button_pressed)
+        complete_option = QtGui.QAction('Complete', self)
+        complete_option.setShortcut('Shift+F')
+        complete_option.triggered.connect(self.complete_button_pressed)
+
+        shortcut_options.addAction(fit_option)
+        shortcut_options.addAction(offset_option)
+        shortcut_options.addAction(moveup_option)
+        shortcut_options.addAction(movedown_option)
+        shortcut_options.addAction(lines_option)
+        shortcut_options.addAction(delete_option)
+        shortcut_options.addAction(next_option)
+        shortcut_options.addAction(prev_option)
+        shortcut_options.addAction(reset_option)
+        shortcut_options.addAction(complete_option)
         self.setMenuBar(menu_bar)
 
-        # Fit associated items
-        hlayout_fit = QtWidgets.QHBoxLayout()
+        # Fit and Idx associated items
+        hlayout1 = QtWidgets.QHBoxLayout()
+        hlayout2 = QtWidgets.QHBoxLayout()
         self.fit_button = QtWidgets.QPushButton('Fit', font=self.font)
         self.fit_button.clicked.connect(self.fit_button_pressed)
-        self.fit_string = QtWidgets.QLabel(font=self.font)
-        self.idx_string = QtWidgets.QLabel(font=self.font)
-        hlayout_fit.addWidget(self.fit_button, stretch=1)
-        hlayout_fit.addWidget(self.fit_string, stretch=3)
-
-        # Idx associated items
-        hlayout_button = QtWidgets.QHBoxLayout()
-        hlayout_string = QtWidgets.QHBoxLayout()
+        self.offset_button = QtWidgets.QPushButton('Offset', font=self.font)
+        self.offset_button.clicked.connect(self.offset_button_pressed)
         self.next_button = QtWidgets.QPushButton('Next', font=self.font)
         self.next_button.clicked.connect(self.next_button_pressed)
         self.prev_button = QtWidgets.QPushButton('Previous', font=self.font)
         self.prev_button.clicked.connect(self.prev_button_pressed)
-        hlayout_button.addWidget(self.prev_button)
-        hlayout_button.addWidget(self.next_button)
         self.idx_string = QtWidgets.QLabel(font=self.font)
         self.tot_idx_string = QtWidgets.QLabel(font=self.font)
+        hlayout1.addWidget(self.fit_button, stretch=1)
+        hlayout1.addWidget(self.offset_button, stretch=1)
+        hlayout1.addWidget(self.tot_idx_string, stretch=2)
+        hlayout2.addWidget(self.prev_button, stretch=1)
+        hlayout2.addWidget(self.next_button, stretch=1)
+        hlayout2.addWidget(self.idx_string, stretch=2)
+        vlayout = QtWidgets.QVBoxLayout()
+        vlayout.addLayout(hlayout1)
+        vlayout.addLayout(hlayout2)
+
+        hlayout3 = QtWidgets.QHBoxLayout()
         self.reset_button = QtWidgets.QPushButton('Reset', font=self.font)
         self.reset_button.clicked.connect(self.reset_button_pressed)
-        hlayout_string.addWidget(self.idx_string)
-        hlayout_string.addWidget(self.tot_idx_string)
-        vlayout = QtWidgets.QVBoxLayout()
-        vlayout.addLayout(hlayout_button)
-        vlayout.addLayout(hlayout_string)
-        vlayout.addWidget(self.reset_button)
+        self.complete_button = QtWidgets.QPushButton('Complete', font=self.font)
+        self.complete_button.clicked.connect(self.complete_button_pressed)
+        hlayout3.addWidget(self.reset_button)
+        hlayout3.addWidget(self.complete_button)
 
         # Title item
         self.title_string = QtWidgets.QLabel(font=self.title_font)
@@ -97,9 +144,9 @@ class MainWindow(QtWidgets.QMainWindow):
         layout_main.addWidget(self.fig_hist_ref, 0, 6, 10, 2)
         layout_main.addWidget(self.title_string, 0, 8, 1, 2)
         layout_main.addWidget(self.fig_slice, 1, 8, 3, 2)
-        layout_main.addLayout(hlayout_fit, 4, 8, 1, 2)
+        layout_main.addLayout(vlayout, 4, 8, 1, 2)
         layout_main.addWidget(self.fig_fit, 5, 8, 3, 2)
-        layout_main.addLayout(vlayout, 8, 8, 2, 2)
+        layout_main.addLayout(hlayout3, 8, 8, 2, 2)
         layout_main.setColumnStretch(0, 4)
         layout_main.setColumnStretch(4, 2)
         layout_main.setColumnStretch(6, 2)
@@ -135,16 +182,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.max_idx = 10
         self.current_idx = 0
 
-        # Variables to keep track of applied fits
-        self.depth_fit_brain = np.empty(((self.max_idx + 1), len(self.depth)))
-        self.depth_fit_brain[0] = self.depth
-        self.depth_fit_probe = np.empty(((self.max_idx + 1), len(self.depth)))
-        self.depth_fit_probe[0] = self.depth
-        self.tot_fit_brain = np.empty((self.max_idx + 1, 2))
-        self.tot_fit_brain[0] = [1, 0]
-        self.tot_fit_probe = np.empty((self.max_idx + 1, 2))
-        self.tot_fit_probe[0] = [1, 0]
-
         self.hist_data = {
             'region': [0] * (self.max_idx + 1),
             'axis_label': [0] * (self.max_idx + 1),
@@ -153,6 +190,7 @@ class MainWindow(QtWidgets.QMainWindow):
         }
 
         # Variables to keep track of number of lines added
+        self.line_status = True
         self.lines = np.empty((0, 2))
         self.points = np.empty((0, 1))
         self.scale = 1
@@ -188,7 +226,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Create reference histology figure
         self.fig_hist_ref = pg.PlotWidget(background='w')
-        self.fig_hist_ref.setMouseEnabled(x=False)
+        self.fig_hist_ref.setMouseEnabled(x=False, y=False)
         self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                     self.probe_extra, padding=self.pad)
         axis = self.fig_hist_ref.plotItem.getAxis('bottom')
@@ -337,9 +375,12 @@ class MainWindow(QtWidgets.QMainWindow):
                                            ax=self.fig_slice_ax)
         self.fig_slice_ax.plot(xyz_trk[:, 0] * 1e6, xyz_trk[:, 2] * 1e6, 'b')
         self.fig_slice_ax.plot(xyz_ch[:, 0] * 1e6, xyz_ch[:, 2] * 1e6, 'k*')
+        self.fig_slice_ax.axis('off')
         self.fig_slice.draw()
 
     def plot_scatter(self):
+        self.fig_data.removeItem(self.data_plot)
+        self.fig_data.removeItem(self.color_bar)
         connect = np.zeros(len(self.sdata['times']), dtype=int)
         plot = pg.PlotDataItem()
         plot.setData(x=self.sdata['times'], y=self.sdata['depths'], connect=connect,
@@ -349,17 +390,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
         self.scale = 1
-        return plot
+        self.data_plot = plot
 
     def plot_image(self):
+        self.fig_data.removeItem(self.data_plot)
+        self.fig_data.removeItem(self.color_bar)
         self.color_bar = cb.ColorBar('cividis')
         lut = self.color_bar.getColourMap()
         image_plot = pg.ImageItem()
-        #img = np.flip(self.amplitude_data['corr'],axis=0)
+        # img = np.flip(self.amplitude_data['corr'],axis=0)
         img = self.amplitude_data['corr']
         bins = self.amplitude_data['bins']
         self.scale = (bins[-1] - bins[0]) / img.shape[0]
-        #image_plot.setImage(img, autoLevels=True)
         image_plot.setImage(img)
         image_plot.scale(self.scale, self.scale)
         image_plot.setLookupTable(lut)
@@ -373,53 +415,38 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_data.setXRange(min=self.probe_tip, max=self.probe_top)
         self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
-        return image_plot
+        self.data_plot = image_plot
 
     """
     Interaction functions
     """
 
-    def keyPressEvent(self, event):
-        if event.key() == QtCore.Qt.Key_Delete:
-            if self.selected_line:
-                line = np.where(self.lines == self.selected_line)[0][0]
-                self.fig_data.removeItem(self.lines[line, 1])
-                self.fig_hist.removeItem(self.lines[line, 0])
-                self.fig_fit.removeItem(self.points[line, 0])
-                self.lines = np.delete(self.lines, line, axis=0)
-                self.points = np.delete(self.points, line, axis=0)
+    def fit_button_pressed(self):
+        if self.current_idx < self.last_idx:
+            self.total_idx = np.copy(self.current_idx)
+            self.diff_idx = (np.mod(self.last_idx, self.max_idx) - np.mod(self.total_idx,
+                                                                          self.max_idx))
+            if self.diff_idx >= 0:
+                self.diff_idx = self.max_idx - self.diff_idx
+            else:
+                self.diff_idx = np.abs(self.diff_idx)
+        else:
+            self.diff_idx = self.max_idx - 1
 
-        if event.key() == QtCore.Qt.Key_Return:
-            self.fit_button_pressed()
-
-        if event.key() == QtCore.Qt.Key_Left:
-            self.prev_button_pressed()
-
-        if event.key() == QtCore.Qt.Key_Right:
-            self.next_button_pressed()
-
-        if event.key() == QtCore.Qt.Key_O:
-            self.offset_button_pressed()
-
-        if event.key() == QtCore.Qt.Key_Down:
-            if self.loaddata.track[self.idx][-1] - 50 / 1e6 >= np.max(self.loaddata.channel_coords
-                                                                      [:, 1]) / 1e6:
-                self.loaddata.features[self.idx] -= 50 / 1e6
-                self.loaddata.track[self.idx] -= 50 / 1e6
-                self.offset_button_pressed()
-
-        if event.key() == QtCore.Qt.Key_Up:
-            if self.loaddata.track[self.idx][0] + 50 / 1e6 <= np.min(self.loaddata.channel_coords
-                                                                     [:, 1]) / 1e6:
-                self.loaddata.features[self.idx] += 50 / 1e6
-                self.loaddata.track[self.idx] += 50 / 1e6
-                self.offset_button_pressed()
-
-        if event.key() == QtCore.Qt.Key_H:
-            self.remove_lines_points()
-
-        if event.key() == QtCore.Qt.Key_S:
-            self.add_lines_points()
+        self.total_idx += 1
+        self.current_idx += 1
+        self.idx_prev = np.copy(self.idx)
+        self.idx = np.mod(self.current_idx, self.max_idx)
+        self.scale_hist_data()
+        self.plot_histology(self.fig_hist)
+        self.plot_fit()
+        self.plot_slice()
+        self.remove_lines_points()
+        self.add_lines_points()
+        self.update_lines_points()
+        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                self.probe_extra, padding=self.pad)
+        self.update_string()
 
     def offset_button_pressed(self):
 
@@ -429,10 +456,8 @@ class MainWindow(QtWidgets.QMainWindow):
                                                                           self.max_idx))
             if self.diff_idx >= 0:
                 self.diff_idx = self.max_idx - self.diff_idx
-                print(self.diff_idx)
             else:
                 self.diff_idx = np.abs(self.diff_idx)
-                print(self.diff_idx)
         else:
             self.diff_idx = self.max_idx - 1
 
@@ -451,35 +476,35 @@ class MainWindow(QtWidgets.QMainWindow):
                                 self.probe_extra, padding=self.pad)
         self.update_string()
 
-    def fit_button_pressed(self):
+    def movedown_button_pressed(self):
+        if self.loaddata.track[self.idx][-1] - 50 / 1e6 >= np.max(self.loaddata.channel_coords
+                                                                  [:, 1]) / 1e6:
+            self.loaddata.features[self.idx] -= 50 / 1e6
+            self.loaddata.track[self.idx] -= 50 / 1e6
+            self.offset_button_pressed()
 
-        if self.current_idx < self.last_idx:
-            self.total_idx = np.copy(self.current_idx)
-            self.diff_idx = (np.mod(self.last_idx, self.max_idx) - np.mod(self.total_idx,
-                                                                          self.max_idx))
-            if self.diff_idx >= 0:
-                self.diff_idx = self.max_idx - self.diff_idx
-                print(self.diff_idx)
-            else:
-                self.diff_idx = np.abs(self.diff_idx)
-                print(self.diff_idx)
+    def moveup_button_pressed(self):
+        if self.loaddata.track[self.idx][0] + 50 / 1e6 <= np.min(self.loaddata.channel_coords
+                                                                 [:, 1]) / 1e6:
+            self.loaddata.features[self.idx] += 50 / 1e6
+            self.loaddata.track[self.idx] += 50 / 1e6
+            self.offset_button_pressed()
+
+    def toggle_line_button_pressed(self):
+        self.line_status = not self.line_status
+        if not self.line_status:
+            self.remove_lines_points()
         else:
-            self.diff_idx = self.max_idx - 1
+            self.add_lines_points()
 
-        self.total_idx += 1
-        self.current_idx += 1
-        self.idx_prev = np.copy(self.idx)
-        self.idx = np.mod(self.current_idx, self.max_idx)
-        self.scale_hist_data()
-        self.plot_histology(self.fig_hist)
-        self.plot_fit()
-        self.plot_slice()
-        self.remove_lines_points()
-        self.add_lines_points()
-        self.update_lines_points()
-        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
-                                self.probe_extra, padding=self.pad)
-        self.update_string()
+    def delete_line_button_pressed(self):
+        if self.selected_line:
+            line = np.where(self.lines == self.selected_line)[0][0]
+            self.fig_data.removeItem(self.lines[line, 1])
+            self.fig_hist.removeItem(self.lines[line, 0])
+            self.fig_fit.removeItem(self.points[line, 0])
+            self.lines = np.delete(self.lines, line, axis=0)
+            self.points = np.delete(self.points, line, axis=0)
 
     def next_button_pressed(self):
         if (self.current_idx < self.total_idx) & (self.current_idx >
@@ -514,12 +539,32 @@ class MainWindow(QtWidgets.QMainWindow):
     def reset_button_pressed(self):
         self.remove_lines_points()
         self.lines = np.empty((0, 2))
-        # self.init_variables()
-        self.scale_hist_data()
+        self.points = np.empty((0, 1))
+        self.total_idx += 1
+        self.current_idx += 1
+        self.idx = np.mod(self.current_idx, self.max_idx)
+        self.loaddata.track_init[self.idx] = np.copy(self.loaddata.track_start)
+        self.loaddata.track[self.idx] = np.copy(self.loaddata.track_start)
+        self.loaddata.features[self.idx] = np.copy(self.loaddata.track_start)
+        region, label, colour = self.loaddata.get_histology_regions(self.idx)
+        self.hist_data['region'][self.idx] = region
+        self.hist_data['axis_label'][self.idx] = label
+        self.hist_data['colour'][self.idx] = colour
         self.plot_histology(self.fig_hist)
-        self.tot_fit_plot.setData()
-        self.fit_plot.setData()
+        self.plot_fit()
+        self.plot_slice()
+        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                self.probe_extra, padding=self.pad)
         self.update_string()
+
+    def complete_button_pressed(self):
+        upload = QtGui.QMessageBox.question(self, 'Scaling Complete',
+                                            "Upload final channel locations to Alyx?",
+                                            QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+        if upload == QtGui.QMessageBox.Yes:
+            print('put upload stuff here')
+        else:
+            pass
 
     def on_mouse_double_clicked(self, event):
         if event.double():
@@ -548,24 +593,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.selected_line = items[0]
             else:
                 self.selected_line = []
-
-    def on_menu_clicked(self, action):
-        self.fig_data.removeItem(self.data_plot)
-        self.fig_data.removeItem(self.color_bar)
-
-        if action.text() == 'Scatter Plot':
-            self.data_plot = self.plot_scatter()
-            self.remove_lines_points()
-            self.add_lines_points()
-
-        if action.text() == 'Depth Plot':
-            self.data_plot = self.plot_bar()
-            self.remove_lines_points()
-            self.add_lines_points()
-        if action.text() == 'Correlation Plot':
-            self.data_plot = self.plot_image()
-            self.remove_lines_points()
-            self.add_lines_points()
 
     def remove_lines_points(self):
         for lines, points in zip(self.lines, self.points):
