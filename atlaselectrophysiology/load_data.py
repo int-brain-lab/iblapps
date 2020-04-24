@@ -28,13 +28,12 @@ class LoadData:
         self.eid = eids[0]
         print(self.eid)
         self.probe_id = probe_id
-        
+
         #self.brain_atlas, self.probe_coord = self.get_data()
         self.get_data()
-        # self.scale_data([1,0])
 
     def get_data(self):
-        #Load in all the data required
+        # Load in all the data required
         dtypes_extra = [
             'spikes.depths',
             'spikes.amps',
@@ -44,7 +43,8 @@ class LoadData:
 
         spikes, _ = load_spike_sorting(eid=self.eid, one=one, dataset_types=dtypes_extra)
         probe_label = [key for key in spikes.keys() if int(key[-1]) == self.probe_id][0]
-        self.channel_coords = one.load_dataset(eid=self.eid, dataset_type='channels.localCoordinates')
+        self.channel_coords = one.load_dataset(eid=self.eid, 
+                                               dataset_type='channels.localCoordinates')
 
         self.spikes = spikes[probe_label]
         self.brain_atlas = atlas.AllenAtlas(res_um=25)
@@ -67,14 +67,21 @@ class LoadData:
         # plot on tilted coronal slice for sanity check
         #ax = self.brain_atlas.plot_tilted_slice(self.xyz_track, axis=1)
         #ax.plot(self.xyz_track[:, 0] * 1e6, self.xyz_track[:, 2] * 1e6, '-*')
-        plt.show()
+        #plt.show()
+
+        self.max_idx = 10
+        self.track_init = [0] * (self.max_idx + 1)
+        self.track = [0] * (self.max_idx + 1)
+        self.features = [0] * (self.max_idx + 1)
 
         tip_distance = _cumulative_distance(self.xyz_track)[2] + TIP_SIZE_UM / 1e6
         track_length = _cumulative_distance(self.xyz_track)[-1]
-        self.depths_track_init = np.array([0, track_length]) - tip_distance
-        self.depths_track = np.copy(self.depths_track_init)
-        self.depths_features = np.copy(self.depths_track)
-
+        #self.depths_track_init = np.array([0, track_length]) - tip_distance
+        #self.depths_track = np.copy(self.track_init[0])
+        #self.depths_features = np.copy(self.depths_track)
+        self.track_init[0] = np.array([0, track_length]) - tip_distance
+        self.track[0] = np.copy(self.track_init[0])
+        self.features[0] = np.copy(self.track_init[0])
 
     def get_scatter_data(self):
         scatter = {
@@ -84,15 +91,15 @@ class LoadData:
 
         return scatter
 
-    def feature2track(self, trk):
-        fcn = scipy.interpolate.interp1d(self.depths_features, self.depths_track)
+    def feature2track(self, trk, idx):
+        fcn = scipy.interpolate.interp1d(self.features[idx], self.track[idx])
         return fcn(trk)
 
-    def track2feature(self, ft):
-        fcn = scipy.interpolate.interp1d(self.depths_track, self.depths_features)
+    def track2feature(self, ft, idx):
+        fcn = scipy.interpolate.interp1d(self.track[idx], self.features[idx])
         return fcn(ft)
 
-    def get_channels_coordinates(self, depths=None):
+    def get_channels_coordinates(self, idx, depths=None):
         """
         Gets 3d coordinates from a depth along the electrophysiology feature. 2 steps
         1) interpolate from the electrophys features depths space to the probe depth space
@@ -102,66 +109,58 @@ class LoadData:
         if depths is None:
             depths = self.channel_coords[:, 1] / 1e6
         # nb using scipy here so we can change to cubic spline if needed
-        channel_depths_track = self.feature2track(depths) - self.depths_track[0]
+        channel_depths_track = self.feature2track(depths, idx) - self.track[idx][0]
         return histology.interpolate_along_track(self.xyz_track, channel_depths_track)
 
-    def get_histology_regions(self):
+    def get_histology_regions(self, idx):
         """
         Samples at 10um along the trajectory
         :return:
         """
-        sampling_trk = np.arange(self.depths_track[0],
-                                 self.depths_track[-1] - 10 * 1e-6, 10 * 1e-6)
+        sampling_trk = np.arange(self.track[idx][0],
+                                 self.track[idx][-1] - 10 * 1e-6, 10 * 1e-6)
 
         xyz_samples = histology.interpolate_along_track(self.xyz_track,
                                                         sampling_trk - sampling_trk[0])
-    
+
         region_ids = self.brain_atlas.get_labels(xyz_samples)
         region_info = self.brain_atlas.regions.get(region_ids)
 
-        # ax = self.brain_atlas.plot_tilted_slice(xyz_samples, axis=1)
-        # ax.plot(xyz_samples[:, 0] * 1e6, xyz_samples[:, 2] * 1e6, '*')
         boundaries = np.where(np.diff(region_info.id))[0]
         region = np.empty((boundaries.size + 1, 2))
         region_label = np.empty((boundaries.size + 1, 2), dtype=object)
         region_colour = np.empty((boundaries.size + 1, 3), dtype=int)
 
-        for idx in np.arange(boundaries.size + 1):
-            if idx == 0:
-                _region = np.array([0, boundaries[idx]])
-            elif idx == boundaries.size:
-                #_region = np.array([boundaries[idx - 1], boundaries[boundaries.size - 1]])
-                _region = np.array([boundaries[idx - 1], region_info.id.size - 1])
-            else: 
-                _region = np.array([boundaries[idx - 1], boundaries[idx]])
-            
-            
+        for bound in np.arange(boundaries.size + 1):
+            if bound == 0:
+                _region = np.array([0, boundaries[bound]])
+            elif bound == boundaries.size:
+                _region = np.array([boundaries[bound - 1], region_info.id.size - 1])
+            else:
+                _region = np.array([boundaries[bound - 1], boundaries[bound]])
+
             _region_colour = region_info.rgb[_region[1]]
             _region_label = region_info.acronym[_region[1]]
-            #_region = sampling_trk[_region] * 1e6
             _region = sampling_trk[_region] 
             _region_mean = np.mean(_region)
 
-            
-            region[idx, :] = _region
-            region_colour[idx, :] = _region_colour
-            region_label[idx, :] = (_region_mean, _region_label)
+            region[bound, :] = _region
+            region_colour[bound, :] = _region_colour
+            region_label[bound, :] = (_region_mean, _region_label)
 
-        track2feature = scipy.interpolate.interp1d(self.depths_track, self.depths_features)
-
-        region = track2feature(region) * 1e6
-
-        region_label[:, 0] = np.int64(track2feature(np.float64(region_label[:, 0])) * 1e6)
+        region = self.track2feature(region, idx) * 1e6
+        region_label[:, 0] = np.int64(self.track2feature(np.float64(region_label[:, 0]),
+                                      idx) * 1e6)
         return region, region_label, region_colour
 
     def get_amplitude_data(self):
-        
+       
         depths = self.spikes['depths']
         depth_int = 40
         depth_bins = np.arange(0, max(self.channel_coords[:, 1]) + depth_int, depth_int)
         depth_bins_cnt = depth_bins[:-1] + depth_int / 2
 
-        amps = self.spikes['amps'] * 1e6 * 2.54  ##Check that this scaling factor is correct!!
+        amps = self.spikes['amps'] * 1e6 * 2.54  ## Check that this scaling factor is correct!!
         amp_int = 50
         amp_bins = np.arange(min(amps), max(amps), amp_int)
 
@@ -189,7 +188,7 @@ class LoadData:
         corr = np.corrcoef(depth_hist)
         #print(corr)
         corr[np.isnan(corr)] = 0
-    
+  
         amplitude = {
             #'amps': depth_amps,
             #'fr': depth_fr,
@@ -199,8 +198,3 @@ class LoadData:
         }
 
         return amplitude
-        
-
-
-
-
