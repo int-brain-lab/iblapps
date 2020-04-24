@@ -5,6 +5,7 @@ import numpy as np
 import atlaselectrophysiology.load_data as ld
 import atlaselectrophysiology.ColorBar as cb
 from random import randrange
+from matplotlib import cm
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -20,6 +21,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         subj = 'ZM_2407'
         date = '2019-11-07'
+        #subj = 'CSHL045'
+        #date = '2020-02-26'
         probe = 0
         self.loaddata = ld.LoadData(subj, date, sess=1, probe_id=probe)
         self.sdata = self.loaddata.get_scatter_data()
@@ -47,9 +50,12 @@ class MainWindow(QtWidgets.QMainWindow):
         menu_bar.setGeometry(QtCore.QRect(0, 0, 1002, 22))
         scatter_plot = QtGui.QAction('Scatter Plot', self)
         scatter_plot.triggered.connect(self.plot_scatter)
+        scatter_image_plot = QtGui.QAction('Scatter Image Plot', self)
+        scatter_image_plot.triggered.connect(self.plot_scatter_image)
         corr_plot = QtGui.QAction('Correlation Plot', self)
         corr_plot.triggered.connect(self.plot_image)
         menu_options.addAction(scatter_plot)
+        menu_options.addAction(scatter_image_plot)
         menu_options.addAction(corr_plot)
 
         shortcut_options = menu_bar.addMenu("Shortcut Keys")
@@ -180,6 +186,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.total_idx = 0
         self.last_idx = 0
         self.max_idx = 10
+        self.diff_idx = 0
         self.current_idx = 0
 
         self.hist_data = {
@@ -238,7 +245,8 @@ class MainWindow(QtWidgets.QMainWindow):
         #self.fig_fit.setMouseEnabled(x=False, y=False)
         self.fig_fit.setXRange(min=self.view_total[0], max=self.view_total[1])
         self.fig_fit.setYRange(min=self.view_total[0], max=self.view_total[1])
-        self.set_axis(self.fig_fit)
+        #self.set_axis(self.fig_fit, label=['Original electrode locations (um)',
+        #                                   'New electrode locations (um)'])
         plot = pg.PlotCurveItem()
         plot.setData(x=self.depth, y=self.depth, pen=self.kpen_dot)
         self.fit_plot = pg.PlotCurveItem(pen=self.kpen_solid)
@@ -381,16 +389,36 @@ class MainWindow(QtWidgets.QMainWindow):
     def plot_scatter(self):
         self.fig_data.removeItem(self.data_plot)
         self.fig_data.removeItem(self.color_bar)
-        connect = np.zeros(len(self.sdata['times']), dtype=int)
+        connect = np.zeros(self.sdata['times'].size, dtype=int)
+        brush = self.sdata['colours'].tolist()
+        size = self.sdata['size'].tolist()
         plot = pg.PlotDataItem()
         plot.setData(x=self.sdata['times'], y=self.sdata['depths'], connect=connect,
-                     symbol='o', symbolSize=2)
+                     symbol='o', symbolSize=size, symbolBrush=brush)
         self.fig_data.addItem(plot)
         self.fig_data.setXRange(min=self.sdata['times'].min(), max=self.sdata['times'].max())
         self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
+        self.set_axis(self.fig_data, label=['Time (s)', 'Distance from probe tip (um)'])
         self.scale = 1
         self.data_plot = plot
+
+    def plot_scatter_image(self):
+        self.fig_data.removeItem(self.data_plot)
+        self.fig_data.removeItem(self.color_bar)
+        scatter_plot = pg.ImageItem()
+        img = self.sdata['image']
+        d_bins = self.sdata['depths_bin']
+        t_bins = self.sdata['times_bin']
+        self.scale = (d_bins[-1] - d_bins[0]) / img.shape[1]
+        self.xscale = (t_bins[-1] - t_bins[0]) / img.shape[0]
+        scatter_plot.setImage(img, levels=[2, 0])
+        scatter_plot.scale(self.xscale, self.scale)
+        self.fig_data.addItem(scatter_plot)
+        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                self.probe_extra, padding=self.pad)
+        self.set_axis(self.fig_data, label=['Time (s)', 'Distance from probe tip (um)'])
+        self.data_plot = scatter_plot
 
     def plot_image(self):
         self.fig_data.removeItem(self.data_plot)
@@ -415,6 +443,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_data.setXRange(min=self.probe_tip, max=self.probe_top)
         self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
+        self.set_axis(self.fig_data, label=['Distance from probe tip (um)',
+                                            'Distance from probe tip (um)'])
         self.data_plot = image_plot
 
     """

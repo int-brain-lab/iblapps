@@ -1,8 +1,10 @@
-
+from matplotlib import cm
+from PyQt5 import QtGui
 import scipy
 import numpy as np
 from brainbox.io.one import load_spike_sorting, load_channel_locations
 from oneibl.one import ONE
+from brainbox.processing import bincount2D
 import random
 import matplotlib.pyplot as plt
 import ibllib.pipes.histology as histology
@@ -81,14 +83,6 @@ class LoadData:
         self.track[0] = np.copy(self.track_start)
         self.features[0] = np.copy(self.track_start)
 
-    def get_scatter_data(self):
-        scatter = {
-            'times': self.spikes['times'][0:-1:100],
-            'depths': self.spikes['depths'][0:-1:100]
-        }
-
-        return scatter
-
     def feature2track(self, trk, idx):
         fcn = scipy.interpolate.interp1d(self.features[idx], self.track[idx])
         return fcn(trk)
@@ -150,40 +144,79 @@ class LoadData:
         region_label[:, 0] = np.int64(self.track2feature(np.float64(region_label[:, 0]),
                                       idx) * 1e6)
         return region, region_label, region_colour
+    
+    
+    def get_scatter_data(self):
+        A_BIN = 10
+        amp_range = np.quantile(self.spikes['amps'], [0.1, 0.9])
+        amp_bins = np.linspace(amp_range[0], amp_range[1], A_BIN)
+        colour_bin = np.linspace(0.0, 1.0, A_BIN)
+        colours = cm.get_cmap('Greys')(colour_bin)[np.newaxis, :, :3][0]
+        spikes_colours = np.empty((self.spikes['amps'].size), dtype=object)
+        spikes_size = np.empty((self.spikes['amps'].size))
+        for iA in range(amp_bins.size - 1):
+            idx = np.where((self.spikes['amps'] > amp_bins[iA]) & (self.spikes['amps'] <=
+                                                                   amp_bins[iA + 1]))[0]
+            spikes_colours[idx] = QtGui.QColor(*colours[iA])
+            spikes_size[idx] = iA / (A_BIN / 4)
+
+        T_BIN = 0.05
+        D_BIN = 5
+        R, times, depths = bincount2D(self.spikes['times'], self.spikes['depths'], T_BIN, D_BIN, 
+                                      ylim=[0, max(self.channel_coords[:, 1])])
+
+        scatter = {
+            'times': self.spikes['times'][0:-1:100],
+            'depths': self.spikes['depths'][0:-1:100],
+            'colours': spikes_colours[0:-1:100],
+            'size': spikes_size[0:-1:100],
+            'times_bin': times,
+            'depths_bin': depths,
+            'image': np.transpose(R)
+        }
+
+        return scatter
 
     def get_amplitude_data(self):
+        
+        T_BIN = 0.05
+        D_BIN = 40
+        R, times, depths = bincount2D(self.spikes['times'], self.spikes['depths'], T_BIN, D_BIN,
+                                      ylim=[0, max(self.channel_coords[:, 1])])
        
-        depths = self.spikes['depths']
-        depth_int = 40
-        depth_bins = np.arange(0, max(self.channel_coords[:, 1]) + depth_int, depth_int)
-        depth_bins_cnt = depth_bins[:-1] + depth_int / 2
-
-        amps = self.spikes['amps'] * 1e6 * 2.54  ## Check that this scaling factor is correct!!
-        amp_int = 50
-        amp_bins = np.arange(min(amps), max(amps), amp_int)
-
-        times = self.spikes['times']
-        time_min = min(times)
-        time_max = max(times)
-        time_int = 0.01
-        time_bins = np.arange(time_min, time_max, time_int)
-
-        depth_amps = []
-        depth_fr = []
-        depth_amps_fr = []
-        depth_hist = []
-
-        for iD in range(len(depth_bins) - 1):
-            depth_idx = np.where((depths > depth_bins[iD]) & (depths <= depth_bins[iD + 1]))[0]
-            #print(len(depth_idx))
-            depth_hist.append(np.histogram(times[depth_idx], time_bins)[0])
-            #print(depth_hist)
-            #depth_amps_fr.append(np.histogram(amps[depth_idx], amp_bins)[0]/ time_max)
-            #depth_amps.append(np.mean(amps[depth_idx]))
-            #depth_fr.append(len(depth_idx) / time_max)
-
+        #depths = self.spikes['depths']
+        #depth_int = 40
+        #depth_bins = np.arange(0, max(self.channel_coords[:, 1]) + depth_int, depth_int)
+        #depth_bins_cnt = depth_bins[:-1] + depth_int / 2
+#
+        #amps = self.spikes['amps'] * 1e6 * 2.54  ## Check that this scaling factor is correct!!
+        #amp_int = 50
+        #amp_bins = np.arange(min(amps), max(amps), amp_int)
+#
+        #times = self.spikes['times']
+        #time_min = min(times)
+        #time_max = max(times)
+        #time_int = 0.01
+        #time_bins = np.arange(time_min, time_max, time_int)
+#
+        #depth_amps = []
+        #depth_fr = []
+        #depth_amps_fr = []
+        #depth_hist = []
+#
+        #for iD in range(len(depth_bins) - 1):
+        #    depth_idx = np.where((depths > depth_bins[iD]) & (depths <= depth_bins[iD + 1]))[0]
+        #    #print(len(depth_idx))
+        #    depth_hist.append(np.histogram(times[depth_idx], time_bins)[0])
+        #    #print(depth_hist)
+        #    #depth_amps_fr.append(np.histogram(amps[depth_idx], amp_bins)[0]/ time_max)
+        #    #depth_amps.append(np.mean(amps[depth_idx]))
+        #    #depth_fr.append(len(depth_idx) / time_max)
+#
         #print(depth_hist)
-        corr = np.corrcoef(depth_hist)
+        #corr = np.corrcoef(depth_hist)
+
+        corr = np.corrcoef(R)
         #print(corr)
         corr[np.isnan(corr)] = 0
   
@@ -192,7 +225,8 @@ class LoadData:
             #'fr': depth_fr,
             #'amps_fr': depth_amps_fr,
             'corr': corr,
-            'bins': depth_bins
+            'bins': depths
+            #'bins': depth_bins
         }
 
         return amplitude
