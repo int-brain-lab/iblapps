@@ -19,14 +19,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.init_variables()
         self.init_layout()
 
-        subj = 'ZM_2407'
-        date = '2019-11-07'
+        #subj = 'ZM_2407'
+        #date = '2019-11-07'
         #subj = 'CSHL045'
         #date = '2020-02-26'
-        probe = 0
+        subj='ZM_2240'
+        date='2020-01-22'
+        probe = 1
         self.loaddata = ld.LoadData(subj, date, sess=1, probe_id=probe)
         self.sdata = self.loaddata.get_scatter_data()
-        self.amplitude_data = self.loaddata.get_amplitude_data()
+        self.corr_data = self.loaddata.get_correlation_data()
+        self.depth_data = self.loaddata.get_depth_data()
+        self.rms_APdata = self.loaddata.get_rms_data('AP')
+        self.rms_LFdata = self.loaddata.get_rms_data('LF')
+        self.lfp_data = self.loaddata.get_lfp_spectrum_data()
         self.title_string.setText(f"{subj} {date} probe0{probe}")
 
         region, label, colour = self.loaddata.get_histology_regions(self.idx)
@@ -45,18 +51,29 @@ class MainWindow(QtWidgets.QMainWindow):
     def init_layout(self):
 
         # Make menu bar
+        lambda: self.on_fig_size_changed(self.fig1_exporter, self.plots.fig1_button)
+
         menu_bar = QtWidgets.QMenuBar(self)
         menu_options = menu_bar.addMenu("Plot Options")
         menu_bar.setGeometry(QtCore.QRect(0, 0, 1002, 22))
         scatter_plot = QtGui.QAction('Scatter Plot', self)
         scatter_plot.triggered.connect(self.plot_scatter)
         scatter_image_plot = QtGui.QAction('Scatter Image Plot', self)
-        scatter_image_plot.triggered.connect(self.plot_scatter_image)
+        scatter_image_plot.triggered.connect(lambda: self.plot_image(self.depth_data))
         corr_plot = QtGui.QAction('Correlation Plot', self)
-        corr_plot.triggered.connect(self.plot_image)
+        corr_plot.triggered.connect(lambda: self.plot_image(self.corr_data))
+        rms_ap_plot = QtGui.QAction('RMS AP Plot', self)
+        rms_ap_plot.triggered.connect(lambda: self.plot_image(self.rms_APdata))
+        rms_lf_plot = QtGui.QAction('RMS LF Plot', self)
+        rms_lf_plot.triggered.connect(lambda: self.plot_image(self.rms_LFdata))
+        lf_plot = QtGui.QAction('LF Plot', self)
+        lf_plot.triggered.connect(lambda: self.plot_image(self.lfp_data))
         menu_options.addAction(scatter_plot)
         menu_options.addAction(scatter_image_plot)
         menu_options.addAction(corr_plot)
+        menu_options.addAction(rms_ap_plot)
+        menu_options.addAction(rms_lf_plot)
+        menu_options.addAction(lf_plot)
 
         shortcut_options = menu_bar.addMenu("Shortcut Keys")
         fit_option = QtGui.QAction('Fit', self)
@@ -203,20 +220,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scale = 1
 
         # Variables for colour bar
-        self.color_bar = []
-        self.data_plot = []
+        self.cbars = []
+        self.plots = []
+        #self.data_plot = []
 
     def init_figures(self):
 
         # Create data figure
         self.fig_data = pg.PlotWidget(background='w')
-        self.fig_data.setMouseEnabled(x=False, y=False)
+        #self.fig_data.setMouseEnabled(x=False, y=False)
         self.fig_data.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
         self.fig_data.scene().sigMouseHover.connect(self.on_mouse_hover)
         self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
-        self.fig_data.addLine(y=self.probe_tip, pen=self.kpen_dot)
-        self.fig_data.addLine(y=self.probe_top, pen=self.kpen_dot)
+        self.fig_data.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)
+        self.fig_data.addLine(y=self.probe_top, pen=self.kpen_dot, z=50)
         self.fig_data_vb = self.fig_data.getViewBox()
         self.set_axis(self.fig_data)
 
@@ -387,8 +405,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_slice.draw()
 
     def plot_scatter(self):
-        self.fig_data.removeItem(self.data_plot)
-        self.fig_data.removeItem(self.color_bar)
+        [self.fig_data.removeItem(plot) for plot in self.plots]
+        [self.fig_data.removeItem(cbar) for cbar in self.cbars]
+        self.plots = []
+        self.cbars = []
         connect = np.zeros(self.sdata['times'].size, dtype=int)
         brush = self.sdata['colours'].tolist()
         size = self.sdata['size'].tolist()
@@ -401,51 +421,74 @@ class MainWindow(QtWidgets.QMainWindow):
                                 self.probe_extra, padding=self.pad)
         self.set_axis(self.fig_data, label=['Time (s)', 'Distance from probe tip (um)'])
         self.scale = 1
+        self.plots.append(plot)
         self.data_plot = plot
 
-    def plot_scatter_image(self):
-        self.fig_data.removeItem(self.data_plot)
-        self.fig_data.removeItem(self.color_bar)
-        scatter_plot = pg.ImageItem()
-        img = self.sdata['image']
-        d_bins = self.sdata['depths_bin']
-        t_bins = self.sdata['times_bin']
-        self.scale = (d_bins[-1] - d_bins[0]) / img.shape[1]
-        self.xscale = (t_bins[-1] - t_bins[0]) / img.shape[0]
-        scatter_plot.setImage(img, levels=[2, 0])
-        scatter_plot.scale(self.xscale, self.scale)
-        self.fig_data.addItem(scatter_plot)
+    def plot_probe_image(self, data, lut=None):
+        for iP, _ in enumerate(data['probe_img']):
+            p_img = data['probe_img'][iP]
+            p_scale = data['probe_scale'][iP]
+            p_offset = data['probe_offset'][iP]
+            p_levels = data['probe_level'][iP]
+            extra_offset = data['extra_offset'][iP]
+            color_bar = cb.ColorBar(data['probe_cmap'])
+            lut = color_bar.getColourMap()
+
+            for iB, (img, scale, offset) in enumerate(zip(p_img, p_scale, p_offset)):
+                image = pg.ImageItem()
+                image.setImage(img)
+                image.translate(offset[0] + extra_offset, offset[1])
+                image.scale(scale[0], scale[1])
+                image.setLookupTable(lut)
+                image.setLevels((p_levels[0], p_levels[1]))
+                self.fig_data.addItem(image)
+                self.plots.append(image)
+
+            if data['plot_cmap']:
+                p_title = data['probe_title'][iP]
+                color_bar.makeVColourBar(400, 400, scale=10, min=p_levels[0], max=p_levels[1],
+                                         label=p_title[0], lim=True)
+                color_bar.setPos(extra_offset - 150, 4500)
+                self.fig_data.addItem(color_bar)
+                self.cbars.append(color_bar)
+
+    def plot_image(self, data):
+        [self.fig_data.removeItem(plot) for plot in self.plots]
+        [self.fig_data.removeItem(cbar) for cbar in self.cbars]
+        self.plots = []
+        self.cbars = []
+
+        image = pg.ImageItem()
+        image.setImage(data['img'])
+        image.scale(data['scale'][0], data['scale'][1])
+        cmap = data.get('cmap', [])
+        if cmap:
+            color_bar = cb.ColorBar(data['cmap'])
+            lut = color_bar.getColourMap()
+            image.setLookupTable(lut)
+            image.setLevels((data['levels'][0], data['levels'][1]))
+            color_bar.makeHColourBar(0.8 * (data['xrange'][1] - data['xrange'][0]), 150,
+                                     min=data['levels'][0], max=data['levels'][1],
+                                     label=data['title'])
+            color_bar.setPos(0.1 * data['xrange'][1], 4500)
+            self.fig_data.addItem(color_bar)
+            self.cbars.append(color_bar)
+        else:
+            image.setLevels((1, 0))
+    
+        self.fig_data.addItem(image)
+        self.plots.append(image)
+
+        probe_img = data.get('probe_img', [])
+        if probe_img:
+            self.plot_probe_image(data)
+
+        self.fig_data.setXRange(min=data['xrange'][0], max=data['xrange'][1])
         self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_data, label=['Time (s)', 'Distance from probe tip (um)'])
-        self.data_plot = scatter_plot
-
-    def plot_image(self):
-        self.fig_data.removeItem(self.data_plot)
-        self.fig_data.removeItem(self.color_bar)
-        self.color_bar = cb.ColorBar('cividis')
-        lut = self.color_bar.getColourMap()
-        image_plot = pg.ImageItem()
-        # img = np.flip(self.amplitude_data['corr'],axis=0)
-        img = self.amplitude_data['corr']
-        bins = self.amplitude_data['bins']
-        self.scale = (bins[-1] - bins[0]) / img.shape[0]
-        image_plot.setImage(img)
-        image_plot.scale(self.scale, self.scale)
-        image_plot.setLookupTable(lut)
-        image_plot.setLevels((img.min(), img.max()))
-
-        self.color_bar.makeColourBar(3000, 150, min=img.min(), max=img.max(), label='Correlation')
-        # Make this so it automatically sets based on size of colourbar!!
-        self.color_bar.setPos(500, 4500)
-        self.fig_data.addItem(image_plot)
-        self.fig_data.addItem(self.color_bar)
-        self.fig_data.setXRange(min=self.probe_tip, max=self.probe_top)
-        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
-                                self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_data, label=['Distance from probe tip (um)',
-                                            'Distance from probe tip (um)'])
-        self.data_plot = image_plot
+        self.set_axis(self.fig_data, label=[data['axis'][0], data['axis'][1]])
+        self.scale = data['scale'][1]
+        self.data_plot = image
 
     """
     Interaction functions

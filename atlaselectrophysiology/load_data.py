@@ -1,7 +1,10 @@
+from pathlib import Path
+import sys
 from matplotlib import cm
 from PyQt5 import QtGui
 import scipy
 import numpy as np
+import alf.io
 from brainbox.io.one import load_spike_sorting, load_channel_locations
 from oneibl.one import ONE
 from brainbox.processing import bincount2D
@@ -11,6 +14,8 @@ import ibllib.pipes.histology as histology
 import ibllib.atlas as atlas
 
 TIP_SIZE_UM = 200
+N_BNK = 4
+BNK_SIZE = 150
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 one = ONE(base_url=ONE_BASE_URL)
 
@@ -28,6 +33,7 @@ class LoadData:
 
         eids = one.search(subject=subj, date=date, number=sess, task_protocol='ephys')
         self.eid = eids[0]
+        self.path = one.path_from_eid(self.eid)
         print(self.eid)
         self.probe_id = probe_id
 
@@ -36,22 +42,38 @@ class LoadData:
 
     def get_data(self):
         # Load in all the data required
-        dtypes_extra = [
+        dtypes = [
             'spikes.depths',
             'spikes.amps',
-            'clusters.peakToTrough',
-            'channels.localCoordinates'
+            'spikes.times',
+            'channels.localCoordinates',
+            'channels.rawInd',
+            '_iblqc_ephysTimeRms.rms',
+            '_iblqc_ephysTimeRms.timestamps',
+            '_iblqc_ephysSpectralDensity.freqs',
+            '_iblqc_ephysSpectralDensity.amps',
+            '_iblqc_ephysSpectralDensity.power'
         ]
 
-        spikes, _ = load_spike_sorting(eid=self.eid, one=one, dataset_types=dtypes_extra)
-        probe_label = [key for key in spikes.keys() if int(key[-1]) == self.probe_id][0]
-        self.channel_coords = one.load_dataset(eid=self.eid, 
-                                               dataset_type='channels.localCoordinates')
+        spikes, _ = load_spike_sorting(eid=self.eid, one=one, dataset_types=dtypes)
+        self.probe_label = [key for key in spikes.keys() if int(key[-1]) == self.probe_id][0]
+        path = one.path_from_eid(self.eid)
+        self.alf_path = path.joinpath('alf', self.probe_label)
+        self.ephys_path = path.joinpath('raw_ephys_data', self.probe_label)
+        self.spikes = spikes[self.probe_label]
+        self.chn_coords, self.chn_ind = (alf.io.load_object(self.alf_path, 'channels')).values()
+        lfp_spectrum = alf.io.load_object(self.ephys_path, '_iblqc_ephysSpectralDensityLF')
+        self.lfp_freq = lfp_spectrum.get('freqs')
+        self.lfp_power = lfp_spectrum.get('power', [])
+        #if not self.lfp_power:
+        #    self.lfp_power = lfp_spectrum.get('amps')
 
-        self.spikes = spikes[probe_label]
+
+
+        
         self.brain_atlas = atlas.AllenAtlas(res_um=25)
 
-        insertion = one.alyx.rest('insertions', 'list', session=self.eid, name=probe_label)
+        insertion = one.alyx.rest('insertions', 'list', session=self.eid, name=self.probe_label)
         xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
         # extrapolate to find the brain entry/exit using only the top/bottom 1/4 of picks
         n_picks = round(xyz_picks.shape[0] / 4)
@@ -99,7 +121,7 @@ class LoadData:
         if depths is not provided, defaults to channels local coordinates depths
         """
         if depths is None:
-            depths = self.channel_coords[:, 1] / 1e6
+            depths = self.chn_coords[:, 1] / 1e6
         # nb using scipy here so we can change to cubic spline if needed
         channel_depths_track = self.feature2track(depths, idx) - self.track[idx][0]
         return histology.interpolate_along_track(self.xyz_track, channel_depths_track)
@@ -160,73 +182,169 @@ class LoadData:
             spikes_colours[idx] = QtGui.QColor(*colours[iA])
             spikes_size[idx] = iA / (A_BIN / 4)
 
-        T_BIN = 0.05
-        D_BIN = 5
-        R, times, depths = bincount2D(self.spikes['times'], self.spikes['depths'], T_BIN, D_BIN, 
-                                      ylim=[0, max(self.channel_coords[:, 1])])
-
         scatter = {
             'times': self.spikes['times'][0:-1:100],
             'depths': self.spikes['depths'][0:-1:100],
             'colours': spikes_colours[0:-1:100],
-            'size': spikes_size[0:-1:100],
-            'times_bin': times,
-            'depths_bin': depths,
-            'image': np.transpose(R)
+            'size': spikes_size[0:-1:100]
         }
 
         return scatter
+    
+    def get_depth_data(self):
+        T_BIN = 0.05
+        D_BIN = 5
+        R, times, depths = bincount2D(self.spikes['times'], self.spikes['depths'], T_BIN, D_BIN,
+                                      ylim=[0, np.max(self.chn_coords[:, 1])])
+        img = R.T
+        xscale = (times[-1] - times[0]) / img.shape[0]
+        yscale = (depths[-1] - depths[0]) / img.shape[1]
+        
+        depth = {
+            'img': img,
+            'scale': np.array([xscale, yscale]),
+            'levels': np.array([1, 0]),
+            'xrange': np.array([times[0], times[-1]]),
+            'axis': ['Time (s)', 'Distance from probe tip (um)']
+        }
 
-    def get_amplitude_data(self):
+        return depth
+    
+    def get_rms_data(self, format):
+        # Finds channels that are at equivalent depth on probe and averages rms values for each 
+        # time point at same depth togehter
+        rms_amps, rms_times = (alf.io.load_object(self.ephys_path, '_iblqc_ephysTimeRms' + format)).values()
+        #rms = alf.io.load_object(self.ephys_path, '_iblqc_ephysTimeRmsAP')
+        #rms_amps = rms.rms
+        _rms = np.take(rms_amps, self.chn_ind, axis=1)
+        _, self.chn_depth, chn_count = np.unique(self.chn_coords[:, 1], return_index=True,
+                                                 return_counts=True)
+        self.chn_depth_eq = np.copy(self.chn_depth)
+        self.chn_depth_eq[np.where(chn_count == 2)] += 1
+
+        def avg_chn_depth(a):
+            return(np.mean([a[self.chn_depth], a[self.chn_depth_eq]], axis=0))
+        
+        img = np.apply_along_axis(avg_chn_depth, 1, _rms * 1e6)
+        xscale = (rms_times[-1] - rms_times[0]) / img.shape[0]
+        yscale = (np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1])) / img.shape[1]
+
+        # Finds the average rms value on each electrode across all time points
+        rms_avg = (np.mean(rms_amps, axis=0)[self.chn_ind]) * 1e6
+        probe_levels = np.quantile(rms_avg, [0.1, 0.9])
+        probe_img, probe_scale, probe_offset = self.arrange_channels2banks(rms_avg)
+        
+        X_OFFSET = rms_times[-1] + 150
+
+        rms_data = {
+            'img': img,
+            'scale': np.array([xscale, yscale]),
+            'levels': probe_levels,
+            'xrange': np.array([0, X_OFFSET + N_BNK * BNK_SIZE]),
+            'cmap': 'plasma',
+            'title': format + ' RMS (uV)',
+            'axis': ['Time (s)', 'Distance from probe tip (um)'],
+            'probe_img': [probe_img],
+            'probe_scale': [probe_scale],
+            'probe_offset': [probe_offset],
+            'probe_level': [probe_levels],
+            'probe_cmap': 'plasma',
+            'extra_offset': [X_OFFSET],
+            'plot_cmap': False
+        }
+
+        return rms_data
+
+    def get_lfp_spectrum_data(self):
+        X_OFFSET = 1000
+        freq_bands = np.vstack(([0, 4], [4, 10], [10, 30], [30, 80], [80, 200]))
+        probe_img = []
+        probe_scale = np.empty((freq_bands.shape[0], 4, 2))
+        probe_offset = np.empty((freq_bands.shape[0], 4, 2))
+        probe_xoffset = np.empty((freq_bands.shape[0], 1))
+        probe_level = np.empty((freq_bands.shape[0], 2))
+        probe_title = np.empty((freq_bands.shape[0], 1), dtype=object)
+
+        for iF, freq in enumerate(freq_bands):
+            freq_idx = np.where((self.lfp_freq >= freq[0]) & (self.lfp_freq < freq[1]))[0]
+            lfp_chns = np.mean(self.lfp_power[freq_idx], axis=0)[self.chn_ind]
+            lfp_chns_dB = 10 * np.log10(lfp_chns)
+            lfp_bnks, lfp_scale, lfp_offset = self.arrange_channels2banks(lfp_chns_dB)
+            lfp_level = np.quantile(lfp_chns_dB, [0.1, 0.9])
+            lfp_title = f"{freq[0]} - {freq[1]} Hz (dB)"
+
+            probe_img.append(lfp_bnks)
+            probe_scale[iF, :] = lfp_scale
+            probe_offset[iF, :] = lfp_offset
+            probe_level[iF, :] = lfp_level
+            probe_title[iF, :] = lfp_title
+            probe_xoffset[iF, :] = iF * X_OFFSET
+        
+        # A bit of a hack
+        img = np.zeros((np.unique(self.chn_coords[:, 1]).size,
+                        np.unique(self.chn_coords[:, 1]).size))
+        xmax = np.max(probe_xoffset) + N_BNK * BNK_SIZE
+        xscale = (xmax - 0) / img.shape[0]
+        yscale = (np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1]) / img.shape[1])
+
+
+        lfp_data = {
+            'img': img,
+            'scale': np.array([xscale, yscale]),
+            'xrange': np.array([0, xmax]),
+            'axis': ['Time (s)', ''],
+            'probe_img': probe_img,
+            'probe_scale': probe_scale,
+            'probe_offset': probe_offset,
+            'probe_level': probe_level,
+            'probe_title': probe_title,
+            'extra_offset': probe_xoffset,
+            'probe_cmap': 'viridis',
+            'plot_cmap': True
+        }
+
+        return lfp_data
+
+
+    def get_correlation_data(self):
         
         T_BIN = 0.05
         D_BIN = 40
         R, times, depths = bincount2D(self.spikes['times'], self.spikes['depths'], T_BIN, D_BIN,
-                                      ylim=[0, max(self.channel_coords[:, 1])])
-       
-        #depths = self.spikes['depths']
-        #depth_int = 40
-        #depth_bins = np.arange(0, max(self.channel_coords[:, 1]) + depth_int, depth_int)
-        #depth_bins_cnt = depth_bins[:-1] + depth_int / 2
-#
-        #amps = self.spikes['amps'] * 1e6 * 2.54  ## Check that this scaling factor is correct!!
-        #amp_int = 50
-        #amp_bins = np.arange(min(amps), max(amps), amp_int)
-#
-        #times = self.spikes['times']
-        #time_min = min(times)
-        #time_max = max(times)
-        #time_int = 0.01
-        #time_bins = np.arange(time_min, time_max, time_int)
-#
-        #depth_amps = []
-        #depth_fr = []
-        #depth_amps_fr = []
-        #depth_hist = []
-#
-        #for iD in range(len(depth_bins) - 1):
-        #    depth_idx = np.where((depths > depth_bins[iD]) & (depths <= depth_bins[iD + 1]))[0]
-        #    #print(len(depth_idx))
-        #    depth_hist.append(np.histogram(times[depth_idx], time_bins)[0])
-        #    #print(depth_hist)
-        #    #depth_amps_fr.append(np.histogram(amps[depth_idx], amp_bins)[0]/ time_max)
-        #    #depth_amps.append(np.mean(amps[depth_idx]))
-        #    #depth_fr.append(len(depth_idx) / time_max)
-#
-        #print(depth_hist)
-        #corr = np.corrcoef(depth_hist)
-
+                                      ylim=[0, np.max(self.chn_coords[:, 1])])
         corr = np.corrcoef(R)
-        #print(corr)
         corr[np.isnan(corr)] = 0
-  
-        amplitude = {
-            #'amps': depth_amps,
-            #'fr': depth_fr,
-            #'amps_fr': depth_amps_fr,
-            'corr': corr,
-            'bins': depths
-            #'bins': depth_bins
+        scale = (np.max(depths) - np.min(depths)) / corr.shape[0]
+
+        correlation = {
+            'img': corr,
+            'scale': np.array([scale, scale]),
+            'levels': np.array([np.min(corr), np.max(corr)]),
+            'xrange': np.array([np.min(self.chn_coords[:, 1]), np.max(self.chn_coords[:, 1])]),
+            'cmap': 'viridis',
+            'title': 'Correlation',
+            'axis': ['Distance from probe tip (um)', 'Distance from probe tip (um)']
         }
 
-        return amplitude
+        return correlation
+    
+    def arrange_channels2banks(self, data):
+        Y_OFFSET = 20
+        bnk_data = []
+        bnk_scale = np.empty((N_BNK, 2))
+        bnk_offset = np.empty((N_BNK, 2))
+        for iX, x in enumerate(np.unique(self.chn_coords[:, 0])):
+            bnk_idx = np.where(self.chn_coords[:, 0] == x)[0]
+            bnk_vals = data[bnk_idx]
+            _bnk_data = np.reshape(bnk_vals, (bnk_vals.size, 1)).T
+            _bnk_yscale = ((np.max(self.chn_coords[bnk_idx, 1]) -
+                            np.min(self.chn_coords[bnk_idx, 1])) / _bnk_data.shape[1])
+            _bnk_xscale = BNK_SIZE / _bnk_data.shape[0]
+            _bnk_yoffset = np.min(self.chn_coords[bnk_idx, 1]) - Y_OFFSET
+            _bnk_xoffset = BNK_SIZE * iX
+
+            bnk_data.append(_bnk_data)
+            bnk_scale[iX, :] = np.array([_bnk_xscale, _bnk_yscale])
+            bnk_offset[iX, :] = np.array([_bnk_xoffset, _bnk_yoffset])
+
+        return bnk_data, bnk_scale, bnk_offset
