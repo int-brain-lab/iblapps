@@ -25,20 +25,48 @@ def _cumulative_distance(xyz):
 
 
 class LoadData:
-    def __init__(self, subj, date, sess=None, probe_id=None):
-        if not sess:
-            sess = 1
-        if not probe_id:
-            probe_id = 0
+    #def __init__(self, subj, date, sess=None, probe_id=None):
+    def __init__(self):
+        la = 1
+        #if not sess:
+        #    sess = 1
+        #if not probe_id:
+        #    probe_id = 0
+        #eids = one.search(subject=subj, date=date, number=sess, task_protocol='ephys')
+        #self.eid = eids[0]
+        #self.path = one.path_from_eid(self.eid)
+        #print(self.eid)
+        #self.probe_id = probe_id
+        ##self.brain_atlas, self.probe_coord = self.get_data()
+        #self.get_data()
+    
+    def get_subjects(self):
+        sess_with_hist = one.alyx.rest('trajectories', 'list', provenance='Histology track')
+        subjects = [sess['session']['subject'] for sess in sess_with_hist]
+        subjects = np.unique(subjects)
 
-        eids = one.search(subject=subj, date=date, number=sess, task_protocol='ephys')
+        return subjects
+
+    def get_sessions(self, subject):
+        self.subj = subject
+        self.sess_with_hist = one.alyx.rest('trajectories', 'list', subject=self.subj,
+                                            provenance='Histology track')
+        session = [(sess['session']['start_time'][:10] + ' ' + sess['probe_name']) for sess in
+                   self.sess_with_hist]
+        return session
+    
+    def get_info(self, idx):
+        self.n_sess = self.sess_with_hist[idx]['session']['number']
+        self.date = self.sess_with_hist[idx]['session']['start_time'][:10]
+        self.probe_label = self.sess_with_hist[idx]['probe_name']
+        print(self.probe_label)
+        print(self.date)
+    
+    def get_eid(self):
+        eids = one.search(subject=self.subj, date=self.date, number=self.n_sess,
+                          task_protocol='ephys')
         self.eid = eids[0]
-        self.path = one.path_from_eid(self.eid)
         print(self.eid)
-        self.probe_id = probe_id
-
-        #self.brain_atlas, self.probe_coord = self.get_data()
-        self.get_data()
 
     def get_data(self):
         # Load in all the data required
@@ -55,21 +83,21 @@ class LoadData:
             '_iblqc_ephysSpectralDensity.power'
         ]
 
-        spikes, _ = load_spike_sorting(eid=self.eid, one=one, dataset_types=dtypes)
-        self.probe_label = [key for key in spikes.keys() if int(key[-1]) == self.probe_id][0]
+        _ = one.load(self.eid, dataset_types=dtypes, download_only=True)
         path = one.path_from_eid(self.eid)
         self.alf_path = path.joinpath('alf', self.probe_label)
         self.ephys_path = path.joinpath('raw_ephys_data', self.probe_label)
-        self.spikes = spikes[self.probe_label]
+        self.spikes = alf.io.load_object(self.alf_path, 'spikes')
+        print(self.spikes.keys())
         self.chn_coords, self.chn_ind = (alf.io.load_object(self.alf_path, 'channels')).values()
         lfp_spectrum = alf.io.load_object(self.ephys_path, '_iblqc_ephysSpectralDensityLF')
         self.lfp_freq = lfp_spectrum.get('freqs')
         self.lfp_power = lfp_spectrum.get('power', [])
-        #if not self.lfp_power:
-        #    self.lfp_power = lfp_spectrum.get('amps')
+        if not np.any(self.lfp_power):
+            self.lfp_power = lfp_spectrum.get('amps')
 
-
-
+        self.alf_path = '/Users/Mayo/Downloads/FlatIron/cortexlab/Subjects/KS014/2019-12-07/001/alf/probe00'
+        self.chn_coords = alf.io.load_file_content(Path(self.alf_path, 'channels.localCoordinates.npy'))
         
         self.brain_atlas = atlas.AllenAtlas(res_um=25)
 
@@ -79,8 +107,41 @@ class LoadData:
         n_picks = round(xyz_picks.shape[0] / 4)
         traj_entry = atlas.Trajectory.fit(xyz_picks[:n_picks, :])
         entry = atlas.Insertion.get_brain_entry(traj_entry, self.brain_atlas)
-        entry[2] = entry[2] + 200 / 1e6
+        #entry[2] = entry[2] + 200 / 1e6
+        #if entry[2] < np.max(self.chn_coords[:,1]) / 1e6:
+        diff = self.brain_atlas.bc.zlim[0] - entry[2]
+        #print(diff)
+        entry[2] += (diff - 100 / 1e6)
+    
+        #exit_points = traj_entry.exit_points(self.brain_atlas.bc)
+        #bc = self.brain_atlas.bc
+        #bounds = np.c_[bc.xlim, bc.ylim, bc.zlim]
+        #print(bounds)
+        #epoints = np.r_[traj_entry.eval_x(bc.xlim), traj_entry.eval_y(bc.ylim), traj_entry.eval_z(bc.zlim)]
+        #print(epoints)
+        #epoints = epoints[~np.all(np.isnan(epoints), axis=1)]
+        #ind = np.all(np.bitwise_and(bounds[0, :] <= epoints, epoints <= bounds[1, :]), axis=1)
+        #print(ind)
+        #print(epoints[ind, :])
+
         traj_exit = atlas.Trajectory.fit(xyz_picks[-1 * n_picks:, :])
+
+        #print(traj_exit)
+
+        #z = self.brain_atlas.bc.zlim[-1]
+        #print(z)
+        #print(traj_exit.eval_z(z))
+        #for m in range(5):
+        #    print(m)
+        #    xyz = traj_exit.eval_z(z)[0]
+        #    print(xyz)
+        #    iy = self.brain_atlas.bc.y2i(xyz[1])
+        #    print(iy)
+        #    ix = self.brain_atlas.bc.x2i(xyz[0])
+        #    print(ix)
+        #    z = self.brain_atlas.bottom[iy, ix]
+        #    print(z)
+
         exit = atlas.Insertion.get_brain_exit(traj_exit, self.brain_atlas)
         exit[2] = exit[2] - 200 / 1e6
 
@@ -89,9 +150,10 @@ class LoadData:
         self.xyz_track = self.xyz_track[np.argsort(self.xyz_track[:, 2]), :]
 
         # plot on tilted coronal slice for sanity check
-        #ax = self.brain_atlas.plot_tilted_slice(self.xyz_track, axis=1)
-        #ax.plot(self.xyz_track[:, 0] * 1e6, self.xyz_track[:, 2] * 1e6, '-*')
-        #plt.show()
+        ax = self.brain_atlas.plot_tilted_slice(self.xyz_track, axis=1)
+        ax.plot(self.xyz_track[:, 0] * 1e6, self.xyz_track[:, 2] * 1e6, '-*')
+        #ax.plot(xyz_picks[:, 0] * 1e6, xyz_picks[:, 2] * 1e6, '-*')
+        plt.show()
 
         self.max_idx = 10
         self.track_init = [0] * (self.max_idx + 1)
@@ -122,6 +184,8 @@ class LoadData:
         """
         if depths is None:
             depths = self.chn_coords[:, 1] / 1e6
+        print(self.track[idx])
+        print(np.max(depths))
         # nb using scipy here so we can change to cubic spline if needed
         channel_depths_track = self.feature2track(depths, idx) - self.track[idx][0]
         return histology.interpolate_along_track(self.xyz_track, channel_depths_track)
@@ -166,8 +230,7 @@ class LoadData:
         region_label[:, 0] = np.int64(self.track2feature(np.float64(region_label[:, 0]),
                                       idx) * 1e6)
         return region, region_label, region_colour
-    
-    
+
     def get_scatter_data(self):
         A_BIN = 10
         amp_range = np.quantile(self.spikes['amps'], [0.1, 0.9])
@@ -190,7 +253,7 @@ class LoadData:
         }
 
         return scatter
-    
+
     def get_depth_data(self):
         T_BIN = 0.05
         D_BIN = 5
@@ -226,6 +289,8 @@ class LoadData:
             return(np.mean([a[self.chn_depth], a[self.chn_depth_eq]], axis=0))
         
         img = np.apply_along_axis(avg_chn_depth, 1, _rms * 1e6)
+        #levels = [np.min(img), np.max(img)]
+        levels = np.quantile(img, [0, 0.5])
         xscale = (rms_times[-1] - rms_times[0]) / img.shape[0]
         yscale = (np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1])) / img.shape[1]
 
@@ -287,7 +352,6 @@ class LoadData:
         xscale = (xmax - 0) / img.shape[0]
         yscale = (np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1]) / img.shape[1])
 
-
         lfp_data = {
             'img': img,
             'scale': np.array([xscale, yscale]),
@@ -305,9 +369,8 @@ class LoadData:
 
         return lfp_data
 
-
     def get_correlation_data(self):
-        
+
         T_BIN = 0.05
         D_BIN = 40
         R, times, depths = bincount2D(self.spikes['times'], self.spikes['depths'], T_BIN, D_BIN,
@@ -327,7 +390,7 @@ class LoadData:
         }
 
         return correlation
-    
+
     def arrange_channels2banks(self, data):
         Y_OFFSET = 20
         bnk_data = []

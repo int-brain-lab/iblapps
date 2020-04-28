@@ -23,35 +23,37 @@ class MainWindow(QtWidgets.QMainWindow):
         #date = '2019-11-07'
         #subj = 'CSHL045'
         #date = '2020-02-26'
-        subj='ZM_2240'
-        date='2020-01-22'
-        probe = 1
-        self.loaddata = ld.LoadData(subj, date, sess=1, probe_id=probe)
-        self.sdata = self.loaddata.get_scatter_data()
-        self.corr_data = self.loaddata.get_correlation_data()
-        self.depth_data = self.loaddata.get_depth_data()
-        self.rms_APdata = self.loaddata.get_rms_data('AP')
-        self.rms_LFdata = self.loaddata.get_rms_data('LF')
-        self.lfp_data = self.loaddata.get_lfp_spectrum_data()
-        self.title_string.setText(f"{subj} {date} probe0{probe}")
-
-        region, label, colour = self.loaddata.get_histology_regions(self.idx)
-        self.hist_data['region'][self.idx] = region
-        self.hist_data['axis_label'][self.idx] = label
-        self.hist_data['colour'][self.idx] = colour
-        self.brain_atlas = self.loaddata.brain_atlas
-
-        # Initialise with scatter plot
-        self.plot_scatter()
-        # Plot histology reference first, should add another argument
-        self.plot_histology(self.fig_hist_ref)
-        self.plot_histology(self.fig_hist)
-        self.plot_slice()
+        #subj='ZM_2240'
+        #date='2020-01-22'
+        #probe = 1
+        self.loaddata = ld.LoadData()
+        #self.loaddata = ld.LoadData(subj, date, sess=1, probe_id=probe)
+        self.populate_lists(self.loaddata.get_subjects(), self.model_subj)
+        
+        #self.sdata = self.loaddata.get_scatter_data()
+        #self.corr_data = self.loaddata.get_correlation_data()
+        #self.depth_data = self.loaddata.get_depth_data()
+        #self.rms_APdata = self.loaddata.get_rms_data('AP')
+        #self.rms_LFdata = self.loaddata.get_rms_data('LF')
+        #self.lfp_data = self.loaddata.get_lfp_spectrum_data()
+        ##self.title_string.setText(f"{subj} {date} probe0{probe}")
+#
+        #region, label, colour = self.loaddata.get_histology_regions(self.idx)
+        #self.hist_data['region'][self.idx] = region
+        #self.hist_data['axis_label'][self.idx] = label
+        #self.hist_data['colour'][self.idx] = colour
+        #self.brain_atlas = self.loaddata.brain_atlas
+#
+        ## Initialise with scatter plot
+        #self.plot_scatter()
+        ## Plot histology reference first, should add another argument
+        #self.plot_histology(self.fig_hist_ref)
+        #self.plot_histology(self.fig_hist)
+        #self.plot_slice()
 
     def init_layout(self):
 
         # Make menu bar
-        lambda: self.on_fig_size_changed(self.fig1_exporter, self.plots.fig1_button)
 
         menu_bar = QtWidgets.QMenuBar(self)
         menu_options = menu_bar.addMenu("Plot Options")
@@ -80,19 +82,19 @@ class MainWindow(QtWidgets.QMainWindow):
         fit_option.setShortcut('Return')
         fit_option.triggered.connect(self.fit_button_pressed)
         offset_option = QtGui.QAction('Offset', self)
-        offset_option.setShortcut('Shift+O')
+        offset_option.setShortcut('O')
         offset_option.triggered.connect(self.offset_button_pressed)
         moveup_option = QtGui.QAction('Offset + 50um', self)
-        moveup_option.setShortcut('Up')
+        moveup_option.setShortcut('Shift+Up')
         moveup_option.triggered.connect(self.moveup_button_pressed)
         movedown_option = QtGui.QAction('Offset - 50um', self)
-        movedown_option.setShortcut('Down')
+        movedown_option.setShortcut('Shift+Down')
         movedown_option.triggered.connect(self.movedown_button_pressed)
         lines_option = QtGui.QAction('Hide/Show Lines', self)
         lines_option.setShortcut('Shift+L')
         lines_option.triggered.connect(self.toggle_line_button_pressed)
         delete_option = QtGui.QAction('Remove Line', self)
-        delete_option.setShortcut('Shift+Del')
+        delete_option.setShortcut('Del')
         delete_option.triggered.connect(self.delete_line_button_pressed)
         next_option = QtGui.QAction('Next', self)
         next_option.setShortcut('Right')
@@ -151,6 +153,31 @@ class MainWindow(QtWidgets.QMainWindow):
         hlayout3.addWidget(self.complete_button)
 
         # Title item
+        hlayout4 = QtWidgets.QHBoxLayout()
+        self.model_subj = QtGui.QStandardItemModel()
+        combobox_subj = QtWidgets.QComboBox()
+        combobox_subj.setLineEdit(QtWidgets.QLineEdit())
+        completer_subj = QtWidgets.QCompleter()
+        completer_subj.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        combobox_subj.setCompleter(completer_subj)
+        combobox_subj.setModel(self.model_subj)
+        combobox_subj.completer().setModel(self.model_subj)
+        combobox_subj.textActivated.connect(self.on_subject_selected)
+
+        self.model_sess = QtGui.QStandardItemModel()
+        combobox_sess = QtWidgets.QComboBox()
+        combobox_sess.setLineEdit(QtWidgets.QLineEdit())
+        combobox_sess.setCompleter(QtWidgets.QCompleter())
+        combobox_sess.setModel(self.model_sess)
+        combobox_sess.activated.connect(self.on_session_selected)
+
+        self.data_button = QtWidgets.QPushButton('Get Data', font=self.font)
+        self.data_button.clicked.connect(self.data_button_pressed)
+
+        hlayout4.addWidget(combobox_subj, stretch=1)
+        hlayout4.addWidget(combobox_sess, stretch=2)
+        hlayout4.addWidget(self.data_button, stretch=1)
+
         self.title_string = QtWidgets.QLabel(font=self.title_font)
         self.update_string()
 
@@ -165,14 +192,14 @@ class MainWindow(QtWidgets.QMainWindow):
         layout_main.addWidget(self.fig_data, 0, 0, 10, 4)
         layout_main.addWidget(self.fig_hist, 0, 4, 10, 2)
         layout_main.addWidget(self.fig_hist_ref, 0, 6, 10, 2)
-        layout_main.addWidget(self.title_string, 0, 8, 1, 2)
+        layout_main.addLayout(hlayout4, 0, 8, 1, 2)
         layout_main.addWidget(self.fig_slice, 1, 8, 3, 2)
         layout_main.addLayout(vlayout, 4, 8, 1, 2)
         layout_main.addWidget(self.fig_fit, 5, 8, 3, 2)
         layout_main.addLayout(hlayout3, 8, 8, 2, 2)
         layout_main.setColumnStretch(0, 4)
-        layout_main.setColumnStretch(4, 2)
-        layout_main.setColumnStretch(6, 2)
+        layout_main.setColumnStretch(4, 1)
+        layout_main.setColumnStretch(6, 1)
         layout_main.setColumnStretch(8, 2)
 
         main_widget.setLayout(layout_main)
@@ -293,6 +320,12 @@ class MainWindow(QtWidgets.QMainWindow):
         ax_y = fig.plotItem.getAxis('left')
         ax_y.setPen('k')
         ax_y.setLabel(label[1])
+    
+    def populate_lists(self, data, model):
+        for dat in data:
+            item = QtGui.QStandardItem(dat)
+            item.setEditable(False)
+            model.appendRow(item)
 
     """
     Plot updates functions
@@ -493,6 +526,44 @@ class MainWindow(QtWidgets.QMainWindow):
     """
     Interaction functions
     """
+    def on_subject_selected(self, subj):
+        #self.remove_lines_points()
+        #self.init_variables()
+        self.model_sess.clear()
+        sessions = self.loaddata.get_sessions(subj)
+        self.populate_lists(sessions, self.model_sess)
+    
+    def on_session_selected(self, idx):
+        [self.fig_data.removeItem(plot) for plot in self.plots]
+        [self.fig_data.removeItem(cbar) for cbar in self.cbars]
+        self.remove_lines_points()
+        self.init_variables()
+        self.loaddata.get_info(idx)
+    
+    def data_button_pressed(self):
+        self.loaddata.get_eid()
+        self.loaddata.get_data()
+
+        self.sdata = self.loaddata.get_scatter_data()
+        self.corr_data = self.loaddata.get_correlation_data()
+        self.depth_data = self.loaddata.get_depth_data()
+        self.rms_APdata = self.loaddata.get_rms_data('AP')
+        self.rms_LFdata = self.loaddata.get_rms_data('LF')
+        self.lfp_data = self.loaddata.get_lfp_spectrum_data()
+        
+
+        region, label, colour = self.loaddata.get_histology_regions(self.idx)
+        self.hist_data['region'][self.idx] = region
+        self.hist_data['axis_label'][self.idx] = label
+        self.hist_data['colour'][self.idx] = colour
+        self.brain_atlas = self.loaddata.brain_atlas
+
+        # Initialise with scatter plot
+        self.plot_image(self.depth_data)
+        # Plot histology reference first, should add another argument
+        self.plot_histology(self.fig_hist_ref)
+        self.plot_histology(self.fig_hist)
+        self.plot_slice()
 
     def fit_button_pressed(self):
         if self.current_idx < self.last_idx:
@@ -550,14 +621,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_string()
 
     def movedown_button_pressed(self):
-        if self.loaddata.track[self.idx][-1] - 50 / 1e6 >= np.max(self.loaddata.channel_coords
+        if self.loaddata.track[self.idx][-1] - 50 / 1e6 >= np.max(self.loaddata.chn_coords
                                                                   [:, 1]) / 1e6:
             self.loaddata.features[self.idx] -= 50 / 1e6
             self.loaddata.track[self.idx] -= 50 / 1e6
             self.offset_button_pressed()
 
     def moveup_button_pressed(self):
-        if self.loaddata.track[self.idx][0] + 50 / 1e6 <= np.min(self.loaddata.channel_coords
+        if self.loaddata.track[self.idx][0] + 50 / 1e6 <= np.min(self.loaddata.chn_coords
                                                                  [:, 1]) / 1e6:
             self.loaddata.features[self.idx] += 50 / 1e6
             self.loaddata.track[self.idx] += 50 / 1e6
