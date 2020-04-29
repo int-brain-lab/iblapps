@@ -1,6 +1,7 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 from pyqtgraph.widgets import MatplotlibWidget as matplot
 import pyqtgraph as pg
+import pyqtgraph.dockarea
 import numpy as np
 import atlaselectrophysiology.load_data as ld
 import atlaselectrophysiology.ColorBar as cb
@@ -19,63 +20,47 @@ class MainWindow(QtWidgets.QMainWindow):
         self.init_variables()
         self.init_layout()
 
-        #subj = 'ZM_2407'
-        #date = '2019-11-07'
-        #subj = 'CSHL045'
-        #date = '2020-02-26'
-        #subj='ZM_2240'
-        #date='2020-01-22'
-        #probe = 1
         self.loaddata = ld.LoadData()
-        #self.loaddata = ld.LoadData(subj, date, sess=1, probe_id=probe)
         self.populate_lists(self.loaddata.get_subjects(), self.model_subj)
-        
-        #self.sdata = self.loaddata.get_scatter_data()
-        #self.corr_data = self.loaddata.get_correlation_data()
-        #self.depth_data = self.loaddata.get_depth_data()
-        #self.rms_APdata = self.loaddata.get_rms_data('AP')
-        #self.rms_LFdata = self.loaddata.get_rms_data('LF')
-        #self.lfp_data = self.loaddata.get_lfp_spectrum_data()
-        ##self.title_string.setText(f"{subj} {date} probe0{probe}")
-#
-        #region, label, colour = self.loaddata.get_histology_regions(self.idx)
-        #self.hist_data['region'][self.idx] = region
-        #self.hist_data['axis_label'][self.idx] = label
-        #self.hist_data['colour'][self.idx] = colour
-        #self.brain_atlas = self.loaddata.brain_atlas
-#
-        ## Initialise with scatter plot
-        #self.plot_scatter()
-        ## Plot histology reference first, should add another argument
-        #self.plot_histology(self.fig_hist_ref)
-        #self.plot_histology(self.fig_hist)
-        #self.plot_slice()
 
     def init_layout(self):
 
         # Make menu bar
 
         menu_bar = QtWidgets.QMenuBar(self)
-        menu_options = menu_bar.addMenu("Plot Options")
         menu_bar.setGeometry(QtCore.QRect(0, 0, 1002, 22))
-        scatter_plot = QtGui.QAction('Scatter Plot', self)
-        scatter_plot.triggered.connect(self.plot_scatter)
-        scatter_image_plot = QtGui.QAction('Scatter Image Plot', self)
-        scatter_image_plot.triggered.connect(lambda: self.plot_image(self.depth_data))
-        corr_plot = QtGui.QAction('Correlation Plot', self)
-        corr_plot.triggered.connect(lambda: self.plot_image(self.corr_data))
-        rms_ap_plot = QtGui.QAction('RMS AP Plot', self)
-        rms_ap_plot.triggered.connect(lambda: self.plot_image(self.rms_APdata))
-        rms_lf_plot = QtGui.QAction('RMS LF Plot', self)
-        rms_lf_plot.triggered.connect(lambda: self.plot_image(self.rms_LFdata))
-        lf_plot = QtGui.QAction('LF Plot', self)
-        lf_plot.triggered.connect(lambda: self.plot_image(self.lfp_data))
-        menu_options.addAction(scatter_plot)
-        menu_options.addAction(scatter_image_plot)
-        menu_options.addAction(corr_plot)
-        menu_options.addAction(rms_ap_plot)
-        menu_options.addAction(rms_lf_plot)
-        menu_options.addAction(lf_plot)
+        img_options = menu_bar.addMenu("Image Plots")
+        depth_scatter = QtGui.QAction('Scatter Plot', self)
+        depth_scatter.triggered.connect(self.plot_scatter)
+        depth_img = QtGui.QAction('Scatter Image Plot', self)
+        depth_img.triggered.connect(lambda: self.plot_image(self.depth_data))
+        corr_img = QtGui.QAction('Correlation Plot', self)
+        corr_img.triggered.connect(lambda: self.plot_image(self.corr_data))
+        rms_ap_img = QtGui.QAction('RMS AP Plot', self)
+        rms_ap_img.triggered.connect(lambda: self.plot_image(self.rms_APdata))
+        rms_lf_img = QtGui.QAction('RMS LF Plot', self)
+        rms_lf_img.triggered.connect(lambda: self.plot_image(self.rms_LFdata))
+        img_options.addAction(depth_scatter)
+        img_options.addAction(depth_img)
+        img_options.addAction(corr_img)
+        img_options.addAction(rms_ap_img)
+        img_options.addAction(rms_lf_img)
+
+        line_options = menu_bar.addMenu("Line Plots")
+        fr_line = QtGui.QAction('Firing Rate', self)
+        fr_line.triggered.connect(lambda: self.plot_line(self.fr_data))
+        amp_line = QtGui.QAction('Amplitude', self)
+        amp_line.triggered.connect(lambda: self.plot_line(self.amp_data))
+        line_options.addAction(fr_line)
+        line_options.addAction(amp_line)
+
+        probe_options = menu_bar.addMenu("Probe Plots")
+        rms_ap_probe = QtGui.QAction('RMS AP', self)
+        rms_ap_probe.triggered.connect(lambda: self.plot_probe(self.rms_APdata))
+        rms_lf_probe = QtGui.QAction('RMS LF', self)
+        rms_lf_probe.triggered.connect(lambda: self.plot_probe(self.rms_LFdata))
+        probe_options.addAction(rms_ap_probe)
+        probe_options.addAction(rms_lf_probe)
 
         shortcut_options = menu_bar.addMenu("Shortcut Keys")
         fit_option = QtGui.QAction('Fit', self)
@@ -108,6 +93,15 @@ class MainWindow(QtWidgets.QMainWindow):
         complete_option = QtGui.QAction('Complete', self)
         complete_option.setShortcut('Shift+F')
         complete_option.triggered.connect(self.complete_button_pressed)
+        view1_option = QtGui.QAction('View 1', self)
+        view1_option.setShortcut('Shift+1')
+        view1_option.triggered.connect(lambda: self.set_view(view=1))
+        view2_option = QtGui.QAction('View 2', self)
+        view2_option.setShortcut('Shift+2')
+        view2_option.triggered.connect(lambda: self.set_view(view=2))
+        view3_option = QtGui.QAction('View 3', self)
+        view3_option.setShortcut('Shift+3')
+        view3_option.triggered.connect(lambda: self.set_view(view=3))
 
         shortcut_options.addAction(fit_option)
         shortcut_options.addAction(offset_option)
@@ -119,6 +113,9 @@ class MainWindow(QtWidgets.QMainWindow):
         shortcut_options.addAction(prev_option)
         shortcut_options.addAction(reset_option)
         shortcut_options.addAction(complete_option)
+        shortcut_options.addAction(view1_option)
+        shortcut_options.addAction(view2_option)
+        shortcut_options.addAction(view3_option)
         self.setMenuBar(menu_bar)
 
         # Fit and Idx associated items
@@ -189,7 +186,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(main_widget)
         # Add everything to the main widget
         layout_main = QtWidgets.QGridLayout()
-        layout_main.addWidget(self.fig_data, 0, 0, 10, 4)
+        layout_main.addWidget(self.fig_data_area, 0, 0, 10, 4)
         layout_main.addWidget(self.fig_hist, 0, 4, 10, 2)
         layout_main.addWidget(self.fig_hist_ref, 0, 6, 10, 2)
         layout_main.addLayout(hlayout4, 0, 8, 1, 2)
@@ -242,28 +239,69 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Variables to keep track of number of lines added
         self.line_status = True
+        self.lines_features = np.empty((0, 3))
+        self.lines_tracks = np.empty((0, 1))
         self.lines = np.empty((0, 2))
         self.points = np.empty((0, 1))
         self.scale = 1
 
         # Variables for colour bar
-        self.cbars = []
-        self.plots = []
+        self.img_plots = []
+        self.line_plots = []
+        self.probe_plots = []
+        self.img_cbars = []
+        self.probe_cbars = []
         #self.data_plot = []
 
     def init_figures(self):
 
-        # Create data figure
-        self.fig_data = pg.PlotWidget(background='w')
-        #self.fig_data.setMouseEnabled(x=False, y=False)
-        self.fig_data.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
-        self.fig_data.scene().sigMouseHover.connect(self.on_mouse_hover)
-        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+        # Create data figures
+        self.fig_img = pg.PlotWidget(background='w')
+        self.fig_img.setMouseEnabled(x=False, y=False)
+        self.fig_img.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
+        self.fig_img.scene().sigMouseHover.connect(self.on_mouse_hover)
+        self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                               self.probe_extra, padding=self.pad)
+        self.fig_img.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)
+        self.fig_img.addLine(y=self.probe_top, pen=self.kpen_dot, z=50)
+        self.set_axis(self.fig_img)
+        self.set_yaxis(self.fig_img)
+        
+        self.fig_line = pg.PlotWidget(background='w')
+        self.fig_line.setMouseEnabled(x=False, y=False)
+        self.fig_line.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
+        self.fig_line.scene().sigMouseHover.connect(self.on_mouse_hover)
+        self.fig_line.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
-        self.fig_data.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)
-        self.fig_data.addLine(y=self.probe_top, pen=self.kpen_dot, z=50)
-        self.fig_data_vb = self.fig_data.getViewBox()
-        self.set_axis(self.fig_data)
+        self.fig_line.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)
+        self.fig_line.addLine(y=self.probe_top, pen=self.kpen_dot, z=50)
+        self.set_axis(self.fig_line)
+        self.set_yaxis(self.fig_line, show=False)
+        #ax = self.fig_line.getAxis('left')
+        #ax.hide()
+        self.fig_probe = pg.PlotWidget(background='w')
+        #self.fig_probe.setMouseEnabled(x=False, y=False)
+        self.fig_probe.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
+        self.fig_probe.scene().sigMouseHover.connect(self.on_mouse_hover)
+        self.fig_probe.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                 self.probe_extra, padding=self.pad)
+        self.fig_probe.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)
+        self.fig_probe.addLine(y=self.probe_top, pen=self.kpen_dot, z=50)
+        self.set_axis(self.fig_probe)
+        self.set_yaxis(self.fig_probe, show=False)
+
+        self.fig_data_area = pg.dockarea.DockArea()
+        self.fig_img_area = pg.dockarea.Dock('', widget=self.fig_img)
+        self.fig_line_area = pg.dockarea.Dock('', widget=self.fig_line)
+        self.fig_probe_area = pg.dockarea.Dock('', widget=self.fig_probe)
+        self.fig_data_area.addDock(self.fig_img_area, 'top')
+        self.fig_data_area.addDock(self.fig_line_area, 'right', self.fig_img_area)
+        self.fig_data_area.addDock(self.fig_probe_area, 'right', self.fig_line_area)
+
+        self.fig_img_area.setStretch(x=5, y=1)
+        self.fig_line_area.setStretch(x=1, y=1)
+        self.fig_probe_area.setStretch(x=1, y=1)
+
 
         # Create histology figure
         self.fig_hist = pg.PlotWidget(background='w')
@@ -272,6 +310,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_hist.setMouseEnabled(x=False)
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
+        self.set_axis(self.fig_hist)
         axis = self.fig_hist.plotItem.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
         axis.setLabel('')
@@ -281,6 +320,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_hist_ref.setMouseEnabled(x=False, y=False)
         self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                     self.probe_extra, padding=self.pad)
+        self.set_axis(self.fig_hist_ref)
         axis = self.fig_hist_ref.plotItem.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
         axis.setLabel('')
@@ -290,6 +330,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #self.fig_fit.setMouseEnabled(x=False, y=False)
         self.fig_fit.setXRange(min=self.view_total[0], max=self.view_total[1])
         self.fig_fit.setYRange(min=self.view_total[0], max=self.view_total[1])
+        self.set_axis(self.fig_fit)
         #self.set_axis(self.fig_fit, label=['Original electrode locations (um)',
         #                                   'New electrode locations (um)'])
         plot = pg.PlotCurveItem()
@@ -305,6 +346,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig = self.fig_slice.getFigure()
         self.fig.canvas.toolbar.hide()
         self.fig_slice_ax = self.fig.gca()
+        self.fig_slice_ax.axis('off')
 
     def set_axis(self, fig, label=None):
         """
@@ -321,11 +363,67 @@ class MainWindow(QtWidgets.QMainWindow):
         ax_y.setPen('k')
         ax_y.setLabel(label[1])
     
+    def set_yaxis(self, fig, show=True, label=None):
+        if not label:
+            label = 'Distance from probe tip (um)'
+        ax_y = fig.plotItem.getAxis('left')
+        if show:
+            ax_y.show()
+            ax_y.setPen('k')
+            ax_y.setLabel(label)
+        else:
+            ax_y.hide()
+    
+    def set_xaxis(self, fig, show=True, label=None):
+        if not label:
+            label = ''
+        ax_x = fig.plotItem.getAxis('bottom')
+        if show:
+            ax_x.show()
+            ax_x.setPen('k')
+            ax_x.setLabel(label)
+        else:
+            ax_x.hide()
+    
     def populate_lists(self, data, model):
         for dat in data:
             item = QtGui.QStandardItem(dat)
             item.setEditable(False)
             model.appendRow(item)
+    
+    def set_view(self, view=1):
+        if view == 1:
+            self.fig_data_area.moveDock(self.fig_img_area, 'left', self.fig_line_area) 
+            self.fig_data_area.moveDock(self.fig_line_area, 'right', self.fig_img_area)
+            self.fig_data_area.moveDock(self.fig_probe_area, 'right', self.fig_line_area)
+            self.set_yaxis(self.fig_img)
+            self.set_yaxis(self.fig_line, show=False)
+            self.set_yaxis(self.fig_probe, show=False)
+            self.fig_img_area.setStretch(x=5, y=1)
+            self.fig_line_area.setStretch(x=1, y=1)
+            self.fig_probe_area.setStretch(x=1, y=1)
+
+        if view == 2:
+            self.fig_data_area.moveDock(self.fig_img_area, 'left', self.fig_line_area)
+            self.fig_data_area.moveDock(self.fig_probe_area, 'right', self.fig_img_area)
+            self.fig_data_area.moveDock(self.fig_line_area, 'right', self.fig_probe_area)
+            self.set_yaxis(self.fig_img)
+            self.set_yaxis(self.fig_line, show=False)
+            self.set_yaxis(self.fig_probe, show=False)
+            self.fig_img_area.setStretch(x=5, y=1)
+            self.fig_line_area.setStretch(x=1, y=1)
+            self.fig_probe_area.setStretch(x=1, y=1)
+
+        if view == 3:
+            self.fig_data_area.moveDock(self.fig_probe_area, 'left', self.fig_line_area)
+            self.fig_data_area.moveDock(self.fig_line_area, 'right', self.fig_probe_area)
+            self.fig_data_area.moveDock(self.fig_img_area, 'right', self.fig_line_area)
+            self.set_yaxis(self.fig_img, show=False)
+            self.set_yaxis(self.fig_line, show=False)
+            self.set_yaxis(self.fig_probe)
+            self.fig_img_area.setStretch(x=5, y=1)
+            self.fig_line_area.setStretch(x=1, y=1)
+            self.fig_probe_area.setStretch(x=1.5, y=1)
 
     """
     Plot updates functions
@@ -338,6 +436,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         fig.clear()
         axis = fig.plotItem.getAxis('left')
+        #axis.show()
         axis.setTicks([self.hist_data['axis_label'][self.idx]])
         axis.setPen('k')
 
@@ -394,9 +493,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def scale_hist_data(self):
         # Lines on the histology plot
-        line_track = np.array([line[0].pos().y() for line in self.lines]) / 1e6
+        line_track = np.array([line[0].pos().y() for line in self.lines_tracks]) / 1e6
         # Lines on the data plot
-        line_feature = np.array([line[1].pos().y() for line in self.lines]) / 1e6
+        line_feature = np.array([line[0].pos().y() for line in self.lines_features]) / 1e6
         depths_track = np.sort(np.r_[self.loaddata.track[self.idx_prev][[0, -1]], line_track])
 
         self.loaddata.track[self.idx] = self.loaddata.feature2track(depths_track, self.idx_prev)
@@ -415,10 +514,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tot_fit_plot.setData(x=self.loaddata.track_init[self.idx] * 1e6,
                                   y=self.loaddata.track[self.idx] * 1e6)
 
-    def update_fit(self, line):
-        idx = np.where(self.lines == line)[0][0]
-        self.points[idx][0].setData(x=[self.lines[idx][1].pos().y()],
-                                    y=[self.lines[idx][0].pos().y()])
+    def update_lines_features(self, line):
+        idx = np.where(self.lines_features == line)
+        line_idx = idx[0][0]
+        fig_idx = np.setdiff1d(np.arange(0, 3), idx[1][0])
+
+        self.lines_features[line_idx][fig_idx[0]].setPos(line.value())
+        self.lines_features[line_idx][fig_idx[1]].setPos(line.value())
+
+        self.points[line_idx][0].setData(x=[self.lines_features[line_idx][0].pos().y()],
+                                         y=[self.lines_tracks[line_idx][0].pos().y()])
+
+    def update_lines_track(self, line):
+        line_idx = np.where(self.lines_tracks == line)[0][0]
+
+        self.points[line_idx][0].setData(x=[self.lines_features[line_idx][0].pos().y()],
+                                         y=[self.lines_tracks[line_idx][0].pos().y()])
+                            
 
     def plot_slice(self):
         """
@@ -438,58 +550,74 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fig_slice.draw()
 
     def plot_scatter(self):
-        [self.fig_data.removeItem(plot) for plot in self.plots]
-        [self.fig_data.removeItem(cbar) for cbar in self.cbars]
-        self.plots = []
-        self.cbars = []
+        [self.fig_img.removeItem(plot) for plot in self.img_plots]
+        [self.fig_img.removeItem(cbar) for cbar in self.img_cbars]
+        self.img_plots = []
+        self.img_cbars = []
         connect = np.zeros(self.sdata['times'].size, dtype=int)
         brush = self.sdata['colours'].tolist()
         size = self.sdata['size'].tolist()
         plot = pg.PlotDataItem()
         plot.setData(x=self.sdata['times'], y=self.sdata['depths'], connect=connect,
                      symbol='o', symbolSize=size, symbolBrush=brush)
-        self.fig_data.addItem(plot)
-        self.fig_data.setXRange(min=self.sdata['times'].min(), max=self.sdata['times'].max())
-        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
-                                self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_data, label=['Time (s)', 'Distance from probe tip (um)'])
+        self.fig_img.addItem(plot)
+        self.fig_img.setXRange(min=self.sdata['times'].min(), max=self.sdata['times'].max(), padding=0)
+        self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                               self.probe_extra, padding=self.pad)
+        self.set_xaxis(self.fig_img, label=self.sdata['xaxis'])
         self.scale = 1
-        self.plots.append(plot)
+        self.img_plots.append(plot)
         self.data_plot = plot
 
-    def plot_probe_image(self, data, lut=None):
-        for iP, _ in enumerate(data['probe_img']):
-            p_img = data['probe_img'][iP]
-            p_scale = data['probe_scale'][iP]
-            p_offset = data['probe_offset'][iP]
-            p_levels = data['probe_level'][iP]
-            extra_offset = data['extra_offset'][iP]
-            color_bar = cb.ColorBar(data['probe_cmap'])
-            lut = color_bar.getColourMap()
+    def plot_line(self, data):
+        [self.fig_line.removeItem(plot) for plot in self.line_plots]
+        self.line_plots = []
+        line = pg.PlotCurveItem()
+        line.setData(x=data['x'], y=data['y'])
+        line.setPen('k')
+        self.fig_line.addItem(line)
+        self.fig_line.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
+        self.fig_line.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                self.probe_extra, padding=self.pad)
+        self.set_xaxis(self.fig_line, label=data['xaxis'])
+        self.line_plots.append(line)
 
-            for iB, (img, scale, offset) in enumerate(zip(p_img, p_scale, p_offset)):
-                image = pg.ImageItem()
-                image.setImage(img)
-                image.translate(offset[0] + extra_offset, offset[1])
-                image.scale(scale[0], scale[1])
-                image.setLookupTable(lut)
-                image.setLevels((p_levels[0], p_levels[1]))
-                self.fig_data.addItem(image)
-                self.plots.append(image)
 
-            if data['plot_cmap']:
-                p_title = data['probe_title'][iP]
-                color_bar.makeVColourBar(400, 400, scale=10, min=p_levels[0], max=p_levels[1],
-                                         label=p_title[0], lim=True)
-                color_bar.setPos(extra_offset - 150, 4500)
-                self.fig_data.addItem(color_bar)
-                self.cbars.append(color_bar)
+    def plot_probe(self, data):
+        [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
+        [self.fig_probe.removeItem(cbar) for cbar in self.probe_cbars]
+        self.probe_plots = []
+        self.probe_cbars = []
+        color_bar = cb.ColorBar(data['probe_cmap'])
+        lut = color_bar.getColourMap()
+        for img, scale, offset in zip(data['probe_img'], data['probe_scale'], data['probe_offset']):
+            image = pg.ImageItem()
+            image.setImage(img)
+            image.translate(offset[0], offset[1])
+            image.scale(scale[0], scale[1])
+            image.setLookupTable(lut)
+            image.setLevels((data['probe_level'][0], data['probe_level'][1]))
+            self.fig_probe.addItem(image)
+            self.probe_plots.append(image)
+        #if data['plot_cmap']:
+        #color_bar.makeHColourBar(0.8 * (data['xrange'][1] - data['xrange'][0]), 1.50, scale=10, min=data['probe_level'][0], max=data['probe_level'][1],
+        #                             label=data['title'], lim=True)
+        #color_bar.makeVColourBar(150, 3000, scale=10, min=data['probe_level'][0], max=data['probe_level'][1],
+        #                             label=data['title'], lim=True)
+        #color_bar.setPos(0.1 * data['xrange'][1], 4500)
+        self.fig_probe.addItem(color_bar)
+        #self.probe_cbars.append(color_bar)
+
+        self.fig_probe.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
+        self.fig_probe.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                 self.probe_extra, padding=self.pad)
+        self.set_xaxis(self.fig_probe, label='')
 
     def plot_image(self, data):
-        [self.fig_data.removeItem(plot) for plot in self.plots]
-        [self.fig_data.removeItem(cbar) for cbar in self.cbars]
-        self.plots = []
-        self.cbars = []
+        [self.fig_img.removeItem(plot) for plot in self.img_plots]
+        [self.fig_img.removeItem(cbar) for cbar in self.img_cbars]
+        self.img_plots = []
+        self.img_cbars = []
 
         image = pg.ImageItem()
         image.setImage(data['img'])
@@ -504,22 +632,17 @@ class MainWindow(QtWidgets.QMainWindow):
                                      min=data['levels'][0], max=data['levels'][1],
                                      label=data['title'])
             color_bar.setPos(0.1 * data['xrange'][1], 4500)
-            self.fig_data.addItem(color_bar)
-            self.cbars.append(color_bar)
+            self.fig_img.addItem(color_bar)
+            self.img_cbars.append(color_bar)
         else:
             image.setLevels((1, 0))
-    
-        self.fig_data.addItem(image)
-        self.plots.append(image)
 
-        probe_img = data.get('probe_img', [])
-        if probe_img:
-            self.plot_probe_image(data)
-
-        self.fig_data.setXRange(min=data['xrange'][0], max=data['xrange'][1])
-        self.fig_data.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
-                                self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_data, label=[data['axis'][0], data['axis'][1]])
+        self.fig_img.addItem(image)
+        self.img_plots.append(image)
+        self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
+        self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                               self.probe_extra, padding=self.pad)
+        self.set_xaxis(self.fig_img, label=data['xaxis'])
         self.scale = data['scale'][1]
         self.data_plot = image
 
@@ -532,10 +655,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.model_sess.clear()
         sessions = self.loaddata.get_sessions(subj)
         self.populate_lists(sessions, self.model_sess)
-    
+
     def on_session_selected(self, idx):
-        [self.fig_data.removeItem(plot) for plot in self.plots]
-        [self.fig_data.removeItem(cbar) for cbar in self.cbars]
+        [self.fig_img.removeItem(plot) for plot in self.img_plots]
+        [self.fig_img.removeItem(cbar) for cbar in self.img_cbars]
+        [self.fig_line.removeItem(plot) for plot in self.line_plots]
+        [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
+        [self.fig_probe.removeItem(cbar) for cbar in self.probe_cbars]
         self.remove_lines_points()
         self.init_variables()
         self.loaddata.get_info(idx)
@@ -544,12 +670,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.loaddata.get_eid()
         self.loaddata.get_data()
 
-        self.sdata = self.loaddata.get_scatter_data()
-        self.corr_data = self.loaddata.get_correlation_data()
-        self.depth_data = self.loaddata.get_depth_data()
-        self.rms_APdata = self.loaddata.get_rms_data('AP')
-        self.rms_LFdata = self.loaddata.get_rms_data('LF')
+        self.sdata = self.loaddata.get_depth_data_scatter()
+        self.corr_data = self.loaddata.get_correlation_data_img()
+        self.depth_data = self.loaddata.get_depth_data_img()
+        self.rms_APdata = self.loaddata.get_rms_data_probe('AP')
+        self.rms_LFdata = self.loaddata.get_rms_data_probe('LF')
         self.lfp_data = self.loaddata.get_lfp_spectrum_data()
+        self.fr_data = self.loaddata.get_fr_data_line()
+        self.amp_data = self.loaddata.get_amp_data_line()
         
 
         region, label, colour = self.loaddata.get_histology_regions(self.idx)
@@ -560,6 +688,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Initialise with scatter plot
         self.plot_image(self.depth_data)
+        self.plot_probe(self.rms_APdata)
+        self.plot_line(self.fr_data)
         # Plot histology reference first, should add another argument
         self.plot_histology(self.fig_hist_ref)
         self.plot_histology(self.fig_hist)
@@ -643,12 +773,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def delete_line_button_pressed(self):
         if self.selected_line:
-            line = np.where(self.lines == self.selected_line)[0][0]
-            self.fig_data.removeItem(self.lines[line, 1])
-            self.fig_hist.removeItem(self.lines[line, 0])
-            self.fig_fit.removeItem(self.points[line, 0])
-            self.lines = np.delete(self.lines, line, axis=0)
-            self.points = np.delete(self.points, line, axis=0)
+            line_idx = np.where(self.lines_features == self.selected_line)[0]
+            if line_idx.size == 0:
+                line_idx = np.where(self.lines_tracks == self.selected_line)[0]
+            line_idx = line_idx[0]
+
+            self.fig_img.removeItem(self.lines_features[line_idx][0])
+            self.fig_line.removeItem(self.lines_features[line_idx][1])
+            self.fig_probe.removeItem(self.lines_features[line_idx][2])
+            self.fig_hist.removeItem(self.lines_tracks[line_idx, 0])
+            self.fig_fit.removeItem(self.points[line_idx, 0])
+            self.lines_features = np.delete(self.lines_features, line_idx, axis=0)
+            self.lines_tracks = np.delete(self.lines_tracks, line_idx, axis=0)
+            self.points = np.delete(self.points, line_idx, axis=0)
 
     def next_button_pressed(self):
         if (self.current_idx < self.total_idx) & (self.current_idx >
@@ -715,18 +852,31 @@ class MainWindow(QtWidgets.QMainWindow):
             pos = self.data_plot.mapFromScene(event.scenePos())
             marker, pen, brush = self.create_line_style()
             line_track = pg.InfiniteLine(pos=pos.y() * self.scale, angle=0, pen=pen, movable=True)
-            line_track.sigPositionChangeFinished.connect(self.update_fit)
+            line_track.sigPositionChanged.connect(self.update_lines_track)
             line_track.setZValue(100)
-            line_feature = pg.InfiniteLine(pos=pos.y() * self.scale, angle=0, pen=pen,
-                                           movable=True)
-            line_feature.setZValue(100)
-            line_feature.sigPositionChangeFinished.connect(self.update_fit)
+            line_feature1 = pg.InfiniteLine(pos=pos.y() * self.scale, angle=0, pen=pen,
+                                            movable=True)
+            line_feature1.setZValue(100)
+            line_feature1.sigPositionChanged.connect(self.update_lines_features)
+            line_feature2 = pg.InfiniteLine(pos=pos.y() * self.scale, angle=0, pen=pen,
+                                            movable=True)
+            line_feature2.setZValue(100)
+            line_feature2.sigPositionChanged.connect(self.update_lines_features)
+            line_feature3 = pg.InfiniteLine(pos=pos.y() * self.scale, angle=0, pen=pen,
+                                            movable=True)
+            line_feature3.setZValue(100)
+            line_feature3.sigPositionChanged.connect(self.update_lines_features)
             self.fig_hist.addItem(line_track)
-            self.fig_data.addItem(line_feature)
-            self.lines = np.vstack([self.lines, [line_track, line_feature]])
+            self.fig_img.addItem(line_feature1)
+            self.fig_line.addItem(line_feature2)
+            self.fig_probe.addItem(line_feature3)
+
+            self.lines_features = np.vstack([self.lines_features, [line_feature1, line_feature2,
+                                                                   line_feature3]])
+            self.lines_tracks = np.vstack([self.lines_tracks, line_track])
 
             point = pg.PlotDataItem()
-            point.setData(x=[line_track.pos().y()], y=[line_feature.pos().y()],
+            point.setData(x=[line_track.pos().y()], y=[line_feature1.pos().y()],
                           symbolBrush=brush, symbol='o', symbolSize=10)
             self.fig_fit.addItem(point)
             self.points = np.vstack([self.points, point])
@@ -739,21 +889,29 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.selected_line = []
 
     def remove_lines_points(self):
-        for lines, points in zip(self.lines, self.points):
-            self.fig_hist.removeItem(lines[0])
-            self.fig_data.removeItem(lines[1])
-            self.fig_fit.removeItem(points[0])
+        for line_feature, line_track, point in zip(self.lines_features, self.lines_tracks,
+                                                   self.points):
+            self.fig_img.removeItem(line_feature[0])
+            self.fig_line.removeItem(line_feature[1])
+            self.fig_probe.removeItem(line_feature[2])
+            self.fig_hist.removeItem(line_track[0])
+            self.fig_fit.removeItem(point[0])
 
     def add_lines_points(self):
-        for lines, points in zip(self.lines, self.points):
-            self.fig_hist.addItem(lines[0])
-            self.fig_data.addItem(lines[1])
-            self.fig_fit.addItem(points[0])
+        for line_feature, line_track, point in zip(self.lines_features, self.lines_tracks,
+                                                   self.points):
+            self.fig_img.addItem(line_feature[0])
+            self.fig_line.addItem(line_feature[1])
+            self.fig_probe.addItem(line_feature[2])
+            self.fig_hist.addItem(line_track[0])
+            self.fig_fit.addItem(point[0])
 
     def update_lines_points(self):
-        for lines, points in zip(self.lines, self.points):
-            lines[0].setPos(lines[1].getYPos())
-            points[0].setData(x=[lines[1].pos().y()], y=[lines[1].pos().y()])
+        for line_feature, line_track, point in zip(self.lines_features, self.lines_tracks,
+                                                   self.points):
+            line_track[0].setPos(line_feature[0].getYPos())
+            point[0].setData(x=[line_feature[0].pos().y()], y=[line_feature[0].pos().y()])
+
 
     def create_line_style(self):
         # Create random choice of line colour and style for infiniteLine

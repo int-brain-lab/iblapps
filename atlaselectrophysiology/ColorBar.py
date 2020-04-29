@@ -21,6 +21,7 @@ class ColorBar(pg.GraphicsWidget):
 
         #Create colour bar object
         self.layout = QtGui.QGraphicsGridLayout()
+        #self.layout = pg.GraphicsLayout()
         self.layout.setContentsMargins(1, 1, 1, 1)
         self.setLayout(self.layout)
         self.layout.setHorizontalSpacing(0)
