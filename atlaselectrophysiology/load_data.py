@@ -1,14 +1,10 @@
-from pathlib import Path
-import sys
 from matplotlib import cm
 from PyQt5 import QtGui
 import scipy
 import numpy as np
 import alf.io
-from brainbox.io.one import load_spike_sorting, load_channel_locations
 from oneibl.one import ONE
 from brainbox.processing import bincount2D
-import random
 import matplotlib.pyplot as plt
 import ibllib.pipes.histology as histology
 import ibllib.atlas as atlas
@@ -16,7 +12,7 @@ import ibllib.atlas as atlas
 TIP_SIZE_UM = 200
 N_BNK = 4
 BNK_SIZE = 10
-ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
+ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
 one = ONE(base_url=ONE_BASE_URL)
 
 
@@ -25,11 +21,15 @@ def _cumulative_distance(xyz):
 
 
 class LoadData:
-    #def __init__(self, subj, date, sess=None, probe_id=None):
-    def __init__(self):
-        la = 1
+    def __init__(self, max_idx):
+        self.max_idx = max_idx
 
     def get_subjects(self):
+        """
+        Finds all subjects that have a histology track trajectory registered
+        :return subjects: list of subjects
+        :type subjects: list of strings
+        """
         sess_with_hist = one.alyx.rest('trajectories', 'list', provenance='Histology track')
         subjects = [sess['session']['subject'] for sess in sess_with_hist]
         subjects = np.unique(subjects)
@@ -37,20 +37,31 @@ class LoadData:
         return subjects
 
     def get_sessions(self, subject):
+        """
+        Finds all sessions for a particular subject that have a histology track trajectory
+        registered
+        :param subject: subject name
+        :type subject: string
+        :return session: list of sessions associated with subject, displayed as date + probe
+        :return session: list of strings
+        """
         self.subj = subject
         self.sess_with_hist = one.alyx.rest('trajectories', 'list', subject=self.subj,
                                             provenance='Histology track')
         session = [(sess['session']['start_time'][:10] + ' ' + sess['probe_name']) for sess in
                    self.sess_with_hist]
         return session
-    
+
     def get_info(self, idx):
+        """
+        """
         self.n_sess = self.sess_with_hist[idx]['session']['number']
         self.date = self.sess_with_hist[idx]['session']['start_time'][:10]
         self.probe_label = self.sess_with_hist[idx]['probe_name']
+        print(self.subj)
         print(self.probe_label)
         print(self.date)
-    
+
     def get_eid(self):
         eids = one.search(subject=self.subj, date=self.date, number=self.n_sess,
                           task_protocol='ephys')
@@ -84,36 +95,23 @@ class LoadData:
         if not np.any(self.lfp_power):
             self.lfp_power = lfp_spectrum.get('amps')
 
-        #self.alf_path = '/Users/Mayo/Downloads/FlatIron/cortexlab/Subjects/KS014/2019-12-07/001/alf/probe00'
-        #self.chn_coords = alf.io.load_file_content(Path(self.alf_path, 'channels.localCoordinates.npy'))
-        
+    def get_probe_track(self):
+
         self.brain_atlas = atlas.AllenAtlas(res_um=25)
 
+        # Load in user picks for session
         insertion = one.alyx.rest('insertions', 'list', session=self.eid, name=self.probe_label)
         xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
-        # extrapolate to find the brain entry/exit using only the top/bottom 1/4 of picks
+        self.probe_id = insertion[0]['id']
+
+        # Use the top/bottom 1/4 of picks to compute the entry and exit trajectories of the probe
         n_picks = np.max([4, round(xyz_picks.shape[0] / 4)])
-        traj_entry = atlas.Trajectory.fit(xyz_picks[:n_picks, :])
-        entry = (traj_entry.eval_z(self.brain_atlas.bc.zlim))[0, :]
-        #entry = atlas.Insertion.get_brain_entry(traj_entry, self.brain_atlas)
-        #entry[2] = entry[2] + 200 / 1e6
-        
+        self.traj_entry = atlas.Trajectory.fit(xyz_picks[:n_picks, :])
+        # Force the entry to be on the upper z lim of the atlas to account for cases where channels
+        # may be located above the surface of the brain
+        entry = (self.traj_entry.eval_z(self.brain_atlas.bc.zlim))[0, :]
+
         traj_exit = atlas.Trajectory.fit(xyz_picks[-1 * n_picks:, :])
-
-        #z = self.brain_atlas.bc.zlim[-1]
-        #print(z)
-        #print(traj_exit.eval_z(z))
-        #for m in range(5):
-        #    print(m)
-        #    xyz = traj_exit.eval_z(z)[0]
-        #    print(xyz)
-        #    iy = self.brain_atlas.bc.y2i(xyz[1])
-        #    print(iy)
-        #    ix = self.brain_atlas.bc.x2i(xyz[0])
-        #    print(ix)
-        #    z = self.brain_atlas.bottom[iy, ix]
-        #    print(z)
-
         exit = atlas.Insertion.get_brain_exit(traj_exit, self.brain_atlas)
         exit[2] = exit[2] - 200 / 1e6
 
@@ -122,24 +120,20 @@ class LoadData:
         self.xyz_track = self.xyz_track[np.argsort(self.xyz_track[:, 2]), :]
 
         # plot on tilted coronal slice for sanity check
-        ax = self.brain_atlas.plot_tilted_slice(self.xyz_track, axis=1)
-        ax.plot(self.xyz_track[:, 0] * 1e6, self.xyz_track[:, 2] * 1e6, '-*')
-        ax.plot(xyz_picks[:, 0] * 1e6, xyz_picks[:, 2] * 1e6, 'r-*')
+        # ax = self.brain_atlas.plot_tilted_slice(self.xyz_track, axis=1)
+        # ax.plot(self.xyz_track[:, 0] * 1e6, self.xyz_track[:, 2] * 1e6, '-*')
+        # ax.plot(xyz_picks[:, 0] * 1e6, xyz_picks[:, 2] * 1e6, 'r-*')
+        # plt.show()
 
-        plt.show()
-
-        self.max_idx = 10
         self.track_init = [0] * (self.max_idx + 1)
         self.track = [0] * (self.max_idx + 1)
         self.features = [0] * (self.max_idx + 1)
 
-        #tip_distance = _cumulative_distance(self.xyz_track)[2] + TIP_SIZE_UM / 1e6
-        #DOUBLE CHECK THIS!!!!!
         tip_distance = _cumulative_distance(self.xyz_track)[1] + TIP_SIZE_UM / 1e6
         track_length = _cumulative_distance(self.xyz_track)[-1]
         self.track_start = np.array([0, track_length]) - tip_distance
 
-        # In case the probe isn't fully in the brain!
+        # In some cases need to extend beyond atlas z-lim to accomodate all channels
         if self.track_start[-1] < 4000 / 1e6:
             print('extending region beyond box')
             self.track_start[-1] = 4000 / 1e6
@@ -147,6 +141,22 @@ class LoadData:
         self.track[0] = np.copy(self.track_start)
         self.features[0] = np.copy(self.track_start)
 
+        self.hist_data = {
+            'region': [0] * (self.max_idx + 1),
+            'axis_label': [0] * (self.max_idx + 1),
+            'colour': [0] * (self.max_idx + 1),
+            'chan_int': 5
+        }
+        self.get_histology_regions(0)
+        self.hist_data_orig = self.hist_data['region'][0]
+
+        self.scale_data = {
+            'region': [0] * (self.max_idx + 1),
+            'scale': [0] * (self.max_idx + 1),
+            'chan_int': 5
+        }
+
+        self.get_scale_factor(0)
 
     def feature2track(self, trk, idx):
         fcn = scipy.interpolate.interp1d(self.features[idx], self.track[idx])
@@ -167,7 +177,18 @@ class LoadData:
             depths = self.chn_coords[:, 1] / 1e6
         # nb using scipy here so we can change to cubic spline if needed
         channel_depths_track = self.feature2track(depths, idx) - self.track[idx][0]
-        return histology.interpolate_along_track(self.xyz_track, channel_depths_track)
+        self.xyz_channels = histology.interpolate_along_track(self.xyz_track, channel_depths_track)
+        return self.xyz_channels
+
+    def upload_channels(self):
+        insertion = self.traj_entry
+        brain_regions = self.brain_atlas.regions.get(self.brain_atlas.get_labels(self.xyz_channels))
+        brain_regions['xyz'] = self.xyz_channels
+        brain_regions['lateral'] = self.chn_coords[:, 0]
+        brain_regions['axial'] = self.chn_coords[:, 1]
+        assert np.unique([len(brain_regions[k]) for k in brain_regions]).size == 1
+        #histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=one)
+
 
     def get_histology_regions(self, idx):
         """
@@ -182,7 +203,6 @@ class LoadData:
 
         region_ids = self.brain_atlas.get_labels(xyz_samples)
         region_info = self.brain_atlas.regions.get(region_ids)
-
         boundaries = np.where(np.diff(region_info.id))[0]
         region = np.empty((boundaries.size + 1, 2))
         region_label = np.empty((boundaries.size + 1, 2), dtype=object)
@@ -206,9 +226,46 @@ class LoadData:
             region_label[bound, :] = (_region_mean, _region_label)
 
         region = self.track2feature(region, idx) * 1e6
-        region_label[:, 0] = np.int64(self.track2feature(np.float64(region_label[:, 0]),
-                                      idx) * 1e6)
-        return region, region_label, region_colour
+        region_label[:, 0] = (self.track2feature(np.float64(region_label[:, 0]), idx) * 1e6)
+        self.hist_data['region'][idx] = region
+        self.hist_data['axis_label'][idx] = region_label
+        self.hist_data['colour'][idx] = region_colour
+
+    def get_scale_factor(self, idx):
+        scale = []
+        for iR, (reg, reg_orig) in enumerate(zip(self.hist_data['region'][idx],
+                                                 self.hist_data_orig)):
+            scale = np.r_[scale, (reg[1] - reg[0]) / (reg_orig[1] - reg_orig[0])]
+
+        boundaries = np.where(np.diff(np.around(scale, 3)))[0]
+        if boundaries.size == 0:
+            region = np.array([[self.hist_data['region'][idx][0][0],
+                               self.hist_data['region'][idx][-1][1]]])
+            region_scale = np.array([1])
+        else:
+
+            region = np.empty((boundaries.size + 1, 2))
+            region_scale = []
+            for bound in np.arange(boundaries.size + 1):
+                if bound == 0:
+                    _region = np.array([self.hist_data['region'][idx][0][0],
+                                       self.hist_data['region'][idx][boundaries[bound]][1]])
+                    _region_scale = scale[0]
+                elif bound == boundaries.size:
+                    _region = np.array([self.hist_data['region'][idx][boundaries[bound - 1]][1],
+                                       self.hist_data['region'][idx][-1][1]])
+                    _region_scale = scale[-1]
+                else:
+                    _region = np.array([self.hist_data['region'][idx][boundaries[bound - 1]][1],
+                                        self.hist_data['region'][idx][boundaries[bound]][1]])
+                    _region_scale = scale[boundaries[bound]]
+
+                region[bound, :] = _region
+                region_scale = np.r_[region_scale, _region_scale]
+
+        self.scale_data['region'][idx] = region
+        self.scale_data['scale'][idx] = region_scale
+
 
     def get_depth_data_scatter(self):
         A_BIN = 10
@@ -225,10 +282,12 @@ class LoadData:
             spikes_size[idx] = iA / (A_BIN / 4)
 
         scatter = {
-            'times': self.spikes['times'][0:-1:100],
-            'depths': self.spikes['depths'][0:-1:100],
+            'x': self.spikes['times'][0:-1:100],
+            'y': self.spikes['depths'][0:-1:100],
             'colours': spikes_colours[0:-1:100],
             'size': spikes_size[0:-1:100],
+            'xrange': np.array([np.min(self.spikes['times'][0:-1:100]),
+                                np.max(self.spikes['times'][0:-1:100])]),
             'xaxis': 'Time (s)'
         }
 
@@ -286,9 +345,8 @@ class LoadData:
     def get_rms_data_img(self, format):
         # Finds channels that are at equivalent depth on probe and averages rms values for each 
         # time point at same depth togehter
-        rms_amps, rms_times = (alf.io.load_object(self.ephys_path, '_iblqc_ephysTimeRms' + format)).values()
-        #rms = alf.io.load_object(self.ephys_path, '_iblqc_ephysTimeRmsAP')
-        #rms_amps = rms.rms
+        rms_amps, rms_times = (alf.io.load_object(self.ephys_path, '_iblqc_ephysTimeRms' +
+                                                  format)).values()
         _rms = np.take(rms_amps, self.chn_ind, axis=1)
         _, self.chn_depth, chn_count = np.unique(self.chn_coords[:, 1], return_index=True,
                                                  return_counts=True)
@@ -298,34 +356,22 @@ class LoadData:
         def avg_chn_depth(a):
             return(np.mean([a[self.chn_depth], a[self.chn_depth_eq]], axis=0))
         
+        def median_subtract(a):
+            return(a - np.median(a))
         img = np.apply_along_axis(avg_chn_depth, 1, _rms * 1e6)
-        #levels = [np.min(img), np.max(img)]
-        levels = np.quantile(img, [0, 0.5])
+        img = np.apply_along_axis(median_subtract, 1, img)
+        levels = np.quantile(img, [0.1, 0.9])
         xscale = (rms_times[-1] - rms_times[0]) / img.shape[0]
         yscale = (np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1])) / img.shape[1]
-
-        # Finds the average rms value on each electrode across all time points
-        rms_avg = (np.mean(rms_amps, axis=0)[self.chn_ind]) * 1e6
-        probe_levels = np.quantile(rms_avg, [0.1, 0.9])
-        probe_img, probe_scale, probe_offset = self.arrange_channels2banks(rms_avg)
-        
-        X_OFFSET = rms_times[-1] + 150
 
         rms_data = {
             'img': img,
             'scale': np.array([xscale, yscale]),
-            'levels': probe_levels,
-            'xrange': np.array([0, X_OFFSET + N_BNK * BNK_SIZE]),
+            'levels': levels,
             'cmap': 'plasma',
-            'title': format + ' RMS (uV)',
-            'axis': ['Time (s)', 'Distance from probe tip (um)'],
-            'probe_img': [probe_img],
-            'probe_scale': [probe_scale],
-            'probe_offset': [probe_offset],
-            'probe_level': [probe_levels],
-            'probe_cmap': 'plasma',
-            'extra_offset': [X_OFFSET],
-            'plot_cmap': False
+            'xrange': np.array([rms_times[0], rms_times[-1]]),
+            'xaxis': 'Time (s)',
+            'title': format + ' RMS (uV)'
         }
 
         return rms_data
@@ -341,65 +387,39 @@ class LoadData:
         probe_img, probe_scale, probe_offset = self.arrange_channels2banks(rms_avg)
 
         rms_data = {
-            'title': format + ' RMS (uV)',
-            'xaxis': 'Time (s)',
+            'img': probe_img,
+            'scale': probe_scale,
+            'offset': probe_offset,
+            'level': probe_levels,
+            'cmap': 'plasma',
             'xrange': np.array([0*BNK_SIZE, (N_BNK) * BNK_SIZE]),
-            'probe_img': probe_img,
-            'probe_scale': probe_scale,
-            'probe_offset': probe_offset,
-            'probe_level': probe_levels,
-            'probe_cmap': 'plasma',
-            'plot_cmap': True
+            'title': format + ' RMS (uV)'
         }
 
         return rms_data
 
     def get_lfp_spectrum_data(self):
-        X_OFFSET = 1000
         freq_bands = np.vstack(([0, 4], [4, 10], [10, 30], [30, 80], [80, 200]))
-        probe_img = []
-        probe_scale = np.empty((freq_bands.shape[0], 4, 2))
-        probe_offset = np.empty((freq_bands.shape[0], 4, 2))
-        probe_xoffset = np.empty((freq_bands.shape[0], 1))
-        probe_level = np.empty((freq_bands.shape[0], 2))
-        probe_title = np.empty((freq_bands.shape[0], 1), dtype=object)
+        lfp_data = {}
 
         for iF, freq in enumerate(freq_bands):
             freq_idx = np.where((self.lfp_freq >= freq[0]) & (self.lfp_freq < freq[1]))[0]
-            lfp_chns = np.mean(self.lfp_power[freq_idx], axis=0)[self.chn_ind]
-            lfp_chns_dB = 10 * np.log10(lfp_chns)
-            lfp_bnks, lfp_scale, lfp_offset = self.arrange_channels2banks(lfp_chns_dB)
-            lfp_level = np.quantile(lfp_chns_dB, [0.1, 0.9])
-            lfp_title = f"{freq[0]} - {freq[1]} Hz (dB)"
+            lfp_avg = np.mean(self.lfp_power[freq_idx], axis=0)[self.chn_ind]
+            lfp_avg_dB = 10 * np.log10(lfp_avg)
+            probe_img, probe_scale, probe_offset = self.arrange_channels2banks(lfp_avg_dB)
+            probe_levels = np.quantile(lfp_avg_dB, [0.1, 0.9])
 
-            probe_img.append(lfp_bnks)
-            probe_scale[iF, :] = lfp_scale
-            probe_offset[iF, :] = lfp_offset
-            probe_level[iF, :] = lfp_level
-            probe_title[iF, :] = lfp_title
-            probe_xoffset[iF, :] = iF * X_OFFSET
-        
-        # A bit of a hack
-        img = np.zeros((np.unique(self.chn_coords[:, 1]).size,
-                        np.unique(self.chn_coords[:, 1]).size))
-        xmax = np.max(probe_xoffset) + N_BNK * BNK_SIZE
-        xscale = (xmax - 0) / img.shape[0]
-        yscale = (np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1]) / img.shape[1])
-
-        lfp_data = {
-            'img': img,
-            'scale': np.array([xscale, yscale]),
-            'xrange': np.array([0, xmax]),
-            'axis': ['Time (s)', ''],
-            'probe_img': probe_img,
-            'probe_scale': probe_scale,
-            'probe_offset': probe_offset,
-            'probe_level': probe_level,
-            'probe_title': probe_title,
-            'extra_offset': probe_xoffset,
-            'probe_cmap': 'viridis',
-            'plot_cmap': True
-        }
+            lfp_band_data = {f"{freq[0]} - {freq[1]} Hz": {
+                'img': probe_img,
+                'scale': probe_scale,
+                'offset': probe_offset,
+                'level': probe_levels,
+                'cmap': 'viridis',
+                'xaxis': 'Time (s)',
+                'xrange': np.array([0 * BNK_SIZE, (N_BNK) * BNK_SIZE]),
+                'title': f"{freq[0]} - {freq[1]} Hz (dB)"}
+            }
+            lfp_data.update(lfp_band_data)
 
         return lfp_data
 
