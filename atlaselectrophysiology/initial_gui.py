@@ -14,7 +14,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.init_variables()
         self.init_layout(self)
         self.loaddata = ld.LoadData(self.max_idx)
-        self.populate_lists(self.loaddata.get_subjects(), self.subj_list)
+        self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
 
     def init_variables(self):
         """
@@ -96,7 +96,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         return axis
 
-    def populate_lists(self, data, list_name):
+    def populate_lists(self, data, list_name, combobox):
         """
         Populate drop down lists with subject/session options
         :param data: list of options to add to widget
@@ -108,6 +108,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             item = QtGui.QStandardItem(dat)
             item.setEditable(False)
             list_name.appendRow(item)
+
+        combobox.setCurrentIndex(0)
 
     def set_view(self, view=1, configure=False):
         """
@@ -329,7 +331,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         scale_factor = self.loaddata.scale_data['scale'][self.idx] - 0.5
         color_bar = cb.ColorBar('seismic')
-        cbar = color_bar.makeColourBar(20, 5, self.fig_stretch_cb, min=0.5, max=0.5,
+        cbar = color_bar.makeColourBar(20, 5, self.fig_stretch_cb, min=0.5, max=1.5,
                                        label='Scale Factor')
         colours = color_bar.map.mapToQColor(scale_factor)
 
@@ -383,15 +385,25 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         type data: dict
         """
         [self.fig_img.removeItem(plot) for plot in self.img_plots]
-        [self.fig_img.removeItem(cbar) for cbar in self.img_cbars]
+        [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
         self.img_plots = []
         self.img_cbars = []
         connect = np.zeros(data['x'].size, dtype=int)
-        brush = data['colours'].tolist()
         size = data['size'].tolist()
+
+        color_bar = cb.ColorBar(data['cmap'])
+        cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=np.min(data['levels'][0]),
+                                       max=np.max(data['levels'][1]), label=data['title'])
+        self.fig_img_cb.addItem(cbar)
+        self.img_cbars.append(cbar)
+
+        if type(data['colours'][0]) == QtGui.QColor:
+            brush = data['colours'].tolist()
+        else:
+            brush = color_bar.map.mapToQColor(data['colours'])
         plot = pg.PlotDataItem()
         plot.setData(x=data['x'], y=data['y'], connect=connect,
-                     symbol='o', symbolSize=size, symbolBrush=brush)
+                     symbol='o', symbolSize=size, symbolBrush=brush, symbolPen=data['pen'])
         self.fig_img.addItem(plot)
         self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1],
                                padding=0)
@@ -521,7 +533,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         self.sess_list.clear()
         sessions = self.loaddata.get_sessions(subj)
-        self.populate_lists(sessions, self.sess_list)
+        self.populate_lists(sessions, self.sess_list, self.sess_combobox)
 
     def on_session_selected(self, idx):
         """
@@ -550,12 +562,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Load in all the data required for plots
         self.scat_drift_data = self.loaddata.get_depth_data_scatter()
+        self.scat_peak2trough_data = self.loaddata.get_peak2trough_data_scatter()
         self.img_corr_data = self.loaddata.get_correlation_data_img()
         self.img_drift_data = self.loaddata.get_depth_data_img()
         self.img_rms_APdata = self.loaddata.get_rms_data_img('AP')
         self.img_rms_LFPdata = self.loaddata.get_rms_data_img('LF')
         self.probe_rms_APdata = self.loaddata.get_rms_data_probe('AP')
-        self.probe_rms_LFdata = self.loaddata.get_rms_data_probe('LF')
+        self.probe_rms_LFPdata = self.loaddata.get_rms_data_probe('LF')
         self.probe_lfp_data = self.loaddata.get_lfp_spectrum_data()
         self.line_fr_data = self.loaddata.get_fr_data_line()
         self.line_amp_data = self.loaddata.get_amp_data_line()
@@ -761,7 +774,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         location
         """
         self.remove_lines_points()
-        self.lines = np.empty((0, 2))
+        self.lines_features = np.empty((0, 3))
+        self.lines_tracks = np.empty((0, 1))
         self.points = np.empty((0, 1))
         if self.current_idx < self.last_idx:
             self.total_idx = np.copy(self.current_idx)
@@ -795,13 +809,34 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
         Alyx
         """
-        upload = QtGui.QMessageBox.question(self, 'Scaling Complete',
+        upload = QtGui.QMessageBox.question(self, '',
                                             "Upload final channel locations to Alyx?",
                                             QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
         if upload == QtGui.QMessageBox.Yes:
-            print('put upload stuff here')
+            if self.loaddata.traj_exists:
+
+                overwrite = QtGui.QMessageBox.warning(self, '', ("Ephys aligned trajectory "
+                                                      "for this probe insertion already exists "
+                                                      "on Alyx. Do you want to overwrite?"),
+                                                      QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+                if overwrite == QtGui.QMessageBox.Yes:
+                    self.loaddata.upload_channels(overwrite=True)
+                    self.loaddata.get_trajectory()
+                    QtGui.QMessageBox.information(self, '', ("Electrode locations "
+                                                  "succesfully uploaded to Alyx"))
+                else:
+                    pass
+                    QtGui.QMessageBox.information(self, '', ("Electrode locations not "
+                                                  "uploaded to Alyx"))
+            else:
+                self.loaddata.upload_channels()
+                self.loaddata.get_trajectory()
+                QtGui.QMessageBox.information(self, 'Status', ("Electrode locations "
+                                              "succesfully uploaded to Alyx"))
         else:
             pass
+            QtGui.QMessageBox.information(self, 'Status', ("Electrode locations not uploaded"
+                                          " to Alyx"))
 
     def on_mouse_double_clicked(self, event):
         """

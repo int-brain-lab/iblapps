@@ -45,6 +45,8 @@ class Setup():
         # Define all 2D scatter/ image plot options
         scatter_drift = QtGui.QAction('Drift Map Scatter', self)
         scatter_drift.triggered.connect(lambda: self.plot_scatter(self.scat_drift_data))
+        scatter_p2t = QtGui.QAction('Peak to Trough Scatter', self)
+        scatter_p2t.triggered.connect(lambda: self.plot_scatter(self.scat_peak2trough_data))
         img_drift = QtGui.QAction('Drift Map Image', self)
         img_drift.triggered.connect(lambda: self.plot_image(self.img_drift_data))
         img_corr = QtGui.QAction('Correlation', self)
@@ -52,10 +54,11 @@ class Setup():
         img_rmsAP = QtGui.QAction('rms AP', self)
         img_rmsAP.triggered.connect(lambda: self.plot_image(self.img_rms_APdata))
         img_rmsLFP = QtGui.QAction('rms LFP', self)
-        img_rmsLFP.triggered.connect(lambda: self.plot_image(self.img_rms_LFdata))
+        img_rmsLFP.triggered.connect(lambda: self.plot_image(self.img_rms_LFPdata))
         # Add menu bar for 2D scatter/ image plot options
         img_options = menu_bar.addMenu('Image Plots')
         img_options.addAction(scatter_drift)
+        img_options.addAction(scatter_p2t)
         img_options.addAction(img_drift)
         img_options.addAction(img_corr)
         img_options.addAction(img_rmsAP)
@@ -76,7 +79,7 @@ class Setup():
         probe_rmsAP = QtGui.QAction('rms AP', self)
         probe_rmsAP.triggered.connect(lambda: self.plot_probe(self.probe_rms_APdata))
         probe_rmsLFP = QtGui.QAction('rms LF', self)
-        probe_rmsLFP.triggered.connect(lambda: self.plot_probe(self.probe_rms_LFdata))
+        probe_rmsLFP.triggered.connect(lambda: self.plot_probe(self.probe_rms_LFPdata))
         # Add menu bar for 2D probe plot options
         probe_options.addAction(probe_rmsAP)
         probe_options.addAction(probe_rmsLFP)
@@ -191,20 +194,21 @@ class Setup():
         self.complete_button.clicked.connect(self.complete_button_pressed)
         # Drop down list to choose subject
         self.subj_list = QtGui.QStandardItemModel()
-        subj_combobox = QtWidgets.QComboBox()
+        self.subj_combobox = QtWidgets.QComboBox()
         # Add line edit and completer to be able to search for subject
-        subj_combobox.setLineEdit(QtWidgets.QLineEdit())
+        self.subj_combobox.setLineEdit(QtWidgets.QLineEdit())
         subj_completer = QtWidgets.QCompleter()
         subj_completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
-        subj_combobox.setCompleter(subj_completer)
-        subj_combobox.setModel(self.subj_list)
-        subj_combobox.completer().setModel(self.subj_list)
-        subj_combobox.textActivated.connect(self.on_subject_selected)
+        self.subj_combobox.setCompleter(subj_completer)
+        self.subj_combobox.setModel(self.subj_list)
+        self.subj_combobox.completer().setModel(self.subj_list)
+        self.subj_combobox.textActivated.connect(self.on_subject_selected)
         # Drop down list to choose session
         self.sess_list = QtGui.QStandardItemModel()
-        sess_combobox = QtWidgets.QComboBox()
-        sess_combobox.setModel(self.sess_list)
-        sess_combobox.activated.connect(self.on_session_selected)
+        self.sess_combobox = QtWidgets.QComboBox()
+        self.sess_combobox.setModel(self.sess_list)
+        self.sess_combobox.activated.connect(self.on_session_selected)
+
         # Button to get data to display in GUI
         self.data_button = QtWidgets.QPushButton('Get Data', font=self.font)
         self.data_button.clicked.connect(self.data_button_pressed)
@@ -228,8 +232,8 @@ class Setup():
         self.interaction_layout2.addWidget(self.complete_button)
         # Group 3
         self.interaction_layout3 = QtWidgets.QHBoxLayout()
-        self.interaction_layout3.addWidget(subj_combobox, stretch=1)
-        self.interaction_layout3.addWidget(sess_combobox, stretch=2)
+        self.interaction_layout3.addWidget(self.subj_combobox, stretch=1)
+        self.interaction_layout3.addWidget(self.sess_combobox, stretch=2)
         self.interaction_layout3.addWidget(self.data_button, stretch=1)
 
     def init_figures(self):
@@ -239,7 +243,7 @@ class Setup():
         # Figures to show ephys data
         # 2D scatter/ image plot
         self.fig_img = pg.PlotItem()
-        self.fig_img.setMouseEnabled(x=False, y=False)
+        #self.fig_img.setMouseEnabled(x=False, y=False)
         self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                self.probe_extra, padding=self.pad)
         self.fig_img.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)

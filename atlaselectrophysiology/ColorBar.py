@@ -6,14 +6,14 @@ import numpy as np
 
 class ColorBar(pg.GraphicsWidget):
 
-    def __init__(self, cmap_name, parent=None):
+    def __init__(self, cmap_name, cbin=256, parent=None):
         pg.GraphicsWidget.__init__(self)
 
         # Create colour map from matplotlib colourmap name
         self.cmap_name = cmap_name
         cmap = matplotlib.cm.get_cmap(self.cmap_name)
         if type(cmap) == matplotlib.colors.LinearSegmentedColormap:
-            cbins = np.linspace(0.0, 1.0, 256)
+            cbins = np.linspace(0.0, 1.0, cbin)
             colors = (cmap(cbins)[np.newaxis, :, :3][0]).tolist()
         else:
             colors = cmap.colors
@@ -37,9 +37,11 @@ class ColorBar(pg.GraphicsWidget):
         if lim:
             ax.setTicks([[(0, str(np.around(min, 2))), (width, str(np.around(max, 2)))]])
         else:
-            ax.setTicks([[(0, str(np.around(min, 2))), (width / 2, str(np.around((max - min) / 2, 2))),
-                        (width, str(np.around(max, 2)))], [(width / 4, str(np.around((max - min) / 4, 2))), 
-                        (3 * width / 4, str(np.around(3 * (max - min) / 4, 2)))]])
+            ax.setTicks([[(0, str(np.around(min, 2))), (width / 2,
+                        str(np.around(min + (max - min) / 2, 2))),
+                       (width, str(np.around(max, 2)))],
+                [(width / 4, str(np.around(min + (max - min) / 4, 2))),
+                 (3 * width / 4, str(np.around(min + (3 * (max - min) / 4), 2)))]])
         fig.setXRange(0, width)
         fig.setYRange(0, height)
 

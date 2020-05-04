@@ -74,6 +74,7 @@ class LoadData:
             'spikes.depths',
             'spikes.amps',
             'spikes.times',
+            'spikes.clusters',
             'channels.localCoordinates',
             'channels.rawInd',
             '_iblqc_ephysTimeRms.rms',
@@ -88,6 +89,7 @@ class LoadData:
         self.alf_path = path.joinpath('alf', self.probe_label)
         self.ephys_path = path.joinpath('raw_ephys_data', self.probe_label)
         self.spikes = alf.io.load_object(self.alf_path, 'spikes')
+        #self.clusters = alf.io.load_object(self.alf_path, 'clusters')
         self.chn_coords, self.chn_ind = (alf.io.load_object(self.alf_path, 'channels')).values()
         lfp_spectrum = alf.io.load_object(self.ephys_path, '_iblqc_ephysSpectralDensityLF')
         self.lfp_freq = lfp_spectrum.get('freqs')
@@ -103,6 +105,7 @@ class LoadData:
         insertion = one.alyx.rest('insertions', 'list', session=self.eid, name=self.probe_label)
         xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
         self.probe_id = insertion[0]['id']
+        self.get_trajectory()
 
         # Use the top/bottom 1/4 of picks to compute the entry and exit trajectories of the probe
         n_picks = np.max([4, round(xyz_picks.shape[0] / 4)])
@@ -158,6 +161,13 @@ class LoadData:
 
         self.get_scale_factor(0)
 
+    def get_trajectory(self):
+        self.traj_exists = False
+        ephys_traj = one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+                                   provenance='Ephys aligned histology track')
+        if len(ephys_traj):
+            self.traj_exists = True
+
     def feature2track(self, trk, idx):
         fcn = scipy.interpolate.interp1d(self.features[idx], self.track[idx])
         return fcn(trk)
@@ -180,15 +190,15 @@ class LoadData:
         self.xyz_channels = histology.interpolate_along_track(self.xyz_track, channel_depths_track)
         return self.xyz_channels
 
-    def upload_channels(self):
-        insertion = self.traj_entry
+    def upload_channels(self, overwrite=False):
+        insertion = atlas.Insertion.from_track(self.xyz_channels, self.brain_atlas)
         brain_regions = self.brain_atlas.regions.get(self.brain_atlas.get_labels(self.xyz_channels))
         brain_regions['xyz'] = self.xyz_channels
         brain_regions['lateral'] = self.chn_coords[:, 0]
         brain_regions['axial'] = self.chn_coords[:, 1]
         assert np.unique([len(brain_regions[k]) for k in brain_regions]).size == 1
-        #histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=one)
-
+        histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=one,
+                                         overwrite=overwrite)
 
     def get_histology_regions(self, idx):
         """
@@ -266,32 +276,64 @@ class LoadData:
         self.scale_data['region'][idx] = region
         self.scale_data['scale'][idx] = region_scale
 
-
     def get_depth_data_scatter(self):
         A_BIN = 10
         amp_range = np.quantile(self.spikes['amps'], [0.1, 0.9])
         amp_bins = np.linspace(amp_range[0], amp_range[1], A_BIN)
         colour_bin = np.linspace(0.0, 1.0, A_BIN)
-        colours = cm.get_cmap('Greys')(colour_bin)[np.newaxis, :, :3][0]
+        colours = (cm.get_cmap('Greys')(colour_bin)[np.newaxis, :, :3][0])*255
         spikes_colours = np.empty((self.spikes['amps'].size), dtype=object)
         spikes_size = np.empty((self.spikes['amps'].size))
         for iA in range(amp_bins.size - 1):
             idx = np.where((self.spikes['amps'] > amp_bins[iA]) & (self.spikes['amps'] <=
                                                                    amp_bins[iA + 1]))[0]
             spikes_colours[idx] = QtGui.QColor(*colours[iA])
+            #spikes_colours[idx] = QtGui.QColor((1., 0.96078431, 0.94117647))
+           # 1.        , 0.96078431, 0.94117647
             spikes_size[idx] = iA / (A_BIN / 4)
 
         scatter = {
             'x': self.spikes['times'][0:-1:100],
             'y': self.spikes['depths'][0:-1:100],
+            #'colours': self.spikes['amps'][0:-1:100],
+            'levels': amp_range,
             'colours': spikes_colours[0:-1:100],
+            'pen': None,
             'size': spikes_size[0:-1:100],
             'xrange': np.array([np.min(self.spikes['times'][0:-1:100]),
                                 np.max(self.spikes['times'][0:-1:100])]),
-            'xaxis': 'Time (s)'
+            'xaxis': 'Time (s)',
+            'title': 'Amplitude (uV)??',
+            'cmap': 'Greys'
         }
 
         return scatter
+
+    def get_peak2trough_data_scatter(self):
+
+        (clu, spike_depths,
+         spike_amps, n_spikes) = self.compute_spike_average(self.spikes['clusters'],
+                                                            self.spikes['depths'], 
+                                                            self.spikes['amps'])
+
+        fr = n_spikes / np.max(self.spikes['times'])
+
+        peak_to_trough = {
+            #'x': self.clusters['peakToTrough'][clu],
+            'x': spike_amps,
+            'y': spike_depths,
+            'colours': fr,
+            'pen': 'k',
+            'size': np.array(5),
+            'levels': np.quantile(fr, [0.1, 1]),
+            'xrange': np.array([np.min(spike_amps),
+                                np.max(spike_amps)]),
+            'xaxis': 'Amplitude (uV)??',
+            'title': 'Firing Rate',
+            'cmap': 'hot'
+        }
+
+        return peak_to_trough
 
     def get_depth_data_img(self):
         T_BIN = 0.05
@@ -341,7 +383,6 @@ class LoadData:
 
         return amp
 
-    
     def get_rms_data_img(self, format):
         # Finds channels that are at equivalent depth on probe and averages rms values for each 
         # time point at same depth togehter
@@ -355,7 +396,7 @@ class LoadData:
 
         def avg_chn_depth(a):
             return(np.mean([a[self.chn_depth], a[self.chn_depth_eq]], axis=0))
-        
+
         def median_subtract(a):
             return(a - np.median(a))
         img = np.apply_along_axis(avg_chn_depth, 1, _rms * 1e6)
@@ -465,3 +506,11 @@ class LoadData:
             bnk_offset[iX, :] = np.array([_bnk_xoffset, _bnk_yoffset])
 
         return bnk_data, bnk_scale, bnk_offset
+
+    def compute_spike_average(self, spike_clusters, spike_depth, spike_amp):
+        clust, inverse, counts = np.unique(spike_clusters, return_inverse=True, return_counts=True)
+        _spike_depth = scipy.sparse.csr_matrix((spike_depth, (inverse, np.zeros(inverse.size, dtype=int))))
+        _spike_amp = scipy.sparse.csr_matrix((spike_amp, (inverse, np.zeros(inverse.size, dtype=int))))
+        spike_depth_avg = np.ravel(_spike_depth.toarray()) / counts
+        spike_amp_avg = np.ravel(_spike_amp.toarray()) / counts
+        return clust, spike_depth_avg, spike_amp_avg, counts
