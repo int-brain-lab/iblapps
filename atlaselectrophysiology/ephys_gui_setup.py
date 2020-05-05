@@ -43,64 +43,99 @@ class Setup():
         self.setMenuBar(menu_bar)
 
         # Define all 2D scatter/ image plot options
-        scatter_drift = QtGui.QAction('Drift Map Scatter', self)
+        scatter_drift = QtGui.QAction('Amplitude', self, checkable=True, checked=False)
         scatter_drift.triggered.connect(lambda: self.plot_scatter(self.scat_drift_data))
-        scatter_p2t = QtGui.QAction('Peak to Trough Scatter', self)
+        scatter_p2t = QtGui.QAction('Cluster Amp vs Depth', self, checkable=True, checked=False)
         scatter_p2t.triggered.connect(lambda: self.plot_scatter(self.scat_peak2trough_data))
-        img_drift = QtGui.QAction('Drift Map Image', self)
-        img_drift.triggered.connect(lambda: self.plot_image(self.img_drift_data))
-        img_corr = QtGui.QAction('Correlation', self)
+        img_fr = QtGui.QAction('Firing Rate', self, checkable=True, checked=True)
+        img_fr.triggered.connect(lambda: self.plot_image(self.img_fr_data))
+        img_corr = QtGui.QAction('Correlation', self, checkable=True, checked=False)
         img_corr.triggered.connect(lambda: self.plot_image(self.img_corr_data))
-        img_rmsAP = QtGui.QAction('rms AP', self)
+        img_rmsAP = QtGui.QAction('rms AP', self, checkable=True, checked=False)
         img_rmsAP.triggered.connect(lambda: self.plot_image(self.img_rms_APdata))
-        img_rmsLFP = QtGui.QAction('rms LFP', self)
+        img_rmsLFP = QtGui.QAction('rms LFP', self, checkable=True, checked=False)
         img_rmsLFP.triggered.connect(lambda: self.plot_image(self.img_rms_LFPdata))
         # Add menu bar for 2D scatter/ image plot options
         img_options = menu_bar.addMenu('Image Plots')
+        img_options_group = QtGui.QActionGroup(img_options)
+        img_options_group.setExclusive(True)
         img_options.addAction(scatter_drift)
+        img_options_group.addAction(scatter_drift)
         img_options.addAction(scatter_p2t)
-        img_options.addAction(img_drift)
+        img_options_group.addAction(scatter_p2t)
+        img_options.addAction(img_fr)
+        img_options_group.addAction(img_fr)
         img_options.addAction(img_corr)
+        img_options_group.addAction(img_corr)
         img_options.addAction(img_rmsAP)
+        img_options_group.addAction(img_rmsAP)
         img_options.addAction(img_rmsLFP)
+        img_options_group.addAction(img_rmsLFP)
 
         # Define all 1D line plot options
-        line_fr = QtGui.QAction('Firing Rate', self)
+        line_fr = QtGui.QAction('Firing Rate', self, checkable=True, checked=True)
         line_fr.triggered.connect(lambda: self.plot_line(self.line_fr_data))
-        line_amp = QtGui.QAction('Amplitude', self)
+        line_amp = QtGui.QAction('Amplitude', self, checkable=True, checked=False)
         line_amp.triggered.connect(lambda: self.plot_line(self.line_amp_data))
         # Add menu bar for 1D line plot options
         line_options = menu_bar.addMenu('Line Plots')
+        line_options_group = QtGui.QActionGroup(line_options)
+        line_options_group.setExclusive(True)
         line_options.addAction(line_fr)
+        line_options_group.addAction(line_fr)
         line_options.addAction(line_amp)
+        line_options_group.addAction(line_amp)
 
         # Define all 2D probe plot options
         probe_options = menu_bar.addMenu("Probe Plots")
-        probe_rmsAP = QtGui.QAction('rms AP', self)
+        probe_options_group = QtGui.QActionGroup(probe_options)
+        probe_options_group.setExclusive(True)
+        probe_rmsAP = QtGui.QAction('rms AP', self, checkable=True, checked=True)
         probe_rmsAP.triggered.connect(lambda: self.plot_probe(self.probe_rms_APdata))
-        probe_rmsLFP = QtGui.QAction('rms LF', self)
+        probe_rmsLFP = QtGui.QAction('rms LF', self, checkable=True, checked=False)
         probe_rmsLFP.triggered.connect(lambda: self.plot_probe(self.probe_rms_LFPdata))
+
         # Add menu bar for 2D probe plot options
         probe_options.addAction(probe_rmsAP)
+        probe_options_group.addAction(probe_rmsAP)
         probe_options.addAction(probe_rmsLFP)
+        probe_options_group.addAction(probe_rmsAP)
 
         # Add the different frequency band options in a loop. These must be the same as in
         # load_data
         freq_bands = np.vstack(([0, 4], [4, 10], [10, 30], [30, 80], [80, 200]))
         for iF, freq in enumerate(freq_bands):
             band = f"{freq[0]} - {freq[1]} Hz"
-            probe = QtGui.QAction(band, self)
+            probe = QtGui.QAction(band, self, checkable=True, checked=False)
             probe.triggered.connect(lambda checked, item=band: self.plot_probe(
                                     self.probe_lfp_data[item]))
             probe_options.addAction(probe)
+            probe_options_group.addAction(probe)
 
+        # Define unit filter options
+        all_units = QtGui.QAction('All', self, checkable=True, checked=True)
+        all_units.triggered.connect(lambda: self.filter_unit_pressed('all'))
+        good_units = QtGui.QAction('Good', self, checkable=True, checked=False)
+        good_units.triggered.connect(lambda: self.filter_unit_pressed('good'))
+        mua_units = QtGui.QAction('MUA', self, checkable=True, checked=False)
+        mua_units.triggered.connect(lambda: self.filter_unit_pressed('mua'))
+
+        unit_filter_options = menu_bar.addMenu("Filter Units")
+        unit_filter_options_group = QtGui.QActionGroup(unit_filter_options)
+        unit_filter_options_group.setExclusive(True)
+        unit_filter_options.addAction(all_units)
+        unit_filter_options_group.addAction(all_units)
+        unit_filter_options.addAction(good_units)
+        unit_filter_options_group.addAction(good_units)
+        unit_filter_options.addAction(mua_units)
+        unit_filter_options_group.addAction(mua_units)
 
         # Define all possible keyboard interactions for GUI
         # Shortcut to apply interpolation
         fit_option = QtGui.QAction('Fit', self)
         fit_option.setShortcut('Return')
-        # Shortcuts to apply offset
         fit_option.triggered.connect(self.fit_button_pressed)
+        # Shortcuts to apply offset
         offset_option = QtGui.QAction('Offset', self)
         offset_option.setShortcut('O')
         offset_option.triggered.connect(self.offset_button_pressed)
@@ -149,6 +184,11 @@ class Setup():
         view3_option.setShortcut('Shift+3')
         view3_option.triggered.connect(lambda: self.set_view(view=3))
 
+        # Shortcut to reset axis on histology figure
+        axis_option = QtGui.QAction('Reset Axis', self)
+        axis_option.setShortcut('Shift+N')
+        axis_option.triggered.connect(self.reset_axis_button_pressed)
+
         # Add menu bar with all possible keyboard interactions
         shortcut_options = menu_bar.addMenu("Shortcut Keys")
         shortcut_options.addAction(fit_option)
@@ -165,6 +205,12 @@ class Setup():
         shortcut_options.addAction(view1_option)
         shortcut_options.addAction(view2_option)
         shortcut_options.addAction(view3_option)
+        shortcut_options.addAction(axis_option)
+
+        notes_options = menu_bar.addMenu('Session Notes')
+        show_notes = QtGui.QAction('Display', self)
+        show_notes.triggered.connect(self.display_session_notes)
+        notes_options.addAction(show_notes)
 
     def init_interaction_features(self):
         """
@@ -243,7 +289,7 @@ class Setup():
         # Figures to show ephys data
         # 2D scatter/ image plot
         self.fig_img = pg.PlotItem()
-        #self.fig_img.setMouseEnabled(x=False, y=False)
+        self.fig_img.setMouseEnabled(x=False, y=False)
         self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                self.probe_extra, padding=self.pad)
         self.fig_img.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)
@@ -319,25 +365,26 @@ class Setup():
         self.ax_hist.setWidth(0)
         self.ax_hist.setStyle(tickTextOffset=-70)
 
-        self.fig_stretch = pg.PlotItem()
-        self.fig_stretch.setMaximumWidth(50)
-        self.fig_stretch.setMouseEnabled(x=False)
-        self.set_axis(self.fig_stretch, 'bottom', pen='w', ticks=False)
-        self.set_axis(self.fig_stretch, 'left', show=False)
-        (self.fig_stretch).setYLink(self.fig_hist)
+        self.fig_scale = pg.PlotItem()
+        self.fig_scale.setMaximumWidth(50)
+        self.fig_scale.setMouseEnabled(x=False)
+        self.scale_label = pg.LabelItem(color='k')
+        self.set_axis(self.fig_scale, 'bottom', pen='w', ticks=False)
+        self.set_axis(self.fig_scale, 'left', show=False)
+        (self.fig_scale).setYLink(self.fig_hist)
 
         # Figure that will show scale factor of histology boundaries
-        self.fig_stretch_cb = pg.PlotItem()
-        self.fig_stretch_cb.setMouseEnabled(x=False, y=False)
-        self.fig_stretch_cb.setMaximumHeight(70)
-        self.set_axis(self.fig_stretch_cb, 'bottom', show=False)
-        self.set_axis(self.fig_stretch_cb, 'left', show=False)
-        self.set_axis(self.fig_stretch_cb, 'top', pen='w')
-        self.set_axis(self.fig_stretch_cb, 'right', show=False)
+        self.fig_scale_cb = pg.PlotItem()
+        self.fig_scale_cb.setMouseEnabled(x=False, y=False)
+        self.fig_scale_cb.setMaximumHeight(70)
+        self.set_axis(self.fig_scale_cb, 'bottom', show=False)
+        self.set_axis(self.fig_scale_cb, 'left', show=False)
+        self.fig_scale_ax = self.set_axis(self.fig_scale_cb, 'top', pen='w')
+        self.set_axis(self.fig_scale_cb, 'right', show=False)
 
         # Histology figure that will remain at initial state for reference
         self.fig_hist_ref = pg.PlotItem()
-        self.fig_hist_ref.setMouseEnabled(x=False, y=False)
+        self.fig_hist_ref.setMouseEnabled(x=False)
         self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                     self.probe_extra, padding=self.pad)
         self.set_axis(self.fig_hist_ref, 'bottom', pen='w', ticks=False)
@@ -347,12 +394,14 @@ class Setup():
         self.ax_hist_ref.setStyle(tickTextOffset=-70)
 
         self.fig_hist_area = pg.GraphicsLayoutWidget()
+        self.fig_hist_area.setMouseTracking(True)
         self.fig_hist_area.scene().sigMouseClicked.connect(self.on_mouse_double_clicked)
         self.fig_hist_area.scene().sigMouseHover.connect(self.on_mouse_hover)
+
         self.fig_hist_layout = pg.GraphicsLayout()
-        self.fig_hist_layout.addItem(self.fig_stretch_cb, 0, 0, 1, 3)
+        self.fig_hist_layout.addItem(self.fig_scale_cb, 0, 0, 1, 3)
         self.fig_hist_layout.addItem(self.fig_hist, 1, 0)
-        self.fig_hist_layout.addItem(self.fig_stretch, 1, 1)
+        self.fig_hist_layout.addItem(self.fig_scale, 1, 1)
         self.fig_hist_layout.addItem(self.fig_hist_ref, 1, 2,)
         self.fig_hist_layout.layout.setColumnStretchFactor(0, 4)
         self.fig_hist_layout.layout.setColumnStretchFactor(1, 1)
@@ -373,8 +422,8 @@ class Setup():
         self.fig_fit.setMouseEnabled(x=False, y=False)
         self.fig_fit.setXRange(min=self.view_total[0], max=self.view_total[1])
         self.fig_fit.setYRange(min=self.view_total[0], max=self.view_total[1])
-        self.set_axis(self.fig_fit, 'bottom')
-        self.set_axis(self.fig_fit, 'left')
+        self.set_axis(self.fig_fit, 'bottom', label='Original coordinates')
+        self.set_axis(self.fig_fit, 'left', label='New coordinates')
         plot = pg.PlotCurveItem()
         plot.setData(x=self.depth, y=self.depth, pen=self.kpen_dot)
         self.fit_plot = pg.PlotCurveItem(pen=self.bpen_solid)

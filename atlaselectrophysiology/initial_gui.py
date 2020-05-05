@@ -3,6 +3,7 @@ import pyqtgraph as pg
 import numpy as np
 from random import randrange
 import atlaselectrophysiology.load_data as ld
+import atlaselectrophysiology.plot_data as pd
 import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 
@@ -15,6 +16,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.init_layout(self)
         self.loaddata = ld.LoadData(self.max_idx)
         self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
+        self.configure = True
+        
 
     def init_variables(self):
         """
@@ -60,6 +63,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.probe_plots = []
         self.img_cbars = []
         self.probe_cbars = []
+        self.scale_regions = np.empty((0, 1))
 
     def set_axis(self, fig, ax, show=True, label=None, pen='k', ticks=True):
         """
@@ -149,7 +153,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             self.fig_img.setPreferredWidth(self.fig_img_width + self.fig_ax_width)
             self.fig_line.setPreferredWidth(self.fig_line_width)
-            self.fig_probe.setMaximumWidth(self.fig_probe_width)
+            self.fig_probe.setFixedWidth(self.fig_probe_width)
 
             self.fig_data_layout.layout.setColumnStretchFactor(0, 6)
             self.fig_data_layout.layout.setColumnStretchFactor(1, 2)
@@ -182,7 +186,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             self.fig_img.setPreferredWidth(self.fig_img_width + self.fig_ax_width)
             self.fig_line.setPreferredWidth(self.fig_line_width)
-            self.fig_probe.setMaximumWidth(self.fig_probe_width)
+            self.fig_probe.setFixedWidth(self.fig_probe_width)
 
             self.fig_data_layout.layout.setColumnStretchFactor(0, 6)
             self.fig_data_layout.layout.setColumnStretchFactor(1, 1)
@@ -246,13 +250,17 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Plot each histology region
         for ir, reg in enumerate(self.loaddata.hist_data['region'][self.idx]):
-            x, y = self.create_hist_data(reg, self.loaddata.hist_data['chan_int'])
-            curve_item = pg.PlotCurveItem()
-            curve_item.setData(x=x, y=y, fillLevel=50)
             colour = QtGui.QColor(*self.loaddata.hist_data['colour'][self.idx][ir])
-            curve_item.setBrush(colour)
-            fig.addItem(curve_item)
+            region = pg.LinearRegionItem(values=(reg[0], reg[1]),
+                                         orientation=pg.LinearRegionItem.Horizontal,
+                                         brush=colour, movable=False)
+            bound = pg.InfiniteLine(pos=reg[0], angle=0, pen='w')
+            fig.addItem(region)
+            fig.addItem(bound)
 
+        bound = pg.InfiniteLine(pos=self.loaddata.hist_data['region'][self.idx][-1][1], angle=0,
+                                pen='w')
+        fig.addItem(bound)
         # Add dotted lines to plot to indicate region along probe track where electrode
         # channels are distributed
         self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot,
@@ -329,23 +337,35 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Plots the scale factor applied to brain regions along probe track, displayed
         alongside histology figure
         """
+        self.fig_scale.clear()
+        self.scale_regions = np.empty((0, 1))
+        self.scale_factor = self.loaddata.scale_data['scale'][self.idx]
         scale_factor = self.loaddata.scale_data['scale'][self.idx] - 0.5
         color_bar = cb.ColorBar('seismic')
-        cbar = color_bar.makeColourBar(20, 5, self.fig_stretch_cb, min=0.5, max=1.5,
+        cbar = color_bar.makeColourBar(20, 5, self.fig_scale_cb, min=0.5, max=1.5,
                                        label='Scale Factor')
         colours = color_bar.map.mapToQColor(scale_factor)
 
         for ir, reg in enumerate(self.loaddata.scale_data['region'][self.idx]):
-            x, y = self.create_hist_data(reg, self.loaddata.scale_data['chan_int'])
-            curve_item = pg.PlotCurveItem()
-            curve_item.setData(x=x, y=y, fillLevel=50)
-            curve_item.setBrush(colours[ir])
-            curve_item.setPen(colours[ir])
-            self.fig_stretch.addItem(curve_item)
+            region = pg.LinearRegionItem(values=(reg[0], reg[1]),
+                                         orientation=pg.LinearRegionItem.Horizontal,
+                                         brush=colours[ir], movable=False)
+            region.setZValue(100)
+            bound = pg.InfiniteLine(pos=reg[0], angle=0, pen=colours[ir])
+            bound.setZValue(101)
 
-        self.fig_stretch.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
-                                   self.probe_extra, padding=self.pad)
-        self.fig_stretch_cb.addItem(cbar)
+            self.fig_scale.addItem(region)
+            self.fig_scale.addItem(bound)
+            self.scale_regions = np.vstack([self.scale_regions, region])
+
+        bound = pg.InfiniteLine(pos=self.loaddata.scale_data['region'][self.idx][-1][1], angle=0,
+                                pen=colours[-1])
+        bound.setZValue(101)
+        self.fig_scale.addItem(bound)
+
+        self.fig_scale.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                 self.probe_extra, padding=self.pad)
+        self.fig_scale_cb.addItem(cbar)
 
     def plot_fit(self):
         """
@@ -384,35 +404,39 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             }
         type data: dict
         """
-        [self.fig_img.removeItem(plot) for plot in self.img_plots]
-        [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
-        self.img_plots = []
-        self.img_cbars = []
-        connect = np.zeros(data['x'].size, dtype=int)
-        size = data['size'].tolist()
-
-        color_bar = cb.ColorBar(data['cmap'])
-        cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=np.min(data['levels'][0]),
-                                       max=np.max(data['levels'][1]), label=data['title'])
-        self.fig_img_cb.addItem(cbar)
-        self.img_cbars.append(cbar)
-
-        if type(data['colours'][0]) == QtGui.QColor:
-            brush = data['colours'].tolist()
+        if not data:
+            print('data for this plot not available')
+            return
         else:
-            brush = color_bar.map.mapToQColor(data['colours'])
-        plot = pg.PlotDataItem()
-        plot.setData(x=data['x'], y=data['y'], connect=connect,
-                     symbol='o', symbolSize=size, symbolBrush=brush, symbolPen=data['pen'])
-        self.fig_img.addItem(plot)
-        self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1],
-                               padding=0)
-        self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
-                               self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_img, 'bottom', label=data['xaxis'])
-        self.scale = 1
-        self.img_plots.append(plot)
-        self.data_plot = plot
+            [self.fig_img.removeItem(plot) for plot in self.img_plots]
+            [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
+            self.img_plots = []
+            self.img_cbars = []
+            connect = np.zeros(data['x'].size, dtype=int)
+            size = data['size'].tolist()
+
+            color_bar = cb.ColorBar(data['cmap'])
+            cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=np.min(data['levels'][0]),
+                                           max=np.max(data['levels'][1]), label=data['title'])
+            self.fig_img_cb.addItem(cbar)
+            self.img_cbars.append(cbar)
+
+            if type(np.any(data['colours'])) == QtGui.QColor:
+                brush = data['colours'].tolist()
+            else:
+                brush = color_bar.map.mapToQColor(data['colours'])
+            plot = pg.PlotDataItem()
+            plot.setData(x=data['x'], y=data['y'], connect=connect,
+                         symbol='o', symbolSize=size, symbolBrush=brush, symbolPen=data['pen'])
+            self.fig_img.addItem(plot)
+            self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1],
+                                   padding=0)
+            self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                   self.probe_extra, padding=self.pad)
+            self.set_axis(self.fig_img, 'bottom', label=data['xaxis'])
+            self.scale = 1
+            self.img_plots.append(plot)
+            self.data_plot = plot
 
     def plot_line(self, data):
         """
@@ -425,17 +449,21 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             }
         type data: dict
         """
-        [self.fig_line.removeItem(plot) for plot in self.line_plots]
-        self.line_plots = []
-        line = pg.PlotCurveItem()
-        line.setData(x=data['x'], y=data['y'])
-        line.setPen('k')
-        self.fig_line.addItem(line)
-        self.fig_line.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
-        self.fig_line.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
-                                self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_line, 'bottom', label=data['xaxis'])
-        self.line_plots.append(line)
+        if not data:
+            print('data for this plot not available')
+            return
+        else:
+            [self.fig_line.removeItem(plot) for plot in self.line_plots]
+            self.line_plots = []
+            line = pg.PlotCurveItem()
+            line.setData(x=data['x'], y=data['y'])
+            line.setPen('k')
+            self.fig_line.addItem(line)
+            self.fig_line.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
+            self.fig_line.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                    self.probe_extra, padding=self.pad)
+            self.set_axis(self.fig_line, 'bottom', label=data['xaxis'])
+            self.line_plots.append(line)
 
     def plot_probe(self, data):
         """
@@ -451,31 +479,35 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             }
         type data: dict
         """
-        [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
-        [self.fig_probe_cb.removeItem(cbar) for cbar in self.probe_cbars]
-        self.set_axis(self.fig_probe_cb, 'top', pen='w')
-        self.probe_plots = []
-        self.probe_cbars = []
-        color_bar = cb.ColorBar(data['cmap'])
-        lut = color_bar.getColourMap()
-        for img, scale, offset in zip(data['img'], data['scale'], data['offset']):
-            image = pg.ImageItem()
-            image.setImage(img)
-            image.translate(offset[0], offset[1])
-            image.scale(scale[0], scale[1])
-            image.setLookupTable(lut)
-            image.setLevels((data['level'][0], data['level'][1]))
-            self.fig_probe.addItem(image)
-            self.probe_plots.append(image)
+        if not data:
+            print('data for this plot not available')
+            return
+        else:
+            [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
+            [self.fig_probe_cb.removeItem(cbar) for cbar in self.probe_cbars]
+            self.set_axis(self.fig_probe_cb, 'top', pen='w')
+            self.probe_plots = []
+            self.probe_cbars = []
+            color_bar = cb.ColorBar(data['cmap'])
+            lut = color_bar.getColourMap()
+            for img, scale, offset in zip(data['img'], data['scale'], data['offset']):
+                image = pg.ImageItem()
+                image.setImage(img)
+                image.translate(offset[0], offset[1])
+                image.scale(scale[0], scale[1])
+                image.setLookupTable(lut)
+                image.setLevels((data['level'][0], data['level'][1]))
+                self.fig_probe.addItem(image)
+                self.probe_plots.append(image)
 
-        cbar = color_bar.makeColourBar(20, 5, self.fig_probe_cb, min=data['level'][0],
-                                       max=data['level'][1], label=data['title'], lim=True)
-        self.fig_probe_cb.addItem(cbar)
-        self.probe_cbars.append(cbar)
+            cbar = color_bar.makeColourBar(20, 5, self.fig_probe_cb, min=data['level'][0],
+                                           max=data['level'][1], label=data['title'], lim=True)
+            self.fig_probe_cb.addItem(cbar)
+            self.probe_cbars.append(cbar)
 
-        self.fig_probe.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
-        self.fig_probe.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
-                                 self.probe_extra, padding=self.pad)
+            self.fig_probe.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
+            self.fig_probe.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                     self.probe_extra, padding=self.pad)
 
     def plot_image(self, data):
         """
@@ -491,36 +523,40 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             }
         type data: dict
         """
-        [self.fig_img.removeItem(plot) for plot in self.img_plots]
-        [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
-        self.set_axis(self.fig_img_cb, 'top', pen='w')
-        self.img_plots = []
-        self.img_cbars = []
-
-        image = pg.ImageItem()
-        image.setImage(data['img'])
-        image.scale(data['scale'][0], data['scale'][1])
-        cmap = data.get('cmap', [])
-        if cmap:
-            color_bar = cb.ColorBar(data['cmap'])
-            lut = color_bar.getColourMap()
-            image.setLookupTable(lut)
-            image.setLevels((data['levels'][0], data['levels'][1]))
-            cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=data['levels'][0],
-                                           max=data['levels'][1], label=data['title'])
-            self.fig_img_cb.addItem(cbar)
-            self.img_cbars.append(cbar)
+        if not data:
+            print('data for this plot not available')
+            return
         else:
-            image.setLevels((1, 0))
+            [self.fig_img.removeItem(plot) for plot in self.img_plots]
+            [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
+            self.set_axis(self.fig_img_cb, 'top', pen='w')
+            self.img_plots = []
+            self.img_cbars = []
 
-        self.fig_img.addItem(image)
-        self.img_plots.append(image)
-        self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
-        self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
-                               self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_img, 'bottom', label=data['xaxis'])
-        self.scale = data['scale'][1]
-        self.data_plot = image
+            image = pg.ImageItem()
+            image.setImage(data['img'])
+            image.scale(data['scale'][0], data['scale'][1])
+            cmap = data.get('cmap', [])
+            if cmap:
+                color_bar = cb.ColorBar(data['cmap'])
+                lut = color_bar.getColourMap()
+                image.setLookupTable(lut)
+                image.setLevels((data['levels'][0], data['levels'][1]))
+                cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=data['levels'][0],
+                                               max=data['levels'][1], label=data['title'])
+                self.fig_img_cb.addItem(cbar)
+                self.img_cbars.append(cbar)
+            else:
+                image.setLevels((1, 0))
+
+            self.fig_img.addItem(image)
+            self.img_plots.append(image)
+            self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
+            self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                   self.probe_extra, padding=self.pad)
+            self.set_axis(self.fig_img, 'bottom', label=data['xaxis'])
+            self.scale = data['scale'][1]
+            self.data_plot = image
 
     """
     Interaction functions
@@ -534,21 +570,14 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.sess_list.clear()
         sessions = self.loaddata.get_sessions(subj)
         self.populate_lists(sessions, self.sess_list, self.sess_combobox)
+        self.loaddata.get_info(0)
 
     def on_session_selected(self, idx):
         """
         Triggered when session is selected from drop down list options
         :param idx: index of chosen session (item) in drop down list
-        :type subj: int
+        :type idx: int
         """
-        # Clear all plots from previous session
-        [self.fig_img.removeItem(plot) for plot in self.img_plots]
-        [self.fig_img.removeItem(cbar) for cbar in self.img_cbars]
-        [self.fig_line.removeItem(plot) for plot in self.line_plots]
-        [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
-        [self.fig_probe.removeItem(cbar) for cbar in self.probe_cbars]
-        self.remove_lines_points()
-        self.init_variables()
         self.loaddata.get_info(idx)
 
     def data_button_pressed(self):
@@ -556,25 +585,32 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Triggered when Get Data button pressed, uses subject and session info to find eid and
         downloads and computes data needed for GUI display
         """
-        self.loaddata.get_eid()
-        self.loaddata.get_data()
-        self.loaddata.get_probe_track()
+        # Clear all plots from previous session
+        [self.fig_img.removeItem(plot) for plot in self.img_plots]
+        [self.fig_img.removeItem(cbar) for cbar in self.img_cbars]
+        [self.fig_line.removeItem(plot) for plot in self.line_plots]
+        [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
+        [self.fig_probe.removeItem(cbar) for cbar in self.probe_cbars]
+        self.fit_plot.setData()
+        self.remove_lines_points()
+        self.init_variables()
 
-        # Load in all the data required for plots
-        self.scat_drift_data = self.loaddata.get_depth_data_scatter()
-        self.scat_peak2trough_data = self.loaddata.get_peak2trough_data_scatter()
-        self.img_corr_data = self.loaddata.get_correlation_data_img()
-        self.img_drift_data = self.loaddata.get_depth_data_img()
-        self.img_rms_APdata = self.loaddata.get_rms_data_img('AP')
-        self.img_rms_LFPdata = self.loaddata.get_rms_data_img('LF')
-        self.probe_rms_APdata = self.loaddata.get_rms_data_probe('AP')
-        self.probe_rms_LFPdata = self.loaddata.get_rms_data_probe('LF')
-        self.probe_lfp_data = self.loaddata.get_lfp_spectrum_data()
-        self.line_fr_data = self.loaddata.get_fr_data_line()
-        self.line_amp_data = self.loaddata.get_amp_data_line()
+        self.loaddata.get_eid()
+        alf_path, ephys_path = self.loaddata.get_data()
+        self.loaddata.get_probe_track()
+        self.plotdata = pd.PlotData(alf_path, ephys_path)
+
+        self.scat_drift_data = self.plotdata.get_depth_data_scatter()
+        self.scat_peak2trough_data = self.plotdata.get_peak2trough_data_scatter()
+        self.img_corr_data = self.plotdata.get_correlation_data_img()
+        self.img_fr_data = self.plotdata.get_fr_img()
+        self.img_rms_APdata, self.probe_rms_APdata = self.plotdata.get_rms_data_img_probe('AP')
+        self.img_rms_LFPdata, self.probe_rms_LFPdata = self.plotdata.get_rms_data_img_probe('LF')
+        self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
+        self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
 
         # Initialise ephys plots
-        self.plot_image(self.img_drift_data)
+        self.plot_image(self.img_fr_data)
         self.plot_probe(self.probe_rms_APdata)
         self.plot_line(self.line_fr_data)
 
@@ -584,7 +620,21 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_scale_factor()
         self.plot_slice()
 
-        self.set_view(view=1, configure=True)
+        # Only configure the view the first time the GUI is launched
+        self.set_view(view=1, configure=self.configure)
+        self.configure = False
+
+    def filter_unit_pressed(self, type):
+        self.plotdata.filter_units(type)
+        self.scat_drift_data = self.plotdata.get_depth_data_scatter()
+        self.scat_peak2trough_data = self.plotdata.get_peak2trough_data_scatter()
+        self.img_corr_data = self.plotdata.get_correlation_data_img()
+        self.img_fr_data = self.plotdata.get_fr_img()
+        self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
+
+        self.plot_image(self.img_fr_data)
+        self.plot_probe(self.probe_rms_APdata)
+        self.plot_line(self.line_fr_data)
 
     def fit_button_pressed(self):
         """
@@ -816,8 +866,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             if self.loaddata.traj_exists:
 
                 overwrite = QtGui.QMessageBox.warning(self, '', ("Ephys aligned trajectory "
-                                                      "for this probe insertion already exists "
-                                                      "on Alyx. Do you want to overwrite?"),
+                                                      "for this probe insertion already exists on "
+                                                      "Alyx. Do you want to overwrite?"),
                                                       QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
                 if overwrite == QtGui.QMessageBox.Yes:
                     self.loaddata.upload_channels(overwrite=True)
@@ -837,6 +887,15 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             pass
             QtGui.QMessageBox.information(self, 'Status', ("Electrode locations not uploaded"
                                           " to Alyx"))
+
+    def reset_axis_button_pressed(self):
+        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                self.probe_extra, padding=self.pad)
+        self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                                    self.probe_extra, padding=self.pad)
+
+    def display_session_notes(self):
+        QtGui.QMessageBox.information(self, 'Session notes', ("Display notes here"))
 
     def on_mouse_double_clicked(self, event):
         """
@@ -885,10 +944,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         lines so that they can be deleted
         """
         if items:
+            self.selected_line = []
             if type(items[0]) == pg.InfiniteLine:
                 self.selected_line = items[0]
-            else:
-                self.selected_line = []
+            elif type(items[0]) == pg.LinearRegionItem:
+                idx = np.where(self.scale_regions == items[0])[0][0]
+                self.fig_scale_ax.setLabel('Scale Factor = ' +
+                                           str(np.around(self.scale_factor[idx], 2)))
 
     def update_lines_features(self, line):
         """
