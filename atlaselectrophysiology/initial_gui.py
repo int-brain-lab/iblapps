@@ -17,7 +17,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.loaddata = ld.LoadData(self.max_idx)
         self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
         self.configure = True
-        
 
     def init_variables(self):
         """
@@ -25,6 +24,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         # Line styles and fonts
         self.kpen_dot = pg.mkPen(color='k', style=QtCore.Qt.DotLine, width=2)
+        self.rpen_dot = pg.mkPen(color='r', style=QtCore.Qt.DotLine, width=2)
         self.kpen_solid = pg.mkPen(color='k', style=QtCore.Qt.SolidLine, width=2)
         self.bpen_solid = pg.mkPen(color='b', style=QtCore.Qt.SolidLine, width=3)
         self.font = QtGui.QFont()
@@ -39,7 +39,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.probe_extra = 100
         self.view_total = [-2000, 6000]
         self.depth = np.arange(self.view_total[0], self.view_total[1], 20)
-        self.probe_offset = 0
+        self.extend_feature = 5000 / 1e6
+        self.lin_fit = True
 
         # Variables to keep track of number of fits (max 10)
         self.max_idx = 10
@@ -230,12 +231,20 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_img.update()
             self.fig_line.update()
             self.fig_probe.update()
+    
+    def toggle_plots(self, options_group):
+        current_act = options_group.checkedAction()
+        actions = options_group.actions()
+        current_idx = [iA for iA, act in enumerate(actions) if act == current_act][0]
+        next_idx = np.mod(current_idx + 1, len(actions))
+        actions[next_idx].setChecked(True)
+        actions[next_idx].trigger()
 
     """
     Plot functions
     """
 
-    def plot_histology(self, fig, ax='left'):
+    def plot_histology(self, fig, ax='left', movable=True):
         """
         Plots histology figure - brain regions that intersect with probe track
         :param fig: figure on which to plot
@@ -264,9 +273,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Add dotted lines to plot to indicate region along probe track where electrode
         # channels are distributed
         self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot,
-                                       movable=True)
+                                       movable=movable)
         self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot,
-                                       movable=True)
+                                       movable=movable)
 
         # Lines can be moved to adjust location of channels along the probe track
         # Ensure distance between bottom and top channel is always constant at 3840um and that
@@ -303,14 +312,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         Offset location of probe tip along probe track
         """
-
-        self.probe_offset += self.tip_pos.value()
-        self.loaddata.track[self.idx] = (self.loaddata.track[self.idx_prev] -
+        self.loaddata.track[self.idx] = (self.loaddata.track[self.idx_prev] +
                                          self.tip_pos.value() / 1e6)
-        self.loaddata.features[self.idx] = (self.loaddata.features[self.idx_prev] -
-                                            self.tip_pos.value() / 1e6)
-        self.loaddata.track_init[self.idx] = self.loaddata.track_init[self.idx_prev]
-        self.loaddata.get_histology_regions(self.idx)
+        self.loaddata.features[self.idx] = (self.loaddata.features[self.idx_prev])
+
+        self.loaddata.scale_histology_regions(self.idx)
         self.loaddata.get_scale_factor(self.idx)
 
     def scale_hist_data(self):
@@ -326,10 +332,21 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.loaddata.track[self.idx] = self.loaddata.feature2track(depths_track, self.idx_prev)
         self.loaddata.features[self.idx] = np.sort(np.r_[self.loaddata.features[self.idx_prev]
                                                    [[0, -1]], line_feature])
-        self.loaddata.track_init[self.idx] = np.sort(np.r_[self.loaddata.track_init[self.idx_prev]
-                                                     [[0, -1]], line_feature -
-                                                     self.tip_pos.value() / 1e6])
-        self.loaddata.get_histology_regions(self.idx)
+
+        if ((self.loaddata.features[self.idx].size >= 5) & self.lin_fit):
+            self.loaddata.features[self.idx][0] -= self.extend_feature
+            self.loaddata.features[self.idx][-1] += self.extend_feature
+            extend_track = self.loaddata.feature2track_lin(self.loaddata.features
+                                                           [self.idx][[0, -1]], self.idx)
+            self.loaddata.track[self.idx][0] = extend_track[0]
+            self.loaddata.track[self.idx][-1] = extend_track[-1]
+
+        else:
+            diff = np.diff(self.loaddata.features[self.idx] - self.loaddata.track[self.idx])
+            self.loaddata.track[self.idx][0] -= diff[0]
+            self.loaddata.track[self.idx][-1] += diff[-1]
+
+        self.loaddata.scale_histology_regions(self.idx)
         self.loaddata.get_scale_factor(self.idx)
 
     def plot_scale_factor(self):
@@ -372,8 +389,16 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Plots the scale factor and offset applied to channels along depth of probe track
         relative to orignal position of channels
         """
-        self.fit_plot.setData(x=self.loaddata.track_init[self.idx] * 1e6,
+        self.fit_plot.setData(x=self.loaddata.features[self.idx] * 1e6,
                               y=self.loaddata.track[self.idx] * 1e6)
+        self.fit_scatter.setData(x=self.loaddata.features[self.idx] * 1e6,
+                                 y=self.loaddata.track[self.idx] * 1e6)
+
+        depth_lin = self.loaddata.feature2track_lin(self.depth / 1e6, self.idx)
+        if np.any(depth_lin):
+            self.fit_plot_lin.setData(x=self.depth, y=depth_lin * 1e6)
+        else:
+            self.fit_plot_lin.setData()
 
     def plot_slice(self):
         """
@@ -387,7 +412,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.loaddata.brain_atlas.plot_tilted_slice(xyz_trk, axis=1, volume='annotation',
                                                     ax=self.fig_slice_ax)
         self.fig_slice_ax.plot(xyz_trk[:, 0] * 1e6, xyz_trk[:, 2] * 1e6, 'b')
-        self.fig_slice_ax.plot(xyz_ch[:, 0] * 1e6, xyz_ch[:, 2] * 1e6, 'k*')
+        self.fig_slice_ax.plot(xyz_ch[:, 0] * 1e6, xyz_ch[:, 2] * 1e6, 'k*', markersize=6)
         self.fig_slice_ax.axis('off')
         self.fig_slice.draw()
 
@@ -414,6 +439,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.img_cbars = []
             connect = np.zeros(data['x'].size, dtype=int)
             size = data['size'].tolist()
+            symbol = data['symbol'].tolist()
 
             color_bar = cb.ColorBar(data['cmap'])
             cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=np.min(data['levels'][0]),
@@ -425,9 +451,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 brush = data['colours'].tolist()
             else:
                 brush = color_bar.map.mapToQColor(data['colours'])
+
             plot = pg.PlotDataItem()
             plot.setData(x=data['x'], y=data['y'], connect=connect,
-                         symbol='o', symbolSize=size, symbolBrush=brush, symbolPen=data['pen'])
+                         symbol=symbol, symbolSize=size, symbolBrush=brush, symbolPen=data['pen'])
             self.fig_img.addItem(plot)
             self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1],
                                    padding=0)
@@ -596,18 +623,24 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.init_variables()
 
         self.loaddata.get_eid()
-        alf_path, ephys_path = self.loaddata.get_data()
+        alf_path, ephys_path, self.sess_notes = self.loaddata.get_data()
         self.loaddata.get_probe_track()
         self.plotdata = pd.PlotData(alf_path, ephys_path)
 
         self.scat_drift_data = self.plotdata.get_depth_data_scatter()
-        self.scat_peak2trough_data = self.plotdata.get_peak2trough_data_scatter()
+        self.scat_fr_data, self.scat_p2t_data = self.plotdata.get_fr_p2t_data_scatter()
         self.img_corr_data = self.plotdata.get_correlation_data_img()
         self.img_fr_data = self.plotdata.get_fr_img()
         self.img_rms_APdata, self.probe_rms_APdata = self.plotdata.get_rms_data_img_probe('AP')
         self.img_rms_LFPdata, self.probe_rms_LFPdata = self.plotdata.get_rms_data_img_probe('LF')
-        self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
+        self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
         self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
+
+        # Initialise checked plots
+        self.img_init.setChecked(True)
+        self.line_init.setChecked(True)
+        self.probe_init.setChecked(True)
+        self.unit_init.setChecked(True)
 
         # Initialise ephys plots
         self.plot_image(self.img_fr_data)
@@ -615,7 +648,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_line(self.line_fr_data)
 
         # Initialise histology plots
-        self.plot_histology(self.fig_hist_ref, ax='right')
+        self.plot_histology(self.fig_hist_ref, ax='right', movable=False)
         self.plot_histology(self.fig_hist)
         self.plot_scale_factor()
         self.plot_slice()
@@ -627,11 +660,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def filter_unit_pressed(self, type):
         self.plotdata.filter_units(type)
         self.scat_drift_data = self.plotdata.get_depth_data_scatter()
-        self.scat_peak2trough_data = self.plotdata.get_peak2trough_data_scatter()
+        self.scat_fr_data, self.scat_p2t_data = self.plotdata.get_fr_p2t_data_scatter()
         self.img_corr_data = self.plotdata.get_correlation_data_img()
         self.img_fr_data = self.plotdata.get_fr_img()
         self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
-
+        self.img_init.setChecked(True)
+        self.line_init.setChecked(True)
+        self.probe_init.setChecked(True)
         self.plot_image(self.img_fr_data)
         self.plot_probe(self.probe_rms_APdata)
         self.plot_line(self.line_fr_data)
@@ -712,7 +747,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         if self.loaddata.track[self.idx][-1] - 50 / 1e6 >= np.max(self.loaddata.chn_coords
                                                                   [:, 1]) / 1e6:
-            self.loaddata.features[self.idx] -= 50 / 1e6
             self.loaddata.track[self.idx] -= 50 / 1e6
             self.offset_button_pressed()
 
@@ -722,7 +756,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         if self.loaddata.track[self.idx][0] + 50 / 1e6 <= np.min(self.loaddata.chn_coords
                                                                  [:, 1]) / 1e6:
-            self.loaddata.features[self.idx] += 50 / 1e6
             self.loaddata.track[self.idx] += 50 / 1e6
             self.offset_button_pressed()
 
@@ -760,8 +793,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Triggered when mouse hovers over reference line and Del key pressed. Deletes a reference
         line from the ephys and histology plots
         """
-
-        # TO DO ensure line already used for a fit cannot be deleted
 
         if self.selected_line:
             line_idx = np.where(self.lines_features == self.selected_line)[0]
@@ -841,10 +872,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.total_idx += 1
         self.current_idx += 1
         self.idx = np.mod(self.current_idx, self.max_idx)
-        self.loaddata.track_init[self.idx] = np.copy(self.loaddata.track_start)
-        self.loaddata.track[self.idx] = np.copy(self.loaddata.track_start)
-        self.loaddata.features[self.idx] = np.copy(self.loaddata.track_start)
-        self.loaddata.get_histology_regions(self.idx)
+        self.loaddata.track[self.idx] = np.copy(self.loaddata.track_init)
+        self.loaddata.features[self.idx] = np.copy(self.loaddata.track_init)
+        self.loaddata.scale_histology_regions(self.idx)
         self.loaddata.get_scale_factor(self.idx)
         self.plot_histology(self.fig_hist)
         self.plot_scale_factor()
@@ -895,7 +925,25 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                     self.probe_extra, padding=self.pad)
 
     def display_session_notes(self):
-        QtGui.QMessageBox.information(self, 'Session notes', ("Display notes here"))
+        dialog = QtGui.QDialog(self)
+        dialog.setWindowTitle('Session notes from Alyx')
+        dialog.resize(200, 100)
+        notes = QtGui.QTextEdit()
+        notes.setReadOnly(True)
+        notes.setLineWrapMode(QtGui.QTextEdit.WidgetWidth)
+        notes.setText(self.sess_notes)
+        dialog_layout = QtGui.QVBoxLayout()
+        dialog_layout.addWidget(notes)
+        dialog.setLayout(dialog_layout)
+        dialog.show()
+
+    def lin_fit_option_changed(self, state):
+        if state == 0:
+            self.lin_fit = False
+            self.fit_button_pressed()
+        else:
+            self.lin_fit = True
+            self.fit_button_pressed()
 
     def on_mouse_double_clicked(self, event):
         """

@@ -81,6 +81,7 @@ class PlotData:
                 'colours': spikes_colours[0:-1:100],
                 'pen': None,
                 'size': spikes_size[0:-1:100],
+                'symbol': np.array('o'),
                 'xrange': np.array([np.min(self.spikes['times'][self.spike_idx][0:-1:100]),
                                     np.max(self.spikes['times'][self.spike_idx][0:-1:100])]),
                 'xaxis': 'Time (s)',
@@ -90,7 +91,7 @@ class PlotData:
 
             return data_scatter
 
-    def get_peak2trough_data_scatter(self):
+    def get_fr_p2t_data_scatter(self):
         if not self.spike_data_status:
             data_scatter = None
             return data_scatter
@@ -101,24 +102,46 @@ class PlotData:
              n_spikes) = self.compute_spike_average(self.spikes['clusters'][self.spike_idx],
                                                     self.spikes['depths'][self.spike_idx],
                                                     self.spikes['amps'][self.spike_idx])
+            spike_amps = spike_amps * 1e6
+            fr = n_spikes / np.max(self.spikes['times'])
 
-            fr = n_spikes / np.max(self.spikes['times'][self.spike_idx])
-            data_scatter = {
-                # 'x': self.clusters['peakToTrough'][clu],
+            fr_norm, fr_levels = self.normalise_data(fr, lquant=0, uquant=1)
+
+            data_fr_scatter = {
                 'x': spike_amps,
                 'y': spike_depths,
-                'colours': fr,
+                'colours': fr_norm,
                 'pen': 'k',
-                'size': np.array(5),
-                'levels': np.quantile(fr, [0.1, 1]),
+                'size': np.array(8),
+                'symbol': np.array('o'),
+                'levels': fr_levels,
                 'xrange': np.array([np.min(spike_amps),
-                                    np.max(spike_amps)]),
+                                    1.1 * np.max(spike_amps)]),
                 'xaxis': 'Amplitude (uV)??',
-                'title': 'Firing Rate',
+                'title': 'Firing Rate (Sp/s)',
                 'cmap': 'hot'
             }
 
-            return data_scatter
+            p2t = self.clusters['peakToTrough'][clu]
+            p2t_norm, p2t_levels = self.normalise_data(p2t, lquant=0, uquant=1)
+
+            data_p2t_scatter = {
+                'x': spike_amps,
+                'y': spike_depths,
+
+                'colours': p2t_norm,
+                'pen': 'k',
+                'size': np.array(8),
+                'symbol': np.array('o'),
+                'levels': p2t_levels,
+                'xrange': np.array([np.min(spike_amps),
+                                    1.1 * np.max(spike_amps)]),
+                'xaxis': 'Amplitude (uV)??',
+                'title': 'Peak to Trough duration (ms)',
+                'cmap': 'RdYlGn',
+            }
+
+            return data_fr_scatter, data_p2t_scatter
 
     def get_fr_img(self):
         if not self.spike_data_status:
@@ -152,7 +175,7 @@ class PlotData:
             data_amp_line = None
             return data_fr_line, data_amp_line
         else:
-            T_BIN = np.max(self.spikes['times'][self.spike_idx])
+            T_BIN = np.max(self.spikes['times'])
             D_BIN = 10
             nspikes, times, depths = bincount2D(self.spikes['times'][self.spike_idx],
                                                 self.spikes['depths'][self.spike_idx], T_BIN,
@@ -165,6 +188,8 @@ class PlotData:
             mean_fr = nspikes[:, 0] / T_BIN
             mean_amp = np.divide(amp[:, 0], nspikes[:, 0]) * 1e6
             mean_amp[np.isnan(mean_amp)] = 0
+            remove_bins = np.where(nspikes[:, 0] < 50)[0]
+            mean_amp[remove_bins] = 0
 
             data_fr_line = {
                 'x': mean_fr,
@@ -241,11 +266,16 @@ class PlotData:
         xscale = (rms_times[-1] - rms_times[0]) / img.shape[0]
         yscale = (np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1])) / img.shape[1]
 
+        if format == 'AP':
+            cmap = 'plasma'
+        else:
+            cmap = 'magma'
+
         data_img = {
             'img': img,
             'scale': np.array([xscale, yscale]),
             'levels': levels,
-            'cmap': 'plasma',
+            'cmap': cmap,
             'xrange': np.array([rms_times[0], rms_times[-1]]),
             'xaxis': 'Time (s)',
             'title': format + ' RMS (uV)'
@@ -261,7 +291,7 @@ class PlotData:
             'scale': probe_scale,
             'offset': probe_offset,
             'level': probe_levels,
-            'cmap': 'plasma',
+            'cmap': cmap,
             'xrange': np.array([0 * BNK_SIZE, (N_BNK) * BNK_SIZE]),
             'title': format + ' RMS (uV)'
         }
@@ -272,12 +302,43 @@ class PlotData:
         freq_bands = np.vstack(([0, 4], [4, 10], [10, 30], [30, 80], [80, 200]))
         data_probe = {}
         if not self.lfp_data_status:
+            data_img = None
             for freq in freq_bands:
                 lfp_band_data = {f"{freq[0]} - {freq[1]} Hz": None}
                 data_probe.update(lfp_band_data)
 
-            return data_probe
+            return data_img, data_probe
         else:
+            # Power spectrum image
+            freq_range = [0, 300]
+            freq_idx = np.where((self.lfp_freq >= freq_range[0]) &
+                                (self.lfp_freq < freq_range[1]))[0]
+            _lfp = np.take(self.lfp_power[freq_idx], self.chn_ind, axis=1)
+            _lfp_dB = 10 * np.log10(_lfp)
+            _, self.chn_depth, chn_count = np.unique(self.chn_coords[:, 1], return_index=True,
+                                                     return_counts=True)
+            self.chn_depth_eq = np.copy(self.chn_depth)
+            self.chn_depth_eq[np.where(chn_count == 2)] += 1
+
+            def avg_chn_depth(a):
+                return(np.mean([a[self.chn_depth], a[self.chn_depth_eq]], axis=0))
+
+            img = np.apply_along_axis(avg_chn_depth, 1, _lfp_dB)
+            levels = np.quantile(img, [0.1, 0.9])
+            xscale = (freq_range[-1] - freq_range[0]) / img.shape[0]
+            yscale = (np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1])) / img.shape[1]
+
+            data_img = {
+                'img': img,
+                'scale': np.array([xscale, yscale]),
+                'levels': levels,
+                'cmap': 'viridis',
+                'xrange': np.array([freq_range[0], freq_range[-1]]),
+                'xaxis': 'Frequency (Hz)',
+                'title': 'PSD (dB)'
+            }
+
+            # Power spectrum in bands on probe
             for freq in freq_bands:
                 freq_idx = np.where((self.lfp_freq >= freq[0]) & (self.lfp_freq < freq[1]))[0]
                 lfp_avg = np.mean(self.lfp_power[freq_idx], axis=0)[self.chn_ind]
@@ -297,7 +358,7 @@ class PlotData:
                 }
                 data_probe.update(lfp_band_data)
 
-            return data_probe
+            return data_img, data_probe
 
     def arrange_channels2banks(self, data):
         Y_OFFSET = 20
@@ -329,3 +390,14 @@ class PlotData:
         spike_depth_avg = np.ravel(_spike_depth.toarray()) / counts
         spike_amp_avg = np.ravel(_spike_amp.toarray()) / counts
         return clust, spike_depth_avg, spike_amp_avg, counts
+
+    def normalise_data(self, data, lquant=0, uquant=1):
+        levels = np.quantile(data, [lquant, uquant])
+        if np.min(data) < 0:
+            data = data + np.abs(np.min(data))
+        norm_data = data / np.max(data)
+        norm_levels = np.quantile(norm_data, [lquant, uquant])
+        norm_data[np.where(norm_data < norm_levels[0])] = 0
+        norm_data[np.where(norm_data > norm_levels[1])] = 1
+
+        return norm_data, levels

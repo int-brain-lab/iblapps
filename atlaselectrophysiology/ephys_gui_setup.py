@@ -1,6 +1,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
 from pyqtgraph.widgets import MatplotlibWidget as matplot
+import pyqtgraph.exporters
 import numpy as np
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -45,8 +46,12 @@ class Setup():
         # Define all 2D scatter/ image plot options
         scatter_drift = QtGui.QAction('Amplitude', self, checkable=True, checked=False)
         scatter_drift.triggered.connect(lambda: self.plot_scatter(self.scat_drift_data))
-        scatter_p2t = QtGui.QAction('Cluster Amp vs Depth', self, checkable=True, checked=False)
-        scatter_p2t.triggered.connect(lambda: self.plot_scatter(self.scat_peak2trough_data))
+        scatter_fr = QtGui.QAction('Cluster Amp vs Depth vs FR', self, checkable=True,
+                                   checked=False)
+        scatter_fr.triggered.connect(lambda: self.plot_scatter(self.scat_fr_data))
+        scatter_p2t = QtGui.QAction('Cluster Amp vs Depth vs Duration', self, checkable=True,
+                                    checked=False)
+        scatter_p2t.triggered.connect(lambda: self.plot_scatter(self.scat_p2t_data))
         img_fr = QtGui.QAction('Firing Rate', self, checkable=True, checked=True)
         img_fr.triggered.connect(lambda: self.plot_image(self.img_fr_data))
         img_corr = QtGui.QAction('Correlation', self, checkable=True, checked=False)
@@ -55,12 +60,17 @@ class Setup():
         img_rmsAP.triggered.connect(lambda: self.plot_image(self.img_rms_APdata))
         img_rmsLFP = QtGui.QAction('rms LFP', self, checkable=True, checked=False)
         img_rmsLFP.triggered.connect(lambda: self.plot_image(self.img_rms_LFPdata))
+        img_LFP = QtGui.QAction('LFP Spectrum', self, checkable=True, checked=False)
+        img_LFP.triggered.connect(lambda: self.plot_image(self.img_lfp_data))
+        self.img_init = img_fr
         # Add menu bar for 2D scatter/ image plot options
         img_options = menu_bar.addMenu('Image Plots')
         img_options_group = QtGui.QActionGroup(img_options)
         img_options_group.setExclusive(True)
         img_options.addAction(scatter_drift)
         img_options_group.addAction(scatter_drift)
+        img_options.addAction(scatter_fr)
+        img_options_group.addAction(scatter_fr)
         img_options.addAction(scatter_p2t)
         img_options_group.addAction(scatter_p2t)
         img_options.addAction(img_fr)
@@ -71,12 +81,16 @@ class Setup():
         img_options_group.addAction(img_rmsAP)
         img_options.addAction(img_rmsLFP)
         img_options_group.addAction(img_rmsLFP)
+        img_options.addAction(img_LFP)
+        img_options_group.addAction(img_LFP)
 
         # Define all 1D line plot options
         line_fr = QtGui.QAction('Firing Rate', self, checkable=True, checked=True)
         line_fr.triggered.connect(lambda: self.plot_line(self.line_fr_data))
         line_amp = QtGui.QAction('Amplitude', self, checkable=True, checked=False)
         line_amp.triggered.connect(lambda: self.plot_line(self.line_amp_data))
+
+        self.line_init = line_fr
         # Add menu bar for 1D line plot options
         line_options = menu_bar.addMenu('Line Plots')
         line_options_group = QtGui.QActionGroup(line_options)
@@ -92,14 +106,15 @@ class Setup():
         probe_options_group.setExclusive(True)
         probe_rmsAP = QtGui.QAction('rms AP', self, checkable=True, checked=True)
         probe_rmsAP.triggered.connect(lambda: self.plot_probe(self.probe_rms_APdata))
-        probe_rmsLFP = QtGui.QAction('rms LF', self, checkable=True, checked=False)
+        probe_rmsLFP = QtGui.QAction('rms LFP', self, checkable=True, checked=False)
         probe_rmsLFP.triggered.connect(lambda: self.plot_probe(self.probe_rms_LFPdata))
+        self.probe_init = probe_rmsAP
 
         # Add menu bar for 2D probe plot options
         probe_options.addAction(probe_rmsAP)
         probe_options_group.addAction(probe_rmsAP)
         probe_options.addAction(probe_rmsLFP)
-        probe_options_group.addAction(probe_rmsAP)
+        probe_options_group.addAction(probe_rmsLFP)
 
         # Add the different frequency band options in a loop. These must be the same as in
         # load_data
@@ -119,6 +134,7 @@ class Setup():
         good_units.triggered.connect(lambda: self.filter_unit_pressed('good'))
         mua_units = QtGui.QAction('MUA', self, checkable=True, checked=False)
         mua_units.triggered.connect(lambda: self.filter_unit_pressed('mua'))
+        self.unit_init = all_units
 
         unit_filter_options = menu_bar.addMenu("Filter Units")
         unit_filter_options_group = QtGui.QActionGroup(unit_filter_options)
@@ -147,16 +163,20 @@ class Setup():
         movedown_option.triggered.connect(self.movedown_button_pressed)
         # Shortcut to hide/show region labels
         toggle_labels_option = QtGui.QAction('Hide/Show Labels', self)
-        toggle_labels_option.setShortcut('Shift+A')
+        toggle_labels_option.setShortcut('Shift+L')
         toggle_labels_option.triggered.connect(self.toggle_labels_button_pressed)
         # Shortcut to hide/show reference lines
         toggle_lines_option = QtGui.QAction('Hide/Show Lines', self)
-        toggle_lines_option.setShortcut('Shift+L')
+        toggle_lines_option.setShortcut('Shift+H')
         toggle_lines_option.triggered.connect(self.toggle_line_button_pressed)
         # Shortcut to remove a reference line
         delete_line_option = QtGui.QAction('Remove Line', self)
         delete_line_option.setShortcut('Del')
         delete_line_option.triggered.connect(self.delete_line_button_pressed)
+        # Shortcut to reset axis on histology figure
+        axis_option = QtGui.QAction('Reset Axis', self)
+        axis_option.setShortcut('Shift+A')
+        axis_option.triggered.connect(self.reset_axis_button_pressed)
         # Shortcut to move between previous/next moves
         next_option = QtGui.QAction('Next', self)
         next_option.setShortcut('Right')
@@ -169,8 +189,8 @@ class Setup():
         reset_option.setShortcut('Shift+R')
         # Shortcut to upload final state to Alyx
         reset_option.triggered.connect(self.reset_button_pressed)
-        complete_option = QtGui.QAction('Complete', self)
-        complete_option.setShortcut('Shift+F')
+        complete_option = QtGui.QAction('Upload', self)
+        complete_option.setShortcut('Shift+U')
         complete_option.triggered.connect(self.complete_button_pressed)
 
         # Shortcuts to switch between different views on left most data plot
@@ -184,10 +204,15 @@ class Setup():
         view3_option.setShortcut('Shift+3')
         view3_option.triggered.connect(lambda: self.set_view(view=3))
 
-        # Shortcut to reset axis on histology figure
-        axis_option = QtGui.QAction('Reset Axis', self)
-        axis_option.setShortcut('Shift+N')
-        axis_option.triggered.connect(self.reset_axis_button_pressed)
+        toggle1_option = QtGui.QAction('Toggle Image Plots', self)
+        toggle1_option.setShortcut('Alt+1')
+        toggle1_option.triggered.connect(lambda: self.toggle_plots(img_options_group))
+        toggle2_option = QtGui.QAction('Toggle Line Plots', self)
+        toggle2_option.setShortcut('Alt+2')
+        toggle2_option.triggered.connect(lambda: self.toggle_plots(line_options_group))
+        toggle3_option = QtGui.QAction('Toggle Probe Plots', self)
+        toggle3_option.setShortcut('Alt+3')
+        toggle3_option.triggered.connect(lambda: self.toggle_plots(probe_options_group))
 
         # Add menu bar with all possible keyboard interactions
         shortcut_options = menu_bar.addMenu("Shortcut Keys")
@@ -198,14 +223,17 @@ class Setup():
         shortcut_options.addAction(toggle_labels_option)
         shortcut_options.addAction(toggle_lines_option)
         shortcut_options.addAction(delete_line_option)
+        shortcut_options.addAction(axis_option)
         shortcut_options.addAction(next_option)
         shortcut_options.addAction(prev_option)
         shortcut_options.addAction(reset_option)
         shortcut_options.addAction(complete_option)
+        shortcut_options.addAction(toggle1_option)
+        shortcut_options.addAction(toggle2_option)
+        shortcut_options.addAction(toggle3_option)
         shortcut_options.addAction(view1_option)
         shortcut_options.addAction(view2_option)
         shortcut_options.addAction(view3_option)
-        shortcut_options.addAction(axis_option)
 
         notes_options = menu_bar.addMenu('Session Notes')
         show_notes = QtGui.QAction('Display', self)
@@ -217,26 +245,26 @@ class Setup():
         Create all interaction widgets that will be added to the GUI
         """
         # Button to apply interpolation
-        self.fit_button = QtWidgets.QPushButton('Fit', font=self.font)
+        self.fit_button = QtWidgets.QPushButton('Fit')
         self.fit_button.clicked.connect(self.fit_button_pressed)
         # Button to apply offset
-        self.offset_button = QtWidgets.QPushButton('Offset', font=self.font)
+        self.offset_button = QtWidgets.QPushButton('Offset')
         self.offset_button.clicked.connect(self.offset_button_pressed)
         # Button to go to next move
-        self.next_button = QtWidgets.QPushButton('Next', font=self.font)
+        self.next_button = QtWidgets.QPushButton('Next')
         self.next_button.clicked.connect(self.next_button_pressed)
         # Button to go to previous move
-        self.prev_button = QtWidgets.QPushButton('Previous', font=self.font)
+        self.prev_button = QtWidgets.QPushButton('Previous')
         self.prev_button.clicked.connect(self.prev_button_pressed)
         # String to display current move index
-        self.idx_string = QtWidgets.QLabel(font=self.font)
+        self.idx_string = QtWidgets.QLabel()
         # String to display total number of moves
-        self.tot_idx_string = QtWidgets.QLabel(font=self.font)
+        self.tot_idx_string = QtWidgets.QLabel()
         # Button to reset GUI to initial state
-        self.reset_button = QtWidgets.QPushButton('Reset', font=self.font)
+        self.reset_button = QtWidgets.QPushButton('Reset')
         self.reset_button.clicked.connect(self.reset_button_pressed)
         # Button to upload final state to Alyx
-        self.complete_button = QtWidgets.QPushButton('Complete', font=self.font)
+        self.complete_button = QtWidgets.QPushButton('Upload')
         self.complete_button.clicked.connect(self.complete_button_pressed)
         # Drop down list to choose subject
         self.subj_list = QtGui.QStandardItemModel()
@@ -256,7 +284,7 @@ class Setup():
         self.sess_combobox.activated.connect(self.on_session_selected)
 
         # Button to get data to display in GUI
-        self.data_button = QtWidgets.QPushButton('Get Data', font=self.font)
+        self.data_button = QtWidgets.QPushButton('Get Data')
         self.data_button.clicked.connect(self.data_button_pressed)
 
         # Arrange interaction features into three different layout groups
@@ -420,12 +448,28 @@ class Setup():
         # Figure to show fit and offset applied by user
         self.fig_fit = pg.PlotWidget(background='w')
         self.fig_fit.setMouseEnabled(x=False, y=False)
+        self.fig_fit_exporter = pg.exporters.ImageExporter(self.fig_fit.plotItem)
+        self.fig_fit.sigDeviceRangeChanged.connect(self.on_fig_size_changed)
         self.fig_fit.setXRange(min=self.view_total[0], max=self.view_total[1])
         self.fig_fit.setYRange(min=self.view_total[0], max=self.view_total[1])
-        self.set_axis(self.fig_fit, 'bottom', label='Original coordinates')
-        self.set_axis(self.fig_fit, 'left', label='New coordinates')
+        self.set_axis(self.fig_fit, 'bottom', label='Original coordinates (um)')
+        self.set_axis(self.fig_fit, 'left', label='New coordinates (um)')
         plot = pg.PlotCurveItem()
         plot.setData(x=self.depth, y=self.depth, pen=self.kpen_dot)
         self.fit_plot = pg.PlotCurveItem(pen=self.bpen_solid)
+        self.fit_scatter = pg.ScatterPlotItem(size=7, symbol='o', brush='w', pen='b')
+        self.fit_plot_lin = pg.PlotCurveItem(pen=self.rpen_dot)
         self.fig_fit.addItem(plot)
         self.fig_fit.addItem(self.fit_plot)
+        self.fig_fit.addItem(self.fit_plot_lin)
+        self.fig_fit.addItem(self.fit_scatter)
+
+        self.lin_fit_option = QtGui.QCheckBox('Linear fit', self.fig_fit)
+        self.lin_fit_option.setChecked(True)
+        self.lin_fit_option.stateChanged.connect(self.lin_fit_option_changed)
+        self.on_fig_size_changed()
+
+    def on_fig_size_changed(self):
+        fig_width = self.fig_fit_exporter.getTargetRect().width()
+        fig_height = self.fig_fit_exporter.getTargetRect().width()
+        self.lin_fit_option.move(fig_width - 70, fig_height - 60)
