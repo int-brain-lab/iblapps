@@ -27,8 +27,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.rpen_dot = pg.mkPen(color='r', style=QtCore.Qt.DotLine, width=2)
         self.kpen_solid = pg.mkPen(color='k', style=QtCore.Qt.SolidLine, width=2)
         self.bpen_solid = pg.mkPen(color='b', style=QtCore.Qt.SolidLine, width=3)
-        self.font = QtGui.QFont()
-        self.font.setPointSize(12)
+        self.bar_colour = QtGui.QColor(160, 160, 160)
 
         # Padding to add to figures to make sure always same size viewbox
         self.pad = 0.05
@@ -65,6 +64,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.img_cbars = []
         self.probe_cbars = []
         self.scale_regions = np.empty((0, 1))
+
+        self.cluster_popups = []
+        self.popup_status = True
 
     def set_axis(self, fig, ax, show=True, label=None, pen='k', ticks=True):
         """
@@ -231,7 +233,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_img.update()
             self.fig_line.update()
             self.fig_probe.update()
-    
+
     def toggle_plots(self, options_group):
         current_act = options_group.checkedAction()
         actions = options_group.actions()
@@ -464,7 +466,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.scale = 1
             self.img_plots.append(plot)
             self.data_plot = plot
+            self.xrange = data['xrange']
 
+            if data['cluster']:
+                self.data = data['x']
+                self.data_plot.sigPointsClicked.connect(self.cluster_clicked)
+            
     def plot_line(self, data):
         """
         Plots a 1D line plot with electrophysiology data
@@ -584,6 +591,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.set_axis(self.fig_img, 'bottom', label=data['xaxis'])
             self.scale = data['scale'][1]
             self.data_plot = image
+            self.xrange = data['xrange']
 
     """
     Interaction functions
@@ -628,7 +636,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plotdata = pd.PlotData(alf_path, ephys_path)
 
         self.scat_drift_data = self.plotdata.get_depth_data_scatter()
-        self.scat_fr_data, self.scat_p2t_data = self.plotdata.get_fr_p2t_data_scatter()
+        (self.scat_fr_data, self.scat_p2t_data,
+         self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
         self.img_corr_data = self.plotdata.get_correlation_data_img()
         self.img_fr_data = self.plotdata.get_fr_img()
         self.img_rms_APdata, self.probe_rms_APdata = self.plotdata.get_rms_data_img_probe('AP')
@@ -651,6 +660,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_histology(self.fig_hist_ref, ax='right', movable=False)
         self.plot_histology(self.fig_hist)
         self.plot_scale_factor()
+        self.plot_fit()
         self.plot_slice()
 
         # Only configure the view the first time the GUI is launched
@@ -660,7 +670,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def filter_unit_pressed(self, type):
         self.plotdata.filter_units(type)
         self.scat_drift_data = self.plotdata.get_depth_data_scatter()
-        self.scat_fr_data, self.scat_p2t_data = self.plotdata.get_fr_p2t_data_scatter()
+        (self.scat_fr_data, self.scat_p2t_data,
+         self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
         self.img_corr_data = self.plotdata.get_correlation_data_img()
         self.img_fr_data = self.plotdata.get_fr_img()
         self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
@@ -923,6 +934,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                 self.probe_extra, padding=self.pad)
         self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                     self.probe_extra, padding=self.pad)
+        self.fig_img.setXRange(min=self.xrange[0], max=self.xrange[1], padding=0)
+        self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
+                               self.probe_extra, padding=self.pad)
+        #self.fig_img.setXRange(min=self.xrange[0], max=self.xrange[1], padding=0)
 
     def display_session_notes(self):
         dialog = QtGui.QDialog(self)
@@ -937,6 +952,30 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         dialog.setLayout(dialog_layout)
         dialog.show()
 
+    def popup_closed(self, popup):
+        popup_idx = [iP for iP, pop in enumerate(self.cluster_popups) if pop == popup][0]
+        self.cluster_popups.pop(popup_idx)
+
+    def popup_moved(self):
+        self.activateWindow()
+
+    def close_popups(self):
+        for pop in self.cluster_popups:
+            pop.blockSignals(True)
+            pop.close()
+        self.cluster_popups = []
+
+    def minimise_popups(self):
+        self.popup_status = not self.popup_status
+        if self.popup_status:
+            for pop in self.cluster_popups:
+                pop.showNormal()
+            self.activateWindow()
+        else:
+            for pop in self.cluster_popups:
+                pop.showMinimized()
+            self.activateWindow()
+
     def lin_fit_option_changed(self, state):
         if state == 0:
             self.lin_fit = False
@@ -944,6 +983,44 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         else:
             self.lin_fit = True
             self.fit_button_pressed()
+
+    def cluster_clicked(self, item, point):
+        point_pos = point[0].pos()
+        clust_idx = np.argwhere(self.data == point_pos.x())[0][0]
+
+        autocorr = self.plotdata.get_autocorr(clust_idx)
+        autocorr_plot = pg.PlotItem()
+        autocorr_plot.setXRange(min=np.min(self.plotdata.t_autocorr),
+                                max=np.max(self.plotdata.t_autocorr))
+        autocorr_plot.setYRange(min=0, max=1.05 * np.max(autocorr))
+        self.set_axis(autocorr_plot, 'bottom', label='T (ms)')
+        self.set_axis(autocorr_plot, 'left', label='Number of spikes')
+        plot = pg.BarGraphItem()
+        plot.setOpts(x=self.plotdata.t_autocorr, height=autocorr, width=0.24,
+                     brush=self.bar_colour)
+        autocorr_plot.addItem(plot)
+
+        template_wf = self.plotdata.get_template_wf(clust_idx)
+        template_plot = pg.PlotItem()
+        plot = pg.PlotCurveItem()
+        template_plot.setXRange(min=np.min(self.plotdata.t_template),
+                                max=np.max(self.plotdata.t_template))
+        self.set_axis(template_plot, 'bottom', label='T (ms)')
+        self.set_axis(template_plot, 'left', label='Amplitude (a.u.)')
+        plot.setData(x=self.plotdata.t_template, y=template_wf, pen=self.kpen_solid)
+        template_plot.addItem(plot)
+
+        clust_layout = pg.GraphicsLayout()
+        clust_layout.addItem(autocorr_plot, 0, 0)
+        clust_layout.addItem(template_plot, 1, 0)
+
+        self.clust_win = ephys_gui.ClustPopupWindow(title=f'Cluster {clust_idx}')
+        self.clust_win.closed.connect(self.popup_closed)
+        self.clust_win.moved.connect(self.popup_moved)
+        self.clust_win.clust_widget.addItem(autocorr_plot, 0, 0)
+        self.clust_win.clust_widget.addItem(template_plot, 1, 0)
+        self.cluster_popups.append(self.clust_win)
+        self.activateWindow()
 
     def on_mouse_double_clicked(self, event):
         """

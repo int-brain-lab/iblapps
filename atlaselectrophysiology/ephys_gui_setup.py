@@ -3,6 +3,7 @@ import pyqtgraph as pg
 from pyqtgraph.widgets import MatplotlibWidget as matplot
 import pyqtgraph.exporters
 import numpy as np
+from random import randrange
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
@@ -52,6 +53,9 @@ class Setup():
         scatter_p2t = QtGui.QAction('Cluster Amp vs Depth vs Duration', self, checkable=True,
                                     checked=False)
         scatter_p2t.triggered.connect(lambda: self.plot_scatter(self.scat_p2t_data))
+        scatter_amp = QtGui.QAction('Cluster FR vs Depth vs Amp', self, checkable=True,
+                                    checked=False)
+        scatter_amp.triggered.connect(lambda: self.plot_scatter(self.scat_amp_data))
         img_fr = QtGui.QAction('Firing Rate', self, checkable=True, checked=True)
         img_fr.triggered.connect(lambda: self.plot_image(self.img_fr_data))
         img_corr = QtGui.QAction('Correlation', self, checkable=True, checked=False)
@@ -67,14 +71,10 @@ class Setup():
         img_options = menu_bar.addMenu('Image Plots')
         img_options_group = QtGui.QActionGroup(img_options)
         img_options_group.setExclusive(True)
-        img_options.addAction(scatter_drift)
-        img_options_group.addAction(scatter_drift)
-        img_options.addAction(scatter_fr)
-        img_options_group.addAction(scatter_fr)
-        img_options.addAction(scatter_p2t)
-        img_options_group.addAction(scatter_p2t)
         img_options.addAction(img_fr)
         img_options_group.addAction(img_fr)
+        img_options.addAction(scatter_drift)
+        img_options_group.addAction(scatter_drift)
         img_options.addAction(img_corr)
         img_options_group.addAction(img_corr)
         img_options.addAction(img_rmsAP)
@@ -83,6 +83,12 @@ class Setup():
         img_options_group.addAction(img_rmsLFP)
         img_options.addAction(img_LFP)
         img_options_group.addAction(img_LFP)
+        img_options.addAction(scatter_fr)
+        img_options_group.addAction(scatter_fr)
+        img_options.addAction(scatter_p2t)
+        img_options_group.addAction(scatter_p2t)
+        img_options.addAction(scatter_amp)
+        img_options_group.addAction(scatter_amp)
 
         # Define all 1D line plot options
         line_fr = QtGui.QAction('Firing Rate', self, checkable=True, checked=True)
@@ -235,6 +241,17 @@ class Setup():
         shortcut_options.addAction(view2_option)
         shortcut_options.addAction(view3_option)
 
+        popup_minimise = QtGui.QAction('Minimise/Show', self)
+        popup_minimise.setShortcut('Alt+M')
+        popup_minimise.triggered.connect(self.minimise_popups)
+        popup_close = QtGui.QAction('Close', self)
+        popup_close.setShortcut('Alt+X')
+        popup_close.triggered.connect(self.close_popups)
+
+        popup_options = menu_bar.addMenu('Popup Windows')
+        popup_options.addAction(popup_minimise)
+        popup_options.addAction(popup_close)
+
         notes_options = menu_bar.addMenu('Session Notes')
         show_notes = QtGui.QAction('Display', self)
         show_notes.triggered.connect(self.display_session_notes)
@@ -317,7 +334,7 @@ class Setup():
         # Figures to show ephys data
         # 2D scatter/ image plot
         self.fig_img = pg.PlotItem()
-        self.fig_img.setMouseEnabled(x=False, y=False)
+        #self.fig_img.setMouseEnabled(x=False, y=False)
         self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                self.probe_extra, padding=self.pad)
         self.fig_img.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)
@@ -473,3 +490,25 @@ class Setup():
         fig_width = self.fig_fit_exporter.getTargetRect().width()
         fig_height = self.fig_fit_exporter.getTargetRect().width()
         self.lin_fit_option.move(fig_width - 70, fig_height - 60)
+
+
+class ClustPopupWindow(QtGui.QMainWindow):
+    closed = QtCore.pyqtSignal(QtGui.QMainWindow)
+    moved = QtCore.pyqtSignal()
+
+    def __init__(self, title, parent=None):
+        super(ClustPopupWindow, self).__init__()
+        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+        self.resize(300, 300)
+        self.move(randrange(30) + 1000, randrange(30) + 200)
+        self.clust_widget = pg.GraphicsLayoutWidget()
+        self.setCentralWidget(self.clust_widget)
+        self.setWindowTitle(title)
+        self.show()
+
+    def closeEvent(self, event):
+        self.closed.emit(self)
+        self.close()
+
+    def leaveEvent(self, event):
+        self.moved.emit()

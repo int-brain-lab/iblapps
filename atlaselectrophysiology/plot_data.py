@@ -1,12 +1,17 @@
 from matplotlib import cm
+from pathlib import Path
 import numpy as np
 import alf.io
 from brainbox.processing import bincount2D
+from brainbox.population import xcorr
 import scipy
 from PyQt5 import QtGui
 
 N_BNK = 4
 BNK_SIZE = 10
+AUTOCORR_BIN_SIZE = 0.25 / 1000
+AUTOCORR_WIN_SIZE = 10 / 1000
+FS = 30000
 np.seterr(divide='ignore', invalid='ignore')
 
 
@@ -28,6 +33,7 @@ class PlotData:
             self.clusters = alf.io.load_object(self.alf_path, 'clusters')
             self.filter_units('all')
             self.cluster_data_status = True
+            self.compute_timescales()
         except Exception:
             print('cluster data was not found, some plots will not display')
             self.cluster_data_status = False
@@ -86,15 +92,18 @@ class PlotData:
                                     np.max(self.spikes['times'][self.spike_idx][0:-1:100])]),
                 'xaxis': 'Time (s)',
                 'title': 'Amplitude (uV)??',
-                'cmap': 'BuPu'
+                'cmap': 'BuPu',
+                'cluster': False
             }
 
             return data_scatter
 
     def get_fr_p2t_data_scatter(self):
         if not self.spike_data_status:
-            data_scatter = None
-            return data_scatter
+            data_fr_scatter = None
+            data_p2t_scatter = None
+            data_amp_scatter = None
+            return data_fr_scatter, data_p2t_scatter, data_amp_scatter
         else:
             (clu,
              spike_depths,
@@ -104,7 +113,6 @@ class PlotData:
                                                     self.spikes['amps'][self.spike_idx])
             spike_amps = spike_amps * 1e6
             fr = n_spikes / np.max(self.spikes['times'])
-
             fr_norm, fr_levels = self.normalise_data(fr, lquant=0, uquant=1)
 
             data_fr_scatter = {
@@ -115,11 +123,12 @@ class PlotData:
                 'size': np.array(8),
                 'symbol': np.array('o'),
                 'levels': fr_levels,
-                'xrange': np.array([np.min(spike_amps),
+                'xrange': np.array([0.9 * np.min(spike_amps),
                                     1.1 * np.max(spike_amps)]),
                 'xaxis': 'Amplitude (uV)??',
                 'title': 'Firing Rate (Sp/s)',
-                'cmap': 'hot'
+                'cmap': 'hot',
+                'cluster': True
             }
 
             p2t = self.clusters['peakToTrough'][clu]
@@ -134,14 +143,34 @@ class PlotData:
                 'size': np.array(8),
                 'symbol': np.array('o'),
                 'levels': p2t_levels,
-                'xrange': np.array([np.min(spike_amps),
+                'xrange': np.array([0.9 * np.min(spike_amps),
                                     1.1 * np.max(spike_amps)]),
                 'xaxis': 'Amplitude (uV)??',
                 'title': 'Peak to Trough duration (ms)',
                 'cmap': 'RdYlGn',
+                'cluster': True
             }
 
-            return data_fr_scatter, data_p2t_scatter
+            spike_amps_norm, spike_amps_levels = self.normalise_data(spike_amps, lquant=0, uquant=1)
+
+            data_amp_scatter = {
+                'x': fr,
+                'y': spike_depths,
+
+                'colours': spike_amps_norm,
+                'pen': 'k',
+                'size': np.array(8),
+                'symbol': np.array('o'),
+                'levels': spike_amps_levels,
+                'xrange': np.array([0.9 * np.min(fr),
+                                    1.1 * np.max(fr)]),
+                'xaxis': 'Firing Rate (Sp/s)',
+                'title': 'Amplitude (uV)??',
+                'cmap': 'magma',
+                'cluster': True
+            }
+
+            return data_fr_scatter, data_p2t_scatter, data_amp_scatter
 
     def get_fr_img(self):
         if not self.spike_data_status:
@@ -235,13 +264,24 @@ class PlotData:
         # Finds channels that are at equivalent depth on probe and averages rms values for each
         # time point at same depth togehter
         try:
-            rms_amps, rms_times = (alf.io.load_object(self.ephys_path, '_iblqc_ephysTimeRms' +
-                                   format)).values()
+            rms = alf.io.load_object(self.ephys_path, '_iblqc_ephysTimeRms' + format)
+            if len(rms) == 2:
+                rms_amps, _ = rms.values()
+            else:
+                rms_amps = list(rms.values())[0]
         except Exception:
             print('rms data was not found, some plots will not display')
             data_img = None
             data_probe = None
             return data_img, data_probe
+
+        try:
+            rms_times = alf.io.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
+                                                 format + '.timestamps.npy'))
+            xaxis = 'Time (s)'
+        except Exception:
+            rms_times = np.array([0, rms_amps.shape[0]])
+            xaxis = 'Time samples'
 
         # Img data
         _rms = np.take(rms_amps, self.chn_ind, axis=1)
@@ -269,7 +309,7 @@ class PlotData:
         if format == 'AP':
             cmap = 'plasma'
         else:
-            cmap = 'magma'
+            cmap = 'inferno'
 
         data_img = {
             'img': img,
@@ -277,7 +317,7 @@ class PlotData:
             'levels': levels,
             'cmap': cmap,
             'xrange': np.array([rms_times[0], rms_times[-1]]),
-            'xaxis': 'Time (s)',
+            'xaxis': xaxis,
             'title': format + ' RMS (uV)'
         }
 
@@ -360,6 +400,17 @@ class PlotData:
 
             return data_img, data_probe
 
+    def get_autocorr(self, clust_idx):
+        idx = np.where(self.spikes['clusters'] == self.clust_id[clust_idx])[0]
+        autocorr = xcorr(self.spikes['times'][idx], self.spikes['clusters'][idx],
+                         AUTOCORR_BIN_SIZE, AUTOCORR_WIN_SIZE)
+
+        return autocorr[0, 0, :]
+
+    def get_template_wf(self, clust_idx):
+        template_wf = (self.clusters['waveforms'][self.clust_id[clust_idx], :, 0])
+        return template_wf * 1e6
+
     def arrange_channels2banks(self, data):
         Y_OFFSET = 20
         bnk_data = []
@@ -389,7 +440,15 @@ class PlotData:
                                               np.zeros(inverse.size, dtype=int))))
         spike_depth_avg = np.ravel(_spike_depth.toarray()) / counts
         spike_amp_avg = np.ravel(_spike_amp.toarray()) / counts
+        self.clust_id = clust
         return clust, spike_depth_avg, spike_amp_avg, counts
+    
+    def compute_timescales(self):
+        self.t_autocorr = 1e3 * np.arange((AUTOCORR_WIN_SIZE / 2) - AUTOCORR_WIN_SIZE,
+                                          (AUTOCORR_WIN_SIZE / 2) + AUTOCORR_BIN_SIZE,
+                                          AUTOCORR_BIN_SIZE)
+        n_template = self.clusters['waveforms'][0, :, 0].size
+        self.t_template = 1e3 * (np.arange(n_template)) / FS
 
     def normalise_data(self, data, lquant=0, uquant=1):
         levels = np.quantile(data, [lquant, uquant])

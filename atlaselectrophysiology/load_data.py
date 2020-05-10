@@ -75,6 +75,7 @@ class LoadData:
             'channels.rawInd',
             'clusters.metrics',
             'clusters.peakToTrough',
+            'clusters.waveforms',
             '_iblqc_ephysTimeRms.rms',
             '_iblqc_ephysTimeRms.timestamps',
             '_iblqc_ephysSpectralDensity.freqs',
@@ -146,7 +147,7 @@ class LoadData:
         }
         self.get_histology_regions(0)
         self.scale_histology_regions(0)
-    
+
         self.scale_data = {
             'region': [0] * (self.max_idx + 1),
             'scale': [0] * (self.max_idx + 1)
