@@ -8,7 +8,7 @@ import ibllib.pipes.histology as histology
 import ibllib.atlas as atlas
 
 TIP_SIZE_UM = 200
-ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
+ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 one = ONE(base_url=ONE_BASE_URL)
 
 
@@ -206,7 +206,7 @@ class LoadData:
         brain_regions['lateral'] = self.chn_coords[:, 0]
         brain_regions['axial'] = self.chn_coords[:, 1]
         assert np.unique([len(brain_regions[k]) for k in brain_regions]).size == 1
-        print(brain_regions)
+        #print(brain_regions)
         histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=one,
                                          overwrite=overwrite)
 
