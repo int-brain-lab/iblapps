@@ -1,177 +1,289 @@
 
+import scipy
 import numpy as np
-from brainbox.io.one import load_spike_sorting, load_channel_locations
+import alf.io
 from oneibl.one import ONE
-import random
+# import matplotlib.pyplot as plt
+import ibllib.pipes.histology as histology
+import ibllib.atlas as atlas
 
-ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
+TIP_SIZE_UM = 200
+ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
 one = ONE(base_url=ONE_BASE_URL)
 
 
+def _cumulative_distance(xyz):
+    return np.cumsum(np.r_[0, np.sqrt(np.sum(np.diff(xyz, axis=0) ** 2, axis=1))])
+
 
 class LoadData:
-    def __init__(self, subj, date, sess=None, probe_id=None):
-        if not sess:
-            sess = 1
-        if not probe_id:
-            probe_id = 0
+    def __init__(self, max_idx):
+        self.max_idx = max_idx
 
-        eids = one.search(subject=subj, date=date, number=sess, task_protocol='ephys')
+    def get_subjects(self):
+        """
+        Finds all subjects that have a histology track trajectory registered
+        :return subjects: list of subjects
+        :type subjects: list of strings
+        """
+        sess_with_hist = one.alyx.rest('trajectories', 'list', provenance='Histology track')
+        subjects = [sess['session']['subject'] for sess in sess_with_hist]
+        subjects = np.unique(subjects)
+
+        return subjects
+
+    def get_sessions(self, subject):
+        """
+        Finds all sessions for a particular subject that have a histology track trajectory
+        registered
+        :param subject: subject name
+        :type subject: string
+        :return session: list of sessions associated with subject, displayed as date + probe
+        :return session: list of strings
+        """
+        self.subj = subject
+        self.sess_with_hist = one.alyx.rest('trajectories', 'list', subject=self.subj,
+                                            provenance='Histology track')
+        session = [(sess['session']['start_time'][:10] + ' ' + sess['probe_name']) for sess in
+                   self.sess_with_hist]
+        return session
+
+    def get_info(self, idx):
+        """
+        """
+        self.n_sess = self.sess_with_hist[idx]['session']['number']
+        self.date = self.sess_with_hist[idx]['session']['start_time'][:10]
+        self.probe_label = self.sess_with_hist[idx]['probe_name']
+
+    def get_eid(self):
+        eids = one.search(subject=self.subj, date=self.date, number=self.n_sess,
+                          task_protocol='ephys')
         self.eid = eids[0]
-        self.probe_id = probe_id
-        self.get_data()
+        print(self.subj)
+        print(self.probe_label)
+        print(self.date)
+        print(self.eid)
 
     def get_data(self):
-        #Load in all the data required
-        dtypes_extra = [
+        # Load in all the data required
+        dtypes = [
             'spikes.depths',
             'spikes.amps',
-            'channels.localCoordinates'
+            'spikes.times',
+            'spikes.clusters',
+            'channels.localCoordinates',
+            'channels.rawInd',
+            'clusters.metrics',
+            'clusters.peakToTrough',
+            'clusters.waveforms',
+            '_iblqc_ephysTimeRms.rms',
+            '_iblqc_ephysTimeRms.timestamps',
+            '_iblqc_ephysSpectralDensity.freqs',
+            '_iblqc_ephysSpectralDensity.amps',
+            '_iblqc_ephysSpectralDensity.power'
         ]
 
-        spikes, _ = load_spike_sorting(eid=self.eid, one=one, dataset_types=dtypes_extra)
-        probe_label = [key for key in spikes.keys() if int(key[-1]) == self.probe_id][0]
+        _ = one.load(self.eid, dataset_types=dtypes, download_only=True)
+        path = one.path_from_eid(self.eid)
+        self.alf_path = path.joinpath('alf', self.probe_label)
+        self.ephys_path = path.joinpath('raw_ephys_data', self.probe_label)
+        self.chn_coords, self.chn_ind = (alf.io.load_object(self.alf_path, 'channels')).values()
 
-        self.spikes = spikes[probe_label]
+        sess = one.alyx.rest('sessions', 'read', id=self.eid)
+        if sess['notes']:
+            sess_notes = sess['notes'][0]['text']
+        else:
+            sess_notes = 'No notes for this session'
 
-        ses = one.alyx.rest('sessions', 'read', id=self.eid)
-        self.channels = load_channel_locations(ses, one=one, probe=probe_label)[probe_label]
-        import ibllib.atlas as atlas
+        return self.alf_path, self.ephys_path, sess_notes
+
+    def get_probe_track(self):
+
         self.brain_atlas = atlas.AllenAtlas(res_um=25)
-        xyz = np.c_[self.channels.x, self.channels.y, self.channels.z]
-        # this insertion is the best fit of the channel positions
-        ins = atlas.Insertion.from_track(xyz, brain_atlas=self.brain_atlas)
-        npoints = np.ceil(ins.depth / 20 * 1e6)
-        xyz = np.c_[np.linspace(*ins.xyz[:, 0], npoints),
-                    np.linspace(*ins.xyz[:, 1], npoints),
-                    np.linspace(*ins.xyz[:, 2], npoints)]
 
-        cax = self.brain_atlas.plot_cslice(xyz[0, 1], volume='annotation')
-        cax.plot(xyz[:, 0] * 1e6, xyz[:, 2] * 1e6, 'k*')
+        # Load in user picks for session
+        insertion = one.alyx.rest('insertions', 'list', session=self.eid, name=self.probe_label)
+        xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
+        self.probe_id = insertion[0]['id']
+        self.get_trajectory()
 
-        region_ids = self.brain_atlas.get_labels(xyz)
-        regions = self.brain_atlas.regions.get(region_ids)
+        # Use the top/bottom 1/4 of picks to compute the entry and exit trajectories of the probe
+        n_picks = np.max([4, round(xyz_picks.shape[0] / 4)])
+        traj_entry = atlas.Trajectory.fit(xyz_picks[:n_picks, :])
+        # Force the entry to be on the upper z lim of the atlas to account for cases where channels
+        # may be located above the surface of the brain
+        entry = (traj_entry.eval_z(self.brain_atlas.bc.zlim))[0, :]
 
-        self.channel_coord = one.load_dataset(eid=self.eid, dataset_type='channels.localCoordinates')
-        assert np.all(np.c_[self.channels.lateral_um, self.channels.axial_um] == self.channel_coord)
-    
+        traj_exit = atlas.Trajectory.fit(xyz_picks[-1 * n_picks:, :])
+        exit = atlas.Insertion.get_brain_exit(traj_exit, self.brain_atlas)
+        # exit = (traj_exit.eval_z(self.brain_atlas.bc.zlim))[1, :]
+        exit[2] = exit[2] - 200 / 1e6
 
-    def get_scatter_data(self):
-        scatter = {
-            'times': self.spikes['times'][0:-1:100],
-            'depths': self.spikes['depths'][0:-1:100]
+        self.xyz_track = np.r_[exit[np.newaxis, :], xyz_picks, entry[np.newaxis, :]]
+        # by convention the deepest point is first
+        self.xyz_track = self.xyz_track[np.argsort(self.xyz_track[:, 2]), :]
+
+        # plot on tilted coronal slice for sanity check
+        # ax = self.brain_atlas.plot_tilted_slice(self.xyz_track, axis=1)
+        # ax.plot(self.xyz_track[:, 0] * 1e6, self.xyz_track[:, 2] * 1e6, '-*')
+        # ax.plot(xyz_picks[:, 0] * 1e6, xyz_picks[:, 2] * 1e6, 'r-*')
+        # plt.show()
+
+        self.track = [0] * (self.max_idx + 1)
+        self.features = [0] * (self.max_idx + 1)
+
+        # ORIG
+        tip_distance = _cumulative_distance(self.xyz_track)[1] + TIP_SIZE_UM / 1e6
+        track_length = _cumulative_distance(self.xyz_track)[-1]
+        self.track_init = np.array([0, track_length]) - tip_distance
+
+        self.track[0] = np.copy(self.track_init)
+        self.features[0] = np.copy(self.track_init)
+
+        self.hist_data = {
+            'region': [0] * (self.max_idx + 1),
+            'axis_label': [0] * (self.max_idx + 1),
+            'colour': [0] * (self.max_idx + 1)
+        }
+        self.get_histology_regions(0)
+        self.scale_histology_regions(0)
+
+        self.scale_data = {
+            'region': [0] * (self.max_idx + 1),
+            'scale': [0] * (self.max_idx + 1)
         }
 
-        return scatter
+        self.get_scale_factor(0)
 
-    
-    def get_histology_data(self):
-        #acronym = np.flip(self.channels['acronym'])
-        acronym = self.channels['acronym']
-        colour = self.create_random_hex_colours(np.unique(acronym))  # TODO: ibllib.atlas get colours from Allen
+    def get_trajectory(self):
+        self.traj_exists = False
+        ephys_traj = one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+                                   provenance='Ephys aligned histology track')
+        if len(ephys_traj):
+            self.traj_exists = True
 
-        # Find all boundaries from histology
-        #boundaries = np.where(np.diff(np.flip(self.channels.atlas_id)))[0]
-        boundaries = np.where(np.diff(self.channels.atlas_id))[0]
+    def feature2track_lin(self, trk, idx):
+        if self.features[idx].size >= 5:
+            fcn_lin = np.poly1d(np.polyfit(self.features[idx][1:-1], self.track[idx][1:-1], 1))
+            lin_fit = fcn_lin(trk)
+        else:
+            lin_fit = 0
+            fcn_lin = 0
+        return lin_fit
 
-        region = []
-        region_label = []
-        region_colour = []
-        for idx in range(len(boundaries) + 1):
-            if idx == 0:
-                _region = [0, boundaries[idx]]
-            elif idx == len(boundaries):
-                _region = [boundaries[idx - 1], len(self.channel_coord) - 1]
-            else: 
-                _region = [boundaries[idx - 1], boundaries[idx]]
+    def feature2track(self, trk, idx):
 
-            _region_label = acronym[_region][1]
-            _region_colour = colour[_region_label]
-            _region = self.channel_coord[:, 1][_region]
-            _region_mean = np.mean(_region, dtype=int)
+        fcn = scipy.interpolate.interp1d(self.features[idx], self.track[idx],
+                                         fill_value="extrapolate")
+        return fcn(trk)
 
-            region_label.append((_region_mean, _region_label))
-            region_colour.append(_region_colour)
-            region.append(_region)
+    def track2feature(self, ft, idx):
 
+        fcn = scipy.interpolate.interp1d(self.track[idx], self.features[idx],
+                                         fill_value="extrapolate")
+        return fcn(ft)
 
+    def get_channels_coordinates(self, idx, depths=None):
+        """
+        Gets 3d coordinates from a depth along the electrophysiology feature. 2 steps
+        1) interpolate from the electrophys features depths space to the probe depth space
+        2) interpolate from the probe depth space to the true 3D coordinates
+        if depths is not provided, defaults to channels local coordinates depths
+        """
+        if depths is None:
+            depths = self.chn_coords[:, 1] / 1e6
+        # nb using scipy here so we can change to cubic spline if needed
+        channel_depths_track = self.feature2track(depths, idx) - self.track_init[0]
+        self.xyz_channels = histology.interpolate_along_track(self.xyz_track, channel_depths_track)
+        return self.xyz_channels
 
-        region_label.append((-250, 'extra'))
-        region_label.append((4090, 'extra'))
-        region_colour.append('#808080')
-        region_colour.append('#808080')
-        region.append([-500, 0])
-        region.append([3840, 3840 + 500])
+    def upload_channels(self, overwrite=False):
+        insertion = atlas.Insertion.from_track(self.xyz_channels, self.brain_atlas)
+        # NEEED TO ADD TIP TO DEPTH?
+        brain_regions = self.brain_atlas.regions.get(self.brain_atlas.get_labels
+                                                     (self.xyz_channels))
+        brain_regions['xyz'] = self.xyz_channels
+        brain_regions['lateral'] = self.chn_coords[:, 0]
+        brain_regions['axial'] = self.chn_coords[:, 1]
+        assert np.unique([len(brain_regions[k]) for k in brain_regions]).size == 1
+        histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=one,
+                                         overwrite=overwrite)
 
-        #print(region)
-        histology = {
-            'boundary': region,
-            'boundary_label': region_label,
-            'boundary_colour': region_colour,
-            'acronym': acronym,
-            'chan_int': 20
-        }
+    def scale_histology_regions(self, idx):
 
-        return histology
+        region_label = np.copy(self.region_label)
+        region = self.track2feature(self.region, idx) * 1e6
+        region_label[:, 0] = (self.track2feature(np.float64(region_label[:, 0]), idx) * 1e6)
 
+        self.hist_data['region'][idx] = region
+        self.hist_data['axis_label'][idx] = region_label
+        self.hist_data['colour'][idx] = self.region_colour
 
-    def create_random_hex_colours(self, unique_regions):
-    
-        colour = {}
-        random.seed(8)
-        for reg in unique_regions:
-            colour[reg] = "#" + ''.join([random.choice('0123456789ABCDEF') for j in range(6)])
-    
-        return colour
-    
-    def get_amplitude_data(self):
-        
-        depths = self.spikes['depths']
-        depth_int = 40
-        depth_bins = np.arange(0, max(self.channel_coord[:, 1]) + depth_int, depth_int)
-        #depth_bins = np.flip(depth_bins)
-        depth_bins_cnt = depth_bins[:-1] + depth_int / 2
+    def get_histology_regions(self, idx):
+        """
+        Samples at 10um along the trajectory
+        :return:
+        """
+        sampling_trk = np.arange(self.track_init[0],
+                                 self.track_init[-1] - 10 * 1e-6, 10 * 1e-6)
+        xyz_samples = histology.interpolate_along_track(self.xyz_track,
+                                                        sampling_trk - sampling_trk[0])
 
-        amps = self.spikes['amps'] * 1e6 * 2.54  ##Check that this scaling factor is correct!!
-        amp_int = 50
-        amp_bins = np.arange(min(amps), max(amps), amp_int)
+        region_ids = self.brain_atlas.get_labels(xyz_samples)
+        region_info = self.brain_atlas.regions.get(region_ids)
+        boundaries = np.where(np.diff(region_info.id))[0]
+        self.region = np.empty((boundaries.size + 1, 2))
+        self.region_label = np.empty((boundaries.size + 1, 2), dtype=object)
+        self.region_colour = np.empty((boundaries.size + 1, 3), dtype=int)
 
-        times = self.spikes['times']
-        time_min = min(times)
-        time_max = max(times)
-        time_int = 0.01
-        time_bins = np.arange(time_min, time_max, time_int)
+        for bound in np.arange(boundaries.size + 1):
+            if bound == 0:
+                _region = np.array([0, boundaries[bound]])
+            elif bound == boundaries.size:
+                _region = np.array([boundaries[bound - 1], region_info.id.size - 1])
+            else:
+                _region = np.array([boundaries[bound - 1], boundaries[bound]])
 
-        depth_amps = []
-        depth_fr = []
-        depth_amps_fr = []
-        depth_hist = []
+            _region_colour = region_info.rgb[_region[1]]
+            _region_label = region_info.acronym[_region[1]]
+            _region = sampling_trk[_region]
+            _region_mean = np.mean(_region)
 
-        for iD in range(len(depth_bins) - 1):
-            depth_idx = np.where((depths > depth_bins[iD]) & (depths <= depth_bins[iD + 1]))[0]
-            #print(len(depth_idx))
-            depth_hist.append(np.histogram(times[depth_idx], time_bins)[0])
-            #print(depth_hist)
-            depth_amps_fr.append(np.histogram(amps[depth_idx], amp_bins)[0]/ time_max)
-            depth_amps.append(np.mean(amps[depth_idx]))
-            depth_fr.append(len(depth_idx) / time_max)
+            self.region[bound, :] = _region
+            self.region_colour[bound, :] = _region_colour
+            self.region_label[bound, :] = (_region_mean, _region_label)
 
-        #print(depth_hist)
-        corr = np.corrcoef(depth_hist)
-        #print(corr)
-        corr[np.isnan(corr)] = 0
+    def get_scale_factor(self, idx):
+        scale = []
+        for iR, (reg, reg_orig) in enumerate(zip(self.hist_data['region'][idx],
+                                                 self.region * 1e6)):
+            scale = np.r_[scale, (reg[1] - reg[0]) / (reg_orig[1] - reg_orig[0])]
 
-        amplitude = {
-            'amps': depth_amps,
-            'fr': depth_fr,
-            'amps_fr': depth_amps_fr,
-            'corr': corr,
-            'bins': depth_bins_cnt
-        }
+        boundaries = np.where(np.diff(np.around(scale, 3)))[0]
+        if boundaries.size == 0:
+            region = np.array([[self.hist_data['region'][idx][0][0],
+                               self.hist_data['region'][idx][-1][1]]])
+            region_scale = np.array([1])
+        else:
 
-        return amplitude
-        
+            region = np.empty((boundaries.size + 1, 2))
+            region_scale = []
+            for bound in np.arange(boundaries.size + 1):
+                if bound == 0:
+                    _region = np.array([self.hist_data['region'][idx][0][0],
+                                       self.hist_data['region'][idx][boundaries[bound]][1]])
+                    _region_scale = scale[0]
+                elif bound == boundaries.size:
+                    _region = np.array([self.hist_data['region'][idx][boundaries[bound - 1]][1],
+                                       self.hist_data['region'][idx][-1][1]])
+                    _region_scale = scale[-1]
+                else:
+                    _region = np.array([self.hist_data['region'][idx][boundaries[bound - 1]][1],
+                                        self.hist_data['region'][idx][boundaries[bound]][1]])
+                    _region_scale = scale[boundaries[bound]]
 
+                region[bound, :] = _region
+                region_scale = np.r_[region_scale, _region_scale]
 
-
-
+        self.scale_data['region'][idx] = region
+        self.scale_data['scale'][idx] = region_scale
