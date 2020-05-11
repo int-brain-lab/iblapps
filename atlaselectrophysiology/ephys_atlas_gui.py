@@ -39,6 +39,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.view_total = [-2000, 6000]
         self.depth = np.arange(self.view_total[0], self.view_total[1], 20)
         self.extend_feature = 5000 / 1e6
+
+        # Initialise with linear fit scaling as default
         self.lin_fit = True
 
         # Variables to keep track of number of fits (max 10)
@@ -65,6 +67,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.probe_cbars = []
         self.scale_regions = np.empty((0, 1))
 
+        # Variables to keep track of popup plots
         self.cluster_popups = []
         self.popup_status = True
 
@@ -79,7 +82,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :type show: bool
         :param label: axis label
         :type label: string
-        :parm pen: colour or axis
+        :parm pen: colour on axis
         :type pen: string
         :param ticks: 'True' to show axis ticks, 'False' to hide axis ticks
         :param ticks: bool
@@ -110,6 +113,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :type data: 1D array of strings
         :param list_name: widget object to which to add data to
         :type list_name: QtGui.QStandardItemModel
+        :param combobox: combobox object to which to add data to
+        :type combobox: QtWidgets.QComboBox
         """
         for dat in data:
             item = QtGui.QStandardItem(dat)
@@ -235,6 +240,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_probe.update()
 
     def toggle_plots(self, options_group):
+        """
+        Allows user to toggle through image, line and probe plots using keyboard shortcuts Alt+1,
+        Alt+2 and Alt+3 respectively
+        :param options_group: Set of plots to toggle through
+        :type options_group: QtGui.QActionGroup
+        """
+
         current_act = options_group.checkedAction()
         actions = options_group.actions()
         current_idx = [iA for iA, act in enumerate(actions) if act == current_act][0]
@@ -253,6 +265,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :type fig: pyqtgraph PlotWidget
         :param ax: orientation of axis, must be one of 'left' (fig_hist) or 'right' (fig_hist_ref)
         :type ax: string
+        :param movable: whether probe reference lines can be moved, True for fig_hist, False for
+                        fig_hist_ref
+        :type movable: Bool
         """
         fig.clear()
         axis = fig.getAxis(ax)

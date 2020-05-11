@@ -151,7 +151,8 @@ class PlotData:
                 'cluster': True
             }
 
-            spike_amps_norm, spike_amps_levels = self.normalise_data(spike_amps, lquant=0, uquant=1)
+            spike_amps_norm, spike_amps_levels = self.normalise_data(spike_amps, lquant=0,
+                                                                     uquant=1)
 
             data_amp_scatter = {
                 'x': fr,
@@ -442,7 +443,7 @@ class PlotData:
         spike_amp_avg = np.ravel(_spike_amp.toarray()) / counts
         self.clust_id = clust
         return clust, spike_depth_avg, spike_amp_avg, counts
-    
+
     def compute_timescales(self):
         self.t_autocorr = 1e3 * np.arange((AUTOCORR_WIN_SIZE / 2) - AUTOCORR_WIN_SIZE,
                                           (AUTOCORR_WIN_SIZE / 2) + AUTOCORR_BIN_SIZE,
