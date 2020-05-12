@@ -113,7 +113,7 @@ class PlotData:
                                                     self.spikes['amps'][self.spike_idx])
             spike_amps = spike_amps * 1e6
             fr = n_spikes / np.max(self.spikes['times'])
-            fr_norm, fr_levels = self.normalise_data(fr, lquant=0, uquant=0.5)
+            fr_norm, fr_levels = self.normalise_data(fr, lquant=0, uquant=1)
 
             data_fr_scatter = {
                 'x': spike_amps,
