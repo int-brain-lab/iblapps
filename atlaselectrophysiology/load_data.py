@@ -28,11 +28,11 @@ class LoadData:
         """
         sess_with_hist = one.alyx.rest('trajectories', 'list', provenance='Histology track')
         subjects = [sess['session']['subject'] for sess in sess_with_hist]
-        subjects = np.unique(subjects)
+        self.subjects = np.unique(subjects)
 
-        return subjects
+        return self.subjects
 
-    def get_sessions(self, subject):
+    def get_sessions(self, idx):
         """
         Finds all sessions for a particular subject that have a histology track trajectory
         registered
@@ -41,7 +41,7 @@ class LoadData:
         :return session: list of sessions associated with subject, displayed as date + probe
         :return session: list of strings
         """
-        self.subj = subject
+        self.subj = self.subjects[idx]
         self.sess_with_hist = one.alyx.rest('trajectories', 'list', subject=self.subj,
                                             provenance='Histology track')
         session = [(sess['session']['start_time'][:10] + ' ' + sess['probe_name']) for sess in

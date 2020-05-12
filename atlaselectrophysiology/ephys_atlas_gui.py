@@ -611,14 +611,14 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     """
     Interaction functions
     """
-    def on_subject_selected(self, subj):
+    def on_subject_selected(self, idx):
         """
         Triggered when subject is selected from drop down list options
-        :param subj: chosen subject (item) in drop down list
-        :type subj: string
+        :param idx: index chosen subject (item) in drop down list
+        :type idx: int
         """
         self.sess_list.clear()
-        sessions = self.loaddata.get_sessions(subj)
+        sessions = self.loaddata.get_sessions(idx)
         self.populate_lists(sessions, self.sess_list, self.sess_combobox)
         self.loaddata.get_info(0)
 

@@ -42,6 +42,7 @@ class Setup():
         """
         # Create menubar widget and add it to the main GUI window
         menu_bar = QtWidgets.QMenuBar(self)
+        menu_bar.setNativeMenuBar(False)
         self.setMenuBar(menu_bar)
 
         # Define all 2D scatter/ image plot options
@@ -293,7 +294,7 @@ class Setup():
         self.subj_combobox.setCompleter(subj_completer)
         self.subj_combobox.setModel(self.subj_list)
         self.subj_combobox.completer().setModel(self.subj_list)
-        self.subj_combobox.textActivated.connect(self.on_subject_selected)
+        self.subj_combobox.activated.connect(self.on_subject_selected)
         # Drop down list to choose session
         self.sess_list = QtGui.QStandardItemModel()
         self.sess_combobox = QtWidgets.QComboBox()
