@@ -53,7 +53,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Variables to keep track of reference lines and points added
         self.line_status = True
-        self.label_status = False
+        self.label_status = True
         self.lines_features = np.empty((0, 3))
         self.lines_tracks = np.empty((0, 1))
         self.points = np.empty((0, 1))
