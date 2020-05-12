@@ -3,6 +3,7 @@ import scipy
 import numpy as np
 import alf.io
 from oneibl.one import ONE
+from pathlib import Path
 # import matplotlib.pyplot as plt
 import ibllib.pipes.histology as histology
 import ibllib.atlas as atlas
@@ -87,7 +88,8 @@ class LoadData:
         path = one.path_from_eid(self.eid)
         self.alf_path = path.joinpath('alf', self.probe_label)
         self.ephys_path = path.joinpath('raw_ephys_data', self.probe_label)
-        self.chn_coords, self.chn_ind = (alf.io.load_object(self.alf_path, 'channels')).values()
+        self.chn_coords = alf.io.load_file_content(Path(self.alf_path, 'channels.localCoordinates.npy'))
+        self.chn_ind = alf.io.load_file_content(Path(self.alf_path, 'channels.rawInd.npy'))
 
         sess = one.alyx.rest('sessions', 'read', id=self.eid)
         if sess['notes']:
