@@ -53,7 +53,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Variables to keep track of reference lines and points added
         self.line_status = True
-        self.label_status = True
+        self.label_status = False
         self.lines_features = np.empty((0, 3))
         self.lines_tracks = np.empty((0, 1))
         self.points = np.empty((0, 1))
@@ -674,6 +674,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Initialise histology plots
         self.plot_histology(self.fig_hist_ref, ax='right', movable=False)
         self.plot_histology(self.fig_hist)
+        self.label_status = False
+        self.toggle_labels_button_pressed()
         self.plot_scale_factor()
         self.plot_fit()
         self.plot_slice()
