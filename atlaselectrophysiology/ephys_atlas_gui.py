@@ -417,7 +417,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         else:
             self.fit_plot_lin.setData()
 
-    def plot_slice(self):
+    def plot_slice_orig(self):
         """
         Plots a tilted coronal slice of the Allen brain atlas annotation volume with probe
         track and channel positions overlaid
@@ -432,6 +432,41 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.fig_slice_ax.plot(xyz_ch[:, 0] * 1e6, xyz_ch[:, 2] * 1e6, 'k*', markersize=6)
         self.fig_slice_ax.axis('off')
         self.fig_slice.draw()
+
+
+    def plot_slice(self, data, img_type):
+        self.fig_slice.clear()
+        self.slice_chns = []
+        img = pg.ImageItem()
+        #self.slice_img.clear()
+        img.setImage(data[img_type])
+        if img_type == 'label':
+            img.translate(data['offset'][0], data['offset'][1])
+            img.scale(data['scale'][0], data['scale'][1])
+        else:
+            img.translate(data['offset'][0], data['offset'][1])
+            img.scale(data['scale'][0], data['scale'][1])
+            color_bar = cb.ColorBar('cividis')
+            lut = color_bar.getColourMap()
+            img.setLookupTable(lut)
+
+        self.fig_slice.addItem(img)
+        traj = pg.PlotCurveItem()
+        traj.setData(x=self.loaddata.xyz_track[:, 0], y=self.loaddata.xyz_track[:, 2], pen='g')
+        self.fig_slice.addItem(traj)
+
+        self.plot_channels()
+
+
+    def plot_channels(self):
+        xyz_ch = self.loaddata.get_channels_coordinates(self.idx)
+        if not self.slice_chns:
+            self.slice_chns = pg.ScatterPlotItem()
+            self.slice_chns.setData(x=xyz_ch[:, 0], y=xyz_ch[:, 2], pen='r', brush='r')
+            self.fig_slice.addItem(self.slice_chns)
+        else:
+            self.slice_chns.setData(x=xyz_ch[:, 0], y=xyz_ch[:, 2], pen='r', brush='r')
+
 
     def plot_scatter(self, data):
         """
@@ -649,6 +684,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         alf_path, ephys_path, self.sess_notes = self.loaddata.get_data()
         self.loaddata.get_probe_track()
         self.plotdata = pd.PlotData(alf_path, ephys_path)
+        self.slice_data = self.loaddata.get_slice_images()
 
         self.scat_drift_data = self.plotdata.get_depth_data_scatter()
         (self.scat_fr_data, self.scat_p2t_data,
@@ -665,6 +701,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.line_init.setChecked(True)
         self.probe_init.setChecked(True)
         self.unit_init.setChecked(True)
+        self.slice_init.setChecked(True)
 
         # Initialise ephys plots
         self.plot_image(self.img_fr_data)
@@ -675,8 +712,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_histology(self.fig_hist_ref, ax='right', movable=False)
         self.plot_histology(self.fig_hist)
         self.plot_scale_factor()
+
+        # Initialise slice and fit images
         self.plot_fit()
-        self.plot_slice()
+        self.plot_slice(self.slice_data, 'hist')
 
         # Only configure the view the first time the GUI is launched
         self.set_view(view=1, configure=self.configure)
@@ -725,7 +764,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_histology(self.fig_hist)
         self.plot_scale_factor()
         self.plot_fit()
-        self.plot_slice()
+        self.plot_channels()
         self.remove_lines_points()
         self.add_lines_points()
         self.update_lines_points()
@@ -759,7 +798,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_histology(self.fig_hist)
         self.plot_scale_factor()
         self.plot_fit()
-        self.plot_slice()
+        self.plot_channels()
         self.remove_lines_points()
         self.add_lines_points()
         self.update_lines_points()
@@ -851,7 +890,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.remove_lines_points()
             self.add_lines_points()
             self.plot_fit()
-            self.plot_slice()
+            self.plot_channels()
             self.update_string()
 
     def prev_button_pressed(self):
@@ -872,7 +911,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.remove_lines_points()
             self.add_lines_points()
             self.plot_fit()
-            self.plot_slice()
+            self.plot_channels()
             self.update_string()
 
     def reset_button_pressed(self):
@@ -905,7 +944,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_histology(self.fig_hist)
         self.plot_scale_factor()
         self.plot_fit()
-        self.plot_slice()
+        self.plot_channels()
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
         self.update_string()

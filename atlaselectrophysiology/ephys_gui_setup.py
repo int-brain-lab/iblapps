@@ -253,6 +253,25 @@ class Setup():
         popup_options.addAction(popup_minimise)
         popup_options.addAction(popup_close)
 
+        slice_hist = QtGui.QAction('Histology', self, checkable=True, checked=True)
+        slice_hist.triggered.connect(lambda: self.plot_slice(self.slice_data, 'hist'))
+        slice_ccf = QtGui.QAction('CCF', self, checkable=True, checked=False)
+        slice_ccf.triggered.connect(lambda: self.plot_slice(self.slice_data, 'ccf'))
+        slice_label = QtGui.QAction('Annotation', self, checkable=True, checked=False)
+        slice_label.triggered.connect(lambda: self.plot_slice(self.slice_data, 'label'))
+
+        slice_options_group = QtGui.QActionGroup(unit_filter_options)
+        slice_options = menu_bar.addMenu("Slice View")
+        slice_options_group.setExclusive(True)
+        slice_options.addAction(slice_hist)
+        slice_options_group.addAction(slice_hist)
+        slice_options.addAction(slice_ccf)
+        slice_options_group.addAction(slice_ccf)
+        slice_options.addAction(slice_label)
+        slice_options_group.addAction(slice_label)
+        self.slice_init = slice_hist
+
+
         notes_options = menu_bar.addMenu('Session Notes')
         show_notes = QtGui.QAction('Display', self)
         show_notes.triggered.connect(self.display_session_notes)
@@ -457,11 +476,21 @@ class Setup():
         self.fig_hist_area.addItem(self.fig_hist_layout)
 
         # Figure to show probe location through coronal slice of brain
-        self.fig_slice = matplot.MatplotlibWidget()
-        fig = self.fig_slice.getFigure()
-        fig.canvas.toolbar.hide()
-        self.fig_slice_ax = fig.gca()
-        self.fig_slice_ax.axis('off')
+        # self.fig_slice = matplot.MatplotlibWidget()
+        # fig = self.fig_slice.getFigure()
+        # fig.canvas.toolbar.hide()
+        # self.fig_slice_ax = fig.gca()
+        # self.fig_slice_ax.axis('off')
+
+        self.fig_slice = pg.PlotWidget(background='w')
+        self.set_axis(self.fig_slice, 'bottom', show=False)
+        self.set_axis(self.fig_slice, 'left', show=False)
+        #self.slice_img = pg.ImageItem()
+        #self.slice_line = pg.PlotCurveItem()
+        #self.slice_scat = pg.ScatterPlotItem()
+        #self.fig_slice.addItem(self.slice_img)
+        #self.fig_slice.addItem(self.slice_line)
+        #self.fig_slice.addItem(self.slice_scat)
 
         # Figure to show fit and offset applied by user
         self.fig_fit = pg.PlotWidget(background='w')

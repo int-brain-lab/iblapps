@@ -3,6 +3,7 @@ import scipy
 import numpy as np
 import alf.io
 from oneibl.one import ONE
+from atlaselectrophysiology.load_histology import download_histology_data
 # import matplotlib.pyplot as plt
 import ibllib.pipes.histology as histology
 import ibllib.atlas as atlas
@@ -54,6 +55,7 @@ class LoadData:
         self.n_sess = self.sess_with_hist[idx]['session']['number']
         self.date = self.sess_with_hist[idx]['session']['start_time'][:10]
         self.probe_label = self.sess_with_hist[idx]['probe_name']
+        self.lab = self.sess_with_hist[idx]['session']['lab']
 
     def get_eid(self):
         eids = one.search(subject=self.subj, date=self.date, number=self.n_sess,
@@ -95,7 +97,35 @@ class LoadData:
         else:
             sess_notes = 'No notes for this session'
 
+        self.hist_path = download_histology_data(self.subj, self.lab, path)
+
         return self.alf_path, self.ephys_path, sess_notes
+
+    def get_slice_images(self):
+
+        ccf_slice, width, height, _ = self.brain_atlas.tilted_slice(self.xyz_track, axis=1)
+        ccf_slice = np.swapaxes(np.flipud(ccf_slice), 0, 1)
+        label_slice, _, _, _ = self.brain_atlas.tilted_slice(self.xyz_track, volume='annotation', axis=1)
+        label_slice = np.swapaxes(np.flipud(label_slice), 0, 1)
+
+        if self.hist_path:
+            hist_atlas = atlas.AllenAtlas(hist_path=self.hist_path)
+            hist_slice, _, _, _ = hist_atlas.tilted_slice(self.xyz_track, axis=1)
+            hist_slice = np.swapaxes(np.flipud(hist_slice), 0, 1)
+        else:
+            print('Could not find histology image for this subject')
+            hist_slice = np.copy(ccf_slice)
+
+        slice_data = {
+            'hist': hist_slice,
+            'ccf': ccf_slice,
+            'label': label_slice,
+            'scale': np.array([(width[-1] - width[0])/hist_slice.shape[0],
+                               (height[-1] - height[0])/hist_slice.shape[1]]),
+            'offset': np.array([width[0], height[0]])
+        }
+
+        return slice_data
 
     def get_probe_track(self):
 
