@@ -30,9 +30,9 @@ class Setup():
         main_layout.addLayout(self.interaction_layout1, 4, 2, 1, 1)
         main_layout.addWidget(self.fig_fit, 5, 2, 3, 1)
         main_layout.addLayout(self.interaction_layout2, 8, 2, 2, 1)
-        main_layout.setColumnStretch(0, 6)
+        main_layout.setColumnStretch(0, 5)
         main_layout.setColumnStretch(1, 2)
-        main_layout.setColumnStretch(2, 2)
+        main_layout.setColumnStretch(2, 3)
 
         main_widget.setLayout(main_layout)
 
@@ -320,6 +320,12 @@ class Setup():
         self.sess_combobox.setModel(self.sess_list)
         self.sess_combobox.activated.connect(self.on_session_selected)
 
+        # Drop down list to choose previous alignments
+        self.align_list = QtGui.QStandardItemModel()
+        self.align_combobox = QtWidgets.QComboBox()
+        self.align_combobox.setModel(self.align_list)
+        self.align_combobox.activated.connect(self.on_alignment_selected)
+
         # Button to get data to display in GUI
         self.data_button = QtWidgets.QPushButton('Get Data')
         self.data_button.clicked.connect(self.data_button_pressed)
@@ -345,6 +351,7 @@ class Setup():
         self.interaction_layout3 = QtWidgets.QHBoxLayout()
         self.interaction_layout3.addWidget(self.subj_combobox, stretch=1)
         self.interaction_layout3.addWidget(self.sess_combobox, stretch=2)
+        self.interaction_layout3.addWidget(self.align_combobox, stretch=2)
         self.interaction_layout3.addWidget(self.data_button, stretch=1)
 
     def init_figures(self):
