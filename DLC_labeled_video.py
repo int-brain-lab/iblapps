@@ -40,11 +40,15 @@ def download_raw_video(eid, cameras=None):
                          if any([cam in f for cam in cam_files])]
             if filenames:
                 return [cache_dir.joinpath(file) for file in filenames]
-        return http_download_file_list(
+
+        http_download_file_list(
             urls,
             username=one._par.HTTP_DATA_SERVER_LOGIN,
             password=one._par.HTTP_DATA_SERVER_PWD,
-            cache_dir=str(cache_dir))
+            cache_dir=str(cache_dir))        
+        
+        return 
+
     else:
         return one.load(eid, ['_iblrig_Camera.raw'], download_only=True)
 
@@ -56,10 +60,9 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     trial_range: first and last trial number of range to be shown, e.g. [5,7]
     save_video: video is displayed and saved in local folder
 
-    Example usage to view and save labeled video:
+    Example usage to view and save labeled video with wheel angle:
     Viewer('3663d82b-f197-4e8b-b299-7b803a155b84', 'left', [5,7])
     '''
-    download_raw_video(eid, cameras=[video_type])
 
     one = ONE()
     dataset_types = ['camera.times',
@@ -74,12 +77,15 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
                ), 'For this eid, not all data available'
 
     D = one.load(eid, dataset_types=dataset_types, dclass_output=True)
-
     alf_path = Path(D.local_path[0]).parent.parent / 'alf'
-    video_data = alf_path.parent / 'raw_video_data'
-    video_path = video_data / str('_iblrig_%sCamera.raw.mp4' % video_type)
+    
 
-    # that gives cam time stamps and DLC output
+    # Download a single video
+    video_data = alf_path.parent / 'raw_video_data'     
+    download_raw_video(eid, cameras=[video_type])
+    video_path = list(video_data.rglob('_iblrig_%sCamera.raw*' % video_type))[0] 
+
+    # that gives cam time stamps and DLC output (change to alf_path)
     cam = alf.io.load_object(alf_path, '_ibl_%sCamera' % video_type)
 
     # set where to read and save video and get video info
@@ -107,8 +113,12 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
 
     wheel = alf.io.load_object(alf_path, '_ibl_wheel')
     import brainbox.behavior.wheel as wh
-    pos, t = wh.interpolate_position(
-        wheel['timestamps'], wheel['position'], freq=1000)
+    try:
+        pos, t = wh.interpolate_position(
+            wheel['timestamps'], wheel['position'], freq=1000)
+    except KeyError:
+        pos, t = wh.interpolate_position(
+            wheel['times'], wheel['position'], freq=1000)        
 
     w_start = find_nearest(t, trials['intervals'][trial_range[0]][0])
     w_stop = find_nearest(t, trials['intervals'][trial_range[-1]][1])
@@ -129,8 +139,15 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     '''
     DLC related stuff
     '''
-    del cam['times']
+    del cam['times']      
+
     points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
+
+    if video_type != 'body':
+        d = list(points) 
+        d.remove('tube_top')
+        d.remove('tube_bottom')   
+        points = np.array(d)
 
     # Set values to nan if likelyhood is too low
     XYs = {}
@@ -159,25 +176,35 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         x1 = size[0]
         y0 = 0
         y1 = size[1]
-        dot_s = 6  # [px] for painting DLC dots
+        if video_type == 'left':
+            dot_s = 20  # [px] for painting DLC dots
+        else: 
+            dot_s = 10
+        
 
     if save_video:
-        out = cv2.VideoWriter('%s_trials_%s_%s.mp4' % (eid,
-                                                       trial_range[0],
-                                                       trial_range[-1],
-                                                       video_type),
+        out = cv2.VideoWriter('%s_trials_%s_%s_%s.mp4' % (eid,
+                                                          trial_range[0],
+                                                          trial_range[-1],
+                                                          video_type),
                               cv2.VideoWriter_fourcc(*'mp4v'),
                               fps,
                               size)  # put , 0 if grey scale
 
     # writing stuff on frames
     font = cv2.FONT_HERSHEY_SIMPLEX
-    bottomLeftCornerOfText = (10, 500)
-    fontScale = 1
+
+    if video_type == 'left':
+        bottomLeftCornerOfText = (20, 1000)
+        fontScale = 4
+    else:
+        bottomLeftCornerOfText = (10, 500)
+        fontScale = 2
+
     fontColor = (255, 255, 255)
     lineType = 2
 
-    # assign a color to each DLC point
+    # assign a color to each DLC point (now: all points red)
     cmap = matplotlib.cm.get_cmap('Spectral')
     CR = np.arange(len(points)) / len(points)
 
@@ -208,7 +235,8 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
             X = Y0
             Y = X0
             if not np.isnan(X) and not np.isnan(Y):
-                col = (np.array([cmap(CR[ll])]) * 255)[0][:3]
+                #col = (np.array([cmap(CR[ll])]) * 255)[0][:3]
+                col = np.array([0, 0, 255]) 
                 X = X.astype(int)
                 Y = Y.astype(int)
                 gray[X - dot_s:X + dot_s, Y - dot_s:Y + dot_s] = block * col
