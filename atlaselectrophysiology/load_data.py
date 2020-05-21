@@ -15,7 +15,8 @@ def _cumulative_distance(xyz):
 
 class EphysAlignment:
 
-    def __init__(self, xyz_track, chn_depths, track_extent, track_init, feature_init, probe_id=None):
+    def __init__(self, xyz_track, chn_depths, track_extent, track_init,
+                 feature_init, probe_id=None):
 
         self.xyz_track = xyz_track
         self.chn_depths = chn_depths
@@ -141,6 +142,28 @@ class EphysAlignment:
     def get_brain_locations(self, xyz_channels):
         brain_regions = brain_atlas.regions.get(brain_atlas.get_labels(xyz_channels))
         return brain_regions
+
+    def get_perp_vector(self, feature_lines, feature, track):
+
+        slice_lines = []
+        for line in feature_lines[1:-1]:
+            depths = np.array([line, line + 10 / 1e6])
+            xyz = self.get_channel_locations(feature, track, depths)
+
+            extent = 500e-6
+            vector = np.diff(xyz, axis=0)[0]
+            point = xyz[0, :]
+            vector_perp = np.array([1, 0, -1 * vector[0] / vector[2]])
+            xyz_per = np.r_[[point + (-1 * extent * vector_perp)],
+                        [point + (extent * vector_perp)]]
+            slice_lines.append(xyz_per)
+
+        return slice_lines
+
+
+
+
+
 
 
 class EphysAlignmentFromAlyx(EphysAlignment):
@@ -268,7 +291,9 @@ class LoadData:
 
         if ephys_traj_prev:
             self.alignments = ephys_traj_prev[0]['json']
-            self.prev_align = [*self.alignments.keys()]
+            self.prev_align = []
+            if self.alignments:
+                self.prev_align = [*self.alignments.keys()]
             # To make sure they are ordered by date added, default to latest fit
             self.prev_align.reverse()
             self.prev_align.append('original')
@@ -333,16 +358,16 @@ class LoadData:
 
         return alf_path, ephys_path, chn_depths, sess_notes
 
-    def get_slice_images(self, xyz_track):
+    def get_slice_images(self, xyz_channels):
         hist_path = download_histology_data(self.subj, self.lab)
-        ccf_slice, width, height, _ = brain_atlas.tilted_slice(xyz_track, axis=1)
+        ccf_slice, width, height, _ = brain_atlas.tilted_slice(xyz_channels, axis=1)
         ccf_slice = np.swapaxes(np.flipud(ccf_slice), 0, 1)
-        label_slice, _, _, _ = brain_atlas.tilted_slice(xyz_track, volume='annotation', axis=1)
+        label_slice, _, _, _ = brain_atlas.tilted_slice(xyz_channels, volume='annotation', axis=1)
         label_slice = np.swapaxes(np.flipud(label_slice), 0, 1)
 
         if hist_path:
             hist_atlas = atlas.AllenAtlas(hist_path=hist_path)
-            hist_slice, _, _, _ = hist_atlas.tilted_slice(xyz_track, axis=1)
+            hist_slice, _, _, _ = hist_atlas.tilted_slice(xyz_channels, axis=1)
             hist_slice = np.swapaxes(np.flipud(hist_slice), 0, 1)
         else:
             print('Could not find histology image for this subject')

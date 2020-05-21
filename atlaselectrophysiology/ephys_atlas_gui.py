@@ -66,6 +66,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.img_cbars = []
         self.probe_cbars = []
         self.scale_regions = np.empty((0, 1))
+        self.slice_lines = []
 
         # Variables to keep track of popup plots
         self.cluster_popups = []
@@ -489,6 +490,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         traj.setData(x=self.xyz_track[:, 0], y=self.xyz_track[:, 2], pen='g')
         self.fig_slice.addItem(traj)
 
+
         self.plot_channels()
 
     def plot_channels(self):
@@ -497,7 +499,27 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.slice_chns = pg.ScatterPlotItem()
             self.slice_chns.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2], pen='r', brush='r')
             self.fig_slice.addItem(self.slice_chns)
+            track_lines = self.ephysalign.get_perp_vector(
+                self.features[self.idx], self.features[self.idx], self.track[self.idx])
+
+            for ref_line in track_lines:
+                line = pg.PlotCurveItem()
+                line.setData(x=ref_line[:, 0], y=ref_line[:, 2], pen='k')
+                self.fig_slice.addItem(line)
+                self.slice_lines.append(line)
+
         else:
+            for line in self.slice_lines:
+                self.fig_slice.removeItem(line)
+
+            track_lines = self.ephysalign.get_perp_vector(
+                self.features[self.idx], self.features[self.idx], self.track[self.idx])
+
+            for ref_line in track_lines:
+                line = pg.PlotCurveItem()
+                line.setData(x=ref_line[:, 0], y=ref_line[:, 2], pen='k')
+                self.fig_slice.addItem(line)
+                self.slice_lines.append(line)
             self.slice_chns.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2], pen='r', brush='r')
 
     def plot_scatter(self, data):
@@ -744,7 +766,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
 
         self.plotdata = pd.PlotData(alf_path, ephys_path)
-        self.slice_data = self.loaddata.get_slice_images(self.xyz_track)
+
+        xyz_channels = self.ephysalign.get_channel_locations(self.features[self.idx], self.track[self.idx])
+        self.slice_data = self.loaddata.get_slice_images(xyz_channels)
 
         self.scat_drift_data = self.plotdata.get_depth_data_scatter()
         (self.scat_fr_data, self.scat_p2t_data,
@@ -771,8 +795,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Initialise histology plots
         self.plot_histology_ref(self.fig_hist_ref)
         self.plot_histology(self.fig_hist)
-        self.create_lines(self.feature_prev[1:-1] * 1e6)
         self.plot_scale_factor()
+        if np.any(self.feature_prev):
+            self.create_lines(self.feature_prev[1:-1] * 1e6)
 
         # Initialise slice and fit images
         self.plot_fit()
@@ -1005,7 +1030,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             = self.ephysalign.get_scale_factor(self.hist_data['region'][self.idx])
         self.plot_histology(self.fig_hist)
         self.plot_scale_factor()
-        self.create_lines(self.feature_prev[1:-1] * 1e6)
+        if np.any(self.feature_prev):
+            self.create_lines(self.feature_prev[1:-1] * 1e6)
         self.plot_fit()
         self.plot_channels()
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
