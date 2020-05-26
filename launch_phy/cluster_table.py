@@ -1,12 +1,13 @@
 import datajoint as dj
-from ibl_pipeline import ephys, reference
+#from ibl_pipeline import ephys, reference
+from ibl_pipeline import reference
 
 schema = dj.schema('group_shared_testing')
 
 @schema
 class ClusterLabel(dj.Imported):
     definition = """
-    -> ephys.Cluster
+    cluster_uuid: uuid              # uuid of cluster
     -> reference.LabMember          #user name
     ---
     label_time: datetime            # date on which labelling was done
