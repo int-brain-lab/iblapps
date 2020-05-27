@@ -55,7 +55,7 @@ def download_raw_video(eid, cameras=None):
 
 def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     '''
-    eid: session id, e.g. 'dfd8e7df-dc51-4589-b6ca-7baccfeb94b4'
+    eid: session id, e.g. '3663d82b-f197-4e8b-b299-7b803a155b84'
     video_type: one of 'left', 'right', 'body'
     trial_range: first and last trial number of range to be shown, e.g. [5,7]
     save_video: video is displayed and saved in local folder
@@ -85,8 +85,10 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     download_raw_video(eid, cameras=[video_type])
     video_path = list(video_data.rglob('_iblrig_%sCamera.raw*' % video_type))[0] 
 
-    # that gives cam time stamps and DLC output (change to alf_path)
-    cam = alf.io.load_object(alf_path, '_ibl_%sCamera' % video_type)
+    # that gives cam time stamps and DLC output (change to alf_path eventually)
+    cam0 = alf.io.load_object(alf_path, '_ibl_%sCamera' % video_type)
+    cam1 = alf.io.load_object(video_path.parent, '_ibl_%sCamera' % video_type)
+    cam = {**cam0,**cam1}
 
     # set where to read and save video and get video info
     cap = cv2.VideoCapture(video_path.as_uri())
