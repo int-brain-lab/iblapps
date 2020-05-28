@@ -1,8 +1,8 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
-from pyqtgraph.widgets import MatplotlibWidget as matplot
 import pyqtgraph.exporters
 import numpy as np
+import alf.io
 from random import randrange
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -20,6 +20,7 @@ class Setup():
 
         self.init_menubar()
         self.init_interaction_features()
+        self.init_region_lookup()
         self.init_figures()
 
         main_layout = QtWidgets.QGridLayout()
@@ -194,11 +195,15 @@ class Setup():
         # Shortcut to reset GUI to initial state
         reset_option = QtGui.QAction('Reset', self)
         reset_option.setShortcut('Shift+R')
-        # Shortcut to upload final state to Alyx
         reset_option.triggered.connect(self.reset_button_pressed)
+        # Shortcut to upload final state to Alyx
         complete_option = QtGui.QAction('Upload', self)
         complete_option.setShortcut('Shift+U')
         complete_option.triggered.connect(self.complete_button_pressed)
+        # Shortcut to show label information
+        describe_option = QtGui.QAction('Region Info', self)
+        describe_option.setShortcut('Shift+D')
+        describe_option.triggered.connect(self.describe_labels_pressed)
 
         # Shortcuts to switch between different views on left most data plot
         view1_option = QtGui.QAction('View 1', self)
@@ -241,6 +246,7 @@ class Setup():
         shortcut_options.addAction(view1_option)
         shortcut_options.addAction(view2_option)
         shortcut_options.addAction(view3_option)
+        shortcut_options.addAction(describe_option)
 
         popup_minimise = QtGui.QAction('Minimise/Show', self)
         popup_minimise.setShortcut('Alt+M')
@@ -353,6 +359,48 @@ class Setup():
         self.interaction_layout3.addWidget(self.sess_combobox, stretch=2)
         self.interaction_layout3.addWidget(self.align_combobox, stretch=2)
         self.interaction_layout3.addWidget(self.data_button, stretch=1)
+
+    def init_region_lookup(self):
+        allen = alf.io.load_file_content('C:/Users/Mayo/Downloads/Electrophys_Features_Map_CCF_v2017 - Sheet1.csv')
+        allen = allen.drop([0]).reset_index(drop=True)
+
+        def parent_path(struct_path):
+            return (struct_path.rsplit('/', 2)[0] + '/')
+
+        allen['parent_path'] = allen['structure_id_path'].apply(parent_path)
+
+        self.struct_list = QtGui.QStandardItemModel()
+        self.struct_view = QtWidgets.QTreeView()
+        self.struct_view.setModel(self.struct_list)
+        self.struct_view.clicked.connect(self.label_pressed)
+
+        self.struct_view.setHeaderHidden(True)
+        unique_levels = np.unique(allen['depth']).astype(int)
+        parent_info = {}
+        idx = np.where(allen['depth'] == unique_levels[0])[0]
+        item = QtGui.QStandardItem(allen['acronym'][idx[0]] + ': ' + allen['name'][idx[0]])
+        icon = QtGui.QPixmap(20, 20)
+        icon.fill(QtGui.QColor('#' + allen['color_hex_triplet'][idx[0]]))
+        item.setIcon(QtGui.QIcon(icon))
+        item.setAccessibleText(str(allen['id'][idx[0]]))
+        item.setEditable(False)
+        self.struct_list.appendRow(item)
+        parent_info.update({allen['structure_id_path'][idx[0]]: item})
+
+        for level in unique_levels[1:]:
+            idx_levels = np.where(allen['depth'] == level)[0]
+            for idx in idx_levels:
+                parent = allen['parent_path'][idx]
+                parent_item = parent_info[parent]
+                item = QtGui.QStandardItem(allen['acronym'][idx] + ': ' + allen['name'][idx])
+                icon.fill(QtGui.QColor('#' + allen['color_hex_triplet'][idx]))
+                item.setIcon(QtGui.QIcon(icon))
+                item.setAccessibleText(str(allen['id'][idx]))
+                item.setEditable(False)
+                parent_item.appendRow(item)
+                parent_info.update({allen['structure_id_path'][idx]: item})
+
+        self.struct_description = QtWidgets.QTextEdit()
 
     def init_figures(self):
         """
@@ -529,17 +577,22 @@ class Setup():
         self.lin_fit_option.move(fig_width - 70, fig_height - 60)
 
 
-class ClustPopupWindow(QtGui.QMainWindow):
+class PopupWindow(QtGui.QMainWindow):
     closed = QtCore.pyqtSignal(QtGui.QMainWindow)
     moved = QtCore.pyqtSignal()
 
-    def __init__(self, title, parent=None):
-        super(ClustPopupWindow, self).__init__()
+    def __init__(self, title, parent=None, size=(300,300), graphics=True):
+        super(PopupWindow, self).__init__()
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
-        self.resize(300, 300)
+        self.resize(size[0], size[1])
         self.move(randrange(30) + 1000, randrange(30) + 200)
-        self.clust_widget = pg.GraphicsLayoutWidget()
-        self.setCentralWidget(self.clust_widget)
+        if graphics:
+            self.popup_widget = pg.GraphicsLayoutWidget()
+        else:
+            self.popup_widget = QtWidgets.QWidget()
+            self.layout = QtWidgets.QGridLayout()
+            self.popup_widget.setLayout(self.layout)
+        self.setCentralWidget(self.popup_widget)
         self.setWindowTitle(title)
         self.show()
 

@@ -6,235 +6,14 @@ import ibllib.atlas as atlas
 from oneibl.one import ONE
 from atlaselectrophysiology.load_histology import download_histology_data
 brain_atlas = atlas.AllenAtlas(25)
-TIP_SIZE_UM = 200
 ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
 one = ONE(base_url=ONE_BASE_URL)
 
-def _cumulative_distance(xyz):
-    return np.cumsum(np.r_[0, np.sqrt(np.sum(np.diff(xyz, axis=0) ** 2, axis=1))])
 
-class EphysAlignment:
-
-    def __init__(self, xyz_track, chn_depths, track_extent, track_init,
-                 feature_init, probe_id=None):
-
-        self.xyz_track = xyz_track
-        self.chn_depths = chn_depths
-        self.track_extent = track_extent
-        self.track_init = track_init
-        self.feature_init = feature_init
-        self.probe_id = probe_id
-        self.region, self.region_label, self.region_colour = self.get_histology_regions()
-
-    def get_track_and_feature(self):
-        return self.feature_init, self.track_init, self.xyz_track
-
-    @staticmethod
-    def feature2track(trk, feature, track):
-        fcn = scipy.interpolate.interp1d(feature, track, fill_value="extrapolate")
-        return fcn(trk)
-
-    @staticmethod
-    def track2feature(ft, feature, track):
-        fcn = scipy.interpolate.interp1d(track, feature, fill_value="extrapolate")
-        return fcn(ft)
-
-    @staticmethod
-    def feature2track_lin(trk, feature, track):
-        if feature.size >= 5:
-            fcn_lin = np.poly1d(np.polyfit(feature[1:-1], track[1:-1], 1))
-            lin_fit = fcn_lin(trk)
-        else:
-            lin_fit = 0
-        return lin_fit
-
-    @staticmethod
-    def adjust_extremes_uniform(feature, track):
-        diff = np.diff(feature - track)
-        track[0] -= diff[0]
-        track[-1] += diff[-1]
-        return track
-
-    def adjust_extremes_linear(self, feature, track, extend_feature):
-        feature[0] = self.track_extent[0] - extend_feature
-        feature[-1] = self.track_extent[-1] + extend_feature
-        extend_track = self.feature2track_lin(feature[[0, -1]], feature, track)
-        track[0] = extend_track[0]
-        track[-1] = extend_track[-1]
-        return feature, track
-
-    def scale_histology_regions(self, feature, track):
-        region_label = np.copy(self.region_label)
-        region = self.track2feature(self.region, feature, track) * 1e6
-        region_label[:, 0] = (self.track2feature(np.float64(region_label[:, 0]), feature, track) * 1e6)
-        return region, region_label
-
-    def get_histology_regions(self):
-        sampling_trk = np.arange(self.track_extent[0],
-                                 self.track_extent[-1] - 10 * 1e-6, 10 * 1e-6)
-        xyz_samples = histology.interpolate_along_track(self.xyz_track,
-                                                        sampling_trk - sampling_trk[0])
-        region_ids = brain_atlas.get_labels(xyz_samples)
-        region_info = brain_atlas.regions.get(region_ids)
-        boundaries = np.where(np.diff(region_info.id))[0]
-        region = np.empty((boundaries.size + 1, 2))
-        region_label = np.empty((boundaries.size + 1, 2), dtype=object)
-        region_colour = np.empty((boundaries.size + 1, 3), dtype=int)
-        for bound in np.arange(boundaries.size + 1):
-            if bound == 0:
-                _region = np.array([0, boundaries[bound]])
-            elif bound == boundaries.size:
-                _region = np.array([boundaries[bound - 1], region_info.id.size - 1])
-            else:
-                _region = np.array([boundaries[bound - 1], boundaries[bound]])
-            _region_colour = region_info.rgb[_region[1]]
-            _region_label = region_info.acronym[_region[1]]
-            _region = sampling_trk[_region]
-            _region_mean = np.mean(_region)
-            region[bound, :] = _region
-            region_colour[bound, :] = _region_colour
-            region_label[bound, :] = (_region_mean, _region_label)
-
-        return region, region_label, region_colour
-
-    def get_scale_factor(self, region):
-        scale = []
-        for iR, (reg, reg_orig) in enumerate(zip(region, self.region * 1e6)):
-            scale = np.r_[scale, (reg[1] - reg[0]) / (reg_orig[1] - reg_orig[0])]
-        boundaries = np.where(np.diff(np.around(scale, 3)))[0]
-        if boundaries.size == 0:
-            scaled_region = np.array([[region[0][0], region[-1][1]]])
-            scale_factor = np.unique(scale)
-        else:
-            scaled_region = np.empty((boundaries.size + 1, 2))
-            scale_factor = []
-            for bound in np.arange(boundaries.size + 1):
-                if bound == 0:
-                    _scaled_region = np.array([region[0][0],
-                                        region[boundaries[bound]][1]])
-                    _scale_factor = scale[0]
-                elif bound == boundaries.size:
-                    _scaled_region = np.array([region[boundaries[bound - 1]][1],
-                                        region[-1][1]])
-                    _scale_factor = scale[-1]
-                else:
-                    _scaled_region = np.array([region[boundaries[bound - 1]][1],
-                                        region[boundaries[bound]][1]])
-                    _scale_factor = scale[boundaries[bound]]
-                scaled_region[bound, :] = _scaled_region
-                scale_factor = np.r_[scale_factor, _scale_factor]
-        return scaled_region, scale_factor
-
-    def get_channel_locations(self, feature, track, depths=None):
-        """
-        Gets 3d coordinates from a depth along the electrophysiology feature. 2 steps
-        1) interpolate from the electrophys features depths space to the probe depth space
-        2) interpolate from the probe depth space to the true 3D coordinates
-        if depths is not provided, defaults to channels local coordinates depths
-        """
-        if depths is None:
-            depths = self.chn_depths / 1e6
-        # nb using scipy here so we can change to cubic spline if needed
-        channel_depths_track = self.feature2track(depths, feature, track) - self.track_extent[0]
-        xyz_channels = histology.interpolate_along_track(self.xyz_track, channel_depths_track)
-        return xyz_channels
-
-    def get_brain_locations(self, xyz_channels):
-        brain_regions = brain_atlas.regions.get(brain_atlas.get_labels(xyz_channels))
-        return brain_regions
-
-    def get_perp_vector(self, feature_lines, feature, track):
-
-        slice_lines = []
-        for line in feature_lines[1:-1]:
-            depths = np.array([line, line + 10 / 1e6])
-            xyz = self.get_channel_locations(feature, track, depths)
-
-            extent = 500e-6
-            vector = np.diff(xyz, axis=0)[0]
-            point = xyz[0, :]
-            vector_perp = np.array([1, 0, -1 * vector[0] / vector[2]])
-            xyz_per = np.r_[[point + (-1 * extent * vector_perp)],
-                        [point + (extent * vector_perp)]]
-            slice_lines.append(xyz_per)
-
-        return slice_lines
-
-
-
-
-
-
-
-class EphysAlignmentFromAlyx(EphysAlignment):
-
-    def __init__(self, eid, probe_label, chn_depths, use_previous=False, track_previous=None, feature_previous=None):
-
-        # Load in user picks for session
-        insertion = one.alyx.rest('insertions', 'list', session=eid, name=probe_label)
-        xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
-        probe_id = insertion[0]['id']
-
-        # Use the top/bottom 1/4 of picks to compute the entry and exit trajectories of the probe
-        n_picks = np.max([4, round(xyz_picks.shape[0] / 4)])
-        traj_entry = atlas.Trajectory.fit(xyz_picks[:n_picks, :])
-        traj_exit = atlas.Trajectory.fit(xyz_picks[-1 * n_picks:, :])
-        # Force the entry to be on the upper z lim of the atlas to account for cases where channels
-        # may be located above the surface of the brain
-        entry = (traj_entry.eval_z(brain_atlas.bc.zlim))[0, :]
-        exit = atlas.Insertion.get_brain_exit(traj_exit, brain_atlas)
-        exit[2] = exit[2] - 200 / 1e6
-
-        xyz_track = np.r_[exit[np.newaxis, :], xyz_picks, entry[np.newaxis, :]]
-        # by convention the deepest point is first
-        xyz_track = xyz_track[np.argsort(xyz_track[:, 2]), :]
-
-        tip_distance = _cumulative_distance(xyz_track)[1] + TIP_SIZE_UM / 1e6
-        track_length = _cumulative_distance(xyz_track)[-1]
-        track_extent = np.array([0, track_length]) - tip_distance
-
-        if use_previous:
-            track_init = track_previous
-            feature_init = feature_previous
-        else:
-            track_init = np.copy(track_extent)
-            feature_init = np.copy(track_extent)
-
-        super().__init__(xyz_track, chn_depths, track_extent, track_init, feature_init, probe_id)
-
-
-
-class EphysAlignmentFromLocal(EphysAlignment):
-
-    def __init__(self, xyz_picks, chn_depths, use_previous=False, track_previous=None, feature_previous=None):
-
-        # Use the top/bottom 1/4 of picks to compute the entry and exit trajectories of the probe
-        n_picks = np.max([4, round(xyz_picks.shape[0] / 4)])
-        traj_entry = atlas.Trajectory.fit(xyz_picks[:n_picks, :])
-        traj_exit = atlas.Trajectory.fit(xyz_picks[-1 * n_picks:, :])
-        # Force the entry to be on the upper z lim of the atlas to account for cases where channels
-        # may be located above the surface of the brain
-        entry = (traj_entry.eval_z(brain_atlas.bc.zlim))[0, :]
-        exit = atlas.Insertion.get_brain_exit(traj_exit, brain_atlas)
-        exit[2] = exit[2] - 200 / 1e6
-
-        xyz_track = np.r_[exit[np.newaxis, :], xyz_picks, entry[np.newaxis, :]]
-        # by convention the deepest point is first
-        xyz_track = xyz_track[np.argsort(xyz_track[:, 2]), :]
-
-        tip_distance = _cumulative_distance(xyz_track)[1] + TIP_SIZE_UM / 1e6
-        track_length = _cumulative_distance(xyz_track)[-1]
-        track_extent = np.array([0, track_length]) - tip_distance
-
-        if use_previous:
-            track_init = track_previous
-            feature_init = feature_previous
-        else:
-            track_init = np.copy(track_extent)
-            feature_init = np.copy(track_extent)
-
-        super().__init__(xyz_track, chn_depths, track_extent, track_init, feature_init, probe_id=None)
-
+brain_regions = one.alyx.rest('brain-regions', 'list')
+allen_id = np.empty((0, 1), dtype=int)
+for br in brain_regions:
+    allen_id = np.append(allen_id, br['id'])
 
 
 class LoadData:
@@ -358,6 +137,13 @@ class LoadData:
 
         return alf_path, ephys_path, chn_depths, sess_notes
 
+    def get_xyzpicks(self):
+        insertion = one.alyx.rest('insertions', 'list', session=self.eid, name=self.probe_label)
+        xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
+
+        return xyz_picks
+
+
     def get_slice_images(self, xyz_channels):
         hist_path = download_histology_data(self.subj, self.lab)
         ccf_slice, width, height, _ = brain_atlas.tilted_slice(xyz_channels, axis=1)
@@ -383,6 +169,32 @@ class LoadData:
         }
 
         return slice_data
+
+    def get_region_info(self, idx, region_ids):
+        region_idx = region_ids[idx]
+        struct_idx = np.where(allen_id == region_idx)[0][0]
+        current_struct = brain_regions[struct_idx]
+        parent_idx = current_struct['parent']
+        structure = []
+        description = []
+
+        while parent_idx:
+            current_struct = brain_regions[struct_idx]
+            parent_idx = current_struct['parent']
+            description.append(current_struct['description'])
+            structure.append(current_struct['acronym'] + ': ' + current_struct['name'])
+            struct_idx = np.where(allen_id == parent_idx)[0][0]
+
+        return structure, description
+
+    def get_region_description(self, region_idx):
+        struct_idx = np.where(allen_id == region_idx)[0][0]
+        description = brain_regions[struct_idx]['description']
+        region_lookup = brain_regions[struct_idx]['acronym'] + ': ' + \
+                        brain_regions[struct_idx]['name']
+
+        return description, region_lookup
+
 
 
     def upload_data(self, feature, track, xyz_channels, overwrite=False):

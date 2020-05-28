@@ -2,7 +2,8 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import numpy as np
 from random import randrange
-from atlaselectrophysiology.load_data import EphysAlignmentFromAlyx, LoadData
+from atlaselectrophysiology.load_data import LoadData
+from atlaselectrophysiology.ephys_alignment import EphysAlignment
 import atlaselectrophysiology.plot_data as pd
 import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
@@ -70,7 +71,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Variables to keep track of popup plots
         self.cluster_popups = []
+        self.label_popup = []
         self.popup_status = True
+
 
         self.hist_data = {
             'region': [0] * (self.max_idx + 1),
@@ -292,6 +295,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :type movable: Bool
         """
         fig.clear()
+        self.hist_regions = np.empty((0,1))
         axis = fig.getAxis(ax)
         axis.setTicks([self.hist_data['axis_label'][self.idx]])
         axis.setZValue(10)
@@ -305,6 +309,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             bound = pg.InfiniteLine(pos=reg[0], angle=0, pen='w')
             fig.addItem(region)
             fig.addItem(bound)
+            self.hist_regions = np.vstack([self.hist_regions, region])
 
         bound = pg.InfiniteLine(pos=self.hist_data['region'][self.idx][-1][1], angle=0,
                                 pen='w')
@@ -436,9 +441,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             region = pg.LinearRegionItem(values=(reg[0], reg[1]),
                                          orientation=pg.LinearRegionItem.Horizontal,
                                          brush=colours[ir], movable=False)
-            region.setZValue(100)
+            #region.setZValue(100)
             bound = pg.InfiniteLine(pos=reg[0], angle=0, pen=colours[ir])
-            bound.setZValue(101)
+            #bound.setZValue(101)
 
             self.fig_scale.addItem(region)
             self.fig_scale.addItem(bound)
@@ -446,7 +451,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         bound = pg.InfiniteLine(pos=self.scale_data['region'][self.idx][-1][1], angle=0,
                                 pen=colours[-1])
-        bound.setZValue(101)
+        #bound.setZValue(101)
         self.fig_scale.addItem(bound)
 
         self.fig_scale.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
@@ -499,8 +504,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.slice_chns = pg.ScatterPlotItem()
             self.slice_chns.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2], pen='r', brush='r')
             self.fig_slice.addItem(self.slice_chns)
-            track_lines = self.ephysalign.get_perp_vector(
-                self.features[self.idx], self.features[self.idx], self.track[self.idx])
+            track_lines = self.ephysalign.get_perp_vector(self.features[self.idx], self.track[self.idx])
 
             for ref_line in track_lines:
                 line = pg.PlotCurveItem()
@@ -512,8 +516,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             for line in self.slice_lines:
                 self.fig_slice.removeItem(line)
 
-            track_lines = self.ephysalign.get_perp_vector(
-                self.features[self.idx], self.features[self.idx], self.track[self.idx])
+            track_lines = self.ephysalign.get_perp_vector(self.features[self.idx], self.track[self.idx])
 
             for ref_line in track_lines:
                 line = pg.PlotCurveItem()
@@ -744,13 +747,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         self.loaddata.get_eid()
         alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
-
+        xyz_picks = self.loaddata.get_xyzpicks()
         if np.any(self.feature_prev):
-            self.ephysalign = EphysAlignmentFromAlyx(self.loaddata.eid, self.loaddata.probe_label, self.chn_depths,
-                                                     use_previous=True, track_previous=self.track_prev,
-                                                     feature_previous=self.feature_prev)
+            self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths,
+                                                track_prev=self.track_prev,
+                                                feature_prev=self.feature_prev)
         else:
-            self.ephysalign = EphysAlignmentFromAlyx(self.loaddata.eid, self.loaddata.probe_label, self.chn_depths)
+            self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths)
 
         self.features[self.idx], self.track[self.idx], self.xyz_track = self.ephysalign.get_track_and_feature()
 
@@ -958,6 +961,72 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.lines_tracks = np.delete(self.lines_tracks, line_idx, axis=0)
             self.points = np.delete(self.points, line_idx, axis=0)
 
+    def describe_labels_pressed2(self):
+        if self.selected_region:
+            idx = np.where(self.hist_regions == self.selected_region)[0][0]
+            structure, description = self.loaddata.get_region_info(idx, self.ephysalign.region_id)
+            tree = QtWidgets.QTreeWidget()
+            #tree.setHeaderLabel('Structures')
+            parent_struct = tree
+            for iS, iStruct in enumerate(structure):
+                current_structure = QtWidgets.QTreeWidgetItem(parent_struct,
+                                                              [structure[iS]])
+                if iS == 0:
+                    tree.addTopLevelItem(current_structure)
+                    tree.expandItem(current_structure)
+
+                if description[iS]:
+                    current_description = QtWidgets.QTreeWidgetItem(
+                        current_structure)
+                    text = QtWidgets.QTextEdit()
+                    text.setFixedSize(200, 50)
+                    text.setText(description[iS])
+                    tree.setItemWidget(current_description, 0, text)
+                else:
+                    QtWidgets.QTreeWidgetItem(current_structure,
+                                              ['No details available'])
+                parent_struct = current_structure
+
+            self.label_win = ephys_gui.ClustPopupWindow(title='Structure Information', graphics=False)
+            self.label_win.layout.addWidget(tree)
+            self.label_popup.append(self.label_win)
+
+
+    def describe_labels_pressed(self):
+        if self.selected_region:
+            idx = np.where(self.hist_regions == self.selected_region)[0][0]
+            description, lookup = self.loaddata.get_region_description(self.ephysalign.region_id[idx])
+
+            item = self.struct_list.findItems(lookup, flags = QtCore.Qt.MatchRecursive)
+            model_item = self.struct_list.indexFromItem(item[0])
+            self.struct_view.scrollTo(model_item)
+            self.struct_view.setCurrentIndex(model_item)
+            self.struct_description.setText(description)
+
+            if not self.label_popup:
+                self.label_win = ephys_gui.PopupWindow(title='Structure Information', size=(500, 700), graphics=False)
+                self.label_win.layout.addWidget(self.struct_view)
+                self.label_win.layout.addWidget(self.struct_description)
+                self.label_win.layout.setRowStretch(0, 7)
+                self.label_win.layout.setRowStretch(1, 3)
+                self.label_popup.append(self.label_win)
+                self.label_win.closed.connect(self.label_closed)
+            else:
+                self.label_win.show()
+
+    def label_closed(self, popup):
+        self.label_win.hide()
+
+    def label_pressed(self, item):
+        idx = int(item.model().itemFromIndex(item).accessibleText())
+        description, lookup = self.loaddata.get_region_description(idx)
+        item = self.struct_list.findItems(lookup,
+                                          flags=QtCore.Qt.MatchRecursive)
+        model_item = self.struct_list.indexFromItem(item[0])
+        self.struct_view.setCurrentIndex(model_item)
+        self.struct_description.setText(description)
+
+
     def next_button_pressed(self):
         """
         Triggered when right key pressed. Updates all plots and indices with next move. Ensures
@@ -1156,11 +1225,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         clust_layout.addItem(autocorr_plot, 0, 0)
         clust_layout.addItem(template_plot, 1, 0)
 
-        self.clust_win = ephys_gui.ClustPopupWindow(title=f'Cluster {clust_idx}')
+        self.clust_win = ephys_gui.PopupWindow(title=f'Cluster {clust_idx}')
         self.clust_win.closed.connect(self.popup_closed)
         self.clust_win.moved.connect(self.popup_moved)
-        self.clust_win.clust_widget.addItem(autocorr_plot, 0, 0)
-        self.clust_win.clust_widget.addItem(template_plot, 1, 0)
+        self.clust_win.popup_widget.addItem(autocorr_plot, 0, 0)
+        self.clust_win.popup_widget.addItem(template_plot, 1, 0)
         self.cluster_popups.append(self.clust_win)
         self.activateWindow()
 
@@ -1169,7 +1238,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Triggered when a double click event is detected on ephys of histology plots. Adds reference
         line on ephys and histology plot that can be moved to align ephys signatures with brain
         regions. Also adds scatter point on fit plot
-        :param event: double click event signal
+        :param event: double click event signals
         :type event: pyqtgraph mouseEvents
         """
         if event.double():
@@ -1210,14 +1279,18 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Returns the pyqtgraph items that the mouse is hovering over. Used to identify reference
         lines so that they can be deleted
         """
-        if items:
+        if len(items) > 1:
             self.selected_line = []
+            self.selected_region = []
             if type(items[0]) == pg.InfiniteLine:
                 self.selected_line = items[0]
-            elif type(items[0]) == pg.LinearRegionItem:
-                idx = np.where(self.scale_regions == items[0])[0][0]
+            elif (items[0] == self.fig_scale) & (type(items[1]) == pg.LinearRegionItem):
+                idx = np.where(self.scale_regions == items[1])[0][0]
                 self.fig_scale_ax.setLabel('Scale Factor = ' +
                                            str(np.around(self.scale_factor[idx], 2)))
+            elif (items[0] == self.fig_hist) & (type(items[1]) == pg.LinearRegionItem):
+                self.selected_region = items[1]
+
 
     def update_lines_features(self, line):
         """
