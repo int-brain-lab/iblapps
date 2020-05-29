@@ -1,8 +1,8 @@
 import datajoint as dj
-#from ibl_pipeline import ephys, reference
 from ibl_pipeline import reference
 
-schema = dj.schema('group_shared_testing')
+schema = dj.schema('group_shared_ephys')
+
 
 @schema
 class ClusterLabel(dj.Imported):
