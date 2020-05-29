@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime
 from oneibl.one import ONE
 from ibllib.misc import print_progress
+import sys
 
 
 def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
@@ -25,10 +26,13 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
 
     # Load in output from phy
     uuid = alf.io.load_file_content(alf_path.joinpath('clusters.uuids.csv'))
-    cluster_info = alf.io.load_file_content(
-        alf_path.joinpath('cluster_group.tsv'))
-    cluster_info['cluster_uuid'] = uuid['uuids'][
-        cluster_info['cluster_id']].values
+    try:
+        cluster_info = alf.io.load_file_content(alf_path.joinpath('cluster_group.tsv'))
+        cluster_info['cluster_uuid'] = uuid['uuids'][cluster_info['cluster_id']].values
+    except Exception as err:
+        print(err)
+        print('Could not find cluster group file output from phy')
+        sys.exit(1)
 
     # dj table that holds data
     cluster = cluster_table.ClusterLabel()
@@ -109,4 +113,4 @@ if __name__ == '__main__':
             populate_dj_with_phy(str(args.probe_label), subj=str(args.subject),
                                  date=str(args.date), sess_no=args.session_no)
 
-    #populate_dj_with_phy('probe00', subj='KS022', date='2019-12-10', sess_no=1)
+    # populate_dj_with_phy('probe00', subj='KS022', date='2019-12-10', sess_no=1)
