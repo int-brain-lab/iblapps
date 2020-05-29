@@ -3,7 +3,7 @@ import pyqtgraph as pg
 import numpy as np
 from random import randrange
 from atlaselectrophysiology.load_data import LoadData
-from atlaselectrophysiology.ephys_alignment import EphysAlignment
+from ibllib.pipes.ephys_alignment import EphysAlignment
 import atlaselectrophysiology.plot_data as pd
 import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
