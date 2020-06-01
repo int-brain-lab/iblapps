@@ -16,6 +16,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.init_variables()
         self.init_layout(self)
         self.loaddata = LoadData()
+        self.init_region_lookup(self.loaddata.get_allen_csv())
         self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
         self.configure = True
 
@@ -146,7 +147,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             item.setEditable(False)
             list_name.appendRow(item)
 
+        min_width = combobox.fontMetrics().width(max(data, key=len))
+        min_width += combobox.view().autoScrollMargin()
+        min_width += combobox.style().pixelMetric(QtGui.QStyle.PM_ScrollBarExtent)
+        combobox.view().setMinimumWidth(min_width)
         combobox.setCurrentIndex(0)
+
+
 
     def set_view(self, view=1, configure=False):
         """
@@ -310,6 +317,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             fig.addItem(region)
             fig.addItem(bound)
             self.hist_regions = np.vstack([self.hist_regions, region])
+
+        self.selected_region = self.hist_regions[-2]
 
         bound = pg.InfiniteLine(pos=self.hist_data['region'][self.idx][-1][1], angle=0,
                                 pen='w')
@@ -492,10 +501,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         self.fig_slice.addItem(img)
         traj = pg.PlotCurveItem()
-        traj.setData(x=self.xyz_track[:, 0], y=self.xyz_track[:, 2], pen='g')
+        traj.setData(x=self.xyz_track[:, 0], y=self.xyz_track[:, 2], pen=self.kpen_solid)
         self.fig_slice.addItem(traj)
-
-
         self.plot_channels()
 
     def plot_channels(self):
@@ -508,7 +515,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             for ref_line in track_lines:
                 line = pg.PlotCurveItem()
-                line.setData(x=ref_line[:, 0], y=ref_line[:, 2], pen='k')
+                line.setData(x=ref_line[:, 0], y=ref_line[:, 2], pen=self.kpen_dot)
                 self.fig_slice.addItem(line)
                 self.slice_lines.append(line)
 
@@ -520,7 +527,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             for ref_line in track_lines:
                 line = pg.PlotCurveItem()
-                line.setData(x=ref_line[:, 0], y=ref_line[:, 2], pen='k')
+                line.setData(x=ref_line[:, 0], y=ref_line[:, 2], pen=self.kpen_dot)
                 self.fig_slice.addItem(line)
                 self.slice_lines.append(line)
             self.slice_chns.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2], pen='r', brush='r')
@@ -598,11 +605,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.line_plots = []
             line = pg.PlotCurveItem()
             line.setData(x=data['x'], y=data['y'])
-            line.setPen('k')
+            line.setPen(self.kpen_solid)
             self.fig_line.addItem(line)
             self.fig_line.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
-            self.fig_line.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
-                                                                               self.probe_extra, padding=self.pad)
+            self.fig_line.setYRange(min=self.probe_tip - self.probe_extra,
+                                    max=self.probe_top +self.probe_extra, padding=self.pad)
             self.set_axis(self.fig_line, 'bottom', label=data['xaxis'])
             self.line_plots.append(line)
 
@@ -961,44 +968,14 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.lines_tracks = np.delete(self.lines_tracks, line_idx, axis=0)
             self.points = np.delete(self.points, line_idx, axis=0)
 
-    def describe_labels_pressed2(self):
-        if self.selected_region:
-            idx = np.where(self.hist_regions == self.selected_region)[0][0]
-            structure, description = self.loaddata.get_region_info(idx, self.ephysalign.region_id)
-            tree = QtWidgets.QTreeWidget()
-            #tree.setHeaderLabel('Structures')
-            parent_struct = tree
-            for iS, iStruct in enumerate(structure):
-                current_structure = QtWidgets.QTreeWidgetItem(parent_struct,
-                                                              [structure[iS]])
-                if iS == 0:
-                    tree.addTopLevelItem(current_structure)
-                    tree.expandItem(current_structure)
-
-                if description[iS]:
-                    current_description = QtWidgets.QTreeWidgetItem(
-                        current_structure)
-                    text = QtWidgets.QTextEdit()
-                    text.setFixedSize(200, 50)
-                    text.setText(description[iS])
-                    tree.setItemWidget(current_description, 0, text)
-                else:
-                    QtWidgets.QTreeWidgetItem(current_structure,
-                                              ['No details available'])
-                parent_struct = current_structure
-
-            self.label_win = ephys_gui.ClustPopupWindow(title='Structure Information', graphics=False)
-            self.label_win.layout.addWidget(tree)
-            self.label_popup.append(self.label_win)
-
-
     def describe_labels_pressed(self):
         if self.selected_region:
             idx = np.where(self.hist_regions == self.selected_region)[0][0]
             description, lookup = self.loaddata.get_region_description(self.ephysalign.region_id[idx])
 
-            item = self.struct_list.findItems(lookup, flags = QtCore.Qt.MatchRecursive)
+            item = self.struct_list.findItems(lookup, flags=QtCore.Qt.MatchRecursive)
             model_item = self.struct_list.indexFromItem(item[0])
+            self.struct_view.collapseAll()
             self.struct_view.scrollTo(model_item)
             self.struct_view.setCurrentIndex(model_item)
             self.struct_description.setText(description)
@@ -1011,11 +988,19 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 self.label_win.layout.setRowStretch(1, 3)
                 self.label_popup.append(self.label_win)
                 self.label_win.closed.connect(self.label_closed)
+                self.label_win.moved.connect(self.label_moved)
+                self.activateWindow()
             else:
                 self.label_win.show()
+                self.activateWindow()
 
     def label_closed(self, popup):
         self.label_win.hide()
+
+    def label_moved(self):
+        self.activateWindow()
+
+
 
     def label_pressed(self, item):
         idx = int(item.model().itemFromIndex(item).accessibleText())
@@ -1025,7 +1010,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         model_item = self.struct_list.indexFromItem(item[0])
         self.struct_view.setCurrentIndex(model_item)
         self.struct_description.setText(description)
-
 
     def next_button_pressed(self):
         """
@@ -1151,17 +1135,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                                                           self.probe_extra, padding=self.pad)
 
     def display_session_notes(self):
-        dialog = QtGui.QDialog(self)
-        dialog.setWindowTitle('Session notes from Alyx')
-        dialog.resize(200, 100)
+        self.session_win = ephys_gui.PopupWindow(title='Session notes from Alyx', size=(200, 100), graphics=False)
         notes = QtGui.QTextEdit()
         notes.setReadOnly(True)
         notes.setLineWrapMode(QtGui.QTextEdit.WidgetWidth)
         notes.setText(self.sess_notes)
-        dialog_layout = QtGui.QVBoxLayout()
-        dialog_layout.addWidget(notes)
-        dialog.setLayout(dialog_layout)
-        dialog.show()
+        self.session_win.layout.addWidget(notes)
 
     def popup_closed(self, popup):
         popup_idx = [iP for iP, pop in enumerate(self.cluster_popups) if pop == popup][0]
@@ -1281,7 +1260,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         if len(items) > 1:
             self.selected_line = []
-            self.selected_region = []
+            #self.selected_region = []
             if type(items[0]) == pg.InfiniteLine:
                 self.selected_line = items[0]
             elif (items[0] == self.fig_scale) & (type(items[1]) == pg.LinearRegionItem):

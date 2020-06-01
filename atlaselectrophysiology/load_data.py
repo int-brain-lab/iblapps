@@ -4,6 +4,8 @@ from datetime import datetime
 import ibllib.pipes.histology as histology
 import ibllib.atlas as atlas
 from oneibl.one import ONE
+from pathlib import Path
+import alf.io
 from atlaselectrophysiology.load_histology import download_histology_data
 brain_atlas = atlas.AllenAtlas(25)
 ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
@@ -55,7 +57,6 @@ class LoadData:
                    self.sess_with_hist]
         return session
 
-
     def get_info(self, idx):
         """
         """
@@ -90,7 +91,6 @@ class LoadData:
         print(self.date)
         print(self.eid)
 
-
     def get_starting_alignment(self, idx):
         align = self.prev_align[idx]
 
@@ -123,10 +123,10 @@ class LoadData:
         ]
 
         _ = one.load(self.eid, dataset_types=dtypes, download_only=True)
-        path = one.path_from_eid(self.eid)
-        alf_path = path.joinpath('alf', self.probe_label)
-        ephys_path = path.joinpath('raw_ephys_data', self.probe_label)
-        self.chn_coords = np.load(path.joinpath(alf_path, 'channels.localCoordinates.npy'))
+        sess_path = one.path_from_eid(self.eid)
+        alf_path = Path(sess_path, 'alf', self.probe_label)
+        ephys_path = Path(sess_path, 'raw_ephys_data', self.probe_label)
+        self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
         chn_depths = self.chn_coords[:, 1]
 
         sess = one.alyx.rest('sessions', 'read', id=self.eid)
@@ -137,12 +137,17 @@ class LoadData:
 
         return alf_path, ephys_path, chn_depths, sess_notes
 
+    def get_allen_csv(self):
+        allen_path = Path(Path(atlas.__file__).parent, 'allen_structure_tree.csv')
+        allen = alf.io.load_file_content(allen_path)
+
+        return allen
+
     def get_xyzpicks(self):
         insertion = one.alyx.rest('insertions', 'list', session=self.eid, name=self.probe_label)
         xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
 
         return xyz_picks
-
 
     def get_slice_images(self, xyz_channels):
         hist_path = download_histology_data(self.subj, self.lab)
@@ -170,39 +175,26 @@ class LoadData:
 
         return slice_data
 
-    def get_region_info(self, idx, region_ids):
-        region_idx = region_ids[idx]
-        struct_idx = np.where(allen_id == region_idx)[0][0]
-        current_struct = brain_regions[struct_idx]
-        parent_idx = current_struct['parent']
-        structure = []
-        description = []
-
-        while parent_idx:
-            current_struct = brain_regions[struct_idx]
-            parent_idx = current_struct['parent']
-            description.append(current_struct['description'])
-            structure.append(current_struct['acronym'] + ': ' + current_struct['name'])
-            struct_idx = np.where(allen_id == parent_idx)[0][0]
-
-        return structure, description
-
-    def get_region_description(self, region_idx):
+    @staticmethod
+    def get_region_description(region_idx):
         struct_idx = np.where(allen_id == region_idx)[0][0]
         description = brain_regions[struct_idx]['description']
         region_lookup = brain_regions[struct_idx]['acronym'] + ': ' + \
                         brain_regions[struct_idx]['name']
 
+        if not description:
+            description = region_lookup + '\nNo information available on Alyx for this region'
+        else:
+            description = region_lookup + '\n' + description
+
         return description, region_lookup
-
-
 
     def upload_data(self, feature, track, xyz_channels, overwrite=False):
 
         if overwrite:
             # Get the original stored trajectory
             ephys_traj_prev = one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
-                                       provenance='Ephys aligned histology track')
+                                            provenance='Ephys aligned histology track')
             # Save the json field in memory
             original_json = ephys_traj_prev[0]['json']
 
@@ -218,7 +210,7 @@ class LoadData:
             histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=one,
                                              overwrite=overwrite)
 
-            # Get  the new trajectoru
+            # Get the new trajectoru
             ephys_traj = one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                        provenance='Ephys aligned histology track')
 
@@ -230,6 +222,7 @@ class LoadData:
             else:
                 original_json = data
             patch_dict = {'json': original_json}
-            one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'], data=patch_dict)
+            one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
+                          data=patch_dict)
 
 
