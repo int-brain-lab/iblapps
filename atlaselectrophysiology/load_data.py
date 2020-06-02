@@ -8,7 +8,7 @@ from pathlib import Path
 import alf.io
 from atlaselectrophysiology.load_histology import download_histology_data
 brain_atlas = atlas.AllenAtlas(25)
-ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
+ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 one = ONE(base_url=ONE_BASE_URL)
 
 
@@ -196,7 +196,9 @@ class LoadData:
             ephys_traj_prev = one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                             provenance='Ephys aligned histology track')
             # Save the json field in memory
-            original_json = ephys_traj_prev[0]['json']
+            original_json = []
+            if np.any(ephys_traj_prev):
+                original_json = ephys_traj_prev[0]['json']
 
             # Create new trajectory and overwrite previous one
             insertion = atlas.Insertion.from_track(xyz_channels, brain_atlas)

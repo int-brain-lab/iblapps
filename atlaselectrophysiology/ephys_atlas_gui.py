@@ -720,8 +720,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.sess_list.clear()
         sessions = self.loaddata.get_sessions(idx)
         self.populate_lists(sessions, self.sess_list, self.sess_combobox)
-        prev_alignments = self.loaddata.get_info(0)
-        self.populate_lists(prev_alignments, self.align_list, self.align_combobox)
+        self.prev_alignments = self.loaddata.get_info(0)
+        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
     def on_session_selected(self, idx):
@@ -730,8 +730,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :param idx: index of chosen session (item) in drop down list
         :type idx: int
         """
-        prev_alignments = self.loaddata.get_info(idx)
-        self.populate_lists(prev_alignments, self.align_list, self.align_combobox)
+        self.prev_alignments = self.loaddata.get_info(idx)
+        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
     def on_alignment_selected(self, idx):
@@ -1100,7 +1100,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                             "Upload final channel locations to Alyx?",
                                             QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
         if upload == QtGui.QMessageBox.Yes:
-            if np.any(self.feature_prev):
+            #if np.any(self.prev_alignments):
+            if len(self.prev_alignments) > 1:
 
                 overwrite = QtGui.QMessageBox.warning(self, '', ("Ephys aligned trajectory "
                                                                  "for this probe insertion already exists on "
