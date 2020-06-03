@@ -151,6 +151,7 @@ class LoadData:
 
     def get_slice_images(self, xyz_channels):
         hist_path = download_histology_data(self.subj, self.lab)
+        #hist_path =[]
         ccf_slice, width, height, _ = brain_atlas.tilted_slice(xyz_channels, axis=1)
         ccf_slice = np.swapaxes(np.flipud(ccf_slice), 0, 1)
         label_slice, _, _, _ = brain_atlas.tilted_slice(xyz_channels, volume='annotation', axis=1)
