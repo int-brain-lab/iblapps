@@ -56,6 +56,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Variables to keep track of reference lines and points added
         self.line_status = True
         self.label_status = True
+        self.channel_status = True
         self.lines_features = np.empty((0, 3))
         self.lines_tracks = np.empty((0, 1))
         self.points = np.empty((0, 1))
@@ -202,8 +203,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_data_layout.layout.setRowStretchFactor(1, 10)
 
             self.fig_img.update()
+            self.fig_img.setXRange(min=self.xrange[0] - 10, max=self.xrange[1] + 10, padding=0)
+            self.reset_axis_button_pressed()
             self.fig_line.update()
             self.fig_probe.update()
+
 
         if view == 2:
             self.fig_data_layout.removeItem(self.fig_img_cb)
@@ -235,6 +239,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_data_layout.layout.setRowStretchFactor(1, 10)
 
             self.fig_img.update()
+            self.fig_img.setXRange(min=self.xrange[0] - 10, max=self.xrange[1] + 10, padding=0)
+            self.reset_axis_button_pressed()
             self.fig_line.update()
             self.fig_probe.update()
 
@@ -268,6 +274,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_line.setPreferredWidth(self.fig_line_width)
 
             self.fig_img.update()
+            self.fig_img.setXRange(min=self.xrange[0] - 10, max=self.xrange[1] + 10, padding=0)
+            self.reset_axis_button_pressed()
             self.fig_line.update()
             self.fig_probe.update()
 
@@ -302,7 +310,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :type movable: Bool
         """
         fig.clear()
-        self.hist_regions = np.empty((0,1))
+        self.hist_regions = np.empty((0, 1))
         axis = fig.getAxis(ax)
         axis.setTicks([self.hist_data['axis_label'][self.idx]])
         axis.setZValue(10)
@@ -359,6 +367,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :type movable: Bool
         """
         fig.clear()
+        self.hist_ref_regions = np.empty((0, 1))
         axis = fig.getAxis(ax)
         axis.setTicks([self.hist_data_ref['axis_label']])
         axis.setZValue(10)
@@ -372,6 +381,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             bound = pg.InfiniteLine(pos=reg[0], angle=0, pen='w')
             fig.addItem(region)
             fig.addItem(bound)
+            self.hist_ref_regions = np.vstack([self.hist_ref_regions, region])
 
         bound = pg.InfiniteLine(pos=self.hist_data_ref['region'][-1][1], angle=0,
                                 pen='w')
@@ -487,27 +497,40 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.fig_slice.clear()
         self.slice_chns = []
         img = pg.ImageItem()
-        # self.slice_img.clear()
         img.setImage(data[img_type])
+
         if img_type == 'label':
             img.translate(data['offset'][0], data['offset'][1])
             img.scale(data['scale'][0], data['scale'][1])
+            self.fig_slice_layout.removeItem(self.slice_item)
+            self.fig_slice_layout.addItem(self.fig_slice_hist_alt, 0, 1)
+            self.slice_item = self.fig_slice_hist_alt
         else:
             img.translate(data['offset'][0], data['offset'][1])
             img.scale(data['scale'][0], data['scale'][1])
             color_bar = cb.ColorBar('cividis')
             lut = color_bar.getColourMap()
             img.setLookupTable(lut)
+            self.fig_slice_layout.removeItem(self.slice_item)
+            self.fig_slice_hist.setImageItem(img)
+            self.fig_slice_hist.gradient.setColorMap(color_bar.map)
+            self.fig_slice_hist.autoHistogramRange()
+            self.fig_slice_layout.addItem(self.fig_slice_hist, 0, 1)
+            hist_levels = self.fig_slice_hist.getLevels()
+            if hist_levels[0] != 0:
+                self.fig_slice_hist.setLevels(mn=hist_levels[0], mx=0.25 * hist_levels[1])
+            self.slice_item = self.fig_slice_hist
 
         self.fig_slice.addItem(img)
-        traj = pg.PlotCurveItem()
-        traj.setData(x=self.xyz_track[:, 0], y=self.xyz_track[:, 2], pen=self.kpen_solid)
-        self.fig_slice.addItem(traj)
+        self.traj_line = pg.PlotCurveItem()
+        self.traj_line.setData(x=self.xyz_track[:, 0], y=self.xyz_track[:, 2], pen=self.kpen_solid)
+        self.fig_slice.addItem(self.traj_line)
         self.plot_channels()
 
     def plot_channels(self):
         self.xyz_channels = self.ephysalign.get_channel_locations(self.features[self.idx], self.track[self.idx])
         if not self.slice_chns:
+            self.slice_lines = []
             self.slice_chns = pg.ScatterPlotItem()
             self.slice_chns.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2], pen='r', brush='r')
             self.fig_slice.addItem(self.slice_chns)
@@ -522,7 +545,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         else:
             for line in self.slice_lines:
                 self.fig_slice.removeItem(line)
-
+            self.slice_lines = []
             track_lines = self.ephysalign.get_perp_vector(self.features[self.idx], self.track[self.idx])
 
             for ref_line in track_lines:
@@ -947,6 +970,23 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         else:
             self.add_lines_points()
 
+    def toggle_channel_button_pressed(self):
+        """
+        Triggered when Shift+C key pressed. Shows/hides channels and trajectory on slice image
+        """
+        self.channel_status = not self.channel_status
+        if not self.channel_status:
+            self.fig_slice.removeItem(self.traj_line)
+            self.fig_slice.removeItem(self.slice_chns)
+            for line in self.slice_lines:
+                self.fig_slice.removeItem(line)
+
+        else:
+            self.fig_slice.addItem(self.traj_line)
+            self.fig_slice.addItem(self.slice_chns)
+            for line in self.slice_lines:
+                self.fig_slice.addItem(line)
+
     def delete_line_button_pressed(self):
         """
         Triggered when mouse hovers over reference line and Del key pressed. Deletes a reference
@@ -970,9 +1010,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
     def describe_labels_pressed(self):
         if self.selected_region:
-            idx = np.where(self.hist_regions == self.selected_region)[0][0]
-            description, lookup = self.loaddata.get_region_description(self.ephysalign.region_id[idx])
+            idx = np.where(self.hist_regions == self.selected_region)[0]
+            if not np.any(idx):
+                idx = np.where(self.hist_ref_regions == self.selected_region)[0]
+            if not np.any(idx):
+                idx = np.array([0])
 
+            description, lookup = self.loaddata.get_region_description(self.ephysalign.region_id[idx[0]])
             item = self.struct_list.findItems(lookup, flags=QtCore.Qt.MatchRecursive)
             model_item = self.struct_list.indexFromItem(item[0])
             self.struct_view.collapseAll()
@@ -1270,6 +1314,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                            str(np.around(self.scale_factor[idx], 2)))
             elif (items[0] == self.fig_hist) & (type(items[1]) == pg.LinearRegionItem):
                 self.selected_region = items[1]
+            elif (items[0] == self.fig_hist_ref) & (type(items[1]) == pg.LinearRegionItem):
+                self.selected_region = items[1]
+
 
 
     def update_lines_features(self, line):

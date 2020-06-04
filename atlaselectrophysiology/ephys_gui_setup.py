@@ -25,7 +25,7 @@ class Setup():
         main_layout.addWidget(self.fig_data_area, 0, 0, 10, 1)
         main_layout.addWidget(self.fig_hist_area, 0, 1, 10, 1)
         main_layout.addLayout(self.interaction_layout3, 0, 2, 1, 1)
-        main_layout.addWidget(self.fig_slice, 1, 2, 3, 1)
+        main_layout.addWidget(self.fig_slice_area, 1, 2, 3, 1)
         main_layout.addLayout(self.interaction_layout1, 4, 2, 1, 1)
         main_layout.addWidget(self.fig_fit, 5, 2, 3, 1)
         main_layout.addLayout(self.interaction_layout2, 8, 2, 2, 1)
@@ -260,6 +260,11 @@ class Setup():
         toggle_lines_option.setShortcut('Shift+H')
         toggle_lines_option.triggered.connect(self.toggle_line_button_pressed)
 
+        # Shortcut to hide/show reference lines and channels on slice image
+        toggle_channels_option = QtGui.QAction('Hide/Show Channels', self)
+        toggle_channels_option.setShortcut('Shift+C')
+        toggle_channels_option.triggered.connect(self.toggle_channel_button_pressed)
+
         # Shortcut for cluster popups
         popup_minimise = QtGui.QAction('Minimise/Show Cluster Popup', self)
         popup_minimise.setShortcut('Alt+M')
@@ -280,6 +285,7 @@ class Setup():
         display_options.addAction(axis_option)
         display_options.addAction(toggle_labels_option)
         display_options.addAction(toggle_lines_option)
+        display_options.addAction(toggle_channels_option)
         display_options.addAction(popup_minimise)
         display_options.addAction(popup_close)
 
@@ -543,9 +549,19 @@ class Setup():
         self.fig_hist_area.addItem(self.fig_hist_layout)
 
         # Figure to show coronal slice through the brain
-        self.fig_slice = pg.PlotWidget(background='w')
-        self.set_axis(self.fig_slice, 'bottom', show=False)
-        self.set_axis(self.fig_slice, 'left', show=False)
+        self.fig_slice_area = pg.GraphicsLayoutWidget()
+        self.fig_slice_layout = pg.GraphicsLayout()
+        self.fig_slice_hist = pg.HistogramLUTItem()
+        self.fig_slice_hist.axis.hide()
+        self.fig_slice_hist_alt = pg.ViewBox()
+        self.fig_slice = pg.ViewBox()
+        self.fig_slice_layout.addItem(self.fig_slice, 0, 0)
+        self.fig_slice_layout.addItem(self.fig_slice_hist_alt, 0, 1)
+        self.fig_slice_layout.layout.setColumnStretchFactor(0, 3)
+        self.fig_slice_layout.layout.setColumnStretchFactor(1, 1)
+        self.fig_slice_area.addItem(self.fig_slice_layout)
+        self.slice_item = self.fig_slice_hist_alt
+
 
         # Figure to show fit and offset applied by user
         self.fig_fit = pg.PlotWidget(background='w')
