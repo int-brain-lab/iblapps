@@ -7,7 +7,7 @@ GUI to allow user to align electrophysiology data with histology data
 Install the iblenv environment using the following instructions:
 https://github.com/int-brain-lab/iblenv
 
-If you have previously installed the environment, an additional package that is required is SimpleITK, this can be
+If you have previously installed the environment, an additional package that is required is SimpleITK. This can be
 installed in the environment using,
 
 ```
@@ -38,7 +38,7 @@ download all data necessary
 In the case that some data is not available on FlatIron, plots associated with this data will not be displayed and a
 warning message is printed in the terminal.
 
-If you find that the histology image is not being found, please refer to the [histology image troubleshooting](## Histology Image Troubleshooting) section
+If you find that the histology image is not being found, please refer to the [histology image troubleshooting](#Histology-Image-Troubleshooting) section
 
 
 ### Layout
@@ -131,7 +131,7 @@ Once the alignment is complete, the new locations of the electrode locations can
 button or Shift + U. If a previous alignment has already been uploaded for this session the user will be warned that the channels object in Alyx
 will be overwritten. The channels object for all previous alignments can be recovered, so overwriting is not a problem.
 
-###Additional Features
+### Additional Features
 #### Session Notes
 If any notes associated with a session have been uploaded to Alyx, these can be displayed as a popup by clicking on
 **Session Information** on the menu bar and selecting **Session Notes**
