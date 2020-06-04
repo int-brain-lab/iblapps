@@ -8,11 +8,15 @@ import SimpleITK as sitk
 
 def download_histology_data(subject, lab):
 
+    if lab == 'hoferlab':
+        lab_temp = 'mrsicflogellab'
+    else:
+        lab_temp = lab
+
     par = params.read('one_params')
-    FLAT_IRON_HIST_REL_PATH = Path('histology', lab, subject, 'downsampledStacks_25', 'sample2ARA')
-    baseurl = (par.HTTP_DATA_SERVER + '/' + '/'.join(FLAT_IRON_HIST_REL_PATH.parts))
+
     try:
-        FLAT_IRON_HIST_REL_PATH = Path('histology', lab, subject, 'downsampledStacks_25', 'sample2ARA')
+        FLAT_IRON_HIST_REL_PATH = Path('histology', lab_temp, subject, 'downsampledStacks_25', 'sample2ARA')
         baseurl = (par.HTTP_DATA_SERVER + '/' + '/'.join(FLAT_IRON_HIST_REL_PATH.parts))
         r = requests.get(baseurl, auth=(par.HTTP_DATA_SERVER_LOGIN, par.HTTP_DATA_SERVER_PWD))
         r.raise_for_status()
@@ -20,7 +24,7 @@ def download_histology_data(subject, lab):
         print(err)
         try:
             subject_rem = subject.replace("_", "")
-            FLAT_IRON_HIST_REL_PATH = Path('histology', lab, subject_rem, 'downsampledStacks_25', 'sample2ARA')
+            FLAT_IRON_HIST_REL_PATH = Path('histology', lab_temp, subject_rem, 'downsampledStacks_25', 'sample2ARA')
             baseurl = (par.HTTP_DATA_SERVER + '/' + '/'.join(FLAT_IRON_HIST_REL_PATH.parts))
             r = requests.get(baseurl, auth=(par.HTTP_DATA_SERVER_LOGIN, par.HTTP_DATA_SERVER_PWD))
             r.raise_for_status()
@@ -31,9 +35,9 @@ def download_histology_data(subject, lab):
 
     tif_files = []
     for line in r.text.splitlines():
-        result = re.findall('href="(.*)GR.tif"', line)
+        result = re.findall('href="(.*)RD.tif"', line)
         if result:
-            tif_files.append(result[0] + 'GR.tif')
+            tif_files.append(result[0] + 'RD.tif')
 
     CACHE_DIR = Path(Path.home(), 'Downloads', 'FlatIron', lab, 'Subjects', subject, 'histology')
     CACHE_DIR.mkdir(exist_ok=True, parents=True)

@@ -6,7 +6,8 @@ import ibllib.atlas as atlas
 from oneibl.one import ONE
 from pathlib import Path
 import alf.io
-from atlaselectrophysiology.load_histology import download_histology_data
+import glob
+from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 brain_atlas = atlas.AllenAtlas(25)
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 one = ONE(base_url=ONE_BASE_URL)
@@ -28,6 +29,7 @@ class LoadData:
         self.date = []
         self.subj = []
         self.chn_coords = []
+        self.sess_path = []
 
     def get_subjects(self):
         """
@@ -123,9 +125,9 @@ class LoadData:
         ]
 
         _ = one.load(self.eid, dataset_types=dtypes, download_only=True)
-        sess_path = one.path_from_eid(self.eid)
-        alf_path = Path(sess_path, 'alf', self.probe_label)
-        ephys_path = Path(sess_path, 'raw_ephys_data', self.probe_label)
+        self.sess_path = one.path_from_eid(self.eid)
+        alf_path = Path(self.sess_path, 'alf', self.probe_label)
+        ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
         self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
         chn_depths = self.chn_coords[:, 1]
 
@@ -150,8 +152,18 @@ class LoadData:
         return xyz_picks
 
     def get_slice_images(self, xyz_channels):
-        hist_path = download_histology_data(self.subj, self.lab)
-        #hist_path =[]
+        # First see if the histology file exists before attempting to connect with FlatIron and
+        # download
+        hist_dir = Path(self.sess_path.parent.parent, 'histology')
+        if hist_dir.exists():
+            path_to_image = glob.glob(str(hist_dir) + '/*RD.tif')
+            if path_to_image:
+                hist_path = tif2nrrd(Path(path_to_image[0]))
+            else:
+                hist_path = download_histology_data(self.subj, self.lab)
+        else:
+            hist_path = download_histology_data(self.subj, self.lab)
+
         ccf_slice, width, height, _ = brain_atlas.tilted_slice(xyz_channels, axis=1)
         ccf_slice = np.swapaxes(np.flipud(ccf_slice), 0, 1)
         label_slice, _, _, _ = brain_atlas.tilted_slice(xyz_channels, volume='annotation', axis=1)
@@ -182,6 +194,9 @@ class LoadData:
         description = brain_regions[struct_idx]['description']
         region_lookup = brain_regions[struct_idx]['acronym'] + ': ' + \
                         brain_regions[struct_idx]['name']
+
+        if region_lookup == 'void: void':
+            region_lookup = 'root: root'
 
         if not description:
             description = region_lookup + '\nNo information available on Alyx for this region'
