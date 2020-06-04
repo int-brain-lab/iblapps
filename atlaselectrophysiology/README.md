@@ -28,17 +28,17 @@ python int-brain-lab\iblapps\atlaselectrophysiology\ephys_atlas_gui.py
 ## Usage
 ### Getting Data
 Upon launching, the GUI automatically finds subjects that have probe tracks traced. To select a subject
-click on the first drop down menu in the right hand panel of the GUI. A list of sessions for the chosen subject and
+click on the subject drop down list (see figure below). A list of sessions for the chosen subject and
 previous alignments associated with each session will then be loaded in the second and third drop down menus respectively.
 If this is the first time an alignment is being conducted for a session the only alignment option will be 'original'. If,
 however, the session has been previously aligned, it is possible to initiate the GUI from the previous alignment. Once the 
-drop down options have been chosen, click on the Get Data button to download the data. The gui will automatically
+drop down options have been chosen, click on the **Get Data** button to download the data. The gui will automatically
 download all data necessary 
 
 In the case that some data is not available on FlatIron, plots associated with this data will not be displayed and a
 warning message is printed in the terminal.
 
-If you find that the histology image is not being found, please refer to the [histology image troubleshooting](#Histology Image Troubleshooting) section
+If you find that the histology image is not being found, please refer to the [histology image troubleshooting](## Histology Image Troubleshooting) section
 
 
 ### Layout
@@ -46,7 +46,7 @@ The GUI comprises four main figure areas.
 
 ![ephys_gui](ephys_atlas_image.png)
 
-####Figure 1 - Ephys Figure
+#### Figure 1 - Ephys Figure
 The first figure contains three panels which display electrophysiology data in the form of:
 
 * Image Plots (2D representation of data in image or scatter plots)
@@ -60,7 +60,7 @@ The first figure contains three panels which display electrophysiology data in t
  The order of the panels can also be rearranged by changing the view (under the **Display Options** menu bar) or by
  pressing, Shift + 1, Shift + 2 or Shift + 3.
  
- ####Figure 2 - Histology  Figure
+ #### Figure 2 - Histology  Figure
  The second figure displays the brain regions through which the traced probe track passes (the trajectory). It is split into 
  three panels, which display, from left to right,
  * Scaled brain regions
@@ -73,7 +73,7 @@ electrode. The labels overlaid on the brain regions can be toggled on and off us
 The actual scale factor value is displayed in the title of the colorbar (top of figure) when hovering over a region on
 the scale factor plot.
  
- ####Figure 3 - Slice Figure
+ #### Figure 3 - Slice Figure
 The third figure displays a tilted slice through the brain. The tilt of the slice displayed is determined by the line
 of best fit through the traced points. Overlaid on the slice is a black line linking the traced points (the trajectory) 
 and the location of the electrodes on the Neuropixel probe along this trajectory (red points). When reference lines are added
@@ -87,7 +87,7 @@ There are three options for the tilted slice displayed (changed using Alt+ 4):
 
 The intensity of the slice images can be changed using the intensity scale bar located on the right hand side of the figure.
 
-####Figure 4 - Fit Figure
+#### Figure 4 - Fit Figure
 The fourth figure provides a 2D representation of the scaling applied along the depth of the trajectory. Coordinates
 are relative to the location of the most ventral electrode. Three lines are displayed in this figure
 * Reference line (black dotted line) - reference for when no fit/scaling is applied
@@ -95,7 +95,7 @@ are relative to the location of the most ventral electrode. Three lines are disp
 * Linear fit line (red dotted line) - linear fit along depth of trajectory (only present when two or more reference lines
 are implemented) 
 
-###Alignment
+### Alignment
 Reference line pairs are used to align features on the Ephys and Histology figures. A pair can be added to the GUI by
 double clicking at any point on either the Ephys or Histology figure and the line on each figure moves independently. 
 Once the two lines of a reference pair line have been moved to the feature/landmark that needs to be aligned, the fit
@@ -161,7 +161,7 @@ To reset the GUI to the original state, i.e. no alignments, press the **Reset** 
 #### Rescaling
 It is possible to zoom in on some plots in the Ephys and Histology figures. To reset the axis press Shift + A.
 
-##Histology Image Troubleshooting
+## Histology Image Troubleshooting
 The naming convention used for subjects in the histology folder on FlatIron (http://ibl.flatironinstitute.org/histology/) 
 is not always consistent with the subject names stored in Alyx. While the code attempts to account for differences in
 capitalisation or underscores, sometimes the naming in the histology is just too quirky. In these cases, it will be
