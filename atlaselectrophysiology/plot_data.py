@@ -20,7 +20,8 @@ class PlotData:
         self.alf_path = alf_path
         self.ephys_path = ephys_path
 
-        self.chn_coords, self.chn_ind = (alf.io.load_object(self.alf_path, 'channels')).values()
+        self.chn_coords = np.load(Path(self.alf_path, 'channels.localCoordinates.npy'))
+        self.chn_ind = np.load(Path(self.alf_path, 'channels.rawInd.npy'))
         # See if spike data is available
         try:
             self.spikes = alf.io.load_object(self.alf_path, 'spikes')
