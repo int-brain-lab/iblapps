@@ -6,5 +6,5 @@ To use it, start an ipython session, then type `run /path/to/DLC_labeled_video.p
 
 This will display and save a labeled video for a particular trial range. E.g. `Viewer('3663d82b-f197-4e8b-b299-7b803a155b84', 'left', [5,7])` will display and save a DLC labeled video for the left cam video of session with eid '3663d82b-f197-4e8b-b299-7b803a155b84' and range from trial 5 to trial 7. There's further the option to show a zoom of the pupil only. 
 
-See `Example_DLC_access.ipynb` for more intructions and an example how to load DLC results.
+See `Example_DLC_access.ipynb` for more intructions and an example how to load DLC results for other potential applications.
 
