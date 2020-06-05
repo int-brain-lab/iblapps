@@ -15,7 +15,6 @@ from pathlib import Path
 import numpy as np
 import alf.io as aio
 import matplotlib.pyplot as plt
-from brainbox.examples.max_acceptable_isi_viol_2 import max_acceptable_cont_2
 import brainbox as bb
 from phylib.stats import correlograms
 import pandas as pd
@@ -36,7 +35,7 @@ def FP_RP(ts):
     if(len(ts)>0 and ts[-1]>ts[0]):
         recDur = (ts[-1]-ts[0])
         fr = len(ts)/recDur
-        mfunc =np.vectorize(max_acceptable_cont_2)
+        mfunc =np.vectorize(max_acceptable_cont)
         m = mfunc(fr,bTest,recDur,fr*acceptThresh,thresh)
         c0 = correlograms(ts,np.zeros(len(ts),dtype='int8'),cluster_ids=[0],bin_size=binSize/1000,sample_rate=20000,window_size=.05,symmetrize=False)
         cumsumc0 = np.cumsum(c0[0,0,:])
@@ -105,6 +104,42 @@ def peak_to_peak_amp(ephys_file, samp_inds, nsamps):
 
     return mean_amp
 
+def max_acceptable_cont(FR, RP, rec_duration,acceptableCont, thresh ):
+    trueContRate = np.linspace(0,FR,100)
+    timeForViol = RP*2*FR*rec_duration
+
+
+    expectedCountForAcceptableLimit = acceptableCont*timeForViol
+
+    max_acceptable = poisson.ppf(thresh,expectedCountForAcceptableLimit)
+
+    if max_acceptable==0 and poisson.pmf(0,expectedCountForAcceptableLimit)>0:
+        max_acceptable=-1
+
+    return max_acceptable
+
+
+def genST(rate, duration):
+'''
+For use in False Positive estimate (sliding refractory period violation metric)
+ Generates a spike train with specified rate and duration. Rate and
+ duration should have the same units.
+    '''
+
+    mu = 1/rate
+    n = rate*duration
+    isi = np.random.exponential(mu, int(np.ceil(n*2))) # generate twice as many spikes as likely required
+
+    while sum(isi)<duration:
+#        this part will be extremely slow if it needs to be invoked, but in
+#        general it should not be
+        np.append(isi,np.random.exponential(mu))
+
+
+    st = np.cumsum(isi)
+    st = st[0:np.where(st<duration)[0][-1]]
+
+    return st
 
 
 def unit_stability(units_b, units=None, feat_names=['amps'], dist='norm', test='ks'):
