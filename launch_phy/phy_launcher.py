@@ -4,7 +4,7 @@ from phy.apps.template import TemplateController, template_gui
 from phy.gui.qt import create_app, run_app
 from oneibl.one import ONE
 from metrics import gen_metrics_labels
-
+from defined_metrics import *
 
 def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=None, compute_metrics=False):
     """
@@ -55,7 +55,8 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
     raw_files = glob.glob(os.path.join(ephys_file_dir, '*ap.*bin'))
     raw_file = [raw_files[0]] if raw_files else None
 
-    if compute_metrics:
+    if args.metrics:
+        print('Computing quality metrics...')
         gen_metrics_labels(eid,probe_name)
 
     # TODO download ephys meta-data, and extract TemplateController input arg params

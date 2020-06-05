@@ -16,7 +16,7 @@ import numpy as np
 import alf.io as aio
 import matplotlib.pyplot as plt
 import brainbox as bb
-from phylib.stats import correlograms, poisson
+from phylib.stats import correlograms
 import pandas as pd
 from ibllib.io import spikeglx
 import scipy.stats as stats
@@ -111,19 +111,19 @@ def max_acceptable_cont(FR, RP, rec_duration,acceptableCont, thresh ):
 
     expectedCountForAcceptableLimit = acceptableCont*timeForViol
 
-    max_acceptable = poisson.ppf(thresh,expectedCountForAcceptableLimit)
+    max_acceptable = stats.poisson.ppf(thresh,expectedCountForAcceptableLimit)
 
-    if max_acceptable==0 and poisson.pmf(0,expectedCountForAcceptableLimit)>0:
+    if max_acceptable==0 and stats.poisson.pmf(0,expectedCountForAcceptableLimit)>0:
         max_acceptable=-1
 
     return max_acceptable
 
 
 def genST(rate, duration):
-'''
-For use in False Positive estimate (sliding refractory period violation metric)
- Generates a spike train with specified rate and duration. Rate and
- duration should have the same units.
+    '''
+    For use in False Positive estimate (sliding refractory period violation metric)
+     Generates a spike train with specified rate and duration. Rate and
+     duration should have the same units.
     '''
 
     mu = 1/rate

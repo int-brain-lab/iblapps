@@ -25,13 +25,14 @@ import matplotlib.pyplot as plt
 import brainbox as bb
 from phylib.stats import correlograms
 import pandas as pd
+from defined_metrics import *
 
 
 
 
 
 def gen_metrics_labels(eid,probe_name):
-
+    one = ONE()
     ses_path=one.path_from_eid(eid)
     alf_probe_dir = os.path.join(ses_path, 'alf', probe_name)
     ks_dir = alf_probe_dir
