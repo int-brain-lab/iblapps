@@ -70,31 +70,30 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
 
 
 if __name__ == '__main__':
-    #from argparse import ArgumentParser
-    #import numpy as np
-#
-    #parser = ArgumentParser()
-    #parser.add_argument('-s', '--subject', default=False, required=False,
-    #                    help='Subject Name')
-    #parser.add_argument('-d', '--date', default=False, required=False,
-    #                    help='Date of session YYYY-MM-DD')
-    #parser.add_argument('-n', '--session_no', default=1, required=False,
-    #                    help='Session Number', type=int)
-    #parser.add_argument('-e', '--eid', default=False, required=False,
-    #                    help='Session eid')
-    #parser.add_argument('-p', '--probe_label', default=False, required=True,
-    #                    help='Probe Label')
-    #args = parser.parse_args()
-#
-    #if args.eid:
-    #    launch_phy(str(args.probe_label), eid=str(args.eid))
-    #else:
-    #    if not np.all(np.array([args.subject, args.date, args.session_no],
-    #                           dtype=object)):
-    #        print('Must give Subject, Date and Session number')
-    #    else:
-    #        launch_phy(str(args.probe_label), subj=str(args.subject),
-    #                   date=str(args.date), sess_no=args.session_no)
+    from argparse import ArgumentParser
+    import numpy as np
 
-    launch_phy('probe00', subj='KS022',
-               date='2019-12-10', sess_no=1)
+    parser = ArgumentParser()
+    parser.add_argument('-s', '--subject', default=False, required=False,
+                        help='Subject Name')
+    parser.add_argument('-d', '--date', default=False, required=False,
+                        help='Date of session YYYY-MM-DD')
+    parser.add_argument('-n', '--session_no', default=1, required=False,
+                        help='Session Number', type=int)
+    parser.add_argument('-e', '--eid', default=False, required=False,
+                        help='Session eid')
+    parser.add_argument('-p', '--probe_label', default=False, required=True,
+                        help='Probe Label')
+    args = parser.parse_args()
+
+    if args.eid:
+        launch_phy(str(args.probe_label), eid=str(args.eid))
+    else:
+        if not np.all(np.array([args.subject, args.date, args.session_no],
+                               dtype=object)):
+            print('Must give Subject, Date and Session number')
+        else:
+            launch_phy(str(args.probe_label), subj=str(args.subject),
+                       date=str(args.date), sess_no=args.session_no)
+    #launch_phy('probe00', subj='KS022',
+               #date='2019-12-10', sess_no=1)
