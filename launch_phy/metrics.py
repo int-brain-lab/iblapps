@@ -23,12 +23,9 @@ import numpy as np
 import alf.io as aio
 import matplotlib.pyplot as plt
 import brainbox as bb
-from brainbox.examples import max_acceptable_isi_viol_2, defined_metrics
-from brainbox.examples.max_acceptable_isi_viol_2 import max_acceptable_cont_2
 from phylib.stats import correlograms
 import pandas as pd
-from brainbox.metrics import metrics
-from brainbox.examples.defined_metrics import FP_RP, noise_cutoff, peak_to_peak_amp
+
 
 
 

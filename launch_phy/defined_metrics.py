@@ -16,7 +16,7 @@ import numpy as np
 import alf.io as aio
 import matplotlib.pyplot as plt
 import brainbox as bb
-from phylib.stats import correlograms
+from phylib.stats import correlograms, poisson
 import pandas as pd
 from ibllib.io import spikeglx
 import scipy.stats as stats
