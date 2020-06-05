@@ -12,6 +12,14 @@ or:
 `python <path/to/phy_launcher.py> -s subject -e eid -p probe_name`
 e.g. `python int-brain-lab\iblapps\launch_phy\phy_launcher.py -e a3df91c8-52a6-4afa-957b-3479a7d0897c -p probe00`
 
+## Compute quality metrics
+
+To compute quality metrics, and then display them in phy, simply add -m True:
+
+`python <path/to/phy_launcher.py> -s subject -d date -n session_no -p probe_name -m True`
+e.g. `python int-brain-lab\iblapps\launch_phy\phy_launcher.py -e a3df91c8-52a6-4afa-957b-3479a7d0897c -p probe00 -m True'
+
+If quality metrics have already been computed, then no need to add this extra argument. The metrics will be displayed when you launch phy normally (as above).
 
 ## Upload manual labels to datajoint
 
