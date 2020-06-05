@@ -35,7 +35,6 @@ from brainbox.examples.defined_metrics import FP_RP, noise_cutoff, peak_to_peak_
 
 def gen_metrics_labels(eid,probe_name):
 
-    one=ONE()
     ses_path=one.path_from_eid(eid)
     alf_probe_dir = os.path.join(ses_path, 'alf', probe_name)
     ks_dir = alf_probe_dir
