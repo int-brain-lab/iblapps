@@ -801,8 +801,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plotdata = pd.PlotData(alf_path, ephys_path)
 
         xyz_channels = self.ephysalign.get_channel_locations(self.features[self.idx], self.track[self.idx])
-        self.slice_data = self.loaddata.get_slice_images(xyz_channels)
-
+        #self.slice_data = self.loaddata.get_slice_images(xyz_channels)
+        self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
         self.scat_drift_data = self.plotdata.get_depth_data_scatter()
         (self.scat_fr_data, self.scat_p2t_data,
          self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()

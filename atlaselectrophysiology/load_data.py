@@ -164,15 +164,27 @@ class LoadData:
         else:
             hist_path = download_histology_data(self.subj, self.lab)
 
-        ccf_slice, width, height, _ = brain_atlas.tilted_slice(xyz_channels, axis=1)
-        ccf_slice = np.swapaxes(np.flipud(ccf_slice), 0, 1)
-        label_slice, _, _, _ = brain_atlas.tilted_slice(xyz_channels, volume='annotation', axis=1)
-        label_slice = np.swapaxes(np.flipud(label_slice), 0, 1)
+        index = brain_atlas.bc.xyz2i(xyz_channels)[:, brain_atlas.xyz2dims]
+        ccf_slice = brain_atlas.image[index[:, 0], :, index[:, 2]]
+        ccf_slice = np.swapaxes(ccf_slice, 0, 1)
+
+        # ccf_slice, width, height, _ = brain_atlas.tilted_slice(xyz_channels, axis=1)
+        # ccf_slice = np.swapaxes(np.flipud(ccf_slice), 0, 1)
+        label_slice = brain_atlas._label2rgb(brain_atlas.label[index[:, 0], :, index[:, 2]])
+        # label_slice, _, _, _ = brain_atlas.tilted_slice(xyz_channels, volume='annotation',
+        #                                                 axis=1)
+        # label_slice = np.swapaxes(np.flipud(label_slice), 0, 1)
+        label_slice = np.swapaxes(label_slice, 0, 1)
+
+        width = [brain_atlas.bc.i2x(0), brain_atlas.bc.i2x(456)]
+        height = [brain_atlas.bc.i2z(index[0, 2]), brain_atlas.bc.i2z(index[-1, 2])]
 
         if hist_path:
             hist_atlas = atlas.AllenAtlas(hist_path=hist_path)
-            hist_slice, _, _, _ = hist_atlas.tilted_slice(xyz_channels, axis=1)
-            hist_slice = np.swapaxes(np.flipud(hist_slice), 0, 1)
+            hist_slice = hist_atlas.image[index[:, 0], :, index[:, 2]]
+            # hist_slice, _, _, _ = hist_atlas.tilted_slice(xyz_channels, axis=1)
+            # hist_slice = np.swapaxes(np.flipud(hist_slice), 0, 1)
+            hist_slice = np.swapaxes(hist_slice, 0, 1)
         else:
             print('Could not find histology image for this subject')
             hist_slice = np.copy(ccf_slice)
