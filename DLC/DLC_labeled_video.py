@@ -142,6 +142,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     '''
     DLC related stuff
     '''
+    Times = cam['times'][frame_start:frame_stop] 
     del cam['times']      
 
     points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
@@ -225,10 +226,24 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         
         # print wheel angle
         fontColor = (255, 255, 255)
-        cv2.putText(gray, 'Wheel angle: ' + str(round(wheel_pos[k], 2)),
+        Angle = round(wheel_pos[k], 2)
+        Time = round(Times[k], 3) 
+        cv2.putText(gray, 
+                    'Wheel angle: ' + str(Angle),
                     bottomLeftCornerOfText,
                     font,
-                    fontScale,
+                    fontScale/2,
+                    fontColor,
+                    lineType)
+
+
+        a,b = bottomLeftCornerOfText
+        bottomLeftCornerOfText0 = (int(a*10 + b/2), b)
+        cv2.putText(gray, 
+                    '; time: ' + str(Time),
+                    bottomLeftCornerOfText0,
+                    font,
+                    fontScale/2,
                     fontColor,
                     lineType)
 
