@@ -240,7 +240,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         a,b = bottomLeftCornerOfText
         bottomLeftCornerOfText0 = (int(a*10 + b/2), b)
         cv2.putText(gray, 
-                    '; time: ' + str(Time),
+                    '  time: ' + str(Time),
                     bottomLeftCornerOfText0,
                     font,
                     fontScale/2,
