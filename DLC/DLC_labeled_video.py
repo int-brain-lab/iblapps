@@ -59,6 +59,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     video_type: one of 'left', 'right', 'body'
     trial_range: first and last trial number of range to be shown, e.g. [5,7]
     save_video: video is displayed and saved in local folder
+
     Example usage to view and save labeled video with wheel angle:
     Viewer('3663d82b-f197-4e8b-b299-7b803a155b84', 'left', [5,7])
     '''
@@ -143,12 +144,14 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     del cam['times']      
 
     points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
+    
 
     if video_type != 'body':
         d = list(points) 
         d.remove('tube_top')
         d.remove('tube_bottom')   
         points = np.array(d)
+
 
     # Set values to nan if likelyhood is too low
     XYs = {}
@@ -178,9 +181,9 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         y0 = 0
         y1 = size[1]
         if video_type == 'left':
-            dot_s = 20  # [px] for painting DLC dots
+            dot_s = 10  # [px] for painting DLC dots
         else: 
-            dot_s = 10
+            dot_s = 5
         
 
     if save_video:
@@ -236,8 +239,8 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
             X = Y0
             Y = X0
             if not np.isnan(X) and not np.isnan(Y):
-                #col = (np.array([cmap(CR[ll])]) * 255)[0][:3]
-                col = np.array([0, 0, 255]) 
+                col = (np.array([cmap(CR[ll])]) * 255)[0][:3]
+                #col = np.array([0, 0, 255]) # all points red
                 X = X.astype(int)
                 Y = Y.astype(int)
                 gray[X - dot_s:X + dot_s, Y - dot_s:Y + dot_s] = block * col
