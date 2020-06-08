@@ -20,6 +20,7 @@ To compute quality metrics, and then display them in phy, simply add -m True:
 e.g. `python int-brain-lab\iblapps\launch_phy\phy_launcher.py -e a3df91c8-52a6-4afa-957b-3479a7d0897c -p probe00 -m True`
 
 If quality metrics have already been computed, then no need to add this extra argument. The metrics will be displayed when you launch phy normally (as above).
+Description of metrics can be found here: https://docs.google.com/document/d/1ba_krsfm4epiAd0zbQ8hdvDN908P9VZOpTxkkH3P_ZY/edit#
 
 ## Upload manual labels to datajoint
 
