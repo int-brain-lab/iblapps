@@ -26,7 +26,7 @@ dtypes = [
 ]
 
 class QcFromPath(object):
-    def __init__(self, session_path, metrics=True):
+    def __init__(self, session_path):
 
         data = BpodQC(session_path, one=one)
         self.bnc1 = data.extractor.BNC1
@@ -34,10 +34,12 @@ class QcFromPath(object):
         self.wheel = data.extractor.wheel_data
         self.trial_data = data.extractor.trial_data
 
-        if metrics:
-            self.qc_frame = pd.DataFrame(data.metrics)
-        else:
-            self.qc_frame = pd.DataFrame(data.passed)
+        metrics = pd.DataFrame(data.metrics)
+        passed = pd.DataFrame(data.passed)
+        passed = passed.add_suffix('_passed')
+        new_col = np.empty((metrics.columns.size + passed.columns.size,), dtype=object)
+        new_col[0::2], new_col[1::2] = metrics.columns, passed.columns
+        self.qc_frame = pd.concat([metrics, passed], axis=1)[new_col]
         self.qc_frame['intervals_0'] = self.trial_data['intervals_0']
         self.qc_frame['intervals_1'] = self.trial_data['intervals_1']
 
@@ -64,7 +66,7 @@ class QcFromPath(object):
         plots.vertical_lines(self.trial_data['stimOn_times'], ymin=0, ymax=ymax,
                              ax=display, label='stimOn_times', color='tab:orange', linewidth=width)
         display.legend()
-        display.set_yticklabels(['', 'BNC 1', 'BNC 2', ''])
+        display.set_yticklabels(['', 'frame2ttl', 'sound', ''])
         display.set_yticks([0, 1, 2, 3])
         display.set_ylim([0, 3])
 
@@ -110,8 +112,7 @@ if __name__ == "__main__":
         _logger.info(f"{sess_path}")
 
     WHEEL = True
-    METRICS = True
-    qc = QcFromPath(sess_path, metrics=METRICS)
+    qc = QcFromPath(sess_path)
     if WHEEL:
         w = ViewEphysQC.viewqc(wheel=qc.wheel)
         qc.create_plots(w.wplot.canvas.ax, wheel_display=w.wplot.canvas.ax2)
