@@ -128,7 +128,7 @@ def gen_metrics_labels(eid,probe_name):
 
         # Cumulative drift of spike depths, normalized by total number of spikes.
         try:
-            cum_depth_drift[idx] = bb.metrics.cum_drift(depths)
+            cum_depth_drift[idx] = cum_drift(depths)
         except Exception as err:
             print("Failed to compute 'cum_drift(depths)' for unit {}. Details: \n {}"
                   .format(unit, err))
@@ -151,7 +151,7 @@ def gen_metrics_labels(eid,probe_name):
 
         # Fraction of isi violations.
         try:
-            frac_isi_viol[idx], _, _ = bb.metrics.isi_viol(ts, rp=0.002)
+            frac_isi_viol[idx], _, _ = isi_viol(ts, rp=0.002)
         except Exception as err:
             print("Failed to compute 'frac_isi_viol' for unit {}. Details: \n {}"
                   .format(unit, err))
@@ -159,7 +159,7 @@ def gen_metrics_labels(eid,probe_name):
 
         # Estimated fraction of missing spikes.
         try:
-            frac_missing_spks[idx], _, _ = bb.metrics.feat_cutoff(
+            frac_missing_spks[idx], _, _ = feat_cutoff(
                 amps, spks_per_bin=10, sigma=4, min_num_bins=50)
         except Exception as err:
             print("Failed to compute 'frac_missing_spks' for unit {}. Details: \n {}"
@@ -168,21 +168,21 @@ def gen_metrics_labels(eid,probe_name):
 
         # Estimated fraction of false positives.
         try:
-            fp_est[idx] = bb.metrics.fp_est(ts, rp=0.002)
+            fp_est[idx] = fp_est(ts, rp=0.002)
         except Exception as err:
             print("Failed to compute 'fp_est' for unit {}. Details: \n {}".format(unit, err))
             units_missing_metrics.add(unit)
 
         # Presence ratio
         try:
-            pres_ratio[idx], _ = bb.metrics.pres_ratio(ts, hist_win=10)
+            pres_ratio[idx], _ = pres_ratio(ts, hist_win=10)
         except Exception as err:
             print("Failed to compute 'pres_ratio' for unit {}. Details: \n {}".format(unit, err))
             units_missing_metrics.add(unit)
 
         # Presence ratio over the standard deviation of spike counts in each bin
         try:
-            pr, pr_bins = bb.metrics.pres_ratio(ts, hist_win=10)
+            pr, pr_bins = pres_ratio(ts, hist_win=10)
             pres_ratio_std[idx] = pr / np.std(pr_bins)
         except Exception as err:
             print("Failed to compute 'pres_ratio_std' for unit {}. Details: \n {}"
