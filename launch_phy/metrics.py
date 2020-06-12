@@ -120,7 +120,7 @@ def gen_metrics_labels(eid,probe_name):
 
         # Cumulative drift of spike amplitudes, normalized by total number of spikes.
         try:
-            cum_amp_drift[idx] = bb.metrics.cum_drift(amps)
+            cum_amp_drift[idx] = cum_drift(amps)
         except Exception as err:
             print("Failed to compute 'cum_drift(amps)' for unit {}. Details: \n {}"
                   .format(unit, err))
