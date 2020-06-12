@@ -168,21 +168,21 @@ def gen_metrics_labels(eid,probe_name):
 
         # Estimated fraction of false positives.
         try:
-            fp_estimate[idx] = fp_est(ts, rp=0.002)
+            fp_est[idx] = defined_metrics.fp_est(ts, rp=0.002)
         except Exception as err:
             print("Failed to compute 'fp_est' for unit {}. Details: \n {}".format(unit, err))
             units_missing_metrics.add(unit)
 
         # Presence ratio
         try:
-            presence_ratio[idx], _ = pres_ratio(ts, hist_win=10)
+            pres_ratio[idx], _ = defined_metrics.pres_ratio(ts, hist_win=10)
         except Exception as err:
             print("Failed to compute 'pres_ratio' for unit {}. Details: \n {}".format(unit, err))
             units_missing_metrics.add(unit)
 
         # Presence ratio over the standard deviation of spike counts in each bin
         try:
-            pr, pr_bins = pres_ratio(ts, hist_win=10)
+            pr, pr_bins = defined_metrics.pres_ratio(ts, hist_win=10)
             pres_ratio_std[idx] = pr / np.std(pr_bins)
         except Exception as err:
             print("Failed to compute 'pres_ratio_std' for unit {}. Details: \n {}"
@@ -240,13 +240,13 @@ def gen_metrics_labels(eid,probe_name):
             print("Could not save 'frac_missing_spks' to .tsv. Details: \n {}".format(err))
 
         try:
-            df_fp_est = pd.DataFrame(fp_estimate.round(2))
+            df_fp_est = pd.DataFrame(fp_est.round(2))
             metrics_read['fp_est'] = df_fp_est
         except Exception as err:
             print("Could not save 'fp_est' to .tsv. Details: \n {}".format(err))
 
         try:
-            df_pres_ratio = pd.DataFrame(presence_ratio.round(2))
+            df_pres_ratio = pd.DataFrame(pres_ratio.round(2))
             metrics_read['pres_ratio'] = df_pres_ratio
         except Exception as err:
             print("Could not save 'pres_ratio' to .tsv. Details: \n {}".format(err))
