@@ -168,21 +168,21 @@ def gen_metrics_labels(eid,probe_name):
 
         # Estimated fraction of false positives.
         try:
-            fp_est[idx] = fp_est(ts, rp=0.002)
+            fp_est[idx] = defined_metrics.fp_est(ts, rp=0.002)
         except Exception as err:
             print("Failed to compute 'fp_est' for unit {}. Details: \n {}".format(unit, err))
             units_missing_metrics.add(unit)
 
         # Presence ratio
         try:
-            pres_ratio[idx], _ = pres_ratio(ts, hist_win=10)
+            pres_ratio[idx], _ = defined_metrics.pres_ratio(ts, hist_win=10)
         except Exception as err:
             print("Failed to compute 'pres_ratio' for unit {}. Details: \n {}".format(unit, err))
             units_missing_metrics.add(unit)
 
         # Presence ratio over the standard deviation of spike counts in each bin
         try:
-            pr, pr_bins = pres_ratio(ts, hist_win=10)
+            pr, pr_bins = defined_metrics.pres_ratio(ts, hist_win=10)
             pres_ratio_std[idx] = pr / np.std(pr_bins)
         except Exception as err:
             print("Failed to compute 'pres_ratio_std' for unit {}. Details: \n {}"
@@ -193,101 +193,104 @@ def gen_metrics_labels(eid,probe_name):
     #append metrics to the current clusters.metrics
     metrics_read = pd.read_csv(Path(alf_probe_dir,'clusters.metrics.csv'))
 
-    try:
-        label_df = pd.DataFrame(label)
-        pd.DataFrame.insert(metrics_read,1,'label',label_df)
-    except ValueError:
-        pd.DataFrame.drop(metrics_read,columns = 'label')
-        pd.DataFrame.insert(metrics_read,1,'label',label_df)
-    except:
-        print("Could not save 'label' to .csv.")
+    if not 'label' in metrics_read.columns:
+        try:
+            label_df = pd.DataFrame(label)
+            pd.DataFrame.insert(metrics_read,1,'label',label_df)
+        except ValueError:
+            pd.DataFrame.drop(metrics_read,columns = 'label')
+            pd.DataFrame.insert(metrics_read,1,'label',label_df)
+        except:
+            print("Could not save 'label' to .csv.")
 
-    try:
-        df_cum_amp_drift = pd.DataFrame(cum_amp_drift.round(2))
-        metrics_read['cum_amp_drift'] = df_cum_amp_drift
-    except Exception as err:
-        print("Could not save 'cum_amp_drift' to .csv. Details: \n {}".format(err))
+        try:
+            df_cum_amp_drift = pd.DataFrame(cum_amp_drift.round(2))
+            metrics_read['cum_amp_drift'] = df_cum_amp_drift
+        except Exception as err:
+            print("Could not save 'cum_amp_drift' to .csv. Details: \n {}".format(err))
 
-    try:
-        df_cum_depth_drift = pd.DataFrame(cum_depth_drift.round(2))
-        metrics_read['cum_depth_drift'] = df_cum_depth_drift
-    except Exception as err:
-        print("Could not save 'cum_depth_drift' to .tsv. Details: \n {}".format(err))
+        try:
+            df_cum_depth_drift = pd.DataFrame(cum_depth_drift.round(2))
+            metrics_read['cum_depth_drift'] = df_cum_depth_drift
+        except Exception as err:
+            print("Could not save 'cum_depth_drift' to .tsv. Details: \n {}".format(err))
 
-    try:
-        df_cv_amp = pd.DataFrame(cv_amp.round(2))
-        metrics_read['cv_amp'] = df_cv_amp
-    except Exception as err:
-        print("Could not save 'cv_amp' to .tsv. Details: \n {}".format(err))
+        try:
+            df_cv_amp = pd.DataFrame(cv_amp.round(2))
+            metrics_read['cv_amp'] = df_cv_amp
+        except Exception as err:
+            print("Could not save 'cv_amp' to .tsv. Details: \n {}".format(err))
 
-    try:
-        df_cv_fr = pd.DataFrame(cv_fr.round(2))
-        metrics_read['cv_fr'] = df_cv_fr
-    except Exception as err:
-        print("Could not save 'cv_fr' to .tsv. Details: \n {}".format(err))
+        try:
+            df_cv_fr = pd.DataFrame(cv_fr.round(2))
+            metrics_read['cv_fr'] = df_cv_fr
+        except Exception as err:
+            print("Could not save 'cv_fr' to .tsv. Details: \n {}".format(err))
 
-    try:
-        df_frac_isi_viol = pd.DataFrame(frac_isi_viol.round(2))
-        metrics_read['frac_isi_viol'] = df_frac_isi_viol
-    except Exception as err:
-        print("Could not save 'frac_isi_viol' to .tsv. Details: \n {}".format(err))
+        try:
+            df_frac_isi_viol = pd.DataFrame(frac_isi_viol.round(2))
+            metrics_read['frac_isi_viol'] = df_frac_isi_viol
+        except Exception as err:
+            print("Could not save 'frac_isi_viol' to .tsv. Details: \n {}".format(err))
 
-    try:
-        df_frac_missing_spks = pd.DataFrame(frac_missing_spks.round(2))
-        metrics_read['frac_missing_spks'] = df_frac_missing_spks
-    except Exception as err:
-        print("Could not save 'frac_missing_spks' to .tsv. Details: \n {}".format(err))
+        try:
+            df_frac_missing_spks = pd.DataFrame(frac_missing_spks.round(2))
+            metrics_read['frac_missing_spks'] = df_frac_missing_spks
+        except Exception as err:
+            print("Could not save 'frac_missing_spks' to .tsv. Details: \n {}".format(err))
 
-    try:
-        df_fp_est = pd.DataFrame(fp_est.round(2))
-        metrics_read['fp_est'] = df_fp_est
-    except Exception as err:
-        print("Could not save 'fp_est' to .tsv. Details: \n {}".format(err))
+        try:
+            df_fp_est = pd.DataFrame(fp_est.round(2))
+            metrics_read['fp_est'] = df_fp_est
+        except Exception as err:
+            print("Could not save 'fp_est' to .tsv. Details: \n {}".format(err))
 
-    try:
-        df_pres_ratio = pd.DataFrame(pres_ratio.round(2))
-        metrics_read['pres_ratio'] = df_pres_ratio
-    except Exception as err:
-        print("Could not save 'pres_ratio' to .tsv. Details: \n {}".format(err))
+        try:
+            df_pres_ratio = pd.DataFrame(pres_ratio.round(2))
+            metrics_read['pres_ratio'] = df_pres_ratio
+        except Exception as err:
+            print("Could not save 'pres_ratio' to .tsv. Details: \n {}".format(err))
 
-    try:
-        df_pres_ratio_std = pd.DataFrame(pres_ratio_std.round(2))
-        metrics_read['pres_ratio_std'] = df_pres_ratio_std
-    except Exception as err:
-        print("Could not save 'pres_ratio_std' to .tsv. Details: \n {}".format(err))
-
-
-    try:
-        df_refp_viol = pd.DataFrame(RefPViol)
-        pd.DataFrame.insert(metrics_read,2,'refp_viol',df_refp_viol)
-    except ValueError:
-        pd.DataFrame.drop(metrics_read,columns = 'refp_viol')
-        pd.DataFrame.insert(metrics_read,2,'refp_viol', df_refp_viol)
-    except Exception as err:
-        print("Could not save 'RefPViol' to .tsv. Details: \n {}".format(err))
-
-    try:
-        df_noise_cutoff = pd.DataFrame(NoiseCutoff)
-        pd.DataFrame.insert(metrics_read,3,'noise_cutoff',df_noise_cutoff)
-    except ValueError:
-        pd.DataFrame.drop(metrics_read,columns = 'noise_cutoff')
-        pd.DataFrame.insert(metrics_read,3,'noise_cutoff',df_noise_cutoff)
-    except Exception as err:
-        print("Could not save 'NoiseCutoff' to .tsv. Details: \n {}".format(err))
-
-    try:
-        df_mean_amp_true = pd.DataFrame(MeanAmpTrue)
-        pd.DataFrame.insert(metrics_read,4,'mean_amp_true',df_mean_amp_true)
-    except ValueError:
-        pd.DataFrame.drop(metrics_read,columns = 'mean_amp_true')
-        pd.DataFrame.insert(metrics_read,4,'mean_amp_true',df_mean_amp_true)
-    except Exception as err:
-        print("Could not save 'Mean Amp True' to .tsv. Details: \n {}".format(err))
+        try:
+            df_pres_ratio_std = pd.DataFrame(pres_ratio_std.round(2))
+            metrics_read['pres_ratio_std'] = df_pres_ratio_std
+        except Exception as err:
+            print("Could not save 'pres_ratio_std' to .tsv. Details: \n {}".format(err))
 
 
+        try:
+            df_refp_viol = pd.DataFrame(RefPViol)
+            pd.DataFrame.insert(metrics_read,2,'refp_viol',df_refp_viol)
+        except ValueError:
+            pd.DataFrame.drop(metrics_read,columns = 'refp_viol')
+            pd.DataFrame.insert(metrics_read,2,'refp_viol', df_refp_viol)
+        except Exception as err:
+            print("Could not save 'RefPViol' to .tsv. Details: \n {}".format(err))
 
-    #now add df to csv
-    metrics_read.to_csv(Path(alf_probe_dir,'clusters.metrics.csv'))
+        try:
+            df_noise_cutoff = pd.DataFrame(NoiseCutoff)
+            pd.DataFrame.insert(metrics_read,3,'noise_cutoff',df_noise_cutoff)
+        except ValueError:
+            pd.DataFrame.drop(metrics_read,columns = 'noise_cutoff')
+            pd.DataFrame.insert(metrics_read,3,'noise_cutoff',df_noise_cutoff)
+        except Exception as err:
+            print("Could not save 'NoiseCutoff' to .tsv. Details: \n {}".format(err))
+
+        try:
+            df_mean_amp_true = pd.DataFrame(MeanAmpTrue)
+            pd.DataFrame.insert(metrics_read,4,'mean_amp_true',df_mean_amp_true)
+        except ValueError:
+            pd.DataFrame.drop(metrics_read,columns = 'mean_amp_true')
+            pd.DataFrame.insert(metrics_read,4,'mean_amp_true',df_mean_amp_true)
+        except Exception as err:
+            print("Could not save 'Mean Amp True' to .tsv. Details: \n {}".format(err))
+
+
+
+        #now add df to csv
+        metrics_read.to_csv(Path(alf_probe_dir,'clusters.metrics.csv'))
+    else:
+        print('Metrics were already computed... launching phy')
 
     try:
         numpass=int(sum(label))
