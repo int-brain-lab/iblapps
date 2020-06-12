@@ -27,6 +27,7 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
         'spikes.amps',
         'spikes.templates',
         'spikes.samples',
+        'spikes.depths',
         'templates.waveforms',
         'templates.waveformsChannels',
         'clusters.uuids',
