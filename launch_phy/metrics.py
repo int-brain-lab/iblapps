@@ -66,8 +66,8 @@ def gen_metrics_labels(eid,probe_name):
     cv_fr = np.full((n_units,), np.nan)
     frac_isi_viol = np.full((n_units,), np.nan)
     frac_missing_spks = np.full((n_units,), np.nan)
-    fp_est = np.full((n_units,), np.nan)
-    pres_ratio = np.full((n_units,), np.nan)
+    fp_estimate = np.full((n_units,), np.nan)
+    presence_ratio = np.full((n_units,), np.nan)
     pres_ratio_std = np.full((n_units,), np.nan)
     ptp_sigma = np.full((n_units,), np.nan)
 
