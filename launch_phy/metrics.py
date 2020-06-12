@@ -289,8 +289,9 @@ def gen_metrics_labels(eid,probe_name):
 
         #now add df to csv
         metrics_read.to_csv(Path(alf_probe_dir,'clusters.metrics.csv'))
+        print('Launching phy')
     else:
-        print('Metrics were already computed... launching phy')
+        print('Launching phy')
 
     try:
         numpass=int(sum(label))
