@@ -123,13 +123,12 @@ turned off by un-ticking the linear fit checkbox located in the fit figure.
 
 When a fit is applied the location of the electrodes on the slice figure will update.
 
-A reference line can be deleted by hovering over the line and pressing the del key. N.B. Any fits anchored on a reference line will
+A reference line can be deleted by hovering over the line and pressing Shift + D. N.B. Any fits anchored on a reference line will
 be lost once the line is deleted. The reference lines can be hidden/ redisplayed using Shift + H. 
 
 ### Uploading data
 Once the alignment is complete, the new locations of the electrode locations can be uploaded to Alyx by pressing the **Upload**
-button or Shift + U. If a previous alignment has already been uploaded for this session the user will be warned that the channels object in Alyx
-will be overwritten. The channels object for all previous alignments can be recovered, so overwriting is not a problem.
+button or Shift + U. 
 
 ### Additional Features
 #### Session Notes

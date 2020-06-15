@@ -189,7 +189,7 @@ class Setup():
         movedown_option.triggered.connect(self.movedown_button_pressed)
         # Shortcut to remove a reference line
         delete_line_option = QtGui.QAction('Remove Line', self)
-        delete_line_option.setShortcut('Del')
+        delete_line_option.setShortcut('Shift+D')
         delete_line_option.triggered.connect(self.delete_line_button_pressed)
         # Shortcut to move between previous/next moves
         next_option = QtGui.QAction('Next', self)
