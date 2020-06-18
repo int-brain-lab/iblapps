@@ -7,8 +7,8 @@ import ibllib.plots as plots
 import alf.io
 import logging
 import argparse
-from ibllib.qc.bpodqc_metrics import BpodQC
 import qt as qt
+from ibllib.qc.bpodqc_metrics import BpodQC
 import ViewEphysQC as ViewEphysQC
 one = ONE()
 
