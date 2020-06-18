@@ -5,6 +5,8 @@ from datetime import datetime
 from oneibl.one import ONE
 from ibllib.misc import print_progress
 import sys
+from pathlib import Path
+import uuid
 
 
 def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
@@ -16,19 +18,88 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
     if eid is None:
         eid = one.search(subject=subj, date=date, number=sess_no)[0]
 
-    # Find the alf path associated with eid
     sess_path = one.path_from_eid(eid)
     alf_path = sess_path.joinpath('alf', probe_label)
 
-    # Find user and current date to add to dj table
+    cluster_path = Path(alf_path, 'spikes.clusters.npy')
+    template_path = Path(alf_path, 'spikes.templates.npy')
+
+    # Compare spikes.clusters with spikes.templates to find which clusters have been merged
+    phy_clusters = np.load(cluster_path)
+    id_phy = np.unique(phy_clusters)
+    orig_clusters = np.load(template_path)
+    id_orig = np.unique(orig_clusters)
+
+    uuid_list = alf.io.load_file_content(alf_path.joinpath('clusters.uuids.csv'))
+
+    # First deal with merged clusters and make sure they have cluster uuis assigned
+    # Find the original cluster ids that have been merged into a new cluster
+    merged_idx = np.setdiff1d(id_orig, id_phy)
+
+    # See if any clusters have been merged, if not skip to the next bit
+    if np.any(merged_idx):
+        # Make association between original cluster and new cluster id and save in dict
+        merge_list = {}
+        for m in merged_idx:
+            idx = phy_clusters[np.where(orig_clusters == m)[0][0]]
+            if idx in merge_list:
+                merge_list[idx].append(m)
+            else:
+                merge_list[idx] = [m]
+
+        # Create a dataframe from the dict
+        merge_clust = pd.DataFrame(columns={'cluster_idx', 'merged_uuid', 'merged_id'})
+        for key, value in merge_list.items():
+            value_uuid = uuid_list['uuids'][value]
+            merge_clust = merge_clust.append({'cluster_idx': key, 'merged_uuid': tuple(value_uuid),
+                                              'merged_idx': tuple(value)},
+                                             ignore_index=True)
+
+        # Get the dj table that has previously stored merged clusters and store in frame
+        merge = cluster_table.MergedClusters()
+        merge_dj = pd.DataFrame(columns={'cluster_uuid', 'merged_uuid'})
+        merge_dj['cluster_uuid'] = merge.fetch('cluster_uuid').astype(str)
+        merge_dj['merged_uuid'] = tuple(map(tuple, merge.fetch('merged_uuid')))
+
+        # Merge the two dataframe to see if any merge combinations already have a cluster_uuid
+        merge_comb = pd.merge(merge_dj, merge_clust, on=['merged_uuid'], how='outer')
+
+        # Find the merged clusters that do not have a uuid assigned
+        no_uuid = np.where(pd.isnull(merge_comb['cluster_uuid']))[0]
+
+        # Assign new uuid to new merge pairs and add to the merge table
+        for nid in no_uuid:
+            new_uuid = str(uuid.uuid4())
+            merge_comb['cluster_uuid'].iloc[nid] = new_uuid
+            merge.insert1(
+                dict(cluster_uuid=new_uuid, merged_uuid=merge_comb['merged_uuid'].iloc[nid]),
+                allow_direct_insert=True)
+
+        # Add all the uuids to the cluster_uuid frame with index according to cluster id from phy
+        for idx, c_uuid in zip(merge_comb['cluster_idx'].values,
+                               merge_comb['cluster_uuid'].values):
+            uuid_list.loc[idx] = c_uuid
+
+        csv_path = Path(alf_path, 'merge_info.csv')
+        merge_comb = merge_comb.reindex(columns=['cluster_idx', 'cluster_uuid', 'merged_idx',
+                                                 'merged_uuid'])
+
+        try:
+            merge_comb.to_csv(csv_path, index=False)
+        except Exception as err:
+            print(err)
+            print('Close merge_info.csv file and then relaunch script')
+            sys.exit(1)
+    else:
+        print('No merges detected, continuing...')
+
+    # Now populate datajoint with cluster labels
     user = one._par.ALYX_LOGIN
     current_date = datetime.now().replace(microsecond=0)
 
-    # Load in output from phy
-    uuid = alf.io.load_file_content(alf_path.joinpath('clusters.uuids.csv'))
     try:
         cluster_info = alf.io.load_file_content(alf_path.joinpath('cluster_group.tsv'))
-        cluster_info['cluster_uuid'] = uuid['uuids'][cluster_info['cluster_id']].values
+        cluster_info['cluster_uuid'] = uuid_list['uuids'][cluster_info['cluster_id']].values
     except Exception as err:
         print(err)
         print('Could not find cluster group file output from phy')
@@ -64,8 +135,7 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
     # Next look through clusters already on datajoint and check if any labels have
     # been changed
     comp_clust = pd.merge(cluster_info, dj_clust, on='cluster_uuid')
-    idx_change = np.where(comp_clust['group'] != comp_clust['cluster_label'])[
-        0]
+    idx_change = np.where(comp_clust['group'] != comp_clust['cluster_label'])[0]
 
     cluster_uuid = comp_clust['cluster_uuid'][idx_change].values
     cluster_label = comp_clust['group'][idx_change].values

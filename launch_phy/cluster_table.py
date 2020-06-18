@@ -1,7 +1,7 @@
 import datajoint as dj
 from ibl_pipeline import reference
 
-schema = dj.schema('group_shared_testing')
+schema = dj.schema('group_shared_ephys')
 dj.config["enable_python_native_blobs"] = True
 
 
