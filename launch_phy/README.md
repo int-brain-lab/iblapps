@@ -33,3 +33,16 @@ or:
 
 `python <path/to/populate_cluster_table.py> -s subject -e eid -p probe_name`
 e.g. `python int-brain-lab\iblapps\launch_phy\populate_cluster_table.py -e a3df91c8-52a6-4afa-957b-3479a7d0897c -p probe00`
+
+
+The result of merging clusters will be saved on google drive (for the time being). The files that 
+need to be uploaded are,
+- spikes.clusters
+- merge_info
+
+These should be uploaded [here](https://drive.google.com/drive/u/1/folders/1_KDshAIblNiFNDQD37ZtoFks8b4VDWgg), 
+within a folder using the following naming convention,
+
+subject_date_session_probe_user
+
+e.g KS022_2019-12-10_001_probe00_mayo
