@@ -294,3 +294,4 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         out.release()
     cap.release()
     cv2.destroyAllWindows()
+    print('Saved labelled video at %s' % save_path)
