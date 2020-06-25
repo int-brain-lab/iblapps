@@ -188,10 +188,9 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         
 
     if save_video:
-        save_path = video_data / '%s_trials_%s_%s_%s.mp4' % (eid,
-                                                          trial_range[0],
-                                                          trial_range[-1],
-                                                          video_type)
+        f_name = '%s_trials_%s_%s_%s.mp4' % (eid,trial_range[0],
+                                             trial_range[-1],video_type)
+        save_path = video_data / f_name
         save_path = str(save_path)
         out = cv2.VideoWriter(save_path,
                               cv2.VideoWriter_fourcc(*'mp4v'),
