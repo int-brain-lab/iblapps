@@ -47,7 +47,7 @@ def FP_RP(ts):
     return didpass
 
 
-def noise_cutoff(amps,quartile_length=.25, nbins=100, end_low = 5):
+def noise_cutoff(amps,quartile_length=.2, nbins=100, end_low = 2):
     if(len(amps)>1):
         bins_list= np.linspace(0, np.max(amps), nbins)
         n,bins = np.histogram(amps,bins = bins_list)
