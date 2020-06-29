@@ -54,15 +54,15 @@ class QcFromPath(object):
         plots.vertical_lines(self.trial_data['goCue_times'], ymin=0, ymax=ymax,
                              ax=display, label='goCue_times', color='b', linewidth=width)
         plots.vertical_lines(self.trial_data['goCueTrigger_times'], ymin=0, ymax=ymax,
-                             ax=display, label='start_trial', color='m', linewidth=width)
+                             ax=display, label='goCueTrigger_times', color='m', linewidth=width)
         plots.vertical_lines(self.trial_data['errorCue_times'], ymin=0, ymax=ymax,
-                             ax=display, label='error tone', color='r', linewidth=width)
+                             ax=display, label='errorCue_times', color='r', linewidth=width)
         plots.vertical_lines(self.trial_data['valveOpen_times'], ymin=0, ymax=ymax,
                              ax=display, label='valveOpen_times', color='g', linewidth=width)
         plots.vertical_lines(self.trial_data['stimFreeze_times'], ymin=0, ymax=ymax,
                              ax=display, label='stimFreeze_times', color='y', linewidth=width)
         plots.vertical_lines(self.trial_data['stimOff_times'], ymin=0, ymax=ymax,
-                             ax=display, label='stim off', color='c', linewidth=width)
+                             ax=display, label='stimOff_times', color='c', linewidth=width)
         plots.vertical_lines(self.trial_data['stimOn_times'], ymin=0, ymax=ymax,
                              ax=display, label='stimOn_times', color='tab:orange', linewidth=width)
         display.legend()
@@ -77,9 +77,9 @@ class QcFromPath(object):
             plots.vertical_lines(self.trial_data['goCue_times'], ymin=0, ymax=ymax,
                                  ax=wheel_display, label='goCue_times', color='b', linewidth=width)
             plots.vertical_lines(self.trial_data['goCueTrigger_times'], ymin=0, ymax=ymax,
-                                 ax=wheel_display, label='start_trial', color='m', linewidth=width)
+                                 ax=wheel_display, label='goCueTrigger_times', color='m', linewidth=width)
             plots.vertical_lines(self.trial_data['errorCue_times'], ymin=0, ymax=ymax,
-                                 ax=wheel_display, label='error tone', color='r', linewidth=width)
+                                 ax=wheel_display, label='errorCue_times', color='r', linewidth=width)
             plots.vertical_lines(self.trial_data['valveOpen_times'], ymin=0, ymax=ymax,
                                  ax=wheel_display, label='valveOpen_times', color='g',
                                  linewidth=width)
@@ -87,7 +87,7 @@ class QcFromPath(object):
                                  ax=wheel_display, label='stimFreeze_times', color='y',
                                  linewidth=width)
             plots.vertical_lines(self.trial_data['stimOff_times'], ymin=0, ymax=ymax,
-                                 ax=wheel_display, label='stim off', color='c', linewidth=width)
+                                 ax=wheel_display, label='stimOff_times', color='c', linewidth=width)
             plots.vertical_lines(self.trial_data['stimOn_times'], ymin=0, ymax=ymax,
                                  ax=wheel_display, label='stimOn_times', color='tab:orange',
                                  linewidth=width)
