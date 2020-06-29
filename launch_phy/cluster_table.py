@@ -12,7 +12,7 @@ class ClusterLabel(dj.Imported):
     -> reference.LabMember          #user name
     ---
     label_time: datetime            # date on which labelling was done
-    cluster_label=null: enum('good', 'mua', 'noise', 'unsorted') # user assigned label
+    cluster_label: varchar(255) # user assigned label
     """
 
 
