@@ -58,8 +58,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     eid: session id, e.g. '3663d82b-f197-4e8b-b299-7b803a155b84'
     video_type: one of 'left', 'right', 'body'
     trial_range: first and last trial number of range to be shown, e.g. [5,7]
-    save_video: video is displayed and saved in local folder
-
+    save_video: video is displayed and saved next to original video
     Example usage to view and save labeled video with wheel angle:
     Viewer('3663d82b-f197-4e8b-b299-7b803a155b84', 'left', [5,7])
     '''
@@ -189,10 +188,11 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         
 
     if save_video:
-        out = cv2.VideoWriter('%s_trials_%s_%s_%s.mp4' % (eid,
-                                                          trial_range[0],
-                                                          trial_range[-1],
-                                                          video_type),
+        f_name = '%s_trials_%s_%s_%s.mp4' % (eid,trial_range[0],
+                                             trial_range[-1],video_type)
+        save_path = video_data / f_name
+        save_path = str(save_path)
+        out = cv2.VideoWriter(save_path,
                               cv2.VideoWriter_fourcc(*'mp4v'),
                               fps,
                               size)  # put , 0 if grey scale
@@ -294,3 +294,4 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         out.release()
     cap.release()
     cv2.destroyAllWindows()
+    print('Saved labelled video at %s' % save_path)
