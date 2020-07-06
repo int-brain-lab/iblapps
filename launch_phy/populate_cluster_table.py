@@ -11,7 +11,6 @@ import uuid
 
 def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
                          sess_no=None, one=None):
-
     if one is None:
         one = ONE()
 
@@ -32,7 +31,7 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
 
     uuid_list = alf.io.load_file_content(alf_path.joinpath('clusters.uuids.csv'))
 
-    # First deal with merged clusters and make sure they have cluster uuis assigned
+    # First deal with merged clusters and make sure they have cluster uuids assigned
     # Find the original cluster ids that have been merged into a new cluster
     merged_idx = np.setdiff1d(id_orig, id_phy)
 
@@ -47,7 +46,7 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
             else:
                 merge_list[idx] = [m]
 
-        # Create a dataframe from the dict
+                # Create a dataframe from the dict
         merge_clust = pd.DataFrame(columns={'cluster_idx', 'merged_uuid', 'merged_id'})
         for key, value in merge_list.items():
             value_uuid = uuid_list['uuids'][value]
@@ -55,7 +54,7 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
                                               'merged_idx': tuple(value)},
                                              ignore_index=True)
 
-        # Get the dj table that has previously stored merged clusters and store in frame
+            # Get the dj table that has previously stored merged clusters and store in frame
         merge = cluster_table.MergedClusters()
         merge_dj = pd.DataFrame(columns={'cluster_uuid', 'merged_uuid'})
         merge_dj['cluster_uuid'] = merge.fetch('cluster_uuid').astype(str)
@@ -93,17 +92,25 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
     else:
         print('No merges detected, continuing...')
 
-    # Now populate datajoint with cluster labels
+        # Now populate datajoint with cluster labels
     user = one._par.ALYX_LOGIN
     current_date = datetime.now().replace(microsecond=0)
 
     try:
-        cluster_info = alf.io.load_file_content(alf_path.joinpath('cluster_group.tsv'))
-        cluster_info['cluster_uuid'] = uuid_list['uuids'][cluster_info['cluster_id']].values
+        cluster_group = alf.io.load_file_content(alf_path.joinpath('cluster_group.tsv'))
     except Exception as err:
         print(err)
         print('Could not find cluster group file output from phy')
         sys.exit(1)
+
+    try:
+        cluster_notes = alf.io.load_file_content(alf_path.joinpath('cluster_notes.tsv'))
+        cluster_info = pd.merge(cluster_group, cluster_notes, on=['cluster_id'], how='outer')
+    except Exception as err:
+        cluster_info = cluster_group
+        cluster_info['notes'] = np.NAN
+
+    cluster_info['cluster_uuid'] = uuid_list['uuids'][cluster_info['cluster_id']].values
 
     # dj table that holds data
     cluster = cluster_table.ClusterLabel()
@@ -120,15 +127,18 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
                                dj_clust['cluster_uuid'], invert=True))[0]
     cluster_uuid = cluster_info['cluster_uuid'][idx_new].values
     cluster_label = cluster_info['group'][idx_new].values
+    cluster_note = cluster_info['notes'][idx_new].values
 
     if idx_new.size != 0:
         print('Populating dj with ' + str(idx_new.size) + ' new labels')
     else:
         print('No new labels to add')
-    for iIter, (iClust, iLabel) in enumerate(zip(cluster_uuid, cluster_label)):
+    for iIter, (iClust, iLabel, iNote) in enumerate(
+            zip(cluster_uuid, cluster_label, cluster_note)):
         cluster.insert1(dict(cluster_uuid=iClust, user_name=user,
                              label_time=current_date,
-                             cluster_label=iLabel),
+                             cluster_label=iLabel,
+                             cluster_note=iNote),
                         allow_direct_insert=True)
         print_progress(iIter, cluster_uuid.size, '', '')
 
@@ -139,17 +149,20 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
 
     cluster_uuid = comp_clust['cluster_uuid'][idx_change].values
     cluster_label = comp_clust['group'][idx_change].values
+    cluster_note = comp_clust['notes'][idx_change].values
 
     # Populate table
     if idx_change.size != 0:
         print('Replacing label of ' + str(idx_change.size) + ' clusters')
     else:
         print('No labels to change')
-    for iIter, (iClust, iLabel) in enumerate(zip(cluster_uuid, cluster_label)):
+    for iIter, (iClust, iLabel, iNote) in enumerate(
+            zip(cluster_uuid, cluster_label, cluster_note)):
         prev_clust = cluster & {'user_name': user} & {'cluster_uuid': iClust}
         cluster.insert1(dict(*prev_clust.proj(),
                              label_time=current_date,
-                             cluster_label=iLabel),
+                             cluster_label=iLabel,
+                             cluster_note=iNote),
                         allow_direct_insert=True, replace=True)
         print_progress(iIter, cluster_uuid.size, '', '')
 
@@ -183,4 +196,4 @@ if __name__ == '__main__':
             populate_dj_with_phy(str(args.probe_label), subj=str(args.subject),
                                  date=str(args.date), sess_no=args.session_no)
 
-    # populate_dj_with_phy('probe00', subj='KS022', date='2019-12-10', sess_no=1)
+    populate_dj_with_phy('probe00', subj='KS022', date='2019-12-10', sess_no=1)

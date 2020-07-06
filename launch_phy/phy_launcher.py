@@ -39,9 +39,9 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
         'channels.rawInd',
         'channels.localCoordinates',
         # 'ephysData.raw.ap'
-        # '_phy_spikes_subset.waveforms'
-        # '_phy_spikes_subset.spikes'
-        # '_phy_spikes_subset.channels'
+        '_phy_spikes_subset.waveforms'
+        '_phy_spikes_subset.spikes'
+        '_phy_spikes_subset.channels'
     ]
 
     if eid is None:
