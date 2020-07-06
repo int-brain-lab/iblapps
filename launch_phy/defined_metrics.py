@@ -47,35 +47,33 @@ def FP_RP(ts):
     return didpass
 
 
-def noise_cutoff(amps,quartile_length=.25):
-        nbins = 100
-        end_low=5
-        if(len(amps)>1):
-            bins_list= np.linspace(0, np.max(amps), nbins)
-            n,bins = np.histogram(amps,bins = bins_list)
-            dx = np.diff(n)
-            idx_nz = np.nonzero(dx) #indices of nonzeros
-            length_nonzeros = idx_nz[0][-1]-idx_nz[0][0] #length of the entire stretch, from first nonzero to last nonzero
-            high_quartile = 1-quartile_length
-            idx_peak = np.argmax(n)
-            length_top_half = idx_nz[0][-1]-idx_peak
-            high_quartile = 1-(2*quartile_length)
+def noise_cutoff(amps,quartile_length=.25,end_low =5, nbins = 100):
+    if(len(amps)>1):
+        bins_list= np.linspace(0, np.max(amps), nbins)
+        n,bins = np.histogram(amps,bins = bins_list)
+        dx = np.diff(n)
+        idx_nz = np.nonzero(dx) #indices of nonzeros
+        length_nonzeros = idx_nz[0][-1]-idx_nz[0][0] #length of the entire stretch, from first nonzero to last nonzero
+        high_quartile = 1-quartile_length
+        idx_peak = np.argmax(n)
+        length_top_half = idx_nz[0][-1]-idx_peak
+        high_quartile = 1-(2*quartile_length)
 
-            high_quartile_start_ind = int(np.ceil(high_quartile*length_top_half + idx_peak))
-            xx=idx_nz[0][idx_nz[0]>high_quartile_start_ind]
-            if len(n[xx])>0:
-                mean_high_quartile = np.mean(n[xx])
-                std_high_quartile = np.std(n[xx])
-                first_low_quartile = np.mean(n[idx_nz[0][1:end_low]])
-                if std_high_quartile>0:
-                    cutoff=(first_low_quartile-mean_high_quartile)/std_high_quartile
-                else:
-                    cutoff=np.float64(np.nan)
+        high_quartile_start_ind = int(np.ceil(high_quartile*length_top_half + idx_peak))
+        xx=idx_nz[0][idx_nz[0]>high_quartile_start_ind]
+        if len(n[xx])>0:
+            mean_high_quartile = np.mean(n[xx])
+            std_high_quartile = np.std(n[xx])
+            first_low_quartile = np.mean(n[idx_nz[0][1:end_low]])
+            if std_high_quartile>0:
+                cutoff=(first_low_quartile-mean_high_quartile)/std_high_quartile
             else:
                 cutoff=np.float64(np.nan)
         else:
             cutoff=np.float64(np.nan)
-        return cutoff
+    else:
+        cutoff=np.float64(np.nan)
+    return cutoff
 
 
 def peak_to_peak_amp(ephys_file, samp_inds, nsamps):
