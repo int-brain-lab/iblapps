@@ -283,11 +283,11 @@ def feat_cutoff(feat, spks_per_bin=20, sigma=5, min_num_bins=50):
 
     # Ensure minimum number of spikes requirement is met.
     error_str = 'The number of spikes in this unit is {0}, ' \
-                'but it must be at least {1}'.format(feat.size, spks_per_bin * min_num_bins)
-    assert (feat.size > (spks_per_bin * min_num_bins)), error_str
+                'but it must be at least {1}'.format(len(feat), spks_per_bin * min_num_bins)
+    assert (len(feat) > (spks_per_bin * min_num_bins)), error_str
 
     # compute the spike feature histogram and pdf:
-    num_bins = np.int(feat.size / spks_per_bin)
+    num_bins = np.int(len(feat) / spks_per_bin)
     hist, bins = np.histogram(feat, num_bins, density=True)
     pdf = filters.gaussian_filter1d(hist, sigma)
 
