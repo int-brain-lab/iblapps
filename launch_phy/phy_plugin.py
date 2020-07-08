@@ -72,6 +72,8 @@ class IBLMetricsPlugin(IPlugin):
         #    Sample waveforms
         #    no waveforms
 
+        #def ptp_sigma(cluster_id):
+            #this also requires checking 3 cases above.
 
         # Use this dictionary to define custom cluster metrics.
         # We memcache the function so that cluster metrics are only computed once and saved
@@ -88,6 +90,5 @@ class IBLMetricsPlugin(IPlugin):
         controller.cluster_metrics['presence_ratio_std'] = controller.context.memcache(presence_ratio_std)
         controller.cluster_metrics['refp_viol'] = controller.context.memcache(refp_viol)
         controller.cluster_metrics['noise_cutoff'] = controller.context.memcache(n_cutoff)
-
-
-
+        controller.cluster_metrics['mean_amp'] = controller.context.memcache(mean_amp_true)
+        controller.cluster_metrics['ptp_sigma'] = controller.context.memcache(ptp_sigma)
