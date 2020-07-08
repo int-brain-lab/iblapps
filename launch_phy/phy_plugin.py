@@ -75,6 +75,14 @@ class IBLMetricsPlugin(IPlugin):
         #def ptp_sigma(cluster_id):
             #this also requires checking 3 cases above.
 
+        def m_label(cluster_id):
+            ts = controller.get_spike_times(cluster_id).data
+            amps = controller.get_amplitudes(cluster_id).data
+            metrics_label = int(FP_RP(ts) and noise_cutoff(amps,quartile_length=.25)<20)
+            #if amplitudes are correct (i.e. raw data or sample wfs exist):
+                #metrics_label = (FP_RP(ts) and noise_cutoff(amps,quartile_length=.25)<20 and np.mean(amps)>50)
+
+
         # Use this dictionary to define custom cluster metrics.
         # We memcache the function so that cluster metrics are only computed once and saved
         # within the session, and also between sessions (the memcached values are also saved
@@ -92,3 +100,4 @@ class IBLMetricsPlugin(IPlugin):
         controller.cluster_metrics['noise_cutoff'] = controller.context.memcache(n_cutoff)
         controller.cluster_metrics['mean_amp'] = controller.context.memcache(mean_amp_true)
         controller.cluster_metrics['ptp_sigma'] = controller.context.memcache(ptp_sigma)
+        controller.cluster_metrics['metrics_label'] = controller.context.memcache(m_label)
