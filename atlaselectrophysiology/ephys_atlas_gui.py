@@ -2,11 +2,12 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import numpy as np
 from random import randrange
-from atlaselectrophysiology.load_data import LoadData
+from atlaselectrophysiology.load_data_local import LoadData
 from ibllib.pipes.ephys_alignment import EphysAlignment
 import atlaselectrophysiology.plot_data as pd
 import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
+from pathlib import Path
 
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
@@ -14,10 +15,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         super(MainWindow, self).__init__()
 
         self.init_variables()
-        self.init_layout(self)
+        self.init_layout(self, offline=True)
         self.loaddata = LoadData()
         self.init_region_lookup(self.loaddata.get_allen_csv())
-        self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
+        #self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
         self.configure = True
 
     def init_variables(self):
@@ -561,8 +562,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         param data: dictionary of data to plot
             {'x': x coordinate of data, np.array((npoints)), float
              'y': y coordinate of data, np.array((npoints)), float
-             'size': size of data, np.array((npoints)), float
-             'colour': colour of data, np.array((npoints)), QtGui.QColor
+             'size': size of data points, np.array((npoints)), float
+             'colour': colour of data points, np.array((npoints)), QtGui.QColor
              'xrange': range to display of x axis, np.array([min range, max range]), float
              'xaxis': label for xaxis, string
             }
@@ -757,8 +758,19 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
+    def on_folder_selected(self):
+        """
+        Triggered in offline mode when folder button is clicked
+        """
+        folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
+        self.folder_line.setText(str(folder_path))
+        self.prev_alignments = self.loaddata.get_info(folder_path)
+        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
+
+
     def on_alignment_selected(self, idx):
-        self.feature_prev, self.track_prev =  self.loaddata.get_starting_alignment(idx)
+        self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(idx)
 
     def data_button_pressed(self):
         """
@@ -775,17 +787,18 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.remove_lines_points()
         self.init_variables()
 
-        self.loaddata.get_eid()
+        #self.loaddata.get_eid()
         alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
         xyz_picks = self.loaddata.get_xyzpicks()
         if np.any(self.feature_prev):
             self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths,
-                                                track_prev=self.track_prev,
-                                                feature_prev=self.feature_prev)
+                                             track_prev=self.track_prev,
+                                             feature_prev=self.feature_prev)
         else:
             self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths)
 
-        self.features[self.idx], self.track[self.idx], self.xyz_track = self.ephysalign.get_track_and_feature()
+        self.features[self.idx], self.track[self.idx], self.xyz_track \
+            = self.ephysalign.get_track_and_feature()
 
         self.hist_data['region'][self.idx], self.hist_data['axis_label'][self.idx] \
             = self.ephysalign.scale_histology_regions(self.features[self.idx], self.track[self.idx])
@@ -1016,7 +1029,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             if not np.any(idx):
                 idx = np.array([0])
 
-            description, lookup = self.loaddata.get_region_description(self.ephysalign.region_id[idx[0]])
+            description, lookup = self.loaddata.get_region_description(self.ephysalign.region_id[idx[0]][0])
             item = self.struct_list.findItems(lookup, flags=QtCore.Qt.MatchRecursive)
             model_item = self.struct_list.indexFromItem(item[0])
             self.struct_view.collapseAll()

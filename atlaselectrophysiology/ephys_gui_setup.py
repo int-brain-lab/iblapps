@@ -8,11 +8,11 @@ pg.setConfigOption('foreground', 'k')
 
 
 class Setup():
-    def init_layout(self, main_window):
+    def init_layout(self, main_window, offline=False):
         self.resize(1600, 800)
         self.setWindowTitle('Electrophysiology Atlas')
         self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-
+        self.offline = offline
         main_widget = QtWidgets.QWidget()
         self.setCentralWidget(main_widget)
         main_layout = QtWidgets.QGridLayout()
@@ -37,13 +37,22 @@ class Setup():
 
     def init_menubar(self):
         """
-        Create menu bar and add all possible plot and keyboard interaction options
+        Create menu bar and add all possible menu options. These are:
+            - Image Plots: possible 2D image/scatter plots
+            - Line Plots: possible 1D line plots
+            - Probe Plots: possible 2D plots arranged according to probe geometry
+            - Slice Plots: possible coronal slice images
+            - Filter Units: filter displayed plots by unit type (All, Good, MUA)
+            - Fit Options: possible keyboard interactions for applying alignment
+            - Display Options: possible keyboard interactions to what is displayed on GUI
+            - Session Information: extra info, session notes and Allen brain regions description
         """
         # Create menubar widget and add it to the main GUI window
         menu_bar = QtWidgets.QMenuBar(self)
         menu_bar.setNativeMenuBar(False)
         self.setMenuBar(menu_bar)
 
+        # IMAGE PLOTS MENU BAR
         # Define all 2D scatter/ image plot options
         scatter_drift = QtGui.QAction('Amplitude', self, checkable=True, checked=False)
         scatter_drift.triggered.connect(lambda: self.plot_scatter(self.scat_drift_data))
@@ -66,10 +75,14 @@ class Setup():
         img_rmsLFP.triggered.connect(lambda: self.plot_image(self.img_rms_LFPdata))
         img_LFP = QtGui.QAction('LFP Spectrum', self, checkable=True, checked=False)
         img_LFP.triggered.connect(lambda: self.plot_image(self.img_lfp_data))
+        # Initialise with firing rate 2D plot
         self.img_init = img_fr
+
         # Add menu bar for 2D scatter/ image plot options
         img_options = menu_bar.addMenu('Image Plots')
+        # Add action group so we can toggle through 2D scatter/ image plot options
         img_options_group = QtGui.QActionGroup(img_options)
+        # Only allow one to plot to be selected at any one time
         img_options_group.setExclusive(True)
         img_options.addAction(img_fr)
         img_options_group.addAction(img_fr)
@@ -90,40 +103,47 @@ class Setup():
         img_options.addAction(scatter_amp)
         img_options_group.addAction(scatter_amp)
 
+        # LINE PLOTS MENU BAR
         # Define all 1D line plot options
         line_fr = QtGui.QAction('Firing Rate', self, checkable=True, checked=True)
         line_fr.triggered.connect(lambda: self.plot_line(self.line_fr_data))
         line_amp = QtGui.QAction('Amplitude', self, checkable=True, checked=False)
         line_amp.triggered.connect(lambda: self.plot_line(self.line_amp_data))
-
+        # Initialise with firing rate 1D plot
         self.line_init = line_fr
         # Add menu bar for 1D line plot options
         line_options = menu_bar.addMenu('Line Plots')
+        # Add action group so we can toggle through 2D scatter/ image plot options
         line_options_group = QtGui.QActionGroup(line_options)
+        # Only allow one to plot to be selected at any one time
         line_options_group.setExclusive(True)
         line_options.addAction(line_fr)
         line_options_group.addAction(line_fr)
         line_options.addAction(line_amp)
         line_options_group.addAction(line_amp)
 
+        # PROBE PLOTS MENU BAR
         # Define all 2D probe plot options
-        probe_options = menu_bar.addMenu("Probe Plots")
-        probe_options_group = QtGui.QActionGroup(probe_options)
-        probe_options_group.setExclusive(True)
+        # In two stages 1) RMS plots manually, 2) frequency plots in for loop
         probe_rmsAP = QtGui.QAction('rms AP', self, checkable=True, checked=True)
         probe_rmsAP.triggered.connect(lambda: self.plot_probe(self.probe_rms_APdata))
         probe_rmsLFP = QtGui.QAction('rms LFP', self, checkable=True, checked=False)
         probe_rmsLFP.triggered.connect(lambda: self.plot_probe(self.probe_rms_LFPdata))
+        # Initialise with rms of AP probe plot
         self.probe_init = probe_rmsAP
 
         # Add menu bar for 2D probe plot options
+        probe_options = menu_bar.addMenu("Probe Plots")
+        # Add action group so we can toggle through probe plot options
+        probe_options_group = QtGui.QActionGroup(probe_options)
+        probe_options_group.setExclusive(True)
         probe_options.addAction(probe_rmsAP)
         probe_options_group.addAction(probe_rmsAP)
         probe_options.addAction(probe_rmsLFP)
         probe_options_group.addAction(probe_rmsLFP)
 
-        # Add the different frequency band options in a loop. These must be the same as in
-        # load_data
+        # Add the different frequency band options in a loop. These bands must be the same as
+        # defined in plot_data
         freq_bands = np.vstack(([0, 4], [4, 10], [10, 30], [30, 80], [80, 200]))
         for iF, freq in enumerate(freq_bands):
             band = f"{freq[0]} - {freq[1]} Hz"
@@ -133,15 +153,20 @@ class Setup():
             probe_options.addAction(probe)
             probe_options_group.addAction(probe)
 
-        # Slice plots
+        # SLICE PLOTS MENU BAR
+        # Define all coronal slice plot options
         slice_hist = QtGui.QAction('Histology', self, checkable=True, checked=True)
         slice_hist.triggered.connect(lambda: self.plot_slice(self.slice_data, 'hist'))
         slice_ccf = QtGui.QAction('CCF', self, checkable=True, checked=False)
         slice_ccf.triggered.connect(lambda: self.plot_slice(self.slice_data, 'ccf'))
         slice_label = QtGui.QAction('Annotation', self, checkable=True, checked=False)
         slice_label.triggered.connect(lambda: self.plot_slice(self.slice_data, 'label'))
+        # Initialise with raw histology image
+        self.slice_init = slice_hist
 
+        # Add menu bar for slice plot options
         slice_options = menu_bar.addMenu("Slice Plots")
+        # Add action group so we can toggle through slice plot options
         slice_options_group = QtGui.QActionGroup(slice_options)
         slice_options_group.setExclusive(True)
         slice_options.addAction(slice_hist)
@@ -150,19 +175,21 @@ class Setup():
         slice_options_group.addAction(slice_ccf)
         slice_options.addAction(slice_label)
         slice_options_group.addAction(slice_label)
-        self.slice_init = slice_hist
 
-
-        # Define unit filter options
+        # FILTER UNITS MENU BAR
+        # Define unit filtering options
         all_units = QtGui.QAction('All', self, checkable=True, checked=True)
         all_units.triggered.connect(lambda: self.filter_unit_pressed('all'))
         good_units = QtGui.QAction('Good', self, checkable=True, checked=False)
         good_units.triggered.connect(lambda: self.filter_unit_pressed('good'))
         mua_units = QtGui.QAction('MUA', self, checkable=True, checked=False)
         mua_units.triggered.connect(lambda: self.filter_unit_pressed('mua'))
+        # Initialise with all units being shown
         self.unit_init = all_units
 
+        # Add menu bar for slice plot options
         unit_filter_options = menu_bar.addMenu("Filter Units")
+        # Add action group so we can toggle through unit options
         unit_filter_options_group = QtGui.QActionGroup(unit_filter_options)
         unit_filter_options_group.setExclusive(True)
         unit_filter_options.addAction(all_units)
@@ -172,7 +199,8 @@ class Setup():
         unit_filter_options.addAction(mua_units)
         unit_filter_options_group.addAction(mua_units)
 
-        # Define all possible keyboard interactions for GUI
+        # FIT OPTIONS MENU BAR
+        # Define all possible keyboard shortcut interactions for GUI
         # Shortcut to apply interpolation
         fit_option = QtGui.QAction('Fit', self)
         fit_option.setShortcut('Return')
@@ -189,7 +217,7 @@ class Setup():
         movedown_option.triggered.connect(self.movedown_button_pressed)
         # Shortcut to remove a reference line
         delete_line_option = QtGui.QAction('Remove Line', self)
-        delete_line_option.setShortcut('Del')
+        delete_line_option.setShortcut('Shift+D')
         delete_line_option.triggered.connect(self.delete_line_button_pressed)
         # Shortcut to move between previous/next moves
         next_option = QtGui.QAction('Next', self)
@@ -202,10 +230,15 @@ class Setup():
         reset_option = QtGui.QAction('Reset', self)
         reset_option.setShortcut('Shift+R')
         reset_option.triggered.connect(self.reset_button_pressed)
-        # Shortcut to upload final state to Alyx
+        # Shortcut to upload final state to Alyx/to local file
         complete_option = QtGui.QAction('Upload', self)
         complete_option.setShortcut('Shift+U')
-        complete_option.triggered.connect(self.complete_button_pressed)
+        if not self.offline:
+            # If offline mode is False, connect to function that writes output to Alyx
+            complete_option.triggered.connect(self.complete_button_pressed)
+        else:
+            # If offline mode is True, connect to function that writes output to local file
+            complete_option.triggered.connect(self.complete_button_pressed)
 
         # Add menu bar with all possible keyboard interactions
         fit_options = menu_bar.addMenu("Fit Options")
@@ -219,19 +252,9 @@ class Setup():
         fit_options.addAction(reset_option)
         fit_options.addAction(complete_option)
 
-
-        # Shortcuts to switch between different views on left most data plot
-        view1_option = QtGui.QAction('View 1', self)
-        view1_option.setShortcut('Shift+1')
-        view1_option.triggered.connect(lambda: self.set_view(view=1))
-        view2_option = QtGui.QAction('View 2', self)
-        view2_option.setShortcut('Shift+2')
-        view2_option.triggered.connect(lambda: self.set_view(view=2))
-        view3_option = QtGui.QAction('View 3', self)
-        view3_option.setShortcut('Shift+3')
-        view3_option.triggered.connect(lambda: self.set_view(view=3))
-
-        # Shortcuts to toggle between plots
+        # DISPLAY OPTIONS MENU BAR
+        # Define all possible keyboard shortcut for visualisation features
+        # Shortcuts to toggle between plots options
         toggle1_option = QtGui.QAction('Toggle Image Plots', self)
         toggle1_option.setShortcut('Alt+1')
         toggle1_option.triggered.connect(lambda: self.toggle_plots(img_options_group))
@@ -245,12 +268,23 @@ class Setup():
         toggle4_option.setShortcut('Alt+4')
         toggle4_option.triggered.connect(lambda: self.toggle_plots(slice_options_group))
 
+        # Shortcuts to switch order of 3 panels in ephys plot
+        view1_option = QtGui.QAction('View 1', self)
+        view1_option.setShortcut('Shift+1')
+        view1_option.triggered.connect(lambda: self.set_view(view=1))
+        view2_option = QtGui.QAction('View 2', self)
+        view2_option.setShortcut('Shift+2')
+        view2_option.triggered.connect(lambda: self.set_view(view=2))
+        view3_option = QtGui.QAction('View 3', self)
+        view3_option.setShortcut('Shift+3')
+        view3_option.triggered.connect(lambda: self.set_view(view=3))
+
         # Shortcut to reset axis on figures
         axis_option = QtGui.QAction('Reset Axis', self)
         axis_option.setShortcut('Shift+A')
         axis_option.triggered.connect(self.reset_axis_button_pressed)
 
-        # Shortcut to hide show region labels
+        # Shortcut to hide/show region labels
         toggle_labels_option = QtGui.QAction('Hide/Show Labels', self)
         toggle_labels_option.setShortcut('Shift+L')
         toggle_labels_option.triggered.connect(self.toggle_labels_button_pressed)
@@ -265,15 +299,15 @@ class Setup():
         toggle_channels_option.setShortcut('Shift+C')
         toggle_channels_option.triggered.connect(self.toggle_channel_button_pressed)
 
-        # Shortcut for cluster popups
+        # Shortcuts for cluster popup window
         popup_minimise = QtGui.QAction('Minimise/Show Cluster Popup', self)
         popup_minimise.setShortcut('Alt+M')
         popup_minimise.triggered.connect(self.minimise_popups)
         popup_close = QtGui.QAction('Close Cluster Popup', self)
         popup_close.setShortcut('Alt+X')
         popup_close.triggered.connect(self.close_popups)
-        # Shortcut to reset axis on histology figure
 
+        # Add menu bar with all possible display options
         display_options = menu_bar.addMenu('Display Options')
         display_options.addAction(toggle1_option)
         display_options.addAction(toggle2_option)
@@ -289,13 +323,18 @@ class Setup():
         display_options.addAction(popup_minimise)
         display_options.addAction(popup_close)
 
-        info_options = menu_bar.addMenu('Session Information')
+        # SESSION INFORMATION MENU BAR
+        # Define all session information options
+        # Display any notes associated with recording session
         session_notes = QtGui.QAction('Session Notes', self)
         session_notes.triggered.connect(self.display_session_notes)
         # Shortcut to show label information
         region_info = QtGui.QAction('Region Info', self)
         region_info.setShortcut('Shift+I')
         region_info.triggered.connect(self.describe_labels_pressed)
+
+        # Add menu bar with all possible session info options
+        info_options = menu_bar.addMenu('Session Information')
         info_options.addAction(session_notes)
         info_options.addAction(region_info)
 
@@ -322,28 +361,40 @@ class Setup():
         # Button to reset GUI to initial state
         self.reset_button = QtWidgets.QPushButton('Reset')
         self.reset_button.clicked.connect(self.reset_button_pressed)
-        # Button to upload final state to Alyx
+        # Button to upload final state to Alyx/ to local file
         self.complete_button = QtWidgets.QPushButton('Upload')
-        self.complete_button.clicked.connect(self.complete_button_pressed)
+        if not self.offline:
+            # If offline mode is False, connect to function that writes output to Alyx
+            self.complete_button.clicked.connect(self.complete_button_pressed)
+        else:
+            # If offline mode is True, connect to function that writes output to local file
+            self.complete_button.clicked.connect(self.complete_button_pressed)
 
+        if not self.offline:
+            # If offline mode is False, read in Subject and Session options from Alyx
+            # Drop down list to choose subject
+            self.subj_list = QtGui.QStandardItemModel()
+            self.subj_combobox = QtWidgets.QComboBox()
+            # Add line edit and completer to be able to search for subject
+            self.subj_combobox.setLineEdit(QtWidgets.QLineEdit())
+            subj_completer = QtWidgets.QCompleter()
+            subj_completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+            self.subj_combobox.setCompleter(subj_completer)
+            self.subj_combobox.setModel(self.subj_list)
+            self.subj_combobox.completer().setModel(self.subj_list)
+            self.subj_combobox.activated.connect(self.on_subject_selected)
 
-        # Drop down list to choose subject
-        self.subj_list = QtGui.QStandardItemModel()
-        self.subj_combobox = QtWidgets.QComboBox()
-        # Add line edit and completer to be able to search for subject
-        self.subj_combobox.setLineEdit(QtWidgets.QLineEdit())
-        subj_completer = QtWidgets.QCompleter()
-        subj_completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
-        self.subj_combobox.setCompleter(subj_completer)
-        self.subj_combobox.setModel(self.subj_list)
-        self.subj_combobox.completer().setModel(self.subj_list)
-        self.subj_combobox.activated.connect(self.on_subject_selected)
-
-        # Drop down list to choose session
-        self.sess_list = QtGui.QStandardItemModel()
-        self.sess_combobox = QtWidgets.QComboBox()
-        self.sess_combobox.setModel(self.sess_list)
-        self.sess_combobox.activated.connect(self.on_session_selected)
+            # Drop down list to choose session
+            self.sess_list = QtGui.QStandardItemModel()
+            self.sess_combobox = QtWidgets.QComboBox()
+            self.sess_combobox.setModel(self.sess_list)
+            self.sess_combobox.activated.connect(self.on_session_selected)
+        else:
+            # If offline mode is True, provide dialog to select local folder that holds data
+            self.folder_line = QtWidgets.QLineEdit()
+            self.folder_button = QtWidgets.QToolButton()
+            self.folder_button.setText('...')
+            self.folder_button.clicked.connect(self.on_folder_selected)
 
         # Drop down list to choose previous alignments
         self.align_list = QtGui.QStandardItemModel()
@@ -372,26 +423,39 @@ class Setup():
         self.interaction_layout2 = QtWidgets.QHBoxLayout()
         self.interaction_layout2.addWidget(self.reset_button)
         self.interaction_layout2.addWidget(self.complete_button)
-        # Group 3
+        # Group 3 will depend on online/ offline mode
         self.interaction_layout3 = QtWidgets.QHBoxLayout()
-        self.interaction_layout3.addWidget(self.subj_combobox, stretch=1)
-        self.interaction_layout3.addWidget(self.sess_combobox, stretch=2)
-        self.interaction_layout3.addWidget(self.align_combobox, stretch=2)
-        self.interaction_layout3.addWidget(self.data_button, stretch=1)
+        if not self.offline:
+            self.interaction_layout3.addWidget(self.subj_combobox, stretch=1)
+            self.interaction_layout3.addWidget(self.sess_combobox, stretch=2)
+            self.interaction_layout3.addWidget(self.align_combobox, stretch=2)
+            self.interaction_layout3.addWidget(self.data_button, stretch=1)
+        else:
+            self.interaction_layout3.addWidget(self.folder_line, stretch=2)
+            self.interaction_layout3.addWidget(self.folder_button, stretch=1)
+            self.interaction_layout3.addWidget(self.align_combobox, stretch=2)
+            self.interaction_layout3.addWidget(self.data_button, stretch=1)
 
     def init_region_lookup(self, allen):
+        """
+        Create Allen Atlas structure tree
+        """
+
+        # Remove the first row which corresponds to 'Void'
         allen = allen.drop([0]).reset_index(drop=True)
 
+        # Find the parent path of each structure by removing the structure id from path
         def parent_path(struct_path):
-            return (struct_path.rsplit('/', 2)[0] + '/')
-
+            return struct_path.rsplit('/', 2)[0] + '/'
         allen['parent_path'] = allen['structure_id_path'].apply(parent_path)
 
+        # Create standard model view
         self.struct_list = QtGui.QStandardItemModel()
         self.struct_view = QtWidgets.QTreeView()
         self.struct_view.setModel(self.struct_list)
         self.struct_view.clicked.connect(self.label_pressed)
 
+        # Defin
         self.struct_view.setHeaderHidden(True)
         unique_levels = np.unique(allen['depth']).astype(int)
         parent_info = {}
@@ -427,7 +491,6 @@ class Setup():
         # Figures to show ephys data
         # 2D scatter/ image plot
         self.fig_img = pg.PlotItem()
-        # self.fig_img.setMouseEnabled(x=False, y=False)
         self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                self.probe_extra, padding=self.pad)
         self.fig_img.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)
