@@ -12,8 +12,8 @@ class ClusterLabel(dj.Imported):
     -> reference.LabMember          #user name 
     --- 
     label_time: datetime            # date on which labelling was done 
-    cluster_label: varchar(255)     # user assigned label  
-    cluster_note: varchar(255)      # user note about cluster
+    cluster_label=null: varchar(255)     # user assigned label  
+    cluster_note=null: varchar(255)      # user note about cluster
     """
 
 

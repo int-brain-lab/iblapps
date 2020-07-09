@@ -92,7 +92,7 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
     else:
         print('No merges detected, continuing...')
 
-        # Now populate datajoint with cluster labels
+    # Now populate datajoint with cluster labels
     user = one._par.ALYX_LOGIN
     current_date = datetime.now().replace(microsecond=0)
 
@@ -108,8 +108,9 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
         cluster_info = pd.merge(cluster_group, cluster_notes, on=['cluster_id'], how='outer')
     except Exception as err:
         cluster_info = cluster_group
-        cluster_info['notes'] = np.NAN
+        cluster_info['notes'] = None
 
+    cluster_info = cluster_info.where(cluster_info.notnull(), None)
     cluster_info['cluster_uuid'] = uuid_list['uuids'][cluster_info['cluster_id']].values
 
     # dj table that holds data
@@ -196,4 +197,4 @@ if __name__ == '__main__':
             populate_dj_with_phy(str(args.probe_label), subj=str(args.subject),
                                  date=str(args.date), sess_no=args.session_no)
 
-    populate_dj_with_phy('probe00', subj='KS022', date='2019-12-10', sess_no=1)
+    #populate_dj_with_phy('probe00', subj='KS022', date='2019-12-10', sess_no=1)
