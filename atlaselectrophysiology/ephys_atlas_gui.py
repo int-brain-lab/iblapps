@@ -1464,12 +1464,12 @@ if __name__ == '__main__':
 
     import argparse
 
-    #parser = argparse.ArgumentParser(description='Load in subject info')
-    #parser.add_argument('-o', '--offline', default=False, required=False, help='Offline mode')
-    #args = parser.parse_args()
+    parser = argparse.ArgumentParser(description='Load in subject info')
+    parser.add_argument('-o', '--offline', default=False, required=False, help='Offline mode')
+    args = parser.parse_args()
 
     app = QtWidgets.QApplication([])
-    #mainapp = MainWindow(offline=args.offline)
-    mainapp = MainWindow(offline=True)
+    mainapp = MainWindow(offline=args.offline)
+    #mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()
