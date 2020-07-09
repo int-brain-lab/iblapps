@@ -56,7 +56,7 @@ class IBLMetricsPlugin(IPlugin):
 
         def presence_ratio_std(cluster_id):
             ts = controller.get_spike_times(cluster_id).data
-            pr, pr_bins  = pres_ratio(ts, hist_win=10)
+            pr, pr_bins = pres_ratio(ts, hist_win=10)
             return pr / np.std(pr_bins)
 
         def refp_viol(cluster_id):
@@ -67,9 +67,38 @@ class IBLMetricsPlugin(IPlugin):
             amps = controller.get_amplitudes(cluster_id).data
             return noise_cutoff(amps, quartile_length=.25)
 
-        #def mean_amp_true(cluster_id):
+        def mean_amp_true(cluster_id):
         #    Three cases: raw data
         #    Sample waveforms
+
+
+            # Get access to sample waveform data
+            spike_ids = controller.get_spike_ids(cluster_id).data
+            # Find which of the spike ids are in the subset of sample waveforms
+            _, _, idx = np.intersect1d(spike_ids,
+                                       controller.model.spike_waveforms['spike_ids'].data,
+                                       return_indices=True)
+            # Sample waveforms that are available for this cluster
+            # Shape of waveforms (n_waveforms, n_samples, n_channels)
+            # where len(idx) == n_waveforms
+            waveforms = controller.model.spike_waveforms['waveforms'][idx].data
+
+            # This way finds (max-min) on each channel, and then for each waveform finds the
+            # maximum (max-min) on any channel and averages these
+            # For each sample waveform find value on channel that has largest (max-min)
+            p2p = np.max((np.max(waveforms, axis=1) - np.min(waveforms, axis=1)), axis=1)
+            # Make sure it is doing what it expected
+            assert(len(p2p) == len(idx))
+            # Find mean p2p across all available sample waveforms
+            p2p_mean = np.mean(p2p)
+
+
+            # This way finds (max-min) on each channel, on each channel averages across all sample
+            # waveforms and then finds the channel with the maximum average value
+            p2p_mean_alt = np.max(np.mean(np.max(waveforms, axis=1) - np.min(waveforms, axis=1), axis=0))
+
+            return p2p_mean
+
         #    no waveforms
 
         #def ptp_sigma(cluster_id):
