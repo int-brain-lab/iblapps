@@ -2,7 +2,8 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import numpy as np
 from random import randrange
-from atlaselectrophysiology.load_data_local import LoadData
+from atlaselectrophysiology.load_data import LoadData
+from atlaselectrophysiology.load_data_local import LoadDataLocal
 from ibllib.pipes.ephys_alignment import EphysAlignment
 import atlaselectrophysiology.plot_data as pd
 import atlaselectrophysiology.ColorBar as cb
@@ -11,14 +12,18 @@ from pathlib import Path
 
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
-    def __init__(self):
+    def __init__(self, offline=False):
         super(MainWindow, self).__init__()
 
         self.init_variables()
-        self.init_layout(self, offline=True)
-        self.loaddata = LoadData()
+        self.init_layout(self, offline=offline)
+        if not offline:
+            self.loaddata = LoadData()
+            self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
+        else:
+            self.loaddata = LoadDataLocal()
+
         self.init_region_lookup(self.loaddata.get_allen_csv())
-        #self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
         self.configure = True
 
     def init_variables(self):
@@ -135,7 +140,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
     def populate_lists(self, data, list_name, combobox):
         """
-        Populate drop down lists with subject/session options
+        Populate drop down lists with subject/session/alignment options
         :param data: list of options to add to widget
         :type data: 1D array of strings
         :param list_name: widget object to which to add data to
@@ -149,13 +154,14 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             item.setEditable(False)
             list_name.appendRow(item)
 
+        # This makes sure the drop down menu is wide enough to showw full length of string
         min_width = combobox.fontMetrics().width(max(data, key=len))
         min_width += combobox.view().autoScrollMargin()
         min_width += combobox.style().pixelMetric(QtGui.QStyle.PM_ScrollBarExtent)
         combobox.view().setMinimumWidth(min_width)
+
+        # Set the default to be the first option
         combobox.setCurrentIndex(0)
-
-
 
     def set_view(self, view=1, configure=False):
         """
@@ -204,11 +210,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_data_layout.layout.setRowStretchFactor(1, 10)
 
             self.fig_img.update()
+            # Manually force the axis to shift and then reset axis as axis not always correct
+            # TO DO: find a better way!
             self.fig_img.setXRange(min=self.xrange[0] - 10, max=self.xrange[1] + 10, padding=0)
             self.reset_axis_button_pressed()
             self.fig_line.update()
             self.fig_probe.update()
-
 
         if view == 2:
             self.fig_data_layout.removeItem(self.fig_img_cb)
@@ -282,8 +289,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
     def toggle_plots(self, options_group):
         """
-        Allows user to toggle through image, line and probe plots using keyboard shortcuts Alt+1,
-        Alt+2 and Alt+3 respectively
+        Allows user to toggle through image, line, probe and slice plots using keyboard shortcuts
+        Alt+1, Alt+2, Alt+3 and Alt+4 respectively
         :param options_group: Set of plots to toggle through
         :type options_group: QtGui.QActionGroup
         """
@@ -322,13 +329,17 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             region = pg.LinearRegionItem(values=(reg[0], reg[1]),
                                          orientation=pg.LinearRegionItem.Horizontal,
                                          brush=colour, movable=False)
+            # Add a white line at the boundary between regions
             bound = pg.InfiniteLine(pos=reg[0], angle=0, pen='w')
             fig.addItem(region)
             fig.addItem(bound)
+            # Need to keep track of each histology region for label pressed interaction
             self.hist_regions = np.vstack([self.hist_regions, region])
+
 
         self.selected_region = self.hist_regions[-2]
 
+        # Boundary for final region
         bound = pg.InfiniteLine(pos=self.hist_data['region'][self.idx][-1][1], angle=0,
                                 pen='w')
         fig.addItem(bound)
@@ -396,8 +407,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Add lines to figure
         fig.addItem(self.tip_pos)
         fig.addItem(self.top_pos)
-
-
 
     def offset_hist_data(self):
         """
@@ -724,8 +733,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_img.addItem(image)
             self.img_plots.append(image)
             self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
-            self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
-                                                                              self.probe_extra, padding=self.pad)
+            self.fig_img.setYRange(min=self.probe_tip - self.probe_extra,
+                                   max=self.probe_top + self.probe_extra, padding=self.pad)
             self.set_axis(self.fig_img, 'bottom', label=data['xaxis'])
             self.scale = data['scale'][1]
             self.data_plot = image
@@ -1154,34 +1163,16 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Alyx
         """
         upload = QtGui.QMessageBox.question(self, '',
-                                            "Upload final channel locations to Alyx?",
+                                            "Save final channel locations?",
                                             QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
         if upload == QtGui.QMessageBox.Yes:
-            #if np.any(self.prev_alignments):
-            if len(self.prev_alignments) > 1:
-
-                overwrite = QtGui.QMessageBox.warning(self, '', ("Ephys aligned trajectory "
-                                                                 "for this probe insertion already exists on "
-                                                                 "Alyx. Do you want to overwrite?"),
-                                                      QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
-                if overwrite == QtGui.QMessageBox.Yes:
-                    self.loaddata.upload_data(self.features[self.idx], self.track[self.idx], self.xyz_channels,
-                                              overwrite=True)
-                    QtGui.QMessageBox.information(self, '', ("Electrode locations "
-                                                             "succesfully uploaded to Alyx"))
-                else:
-                    pass
-                    QtGui.QMessageBox.information(self, '', ("Electrode locations not "
-                                                             "uploaded to Alyx"))
-            else:
-                self.loaddata.upload_data(self.features[self.idx], self.track[self.idx], self.xyz_channels,
-                                          overwrite=True)
-                QtGui.QMessageBox.information(self, 'Status', ("Electrode locations "
-                                                               "succesfully uploaded to Alyx"))
+            self.loaddata.upload_data(self.features[self.idx], self.track[self.idx],
+                                      self.xyz_channels, overwrite=True)
+            QtGui.QMessageBox.information(self, 'Status', ("Electrode locations "
+                                                           "succesfully saved"))
         else:
             pass
-            QtGui.QMessageBox.information(self, 'Status', ("Electrode locations not uploaded"
-                                                           " to Alyx"))
+            QtGui.QMessageBox.information(self, 'Status', ("Electrode locations not saved"))
 
     def reset_axis_button_pressed(self):
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
@@ -1470,7 +1461,15 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
 
 if __name__ == '__main__':
+
+    import argparse
+
+    #parser = argparse.ArgumentParser(description='Load in subject info')
+    #parser.add_argument('-o', '--offline', default=False, required=False, help='Offline mode')
+    #args = parser.parse_args()
+
     app = QtWidgets.QApplication([])
-    mainapp = MainWindow()
+    #mainapp = MainWindow(offline=args.offline)
+    mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()

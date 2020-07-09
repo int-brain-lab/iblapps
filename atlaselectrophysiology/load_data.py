@@ -10,17 +10,19 @@ import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 brain_atlas = atlas.AllenAtlas(25)
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
-one = ONE(base_url=ONE_BASE_URL)
-
-
-brain_regions = one.alyx.rest('brain-regions', 'list')
-allen_id = np.empty((0, 1), dtype=int)
-for br in brain_regions:
-    allen_id = np.append(allen_id, br['id'])
 
 
 class LoadData:
     def __init__(self):
+
+        if not self.one:
+            self.one = ONE(base_url=ONE_BASE_URL)
+
+        brain_regions = one.alyx.rest('brain-regions', 'list')
+        allen_id = np.empty((0, 1), dtype=int)
+        for br in brain_regions:
+            allen_id = np.append(allen_id, br['id'])
+
         self.eid = []
         self.lab = []
         self.n_sess = []

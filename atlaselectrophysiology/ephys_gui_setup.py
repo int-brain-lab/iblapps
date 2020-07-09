@@ -233,12 +233,7 @@ class Setup():
         # Shortcut to upload final state to Alyx/to local file
         complete_option = QtGui.QAction('Upload', self)
         complete_option.setShortcut('Shift+U')
-        if not self.offline:
-            # If offline mode is False, connect to function that writes output to Alyx
-            complete_option.triggered.connect(self.complete_button_pressed)
-        else:
-            # If offline mode is True, connect to function that writes output to local file
-            complete_option.triggered.connect(self.complete_button_pressed)
+        complete_option.triggered.connect(self.complete_button_pressed)
 
         # Add menu bar with all possible keyboard interactions
         fit_options = menu_bar.addMenu("Fit Options")
@@ -363,12 +358,7 @@ class Setup():
         self.reset_button.clicked.connect(self.reset_button_pressed)
         # Button to upload final state to Alyx/ to local file
         self.complete_button = QtWidgets.QPushButton('Upload')
-        if not self.offline:
-            # If offline mode is False, connect to function that writes output to Alyx
-            self.complete_button.clicked.connect(self.complete_button_pressed)
-        else:
-            # If offline mode is True, connect to function that writes output to local file
-            self.complete_button.clicked.connect(self.complete_button_pressed)
+        self.complete_button.clicked.connect(self.complete_button_pressed)
 
         if not self.offline:
             # If offline mode is False, read in Subject and Session options from Alyx

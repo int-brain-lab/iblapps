@@ -9,7 +9,7 @@ from atlaselectrophysiology.load_histology import download_histology_data, tif2n
 brain_atlas = atlas.AllenAtlas(25)
 
 
-class LoadData:
+class LoadDataLocal:
     def __init__(self):
         self.folder_path = []
         self.chn_coords = []
@@ -106,16 +106,12 @@ class LoadData:
     def get_slice_images(self, xyz_channels):
         # First see if the histology file exists before attempting to connect with FlatIron and
         # download
-        #hist_dir = Path(self.sess_path.parent.parent, 'histology')
-        #if hist_dir.exists():
-        #    path_to_image = glob.glob(str(hist_dir) + '/*RD.tif')
-        #    if path_to_image:
-        #        hist_path = tif2nrrd(Path(path_to_image[0]))
-        #    else:
-        #        hist_path = download_histology_data(self.subj, self.lab)
-        #else:
-        #    hist_path = download_histology_data(self.subj, self.lab)
-        hist_path = []
+
+        path_to_image = glob.glob(str(self.folder_path) + '/*RD.nrrd')
+        if path_to_image:
+            hist_path = Path(path_to_image[0])
+        else:
+            hist_path = []
 
         index = brain_atlas.bc.xyz2i(xyz_channels)[:, brain_atlas.xyz2dims]
         ccf_slice = brain_atlas.image[index[:, 0], :, index[:, 2]]
@@ -173,6 +169,9 @@ class LoadData:
             brain_regions['axial'] = self.chn_coords[:, 1]
             assert np.unique([len(brain_regions[k]) for k in brain_regions]).size == 1
             channel_dict = self.create_channel_dict(brain_regions)
+            bregma = atlas.ALLEN_CCF_LANDMARKS_MLAPDV_UM['bregma'].tolist()
+            origin = {'origin': {'bregma': bregma}}
+            channel_dict.update(origin)
 
             # Save the channel locations
             with open(Path(self.folder_path, 'channel_locations.json'), "w") as f:
