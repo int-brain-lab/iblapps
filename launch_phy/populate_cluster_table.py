@@ -46,7 +46,7 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
             else:
                 merge_list[idx] = [m]
 
-                # Create a dataframe from the dict
+        # Create a dataframe from the dict
         merge_clust = pd.DataFrame(columns={'cluster_idx', 'merged_uuid', 'merged_id'})
         for key, value in merge_list.items():
             value_uuid = uuid_list['uuids'][value]
@@ -54,7 +54,7 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
                                               'merged_idx': tuple(value)},
                                              ignore_index=True)
 
-            # Get the dj table that has previously stored merged clusters and store in frame
+        # Get the dj table that has previously stored merged clusters and store in frame
         merge = cluster_table.MergedClusters()
         merge_dj = pd.DataFrame(columns={'cluster_uuid', 'merged_uuid'})
         merge_dj['cluster_uuid'] = merge.fetch('cluster_uuid').astype(str)
