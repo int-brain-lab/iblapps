@@ -1,7 +1,6 @@
 import logging
 
 from PyQt5 import QtCore, QtWidgets
-import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 import pandas as pd
@@ -74,6 +73,19 @@ class DataFrameModel(QtCore.QAbstractTableModel):
             DataFrameModel.ValueRole: b'value'
         }
         return roles
+
+    def sort(self, col, order):
+        """
+        Sort table by given column number
+        :param col: the column number selected (between 0 and self._dataframe.columns.size)
+        :param order: the order to be sorted, 0 is descending; 1, ascending
+        :return:
+        """
+        self.layoutAboutToBeChanged.emit()
+        col_name = self._dataframe.columns.values[col]
+        # print('sorting by ' + col_name)
+        self._dataframe.sort_values(by=col_name, ascending=not order, inplace=True)
+        self.layoutChanged.emit()
 
 
 class PlotCanvas(FigureCanvasQTAgg):
