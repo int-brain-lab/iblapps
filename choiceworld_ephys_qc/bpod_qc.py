@@ -51,6 +51,7 @@ class QcFromPath(object):
         self.qc_frame = pd.concat([metrics, passed], axis=1)[new_col]
         self.qc_frame['intervals_0'] = self.trial_data['intervals_0']
         self.qc_frame['intervals_1'] = self.trial_data['intervals_1']
+        self.qc_frame.insert(loc=0, column='trial_no', value=self.qc_frame.index)
 
     def create_plots(self, display, wheel_display=None, trial_events=None):
         """

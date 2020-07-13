@@ -85,6 +85,7 @@ class DataFrameModel(QtCore.QAbstractTableModel):
         col_name = self._dataframe.columns.values[col]
         # print('sorting by ' + col_name)
         self._dataframe.sort_values(by=col_name, ascending=not order, inplace=True)
+        self._dataframe.reset_index(inplace=True, drop=True)
         self.layoutChanged.emit()
 
 
