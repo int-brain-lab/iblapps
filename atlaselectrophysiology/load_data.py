@@ -18,7 +18,7 @@ class LoadData:
         if not self.one:
             self.one = ONE(base_url=ONE_BASE_URL)
 
-        brain_regions = one.alyx.rest('brain-regions', 'list')
+        brain_regions = self.one.alyx.rest('brain-regions', 'list')
         allen_id = np.empty((0, 1), dtype=int)
         for br in brain_regions:
             allen_id = np.append(allen_id, br['id'])
@@ -39,8 +39,9 @@ class LoadData:
         :return subjects: list of subjects
         :type subjects: list of strings
         """
-        sess_with_hist = one.alyx.rest('trajectories', 'list', provenance='Histology track')
-        subjects = [sess['session']['subject'] for sess in sess_with_hist]
+        self.sess_with_hist = self.one.alyx.rest('trajectories', 'list', provenance='Histology track')
+        subjects = [sess['session']['subject'] for sess in self.sess_with_hist]
+
         self.subjects = np.unique(subjects)
 
         return self.subjects
@@ -55,22 +56,22 @@ class LoadData:
         :return session: list of strings
         """
         self.subj = self.subjects[idx]
-        self.sess_with_hist = one.alyx.rest('trajectories', 'list', subject=self.subj,
+        self.sess= self.one.alyx.rest('trajectories', 'list', subject=self.subj,
                                             provenance='Histology track')
         session = [(sess['session']['start_time'][:10] + ' ' + sess['probe_name']) for sess in
-                   self.sess_with_hist]
+                   self.sess if sess['x']]
         return session
 
     def get_info(self, idx):
         """
         """
-        self.n_sess = self.sess_with_hist[idx]['session']['number']
-        self.date = self.sess_with_hist[idx]['session']['start_time'][:10]
-        self.probe_label = self.sess_with_hist[idx]['probe_name']
-        self.probe_id = self.sess_with_hist[idx]['probe_insertion']
-        self.lab = self.sess_with_hist[idx]['session']['lab']
+        self.n_sess = self.sess[idx]['session']['number']
+        self.date = self.sess[idx]['session']['start_time'][:10]
+        self.probe_label = self.sess[idx]['probe_name']
+        self.probe_id = self.sess[idx]['probe_insertion']
+        self.lab = self.sess[idx]['session']['lab']
 
-        ephys_traj_prev = one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+        ephys_traj_prev = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                         provenance='Ephys aligned histology track')
 
         if ephys_traj_prev:
@@ -86,8 +87,16 @@ class LoadData:
 
         return self.prev_align
 
+    def get_nearby_trajectories(self, radius=500):
+        x_dist = [sess['x'] for sess in self.sess_with_hist] - self.sess['x']
+        y_dist = [sess['y'] for sess in self.sess_with_hist] - self.sess['y']
+
+        close_idx = np.where(np.sqrt(np.sum([x_dist])))
+
+
+
     def get_eid(self):
-        eids = one.search(subject=self.subj, date=self.date, number=self.n_sess,
+        eids = self.one.search(subject=self.subj, date=self.date, number=self.n_sess,
                           task_protocol='ephys')
         self.eid = eids[0]
         print(self.subj)
@@ -126,14 +135,14 @@ class LoadData:
             '_iblqc_ephysSpectralDensity.power'
         ]
 
-        _ = one.load(self.eid, dataset_types=dtypes, download_only=True)
-        self.sess_path = one.path_from_eid(self.eid)
+        _ = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
+        self.sess_path = self.one.path_from_eid(self.eid)
         alf_path = Path(self.sess_path, 'alf', self.probe_label)
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
         self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
         chn_depths = self.chn_coords[:, 1]
 
-        sess = one.alyx.rest('sessions', 'read', id=self.eid)
+        sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
         if sess['notes']:
             sess_notes = sess['notes'][0]['text']
         else:
@@ -148,7 +157,7 @@ class LoadData:
         return allen
 
     def get_xyzpicks(self):
-        insertion = one.alyx.rest('insertions', 'list', session=self.eid, name=self.probe_label)
+        insertion = self.one.alyx.rest('insertions', 'list', session=self.eid, name=self.probe_label)
         xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
 
         return xyz_picks
@@ -223,7 +232,7 @@ class LoadData:
 
         if overwrite:
             # Get the original stored trajectory
-            ephys_traj_prev = one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+            ephys_traj_prev = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                             provenance='Ephys aligned histology track')
             # Save the json field in memory
             original_json = []
@@ -243,10 +252,10 @@ class LoadData:
                                              overwrite=overwrite)
 
             # Get the new trajectoru
-            ephys_traj = one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+            ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                        provenance='Ephys aligned histology track')
 
-            name = one._par.ALYX_LOGIN
+            name = self.one._par.ALYX_LOGIN
             date = datetime.now().replace(microsecond=0).isoformat()
             data = {date + '_' + name: [feature.tolist(), track.tolist()]}
             if original_json:
@@ -254,7 +263,7 @@ class LoadData:
             else:
                 original_json = data
             patch_dict = {'json': original_json}
-            one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
+            self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
                           data=patch_dict)
 
 
