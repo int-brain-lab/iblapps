@@ -118,7 +118,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     try:
         pos, t = wh.interpolate_position(
             wheel['timestamps'], wheel['position'], freq=1000)
-    except KeyError:
+    except:
         pos, t = wh.interpolate_position(
             wheel['times'], wheel['position'], freq=1000)        
 
