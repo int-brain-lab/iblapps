@@ -15,7 +15,6 @@ class LoadDataLocal:
         self.chn_coords = []
         self.sess_path = []
 
-
     def get_info(self, folder_path):
         """
         Read in the local json file to see if any previous alignments exist
@@ -107,11 +106,17 @@ class LoadDataLocal:
         # First see if the histology file exists before attempting to connect with FlatIron and
         # download
 
-        path_to_image = glob.glob(str(self.folder_path) + '/*RD.nrrd')
-        if path_to_image:
-            hist_path = Path(path_to_image[0])
+        path_to_rd_image = glob.glob(str(self.folder_path) + '/*RD.nrrd')
+        if path_to_rd_image:
+            hist_path_rd = Path(path_to_rd_image[0])
         else:
-            hist_path = []
+            hist_path_rd = []
+
+        path_to_gr_image = glob.glob(str(self.folder_path) + '/*GR.nrrd')
+        if path_to_gr_image:
+            hist_path_gr = Path(path_to_gr_image[0])
+        else:
+            hist_path_gr = []
 
         index = brain_atlas.bc.xyz2i(xyz_channels)[:, brain_atlas.xyz2dims]
         ccf_slice = brain_atlas.image[index[:, 0], :, index[:, 2]]
@@ -123,20 +128,29 @@ class LoadDataLocal:
         width = [brain_atlas.bc.i2x(0), brain_atlas.bc.i2x(456)]
         height = [brain_atlas.bc.i2z(index[0, 2]), brain_atlas.bc.i2z(index[-1, 2])]
 
-        if hist_path:
-            hist_atlas = atlas.AllenAtlas(hist_path=hist_path)
-            hist_slice = hist_atlas.image[index[:, 0], :, index[:, 2]]
-            hist_slice = np.swapaxes(hist_slice, 0, 1)
+        if hist_path_rd:
+            hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd)
+            hist_slice_rd = hist_atlas_rd.image[index[:, 0], :, index[:, 2]]
+            hist_slice_rd = np.swapaxes(hist_slice_rd, 0, 1)
         else:
-            print('Could not find histology image for this subject')
-            hist_slice = np.copy(ccf_slice)
+            print('Could not find red histology image for this subject')
+            hist_slice_rd = np.copy(ccf_slice)
+
+        if hist_path_gr:
+            hist_atlas_gr = atlas.AllenAtlas(hist_path=hist_path_gr)
+            hist_slice_gr = hist_atlas_gr.image[index[:, 0], :, index[:, 2]]
+            hist_slice_gr = np.swapaxes(hist_slice_gr, 0, 1)
+        else:
+            print('Could not find green histology image for this subject')
+            hist_slice_gr = np.copy(ccf_slice)
 
         slice_data = {
-            'hist': hist_slice,
+            'hist_rd': hist_slice_rd,
+            'hist_gr': hist_slice_gr,
             'ccf': ccf_slice,
             'label': label_slice,
-            'scale': np.array([(width[-1] - width[0])/hist_slice.shape[0],
-                               (height[-1] - height[0])/hist_slice.shape[1]]),
+            'scale': np.array([(width[-1] - width[0])/ccf_slice.shape[0],
+                               (height[-1] - height[0])/ccf_slice.shape[1]]),
             'offset': np.array([width[0], height[0]])
         }
 

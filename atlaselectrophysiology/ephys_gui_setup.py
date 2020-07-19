@@ -155,22 +155,26 @@ class Setup():
 
         # SLICE PLOTS MENU BAR
         # Define all coronal slice plot options
-        slice_hist = QtGui.QAction('Histology', self, checkable=True, checked=True)
-        slice_hist.triggered.connect(lambda: self.plot_slice(self.slice_data, 'hist'))
+        slice_hist_rd = QtGui.QAction('Histology Red', self, checkable=True, checked=True)
+        slice_hist_rd.triggered.connect(lambda: self.plot_slice(self.slice_data, 'hist_rd'))
+        slice_hist_gr = QtGui.QAction('Histology Green', self, checkable=True, checked=False)
+        slice_hist_gr.triggered.connect(lambda: self.plot_slice(self.slice_data, 'hist_gr'))
         slice_ccf = QtGui.QAction('CCF', self, checkable=True, checked=False)
         slice_ccf.triggered.connect(lambda: self.plot_slice(self.slice_data, 'ccf'))
         slice_label = QtGui.QAction('Annotation', self, checkable=True, checked=False)
         slice_label.triggered.connect(lambda: self.plot_slice(self.slice_data, 'label'))
         # Initialise with raw histology image
-        self.slice_init = slice_hist
+        self.slice_init = slice_hist_rd
 
         # Add menu bar for slice plot options
         slice_options = menu_bar.addMenu("Slice Plots")
         # Add action group so we can toggle through slice plot options
         slice_options_group = QtGui.QActionGroup(slice_options)
         slice_options_group.setExclusive(True)
-        slice_options.addAction(slice_hist)
-        slice_options_group.addAction(slice_hist)
+        slice_options.addAction(slice_hist_rd)
+        slice_options_group.addAction(slice_hist_rd)
+        slice_options.addAction(slice_hist_gr)
+        slice_options_group.addAction(slice_hist_gr)
         slice_options.addAction(slice_ccf)
         slice_options_group.addAction(slice_ccf)
         slice_options.addAction(slice_label)
@@ -332,6 +336,12 @@ class Setup():
         info_options = menu_bar.addMenu('Session Information')
         info_options.addAction(session_notes)
         info_options.addAction(region_info)
+
+        # Display other sessions that are closeby if online mode
+        if not self.offline:
+            nearby_info = QtGui.QAction('Nearby Sessions', self)
+            nearby_info.triggered.connect(self.display_nearby_sessions)
+            info_options.addAction(nearby_info)
 
     def init_interaction_features(self):
         """
