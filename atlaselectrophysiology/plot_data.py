@@ -57,9 +57,11 @@ class PlotData:
     def filter_units(self, type):
         if type == 'all':
             self.spike_idx = np.arange(self.spikes['clusters'].size)
+            self.kp_idx = np.where(~np.isnan(self.spikes['depths'][self.spike_idx]))[0]
         else:
             clust = np.where(self.clusters.metrics.ks2_label == type)
             self.spike_idx = np.where(np.isin(self.spikes['clusters'], clust))[0]
+            self.kp_idx = np.where(~np.isnan(self.spikes['depths'][self.spike_idx]))[0]
 
 # Plots that require spike and cluster data
     def get_depth_data_scatter(self):
@@ -72,8 +74,8 @@ class PlotData:
             amp_bins = np.linspace(amp_range[0], amp_range[1], A_BIN)
             colour_bin = np.linspace(0.0, 1.0, A_BIN)
             colours = (cm.get_cmap('BuPu')(colour_bin)[np.newaxis, :, :3][0]) * 255
-            spikes_colours = np.empty((self.spikes['amps'][self.spike_idx].size), dtype=object)
-            spikes_size = np.empty((self.spikes['amps'][self.spike_idx].size))
+            spikes_colours = np.empty(self.spikes['amps'][self.spike_idx].size, dtype=object)
+            spikes_size = np.empty(self.spikes['amps'][self.spike_idx].size)
             for iA in range(amp_bins.size - 1):
                 idx = np.where((self.spikes['amps'][self.spike_idx] > amp_bins[iA]) &
                                (self.spikes['amps'][self.spike_idx] <= amp_bins[iA + 1]))[0]
@@ -92,7 +94,7 @@ class PlotData:
                 'xrange': np.array([np.min(self.spikes['times'][self.spike_idx][0:-1:100]),
                                     np.max(self.spikes['times'][self.spike_idx][0:-1:100])]),
                 'xaxis': 'Time (s)',
-                'title': 'Amplitude (uV)??',
+                'title': 'Amplitude (uV)',
                 'cmap': 'BuPu',
                 'cluster': False
             }
@@ -126,7 +128,7 @@ class PlotData:
                 'levels': fr_levels,
                 'xrange': np.array([0.9 * np.min(spike_amps),
                                     1.1 * np.max(spike_amps)]),
-                'xaxis': 'Amplitude (uV)??',
+                'xaxis': 'Amplitude (uV)',
                 'title': 'Firing Rate (Sp/s)',
                 'cmap': 'hot',
                 'cluster': True
@@ -135,6 +137,8 @@ class PlotData:
             p2t = self.clusters['peakToTrough'][clu]
             p2t_norm, p2t_levels = self.normalise_data(p2t, lquant=0, uquant=1)
 
+            # Define the p2t levels so always same colourbar across sessions
+            p2t_levels = [-1.5, 1.5]
             data_p2t_scatter = {
                 'x': spike_amps,
                 'y': spike_depths,
@@ -146,7 +150,7 @@ class PlotData:
                 'levels': p2t_levels,
                 'xrange': np.array([0.9 * np.min(spike_amps),
                                     1.1 * np.max(spike_amps)]),
-                'xaxis': 'Amplitude (uV)??',
+                'xaxis': 'Amplitude (uV)',
                 'title': 'Peak to Trough duration (ms)',
                 'cmap': 'RdYlGn',
                 'cluster': True
@@ -167,7 +171,7 @@ class PlotData:
                 'xrange': np.array([0.9 * np.min(fr),
                                     1.1 * np.max(fr)]),
                 'xaxis': 'Firing Rate (Sp/s)',
-                'title': 'Amplitude (uV)??',
+                'title': 'Amplitude (uV)',
                 'cmap': 'magma',
                 'cluster': True
             }
@@ -181,10 +185,10 @@ class PlotData:
         else:
             T_BIN = 0.05
             D_BIN = 5
-            n, times, depths = bincount2D(self.spikes['times'][self.spike_idx],
-                                          self.spikes['depths'][self.spike_idx], T_BIN,
-                                          D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
-            img = (n.T) / T_BIN
+            n, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
+                                          self.spikes['depths'][self.spike_idx][self.kp_idx],
+                                          T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
+            img = n.T / T_BIN
             xscale = (times[-1] - times[0]) / img.shape[0]
             yscale = (depths[-1] - depths[0]) / img.shape[1]
 
@@ -208,14 +212,16 @@ class PlotData:
         else:
             T_BIN = np.max(self.spikes['times'])
             D_BIN = 10
-            nspikes, times, depths = bincount2D(self.spikes['times'][self.spike_idx],
-                                                self.spikes['depths'][self.spike_idx], T_BIN,
-                                                D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
+            nspikes, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
+                                                self.spikes['depths'][self.spike_idx][self.kp_idx],
+                                                T_BIN, D_BIN,
+                                                ylim=[0, np.max(self.chn_coords[:, 1])])
 
-            amp, times, depths = bincount2D(self.spikes['amps'][self.spike_idx],
-                                            self.spikes['depths'][self.spike_idx], T_BIN,
-                                            D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])],
-                                            weights=self.spikes['amps'][self.spike_idx])
+            amp, times, depths = bincount2D(self.spikes['amps'][self.spike_idx][self.kp_idx],
+                                            self.spikes['depths'][self.spike_idx][self.kp_idx],
+                                            T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])],
+                                            weights=self.spikes['amps'][self.spike_idx]
+                                            [self.kp_idx])
             mean_fr = nspikes[:, 0] / T_BIN
             mean_amp = np.divide(amp[:, 0], nspikes[:, 0]) * 1e6
             mean_amp[np.isnan(mean_amp)] = 0
@@ -233,7 +239,7 @@ class PlotData:
                 'x': mean_amp,
                 'y': depths,
                 'xrange': np.array([0, np.max(mean_amp)]),
-                'xaxis': 'Amplitude (uV???)'
+                'xaxis': 'Amplitude (uV)'
             }
 
             return data_fr_line, data_amp_line
@@ -245,9 +251,9 @@ class PlotData:
         else:
             T_BIN = 0.05
             D_BIN = 40
-            R, times, depths = bincount2D(self.spikes['times'][self.spike_idx],
-                                          self.spikes['depths'][self.spike_idx], T_BIN,
-                                          D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
+            R, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
+                                          self.spikes['depths'][self.spike_idx][self.kp_idx],
+                                          T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
             corr = np.corrcoef(R)
             corr[np.isnan(corr)] = 0
             scale = (np.max(depths) - np.min(depths)) / corr.shape[0]
