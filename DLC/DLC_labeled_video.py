@@ -35,7 +35,7 @@ def download_raw_video(eid, cameras=None):
         if not os.path.exists(str(cache_dir)):
             os.mkdir(str(cache_dir))
         else:  # Check if file already downloaded
-            cam_files = [file[:-4] for file in cam_files]  # Remove ext
+            #cam_files = [fi[:-4] for fi in cam_files]  # Remove ext
             filenames = [f for f in os.listdir(str(cache_dir))
                          if any([cam in f for cam in cam_files])]
             if filenames:
@@ -58,7 +58,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     eid: session id, e.g. '3663d82b-f197-4e8b-b299-7b803a155b84'
     video_type: one of 'left', 'right', 'body'
     trial_range: first and last trial number of range to be shown, e.g. [5,7]
-    save_video: video is displayed and saved in local folder
+    save_video: video is displayed and saved next to original video
     Example usage to view and save labeled video with wheel angle:
     Viewer('3663d82b-f197-4e8b-b299-7b803a155b84', 'left', [5,7])
     '''
@@ -82,12 +82,13 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     # Download a single video
     video_data = alf_path.parent / 'raw_video_data'     
     download_raw_video(eid, cameras=[video_type])
-    video_path = list(video_data.rglob('_iblrig_%sCamera.raw*' % video_type))[0] 
+    video_path = list(video_data.rglob('_iblrig_%sCamera.raw.*' % video_type))[0] 
+    print(video_path) 
 
     # that gives cam time stamps and DLC output (change to alf_path eventually)
-    cam0 = alf.io.load_object(alf_path, '_ibl_%sCamera' % video_type)
+    cam0 = alf.io.load_object(alf_path, '_ibl_%sCamera' % video_type)        
     cam1 = alf.io.load_object(video_path.parent, '_ibl_%sCamera' % video_type)
-    cam = {**cam0,**cam1}
+    cam = {'times':cam0['times'],**cam1}
 
     # set where to read and save video and get video info
     cap = cv2.VideoCapture(video_path.as_uri())
@@ -140,15 +141,18 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     '''
     DLC related stuff
     '''
+    Times = cam['times'][frame_start:frame_stop] 
     del cam['times']      
 
     points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
+    
 
     if video_type != 'body':
         d = list(points) 
         d.remove('tube_top')
         d.remove('tube_bottom')   
         points = np.array(d)
+
 
     # Set values to nan if likelyhood is too low
     XYs = {}
@@ -178,16 +182,17 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         y0 = 0
         y1 = size[1]
         if video_type == 'left':
-            dot_s = 20  # [px] for painting DLC dots
+            dot_s = 10  # [px] for painting DLC dots
         else: 
-            dot_s = 10
+            dot_s = 5
         
 
     if save_video:
-        out = cv2.VideoWriter('%s_trials_%s_%s_%s.mp4' % (eid,
-                                                          trial_range[0],
-                                                          trial_range[-1],
-                                                          video_type),
+        f_name = '%s_trials_%s_%s_%s.mp4' % (eid,trial_range[0],
+                                             trial_range[-1],video_type)
+        save_path = video_data / f_name
+        save_path = str(save_path)
+        out = cv2.VideoWriter(save_path,
                               cv2.VideoWriter_fourcc(*'mp4v'),
                               fps,
                               size)  # put , 0 if grey scale
@@ -202,7 +207,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         bottomLeftCornerOfText = (10, 500)
         fontScale = 2
 
-    fontColor = (255, 255, 255)
+    
     lineType = 2
 
     # assign a color to each DLC point (now: all points red)
@@ -218,26 +223,59 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     while(cap.isOpened()):
         ret, frame = cap.read()
         gray = frame
-
+        
         # print wheel angle
-        cv2.putText(gray, 'Wheel angle: ' + str(round(wheel_pos[k], 2)),
+        fontColor = (255, 255, 255)
+        Angle = round(wheel_pos[k], 2)
+        Time = round(Times[k], 3) 
+        cv2.putText(gray, 
+                    'Wheel angle: ' + str(Angle),
                     bottomLeftCornerOfText,
                     font,
-                    fontScale,
+                    fontScale/2,
                     fontColor,
                     lineType)
 
+
+        a,b = bottomLeftCornerOfText
+        bottomLeftCornerOfText0 = (int(a*10 + b/2), b)
+        cv2.putText(gray, 
+                    '  time: ' + str(Time),
+                    bottomLeftCornerOfText0,
+                    font,
+                    fontScale/2,
+                    fontColor,
+                    lineType)
+
+            
         # print DLC dots
         ll = 0
         for point in points:
+               
+            # Put point color legend
+            fontColor = (np.array([cmap(CR[ll])]) * 255)[0][:3]
+            a ,b = bottomLeftCornerOfText
+            if video_type == 'right':
+                bottomLeftCornerOfText2 = (a, a * 2*(1 + ll))
+            else: 
+                bottomLeftCornerOfText2 = (b, a * 2*(1 + ll))
+            fontScale2 = fontScale/4
+            cv2.putText(gray, point,
+                        bottomLeftCornerOfText2,
+                        font,
+                        fontScale2,
+                        fontColor,
+                        lineType)                            
+        
             X0 = XYs[point][0][k]
             Y0 = XYs[point][1][k]
             # transform for opencv?
             X = Y0
             Y = X0
+            
             if not np.isnan(X) and not np.isnan(Y):
-                #col = (np.array([cmap(CR[ll])]) * 255)[0][:3]
-                col = np.array([0, 0, 255]) 
+                col = (np.array([cmap(CR[ll])]) * 255)[0][:3]
+                #col = np.array([0, 0, 255]) # all points red
                 X = X.astype(int)
                 Y = Y.astype(int)
                 gray[X - dot_s:X + dot_s, Y - dot_s:Y + dot_s] = block * col
@@ -256,3 +294,4 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         out.release()
     cap.release()
     cv2.destroyAllWindows()
+    print('Saved labelled video at %s' % save_path)

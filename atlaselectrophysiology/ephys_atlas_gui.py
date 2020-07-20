@@ -1147,26 +1147,26 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                             QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
         if upload == QtGui.QMessageBox.Yes:
             #if np.any(self.prev_alignments):
-            if len(self.prev_alignments) > 1:
-
-                overwrite = QtGui.QMessageBox.warning(self, '', ("Ephys aligned trajectory "
-                                                                 "for this probe insertion already exists on "
-                                                                 "Alyx. Do you want to overwrite?"),
-                                                      QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
-                if overwrite == QtGui.QMessageBox.Yes:
-                    self.loaddata.upload_data(self.features[self.idx], self.track[self.idx], self.xyz_channels,
-                                              overwrite=True)
-                    QtGui.QMessageBox.information(self, '', ("Electrode locations "
-                                                             "succesfully uploaded to Alyx"))
-                else:
-                    pass
-                    QtGui.QMessageBox.information(self, '', ("Electrode locations not "
-                                                             "uploaded to Alyx"))
-            else:
-                self.loaddata.upload_data(self.features[self.idx], self.track[self.idx], self.xyz_channels,
+            #if len(self.prev_alignments) > 1:
+#
+            #    overwrite = QtGui.QMessageBox.warning(self, '', ("Ephys aligned trajectory "
+            #                                                     "for this probe insertion already exists on "
+            #                                                     "Alyx. Do you want to overwrite?"),
+            #                                          QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+            #    if overwrite == QtGui.QMessageBox.Yes:
+            #        self.loaddata.upload_data(self.features[self.idx], self.track[self.idx], self.xyz_channels,
+            #                                  overwrite=True)
+            #        QtGui.QMessageBox.information(self, '', ("Electrode locations "
+            #                                                 "succesfully uploaded to Alyx"))
+            #    else:
+            #        pass
+            #        QtGui.QMessageBox.information(self, '', ("Electrode locations not "
+            #                                                 "uploaded to Alyx"))
+            #else:
+            self.loaddata.upload_data(self.features[self.idx], self.track[self.idx], self.xyz_channels,
                                           overwrite=True)
-                QtGui.QMessageBox.information(self, 'Status', ("Electrode locations "
-                                                               "succesfully uploaded to Alyx"))
+            QtGui.QMessageBox.information(self, 'Status', ("Electrode locations "
+                                                            "succesfully uploaded to Alyx"))
         else:
             pass
             QtGui.QMessageBox.information(self, 'Status', ("Electrode locations not uploaded"
