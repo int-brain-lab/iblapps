@@ -196,7 +196,8 @@ class LoadData:
             '_iblqc_ephysTimeRms.rms',
             '_iblqc_ephysTimeRms.timestamps',
             '_iblqc_ephysSpectralDensity.freqs',
-            '_iblqc_ephysSpectralDensity.power'
+            '_iblqc_ephysSpectralDensity.power',
+            '_iblqc_ephysSpectralDensity.amps'
         ]
 
         print(self.subj)
