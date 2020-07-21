@@ -8,6 +8,7 @@ from pathlib import Path
 import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
+# from atlaselectrophysiology import qc_table
 brain_atlas = atlas.AllenAtlas(25)
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
@@ -243,6 +244,7 @@ class LoadData:
         """
         insertion = self.one.alyx.rest('insertions', 'list', session=self.eid,
                                        name=self.probe_label)
+        self.insertion_id = insertion[0]['id']
         xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
 
         return xyz_picks
@@ -357,3 +359,15 @@ class LoadData:
             patch_dict = {'json': original_json}
             self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
                                data=patch_dict)
+
+    def upload_dj(self, align_qc, ephys_qc, ephys_desc):
+        # Upload qc results to datajoint table
+
+        user = self.one._par.ALYX_LOGIN
+        qc = qc_table.EphysQC()
+        if ephys_desc == 'None':
+            ephys_desc = None
+        qc.insert1(dict(probe_insertion_uuid=self.insertion_id, user_name=user,
+                        alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
+                   allow_direct_insert=True, replace=True)
+

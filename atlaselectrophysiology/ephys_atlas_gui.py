@@ -1184,53 +1184,15 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             QtGui.QMessageBox.information(self, 'Status', "Electrode locations not saved")
 
 
-    def qc_options(self):
+    def display_qc_options(self):
+        self.qc_dialog.exec()
 
-        alignment_qc = QtGui.QMessageBox.question(self, '', "How confident are you in your "
-                                                            "alignment?")
-        confidence_high = alignment_qc.addButton("High", QtGui.QMessageBox.ApplyRole)
-        confidence_med = alignment_qc.addButton("Medium", QtGui.QMessageBox.ApplyRole)
-        confidence_low = alignment_qc.addButton("Low", QtGui.QMessageBox.ApplyRole)
-
-        alignment_qc.buttonClicked.connect(self.qc_button_clicked)
-
-        ephys_qc = QtGui.QMessageBox.question(self, '', "How confident are you in your "
-                                                            "alignment?")
-        quality_high = ephys_qc.addButton("Pass", QtGui.QMessageBox.ApplyRole)
-        quality_med = ephys_qc.addButton("Warning", QtGui.QMessageBox.ApplyRole)
-        quality_low = ephys_qc.addButton("Critical", QtGui.QMessageBox.ApplyRole)
-
-        ephys_qc.buttonClicked.connect(self.qc_button_clicked)
-
-
-        dialog = QtGui.QDialog(self)
-        dialog.setWindowTitle('Session notes from Alyx')
-        dialog.resize(200, 100)
-        notes = QtGui.QTextEdit()
-        notes.setReadOnly(True)
-        notes.setLineWrapMode(QtGui.QTextEdit.WidgetWidth)
-        notes.setText(self.sess_notes)
-        dialog_layout = QtGui.QVBoxLayout()
-        dialog_layout.addWidget(notes)
-        dialog.setLayout(dialog_layout)
-        dialog.show()
-
-        alignment_qc_label = QtGui.QLabel("How confident are you in your alignment?")
-        alignment_qc = QtGui.QComboBox()
-        alignment_qc.addItems(["High", "Medium", "Low"])
-
-        ephys_qc_label = QtGui.QLabel("QC score for ephys recording")
-        ephys_qc = QtGui.QComboBox()
-        ephys_qc.addItems(["Pass", "Warning", "Critical"])
-
-        ephys_desc_label = QtGui.QLabel("Choose problem with recording")
-        ephys_desc = QtGui.QComboBox()
-        ephys_desc.addItems(["Pass", "Warning", "Critical"])
-
-
-
-    def qc_button_clicked(self, button):
-        print(button.text())
+    def qc_button_clicked(self):
+        align_qc = self.align_qc.currentText()
+        ephys_qc = self.ephys_qc.currentText()
+        ephys_desc = self.ephys_desc.currentText()
+        self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
+        self.complete_button_pressed()
 
     def reset_axis_button_pressed(self):
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra,
