@@ -133,4 +133,3 @@ if __name__ == "__main__":
 
     w.update_df(qc.qc_frame)
     qt.run_app()
-
