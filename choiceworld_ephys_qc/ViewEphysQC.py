@@ -1,12 +1,12 @@
 import logging
 
 from PyQt5 import QtCore, QtWidgets
-import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 import pandas as pd
+import numpy as np
 
-import choiceworld_ephys_qc.qt as qt
+import qt as qt
 
 _logger = logging.getLogger('ibllib')
 
@@ -74,12 +74,25 @@ class DataFrameModel(QtCore.QAbstractTableModel):
         }
         return roles
 
+    def sort(self, col, order):
+        """
+        Sort table by given column number
+        :param col: the column number selected (between 0 and self._dataframe.columns.size)
+        :param order: the order to be sorted, 0 is descending; 1, ascending
+        :return:
+        """
+        self.layoutAboutToBeChanged.emit()
+        col_name = self._dataframe.columns.values[col]
+        # print('sorting by ' + col_name)
+        self._dataframe.sort_values(by=col_name, ascending=not order, inplace=True)
+        self._dataframe.reset_index(inplace=True, drop=True)
+        self.layoutChanged.emit()
+
 
 class PlotCanvas(FigureCanvasQTAgg):
 
-    def __init__(self, parent=None, width=5, height=4, dpi=100):
+    def __init__(self, parent=None, width=5, height=4, dpi=100, wheel=None):
         fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axes = fig.add_subplot(111)
 
         FigureCanvasQTAgg.__init__(self, fig)
         self.setParent(parent)
@@ -89,21 +102,26 @@ class PlotCanvas(FigureCanvasQTAgg):
             QtWidgets.QSizePolicy.Expanding,
             QtWidgets.QSizePolicy.Expanding)
         FigureCanvasQTAgg.updateGeometry(self)
-        self.ax = self.figure.add_subplot(111)
+        if wheel:
+            self.ax = fig.add_subplot(211)
+            self.ax2 = fig.add_subplot(212, sharex=self.ax)
+        else:
+            self.ax = fig.add_subplot(111)
         self.draw()
 
 
 class PlotWindow(QtWidgets.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, wheel=None):
         QtWidgets.QWidget.__init__(self, parent=None)
-        self.canvas = PlotCanvas()
+        self.canvas = PlotCanvas(wheel=wheel)
         self.vbl = QtWidgets.QVBoxLayout()         # Set box for plotting
         self.vbl.addWidget(self.canvas)
         self.setLayout(self.vbl)
         self.vbl.addWidget(NavigationToolbar2QT(self.canvas, self))
 
+
 class GraphWindow(QtWidgets.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, wheel=None):
         QtWidgets.QWidget.__init__(self, parent=None)
         vLayout = QtWidgets.QVBoxLayout(self)
         hLayout = QtWidgets.QHBoxLayout()
@@ -117,8 +135,9 @@ class GraphWindow(QtWidgets.QWidget):
         self.loadBtn.clicked.connect(self.loadFile)
         self.pandasTv.setSortingEnabled(True)
         self.pandasTv.doubleClicked.connect(self.tv_double_clicked)
-        self.wplot = PlotWindow()
+        self.wplot = PlotWindow(wheel=wheel)
         self.wplot.show()
+        self.wheel = wheel
         print("toto")
 
     def loadFile(self):
@@ -139,13 +158,21 @@ class GraphWindow(QtWidgets.QWidget):
         start = df.loc[ind.row()]['intervals_0']
         finish = df.loc[ind.row()]['intervals_1']
         dt = finish - start
+        if self.wheel:
+            idx = np.searchsorted(self.wheel['re_ts'], np.array([start - dt / 10,
+                                                                 finish + dt / 10]))
+            max_val = np.max(self.wheel['re_pos'][idx[0]:idx[1]])
+            min_val = np.min(self.wheel['re_pos'][idx[0]:idx[1]])
+            self.wplot.canvas.ax2.set_ylim(min_val - 1, max_val + 1)
+            self.wplot.canvas.ax2.set_xlim(start - dt / 10, finish + dt / 10)
         self.wplot.canvas.ax.set_xlim(start - dt / 10, finish + dt / 10)
+
         self.wplot.canvas.draw()
 
 
-def viewqc(qc=None, title=None):
+def viewqc(qc=None, title=None, wheel=None):
     qt.create_app()
-    qcw = GraphWindow()
+    qcw = GraphWindow(wheel=wheel)
     qcw.setWindowTitle(title)
     if qc is not None:
         qcw.update_df(qc)
