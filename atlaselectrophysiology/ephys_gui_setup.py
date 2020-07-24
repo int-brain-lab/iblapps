@@ -300,6 +300,11 @@ class Setup():
         toggle_channels_option.setShortcut('Shift+C')
         toggle_channels_option.triggered.connect(self.toggle_channel_button_pressed)
 
+        # Shortcut to change default histology reference image
+        toggle_histology_option = QtGui.QAction('Hide/Show Nearby Boundaries', self)
+        toggle_histology_option.setShortcut('Shift+N')
+        toggle_histology_option.triggered.connect(self.toggle_histology_button_pressed)
+
         # Shortcuts for cluster popup window
         popup_minimise = QtGui.QAction('Minimise/Show Cluster Popup', self)
         popup_minimise.setShortcut('Alt+M')
@@ -321,6 +326,7 @@ class Setup():
         display_options.addAction(toggle_labels_option)
         display_options.addAction(toggle_lines_option)
         display_options.addAction(toggle_channels_option)
+        display_options.addAction(toggle_histology_option)
         display_options.addAction(popup_minimise)
         display_options.addAction(popup_close)
 
@@ -625,7 +631,7 @@ class Setup():
         self.fig_hist_ref.setMouseEnabled(x=False)
         self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                     self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_hist_ref, 'bottom', pen='w', ticks=False)
+        self.set_axis(self.fig_hist_ref, 'bottom', pen='w')
         self.set_axis(self.fig_hist_ref, 'left', show=False)
         self.ax_hist_ref = self.set_axis(self.fig_hist_ref, 'right', pen='k')
         self.ax_hist_ref.setWidth(0)
