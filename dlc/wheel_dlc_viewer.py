@@ -21,6 +21,7 @@ from more_itertools import chunked
 
 import cv2
 import numpy as np
+import matplotlib as mpl
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
@@ -212,11 +213,22 @@ class Viewer:
 
         # Our plot data, e.g. data that falls within trial
         frame_ids = self.frames_for_period(self._session_data['camera_ts'], trial - 1)
-        data = {
-            'frames': frame_ids,
-            'camera_ts': self._session_data['camera_ts'][frame_ids],
-            'frame_images': get_video_frames_preload(self.video_path, frame_ids)[0]
-        }
+        try:
+            data = {
+                'frames': frame_ids,
+                'camera_ts': self._session_data['camera_ts'][frame_ids],
+                'frame_images': get_video_frames_preload(self.video_path, frame_ids)[0]
+            }
+        except cv2.error as ex:
+            # Log errors when out of memory; occurs when there are too many frames to load
+            if ex.func.endswith('OutOfMemoryError'):
+                self._logger.error(f'{ex.func}: {ex.err}')
+                return
+            else:
+                raise ex
+        except MemoryError:
+            self._logger.error('Out of memory; please try loading another trial')
+            return
         #  frame = get_video_frame(video_path, frames[0])
 
         on, off, ts, pos, units = self.extract_onsets_for_trial()
@@ -604,13 +616,16 @@ class Viewer:
             self.anim.event_source.start()
             self.anim.running = True
         elif event.key == 't':
+            if self.anim.running:
+                self.anim.event_source.stop()
+                self.anim.running = False
             # Select trial
             trial = input(f'\rInput a trial within range (1, {total_trials}): \n')
             if trial:
                 self.trial_num = int(trial)
                 self.init_plot()
-                self.anim.event_source.start()
-                self.anim.running = True
+            self.anim.event_source.start()
+            self.anim.running = True
         elif event.key == 'n':
             # Next trial
             self.trial_num = self.trial_num + 1 if self.trial_num < total_trials else 1
@@ -649,6 +664,8 @@ if __name__ == "__main__":
         <left>    move to previous frame
         <right>   move to next frame
     """
+    mpl.use('TKAgg')  # Different backend required for event callbacks in main
+
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
                                      description=textwrap.dedent(docstring))
     parser.add_argument('--eid', help='session uuid')
