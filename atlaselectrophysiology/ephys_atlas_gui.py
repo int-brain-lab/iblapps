@@ -10,7 +10,6 @@ import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 from pathlib import Path
 
-
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def __init__(self, offline=False):
         super(MainWindow, self).__init__()
@@ -22,8 +21,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
         else:
             self.loaddata = LoadDataLocal()
-
-        self.init_region_lookup(self.loaddata.get_allen_csv())
+        self.allen = self.loaddata.get_allen_csv()
+        self.init_region_lookup(self.allen)
         self.configure = True
 
     def init_variables(self):
@@ -63,6 +62,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.line_status = True
         self.label_status = True
         self.channel_status = True
+        self.hist_bound_status = True
         self.lines_features = np.empty((0, 3))
         self.lines_tracks = np.empty((0, 1))
         self.points = np.empty((0, 1))
@@ -99,6 +99,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             'region': [0] * (self.max_idx + 1),
             'scale': [0] * (self.max_idx + 1)
         }
+
+        self.hist_nearby_x = None
+        self.hist_nearby_y = None
+        self.hist_nearby_col = None
+        self.hist_nearby_parent_x = None
+        self.hist_nearby_parent_y = None
+        self.hist_nearby_parent_col = None
 
         self.track = [0] * (self.max_idx + 1)
         self.features = [0] * (self.max_idx + 1)
@@ -383,6 +390,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         axis = fig.getAxis(ax)
         axis.setTicks([self.hist_data_ref['axis_label']])
         axis.setZValue(10)
+        self.set_axis(self.fig_hist_ref, 'bottom', pen='w')
 
         # Plot each histology region
         for ir, reg in enumerate(self.hist_data_ref['region']):
@@ -398,6 +406,58 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         bound = pg.InfiniteLine(pos=self.hist_data_ref['region'][-1][1], angle=0,
                                 pen='w')
         fig.addItem(bound)
+        # Add dotted lines to plot to indicate region along probe track where electrode
+        # channels are distributed
+        self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot,
+                                       movable=movable)
+        self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot,
+                                       movable=movable)
+        # Add lines to figure
+        fig.addItem(self.tip_pos)
+        fig.addItem(self.top_pos)
+
+    def plot_histology_nearby(self, fig, ax='right', movable=False):
+        """
+        Plots histology figure - brain regions that intersect with probe track
+        :param fig: figure on which to plot
+        :type fig: pyqtgraph PlotWidget
+        :param ax: orientation of axis, must be one of 'left' (fig_hist) or 'right' (fig_hist_ref)
+        :type ax: string
+        :param movable: whether probe reference lines can be moved, True for fig_hist, False for
+                        fig_hist_ref
+        :type movable: Bool
+        """
+        fig.clear()
+        self.hist_ref_regions = np.empty((0, 1))
+        axis = fig.getAxis(ax)
+        axis.setTicks([self.hist_data_ref['axis_label']])
+        axis.setZValue(10)
+
+        self.set_axis(fig, 'bottom', label='dist to boundary (um)')
+        fig.setXRange(min=0, max=100)
+        fig.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra,
+                      padding=self.pad)
+
+        # Plot nearby regions
+        for ir, (x, y, c) in enumerate(zip(self.hist_nearby_x, self.hist_nearby_y,
+                                           self.hist_nearby_col)):
+            colour = QtGui.QColor(c)
+            plot = pg.PlotCurveItem()
+            plot.setData(x=x, y=y*1e6, fillLevel=10, fillOutline=True)
+            plot.setBrush(colour)
+            plot.setPen(colour)
+            fig.addItem(plot)
+
+        for ir, (x, y, c) in enumerate(zip(self.hist_nearby_parent_x, self.hist_nearby_parent_y,
+                                           self.hist_nearby_parent_col)):
+            colour = QtGui.QColor(c)
+            colour.setAlpha(70)
+            plot = pg.PlotCurveItem()
+            plot.setData(x=x, y=y*1e6, fillLevel=10, fillOutline=True)
+            plot.setBrush(colour)
+            plot.setPen(colour)
+            fig.addItem(plot)
+
         # Add dotted lines to plot to indicate region along probe track where electrode
         # channels are distributed
         self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot,
@@ -808,6 +868,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
         xyz_picks = self.loaddata.get_xyzpicks()
+
         if np.any(self.feature_prev):
             self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths,
                                              track_prev=self.track_prev,
@@ -830,8 +891,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                                       self.ephysalign.track_extent)
         self.hist_data_ref['colour'] = self.ephysalign.region_colour
 
-        self.plotdata = pd.PlotData(alf_path, ephys_path)
 
+        self.plotdata = pd.PlotData(alf_path, ephys_path)
         self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
         self.scat_drift_data = self.plotdata.get_depth_data_scatter()
         (self.scat_fr_data, self.scat_p2t_data,
@@ -842,6 +903,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.img_rms_LFPdata, self.probe_rms_LFPdata = self.plotdata.get_rms_data_img_probe('LF')
         self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
         self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
+
 
         # Initialise checked plots
         self.img_init.setChecked(True)
@@ -871,6 +933,34 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Only configure the view the first time the GUI is launched
         self.set_view(view=1, configure=self.configure)
         self.configure = False
+
+    def compute_nearby_boundaries(self):
+        nearby_bounds = self.ephysalign.get_nearest_boundary(self.ephysalign.xyz_samples,
+                                                             self.allen, steps=6)
+        [self.hist_nearby_x, self.hist_nearby_y,
+         self.hist_nearby_col] = self.ephysalign.arrange_into_regions(
+            self.ephysalign.sampling_trk, nearby_bounds['id'], nearby_bounds['dist'],
+            nearby_bounds['col'])
+
+        [self.hist_nearby_parent_x,
+         self.hist_nearby_parent_y,
+         self.hist_nearby_parent_col] = self.ephysalign.arrange_into_regions(
+            self.ephysalign.sampling_trk, nearby_bounds['parent_id'], nearby_bounds['parent_dist'],
+            nearby_bounds['parent_col'])
+
+    def toggle_histology_button_pressed(self):
+        self.hist_bound_status = not self.hist_bound_status
+
+        if not self.hist_bound_status:
+            #if self.hist_nearby_x is None:
+            #    self.compute_nearby_boundaries()
+
+            #self.plot_histology_nearby(self.fig_hist_ref)
+            self.plot_histology_ref(self.fig_hist_ref)
+        else:
+            self.plot_histology_ref(self.fig_hist_ref)
+
+
 
     def filter_unit_pressed(self, type):
         self.plotdata.filter_units(type)
@@ -1184,6 +1274,17 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         else:
             pass
             QtGui.QMessageBox.information(self, 'Status', "Electrode locations not saved")
+
+
+    def display_qc_options(self):
+        self.qc_dialog.exec()
+
+    def qc_button_clicked(self):
+        align_qc = self.align_qc.currentText()
+        ephys_qc = self.ephys_qc.currentText()
+        ephys_desc = self.ephys_desc.currentText()
+        self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
+        self.complete_button_pressed()
 
     def reset_axis_button_pressed(self):
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra,

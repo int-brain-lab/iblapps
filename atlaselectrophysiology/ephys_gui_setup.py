@@ -15,7 +15,6 @@ class Setup():
         self.offline = offline
         main_widget = QtWidgets.QWidget()
         self.setCentralWidget(main_widget)
-        main_layout = QtWidgets.QGridLayout()
 
         self.init_menubar()
         self.init_interaction_features()
@@ -237,7 +236,10 @@ class Setup():
         # Shortcut to upload final state to Alyx/to local file
         complete_option = QtGui.QAction('Upload', self)
         complete_option.setShortcut('Shift+U')
-        complete_option.triggered.connect(self.complete_button_pressed)
+        if not self.offline:
+            complete_option.triggered.connect(self.display_qc_options)
+        else:
+            complete_option.triggered.connect(self.complete_button_pressed)
 
         # Add menu bar with all possible keyboard interactions
         fit_options = menu_bar.addMenu("Fit Options")
@@ -298,6 +300,11 @@ class Setup():
         toggle_channels_option.setShortcut('Shift+C')
         toggle_channels_option.triggered.connect(self.toggle_channel_button_pressed)
 
+        # Shortcut to change default histology reference image
+        toggle_histology_option = QtGui.QAction('Hide/Show Nearby Boundaries', self)
+        toggle_histology_option.setShortcut('Shift+N')
+        toggle_histology_option.triggered.connect(self.toggle_histology_button_pressed)
+
         # Shortcuts for cluster popup window
         popup_minimise = QtGui.QAction('Minimise/Show Cluster Popup', self)
         popup_minimise.setShortcut('Alt+M')
@@ -319,6 +326,7 @@ class Setup():
         display_options.addAction(toggle_labels_option)
         display_options.addAction(toggle_lines_option)
         display_options.addAction(toggle_channels_option)
+        display_options.addAction(toggle_histology_option)
         display_options.addAction(popup_minimise)
         display_options.addAction(popup_close)
 
@@ -368,7 +376,10 @@ class Setup():
         self.reset_button.clicked.connect(self.reset_button_pressed)
         # Button to upload final state to Alyx/ to local file
         self.complete_button = QtWidgets.QPushButton('Upload')
-        self.complete_button.clicked.connect(self.complete_button_pressed)
+        if not self.offline:
+            self.complete_button.clicked.connect(self.display_qc_options)
+        else:
+            self.complete_button.clicked.connect(self.complete_button_pressed)
 
         if not self.offline:
             # If offline mode is False, read in Subject and Session options from Alyx
@@ -435,6 +446,38 @@ class Setup():
             self.interaction_layout3.addWidget(self.folder_button, stretch=1)
             self.interaction_layout3.addWidget(self.align_combobox, stretch=2)
             self.interaction_layout3.addWidget(self.data_button, stretch=1)
+
+        # Pop up dialog for qc results to datajoint, only for online mode
+        if not self.offline:
+            align_qc_label = QtGui.QLabel("Confidence of alignment")
+            self.align_qc = QtGui.QComboBox()
+            self.align_qc.addItems(["High", "Medium", "Low"])
+            ephys_qc_label = QtGui.QLabel("QC for ephys recording")
+            self.ephys_qc = QtGui.QComboBox()
+            self.ephys_qc.addItems(["Pass", "Warning", "Critical"])
+            ephys_desc_label = QtGui.QLabel("Describe problem with recording")
+            self.ephys_desc = QtGui.QComboBox()
+            self.ephys_desc.addItems(["None", "Noise and artifact", "Drift", "Poor neural yield",
+                                      "Brain Damage", "Other"])
+            self.qc_dialog = QtGui.QDialog(self)
+            self.qc_dialog.setWindowTitle('QC assessment')
+            self.qc_dialog.resize(300, 150)
+            self.qc_dialog.accepted.connect(self.qc_button_clicked)
+            buttonBox = QtGui.QDialogButtonBox(
+                QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel)
+            buttonBox.accepted.connect(self.qc_dialog.accept)
+            buttonBox.rejected.connect(self.qc_dialog.reject)
+            #
+            dialog_layout = QtGui.QVBoxLayout()
+            dialog_layout.addWidget(align_qc_label)
+            dialog_layout.addWidget(self.align_qc)
+            dialog_layout.addWidget(ephys_qc_label)
+            dialog_layout.addWidget(self.ephys_qc)
+            dialog_layout.addWidget(ephys_desc_label)
+            dialog_layout.addWidget(self.ephys_desc)
+            dialog_layout.addWidget(buttonBox)
+            self.qc_dialog.setLayout(dialog_layout)
+
 
     def init_region_lookup(self, allen):
         """
@@ -588,7 +631,7 @@ class Setup():
         self.fig_hist_ref.setMouseEnabled(x=False)
         self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                     self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_hist_ref, 'bottom', pen='w', ticks=False)
+        self.set_axis(self.fig_hist_ref, 'bottom', pen='w')
         self.set_axis(self.fig_hist_ref, 'left', show=False)
         self.ax_hist_ref = self.set_axis(self.fig_hist_ref, 'right', pen=None)
         self.ax_hist_ref.setWidth(0)
@@ -681,3 +724,7 @@ class PopupWindow(QtGui.QMainWindow):
 
     def leaveEvent(self, event):
         self.moved.emit()
+
+
+
+

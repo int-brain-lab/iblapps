@@ -8,9 +8,9 @@ from pathlib import Path
 import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
+from atlaselectrophysiology import qc_table
 brain_atlas = atlas.AllenAtlas(25)
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
-
 
 class LoadData:
     def __init__(self):
@@ -97,8 +97,7 @@ class LoadData:
         self.traj_id = self.sess[idx]['id']
         self.probe_id = self.sess[idx]['probe_insertion']
         self.lab = self.sess[idx]['session']['lab']
-        self.eid = self.one.search(subject=self.subj, date=self.date, number=self.n_sess,
-                                   task_protocol='ephys')[0]
+        self.eid = self.sess[idx]['session']['id']
 
         # Looks for any previous alignments
         ephys_traj_prev = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
@@ -205,8 +204,9 @@ class LoadData:
         print(self.date)
         print(self.eid)
 
-        _ = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
-        self.sess_path = self.one.path_from_eid(self.eid)
+        data_path = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
+        self.sess_path = alf.io.get_session_path(data_path[0])
+
         alf_path = Path(self.sess_path, 'alf', self.probe_label)
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
         self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
@@ -244,6 +244,7 @@ class LoadData:
         """
         insertion = self.one.alyx.rest('insertions', 'list', session=self.eid,
                                        name=self.probe_label)
+        self.insertion_id = insertion[0]['id']
         xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
 
         return xyz_picks
@@ -252,20 +253,30 @@ class LoadData:
         # First see if the histology file exists before attempting to connect with FlatIron and
         # download
         hist_dir = Path(self.sess_path.parent.parent, 'histology')
+        hist_path_rd = None
+        hist_path_gr = None
         if hist_dir.exists():
             path_to_rd_image = glob.glob(str(hist_dir) + '/*RD.tif')
             if path_to_rd_image:
                 hist_path_rd = tif2nrrd(Path(path_to_rd_image[0]))
             else:
-                _, hist_path_rd = download_histology_data(self.subj, self.lab)
+                files = download_histology_data(self.subj, self.lab)
+                if files is not None:
+                    hist_path_rd = files[1]
 
             path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.tif')
             if path_to_gr_image:
                 hist_path_gr = tif2nrrd(Path(path_to_gr_image[0]))
             else:
-                hist_path_gr, _ = download_histology_data(self.subj, self.lab)
+                files = download_histology_data(self.subj, self.lab)
+                if files is not None:
+                    hist_path_gr = files[0]
+
         else:
-            hist_path_gr, hist_path_rd = download_histology_data(self.subj, self.lab)
+            files = download_histology_data(self.subj, self.lab)
+            if files is not None:
+                hist_path_gr = files[0]
+                hist_path_rd = files[1]
 
         index = brain_atlas.bc.xyz2i(xyz_channels)[:, brain_atlas.xyz2dims]
         ccf_slice = brain_atlas.image[index[:, 0], :, index[:, 2]]
@@ -358,3 +369,15 @@ class LoadData:
             patch_dict = {'json': original_json}
             self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
                                data=patch_dict)
+
+    def upload_dj(self, align_qc, ephys_qc, ephys_desc):
+        # Upload qc results to datajoint table
+
+        user = self.one._par.ALYX_LOGIN
+        qc = qc_table.EphysQC()
+        if ephys_desc == 'None':
+            ephys_desc = None
+        qc.insert1(dict(probe_insertion_uuid=self.insertion_id, user_name=user,
+                        alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
+                   allow_direct_insert=True, replace=True)
+
