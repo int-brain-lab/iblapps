@@ -1,7 +1,7 @@
 from ibl_pipeline import reference
 import datajoint as dj
 
-schema = dj.schema('group_shared_testing')
+schema = dj.schema('group_shared_ephys')
 
 
 @schema

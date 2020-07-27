@@ -8,7 +8,7 @@ from pathlib import Path
 import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
-# from atlaselectrophysiology import qc_table
+from atlaselectrophysiology import qc_table
 brain_atlas = atlas.AllenAtlas(25)
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
