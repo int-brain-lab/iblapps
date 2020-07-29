@@ -25,19 +25,19 @@ Description of metrics can be found here: https://docs.google.com/document/d/1ba
 ## Manual Curation
 Manual curation comprises three different steps
 
-1) Labelling clusters (assigning each cluster with a label Good, Mua or Noise)
+1) **Labelling clusters** (assigning each cluster with a label Good, Mua or Noise)
     * Select a cluster within Cluster View and click on `Edit -> Move best to` and assign your chosen label. 
     * Alternatively you can use the shortcuts alt+G, alt+M, alt+N to label the cluster as good, mua or noise respectively
 
-2)  Additional notes associated with clusters (extra information about clusters, for example if it looks like artifact or drift)
+2)  **Additional notes associated with clusters** (extra information about clusters, for example if it looks like artifact or drift)
     * Select a cluster within Cluster View
     * Ensure snippet mode is enabled by clicking `File-> Enable Snippet Mode`
     * Type `:l notes your_note` and then hit enter (when typing you should see the text appear in the lower left 
     hand corner of the main window)
     * A new column, with the heading **notes** should have been created in the Cluster View window
         
-3)  Merging clusters
-    * Clusters can be merged by selecting the two clusters in Cluster View and using `Edit-> Merge` or by pressing G
+3)  **Merging clusters**
+    * Clusters can be merged by selecting the two or more clusters in Cluster View and using `Edit-> Merge` or by pressing G
 
 Make sure you hit the save button frequently during manual curation so your results are saved and can be
 recovered in case Phy freezes or crashes!
@@ -70,4 +70,4 @@ within a folder using the following naming convention,
 
 subject_date_session_probe_user
 
-e.g KS022_2019-12-10_001_probe00_mayo
+e.g `KS022_2019-12-10_001_probe00_mayo`
