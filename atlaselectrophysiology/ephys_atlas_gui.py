@@ -952,15 +952,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.hist_bound_status = not self.hist_bound_status
 
         if not self.hist_bound_status:
-            #if self.hist_nearby_x is None:
-            #    self.compute_nearby_boundaries()
+            if self.hist_nearby_x is None:
+                self.compute_nearby_boundaries()
 
-            #self.plot_histology_nearby(self.fig_hist_ref)
-            self.plot_histology_ref(self.fig_hist_ref)
+            self.plot_histology_nearby(self.fig_hist_ref)
         else:
             self.plot_histology_ref(self.fig_hist_ref)
-
-
 
     def filter_unit_pressed(self, type):
         self.plotdata.filter_units(type)
