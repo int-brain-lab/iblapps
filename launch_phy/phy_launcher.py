@@ -2,9 +2,11 @@ import glob
 import os
 from phy.apps.template import TemplateController, template_gui
 from phy.gui.qt import create_app, run_app
+from phylib import add_default_handler
 from oneibl.one import ONE
 from metrics import gen_metrics_labels
 from defined_metrics import *
+
 
 def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=None, compute_metrics=False):
     """
@@ -41,15 +43,15 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
         'channels.rawInd',
         'channels.localCoordinates',
         # 'ephysData.raw.ap'
-        # '_phy_spikes_subset.waveforms'
-        # '_phy_spikes_subset.spikes'
-        # '_phy_spikes_subset.channels'
+        '_phy_spikes_subset.waveforms',
+        '_phy_spikes_subset.spikes',
+        '_phy_spikes_subset.channels',
     ]
 
     if eid is None:
         eid = one.search(subject=subj, date=date, number=sess_no)[0]
 
-    _ = one.load(eid, dataset_types=dtypes, download_only=True)
+    # _ = one.load(eid, dataset_types=dtypes, download_only=True)
     ses_path = one.path_from_eid(eid)
     alf_probe_dir = os.path.join(ses_path, 'alf', probe_name)
     ephys_file_dir = os.path.join(ses_path, 'raw_ephys_data', probe_name)
@@ -58,12 +60,13 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
 
     if args.metrics:
         print('Computing quality metrics...')
-        gen_metrics_labels(eid,probe_name)
+        gen_metrics_labels(eid, probe_name)
 
     # TODO download ephys meta-data, and extract TemplateController input arg params
 
     # Launch phy #
     # -------------------- #
+    add_default_handler('DEBUG')
     create_app()
     controller = TemplateController(dat_path=raw_file, dir_path=alf_probe_dir, dtype=np.int16,
                                     n_channels_dat=384, sample_rate=3e4)
@@ -89,8 +92,8 @@ if __name__ == '__main__':
                         help='Session eid')
     parser.add_argument('-p', '--probe_label', default=False, required=True,
                         help='Probe Label')
-    parser.add_argument('-m','--metrics', default=False,required=False,
-                        help = 'Set True to compute quality metrics')
+    parser.add_argument('-m', '--metrics', default=False, required=False,
+                        help='Set True to compute quality metrics')
     args = parser.parse_args()
 
     if args.eid:
@@ -102,5 +105,5 @@ if __name__ == '__main__':
         else:
             launch_phy(str(args.probe_label), subj=str(args.subject),
                        date=str(args.date), sess_no=args.session_no)
-    #launch_phy('probe00', subj='KS022',
-               #date='2019-12-10', sess_no=1)
+    # launch_phy('probe00', subj='KS022',
+            # date='2019-12-10', sess_no=1)
