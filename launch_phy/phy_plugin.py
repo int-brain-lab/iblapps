@@ -1,10 +1,11 @@
 # import from plugins/cluster_metrics.py
 """Show how to add a custom cluster metrics."""
 
+import logging
 import numpy as np
 from phy import IPlugin
 #import brainbox as bb
-from launch_phy.defined_metrics import *
+from defined_metrics import *
 
 
 class IBLMetricsPlugin(IPlugin):
@@ -40,7 +41,8 @@ class IBLMetricsPlugin(IPlugin):
         def frac_missing_spikes(cluster_id):
             amps = controller.get_amplitudes(cluster_id).data
             try:
-                frac_missing_spks, _, _ = feat_cutoff(amps, spks_per_bin=10, sigma=4, min_num_bins=50)
+                frac_missing_spks, _, _ = feat_cutoff(
+                    amps, spks_per_bin=10, sigma=4, min_num_bins=50)
             except:
                 frac_missing_spks = np.NAN
             return frac_missing_spks
@@ -93,7 +95,7 @@ class IBLMetricsPlugin(IPlugin):
 
             # Approach 2
             # Only works for sample waveforms
-            #### For non median subtracted and no high pass can access sample waveforms like this
+            # For non median subtracted and no high pass can access sample waveforms like this
             # spike_ids = controller.get_spike_ids(cluster_id).data
             # # Find which of the spike ids are in the subset of sample waveforms
             # _, _, idx = np.intersect1d(spike_ids,
@@ -104,25 +106,21 @@ class IBLMetricsPlugin(IPlugin):
             # # where len(idx) == n_waveforms
             # waveforms = controller.model.spike_waveforms['waveforms'][idx].data
 
-
             # RAW DATA CASE
-
-
 
             return p2p_mean
 
         #    no waveforms
 
-        #def ptp_sigma(cluster_id):
-            #this also requires checking 3 cases above.
+        # def ptp_sigma(cluster_id):
+            # this also requires checking 3 cases above.
 
         def m_label(cluster_id):
             ts = controller.get_spike_times(cluster_id).data
             amps = controller.get_amplitudes(cluster_id).data
-            metrics_label = int(FP_RP(ts) and noise_cutoff(amps,quartile_length=.25)<20)
-            #if amplitudes are correct (i.e. raw data or sample wfs exist):
-                #metrics_label = (FP_RP(ts) and noise_cutoff(amps,quartile_length=.25)<20 and np.mean(amps)>50)
-
+            metrics_label = int(FP_RP(ts) and noise_cutoff(amps, quartile_length=.25) < 20)
+            # if amplitudes are correct (i.e. raw data or sample wfs exist):
+            #metrics_label = (FP_RP(ts) and noise_cutoff(amps,quartile_length=.25)<20 and np.mean(amps)>50)
 
         # Use this dictionary to define custom cluster metrics.
         # We memcache the function so that cluster metrics are only computed once and saved
@@ -130,13 +128,19 @@ class IBLMetricsPlugin(IPlugin):
         # on disk).
         controller.cluster_metrics['cv_amp'] = controller.context.memcache(cv_amp)
         controller.cluster_metrics['cum_amp_drift'] = controller.context.memcache(cum_amp_drift)
-        controller.cluster_metrics['cum_depth_drift'] = controller.context.memcache(cum_depth_drift)
+
+        # NOTE: the branch of phylib which defines model.spike_depths is not working yet
+        # controller.cluster_metrics['cum_depth_drift'] = controller.context.memcache(
+        #     cum_depth_drift)
+
         controller.cluster_metrics['cv_fr'] = controller.context.memcache(cv_fr)
         controller.cluster_metrics['frac_isi_viol'] = controller.context.memcache(frac_isi_viol)
-        controller.cluster_metrics['frac_missing_spikes'] = controller.context.memcache(frac_missing_spikes)
+        controller.cluster_metrics['frac_missing_spikes'] = controller.context.memcache(
+            frac_missing_spikes)
         controller.cluster_metrics['fp_estimate'] = controller.context.memcache(fp_estimate)
         controller.cluster_metrics['presence_ratio'] = controller.context.memcache(presence_ratio)
-        controller.cluster_metrics['presence_ratio_std'] = controller.context.memcache(presence_ratio_std)
+        controller.cluster_metrics['presence_ratio_std'] = controller.context.memcache(
+            presence_ratio_std)
         controller.cluster_metrics['refp_viol'] = controller.context.memcache(refp_viol)
         controller.cluster_metrics['noise_cutoff'] = controller.context.memcache(n_cutoff)
         controller.cluster_metrics['mean_amp'] = controller.context.memcache(mean_amp_true)

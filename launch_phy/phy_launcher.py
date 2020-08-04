@@ -1,5 +1,7 @@
 import glob
+import logging
 import os
+
 from phy.apps.template import TemplateController, template_gui
 from phy.gui.qt import create_app, run_app
 from phylib import add_default_handler
@@ -66,10 +68,13 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
 
     # Launch phy #
     # -------------------- #
-    add_default_handler('DEBUG')
+    add_default_handler('DEBUG', logging.getLogger("phy"))
+    add_default_handler('DEBUG', logging.getLogger("phylib"))
     create_app()
     controller = TemplateController(dat_path=raw_file, dir_path=alf_probe_dir, dtype=np.int16,
-                                    n_channels_dat=384, sample_rate=3e4)
+                                    n_channels_dat=384, sample_rate=3e4,
+                                    plugins=['IBLMetricsPlugin'],
+                                    plugin_dirs=[Path(__file__).resolve().parent])
     gui = controller.create_gui()
     gui.show()
     run_app()
