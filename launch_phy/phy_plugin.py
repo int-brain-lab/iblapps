@@ -144,5 +144,4 @@ class IBLMetricsPlugin(IPlugin):
         controller.cluster_metrics['refp_viol'] = controller.context.memcache(refp_viol)
         controller.cluster_metrics['noise_cutoff'] = controller.context.memcache(n_cutoff)
         controller.cluster_metrics['mean_amp'] = controller.context.memcache(mean_amp_true)
-        controller.cluster_metrics['ptp_sigma'] = controller.context.memcache(ptp_sigma)
         controller.cluster_metrics['metrics_label'] = controller.context.memcache(m_label)
