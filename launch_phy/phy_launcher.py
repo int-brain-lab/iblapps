@@ -10,7 +10,7 @@ from metrics import gen_metrics_labels
 from defined_metrics import *
 
 
-def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=None, compute_metrics=False):
+def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=None):
     """
     Launch phy given an eid and probe name.
 
@@ -60,10 +60,6 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
     raw_files = glob.glob(os.path.join(ephys_file_dir, '*ap.*bin'))
     raw_file = [raw_files[0]] if raw_files else None
 
-    if args.metrics:
-        print('Computing quality metrics...')
-        gen_metrics_labels(eid, probe_name)
-
     # TODO download ephys meta-data, and extract TemplateController input arg params
 
     # Launch phy #
@@ -97,8 +93,7 @@ if __name__ == '__main__':
                         help='Session eid')
     parser.add_argument('-p', '--probe_label', default=False, required=True,
                         help='Probe Label')
-    parser.add_argument('-m', '--metrics', default=False, required=False,
-                        help='Set True to compute quality metrics')
+
     args = parser.parse_args()
 
     if args.eid:
