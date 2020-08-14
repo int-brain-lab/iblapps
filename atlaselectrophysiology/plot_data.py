@@ -40,7 +40,8 @@ class PlotData:
             self.cluster_data_status = False
 
         try:
-            lfp_spectrum = alf.io.load_object(self.ephys_path, '_iblqc_ephysSpectralDensityLF')
+            lfp_spectrum = alf.io.load_object(self.ephys_path, 'ephysSpectralDensityLF',
+                                              namespace='iblqc')
             if len(lfp_spectrum) == 2:
                 self.lfp_freq = lfp_spectrum.get('freqs')
                 self.lfp_power = lfp_spectrum.get('power', [])
