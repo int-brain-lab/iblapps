@@ -950,11 +950,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.hist_bound_status = not self.hist_bound_status
 
         if not self.hist_bound_status:
-            #if self.hist_nearby_x is None:
-            #    self.compute_nearby_boundaries()
+            if self.hist_nearby_x is None:
+                self.compute_nearby_boundaries()
 
-            #self.plot_histology_nearby(self.fig_hist_ref)
-            self.plot_histology_ref(self.fig_hist_ref)
+            self.plot_histology_nearby(self.fig_hist_ref)
         else:
             self.plot_histology_ref(self.fig_hist_ref)
 
@@ -1598,13 +1597,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 if __name__ == '__main__':
 
     import argparse
-#
+
     parser = argparse.ArgumentParser(description='Offline vs online mode')
     parser.add_argument('-o', '--offline', default=False, required=False, help='Offline mode')
     args = parser.parse_args()
-#
+
     app = QtWidgets.QApplication([])
     mainapp = MainWindow(offline=args.offline)
-    #mainapp = MainWindow(offline=False)
+    # mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()
