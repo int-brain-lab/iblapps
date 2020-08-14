@@ -273,12 +273,9 @@ class PlotData:
         # Finds channels that are at equivalent depth on probe and averages rms values for each
         # time point at same depth togehter
         try:
-            rms = alf.io.load_object(self.ephys_path, 'ephysTimeRms' + format, namespace='iblqc')
-            if len(rms) == 2:
-                rms_amps, _ = rms.values()
-            else:
-                rms_amps = list(rms.values())[0]
-        except Exception:
+            rms_amps = alf.io.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
+                                                     format + '.rms.npy'))
+        except Exception as err:
             print('rms data was not found, some plots will not display')
             data_img = None
             data_probe = None
@@ -286,11 +283,12 @@ class PlotData:
 
         try:
             rms_times = alf.io.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
-                                                 format + '.timestamps.npy'))
+                                                      format + '.timestamps.npy'))
             xaxis = 'Time (s)'
         except Exception:
             rms_times = np.array([0, rms_amps.shape[0]])
             xaxis = 'Time samples'
+
 
         # Img data
         _rms = np.take(rms_amps, self.chn_ind, axis=1)
