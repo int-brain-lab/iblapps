@@ -51,7 +51,8 @@ Column-wise, the table has two parts:
 When double-clicking on any field of that table, the TTL synch pulse display time (x-) axis is adjusted so as to visualise the corresponding trial selected.
 
 ## What to look for
-Tests are defined here : https://github.com/int-brain-lab/ibllib/blob/90163a40eb970cf0282b651667dd8ba341ff2044/ibllib/ephys/ephysqc.py#L419
+Tests are define here for the BpodQC: https://github.com/int-brain-lab/ibllib/blob/5c4ebf3f0ba99f160801c43fcb089482d6daa098/ibllib/qc/bpodqc_metrics.py
+Tests are defined here for the EphysQC: https://github.com/int-brain-lab/ibllib/blob/90163a40eb970cf0282b651667dd8ba341ff2044/ibllib/ephys/ephysqc.py#L419
 
 You can search in this code for a specific test name (e.g. `stimOff_delay_valve` - which is a column in the GUI table) to find the corresponding explanation and implementation (e.g. `# stimOff 1 sec after valve, with 0.1 as acceptable jitter`).
 
@@ -62,6 +63,9 @@ If test containin the wording `_nan` is FALSE (e.g. `goCue_times_nan`), it means
 If test containing the wording `_before_` or `_delay_` (e.g. `stim_freeze_before_feedback`) is FALSE, it means order / delay between events is not respected.
 
 Some tests check for the number of output detected, in which case the output is not TRUE/FALSE but an integer. E.g. `n_feedback` should always be = 1 given our implementation. 
+
+Tip: You can sort the row values so as to diplay zeros (=FALSE) at the top, by clicking on the header of the column corresponding to the test of interest.
+This will allow you to quickly go through the trials with failures.
 
 ## Exit
 Close the GUI window containing the interactive table to exit.
