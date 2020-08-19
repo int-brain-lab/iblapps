@@ -1,9 +1,8 @@
-# iblapps
-pyqt5 dependent applications for IBL sessions.
+# Choice World QC Viewers
 
-This readme contains instructions for two GUIs:
+This readme contains instructions for two data viewers:
 - Bpod QC Viewer (to look at data collected on the Bpod)
-- Ephys QC Viewer (to look at data collected on the FPGA/PXI)
+- Ephys QC Viewer (to look at data collected on the FPGA/PXI) (currently not working)
 
 # General instructions for both viewers
 ## Setup
