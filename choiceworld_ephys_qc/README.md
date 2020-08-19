@@ -1,9 +1,40 @@
 # iblapps
 pyqt5 dependent applications for IBL sessions
 
+## Bpod QC Viewer
+This will download the TTL pulses and data collected on Bpoad and plot the results
+alongside an interactive table.
+The UUID is the session id. 
+
+### Setup
+Needs ibllib and ONE installed properly. Follow this guide for setup: https://readthedocs.org/projects/ibllib/downloads/pdf/latest/ 
+
+If on the server PC, activate the environment by typing:
+```
+iblscripts
+```
+Otherwise, activate the iblenv as described in the guide above.
+
+Go into the iblapps directory that you cloned:
+```
+cd /home/olivier/Documents/PYTHON/iblapps/choice_world_ephys_qc
+```
+Launch the Viewer by typing `ipython bpod_qc.py session_UUID` , example:
+```
+ipython bpod_qc.py c9fec76e-7a20-4da4-93ad-04510a89473b
+```
+If you encouter the error `ModuleNotFoundError: No module named 'PyQt5'`, write in (conda) terminal (with iblenv activated):
+```
+pip install pyqt5
+```
+
 ## Ephys QC Viewer
+
+NOTE: THIS APP IS NO LONGER SUPPORTED FOR NOW. EXTRA DEVELOPMENT IS NEEDED
+TO FIX THE IMPORTS.
+
 This will download the sync pulses and behaviour raw data and plot the results alongside
-an interactive table.
+an interactive table. The data comes from the FPGA/PXI system.
 The UUID is the session id. 
 
 ### Setup
