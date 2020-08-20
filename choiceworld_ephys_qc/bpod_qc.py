@@ -71,7 +71,10 @@ class QcFromPath(object):
                 'valveOpen_times',
                 'stimFreeze_times',
                 'stimOff_times',
-                'stimOn_times'
+                'stimOn_times',
+                'response_times',
+                'intervals_0',
+                'intervals_1'
             ]
 
         plot_args = {
@@ -86,7 +89,13 @@ class QcFromPath(object):
         plots.squares(self.bnc2['times'], self.bnc2['polarities'] * 0.4 + 2,
                       ax=display, color='k')
         for event, c in zip(trial_events, cycle(TABLEAU_COLORS.keys())):
-            plots.vertical_lines(self.trial_data[event], label=event, color=c, **plot_args)
+            if event == 'intervals_0':
+                label = 'trial_start'
+            elif event == 'intervals_1':
+                label = 'trial_end'
+            else:
+                label = event
+            plots.vertical_lines(self.trial_data[event], label=label, color=c, **plot_args)
         display.legend()
         display.set_yticklabels(['', 'frame2ttl', 'sound', ''])
         display.set_yticks([0, 1, 2, 3])
