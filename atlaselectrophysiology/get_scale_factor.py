@@ -20,7 +20,7 @@ brain_atlas = atlas.AllenAtlas(25)
 one = ONE()
 
 # Find eid of interest
-subject = 'CSH_ZAD_001'
+subject = 'KS022'
 
 # Find the ephys aligned trajectory for eid probe combination
 trajectory = one.alyx.rest('trajectories', 'list', provenance='Ephys aligned histology track',
@@ -55,12 +55,18 @@ for traj in trajectory:
         _, scale_factor = ephysalign.get_scale_factor(region_scaled)
 
         if np.all(np.round(np.diff(scale_factor), 3) == 0):
+            # Case where there is no scaling but just an offset
             scale_factor = np.array([1])
             avg_sf = 1
         else:
             if feature.size > 4:
+                # Case where 3 or more reference lines have been placed so take gradient of
+                # linear fit to represent average scaling factor
                 avg_sf = scale_factor[0]
             else:
+                # Case where 2 reference lines have been used. Only have local scaling between
+                # two reference lines, everywhere else scaling is 1. Use the local scaling as the
+                # average scaling factor
                 avg_sf = np.mean(scale_factor[1:-1])
 
         for iS, sf in enumerate(scale_factor):
@@ -71,11 +77,15 @@ for traj in trajectory:
             else:
                 subject_summary = subject_summary.append(
                     {'Session': session_info, 'User': user, 'Scale Factor': sf,
-                     'Avg Scale Factor': np.NAN}, ignore_index=True)
+                     'Avg Scale Factor': np.NaN}, ignore_index=True)
 
-fig, ax = plt.subplots()
-s1 = sns.swarmplot(x='Session', y='Scale Factor', hue='User', data=subject_summary, ax=ax)
-s1.legend_.remove()
-s2 = sns.swarmplot(x='Session', y='Avg Scale Factor', hue='User', size=8, linewidth=1,
-                  data=subject_summary, ax=ax)
+fig, ax = plt.subplots(figsize=(10, 8))
+sns.swarmplot(x='Session', y='Scale Factor', hue='User', data=subject_summary, ax=ax)
+sns.swarmplot(x='Session', y='Avg Scale Factor', hue='User', size=8, linewidth=1,
+                data=subject_summary, ax=ax)
+# ensures value in legend isn't repeated
+handles, labels = ax.get_legend_handles_labels()
+by_label = dict(zip(labels, handles))
+ax.legend(by_label.values(), by_label.keys())
+
 plt.show()
