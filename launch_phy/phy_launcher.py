@@ -53,7 +53,7 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
     if eid is None:
         eid = one.search(subject=subj, date=date, number=sess_no)[0]
 
-    # _ = one.load(eid, dataset_types=dtypes, download_only=True)
+    _ = one.load(eid, dataset_types=dtypes, download_only=True)
     ses_path = one.path_from_eid(eid)
     alf_probe_dir = os.path.join(ses_path, 'alf', probe_name)
     ephys_file_dir = os.path.join(ses_path, 'raw_ephys_data', probe_name)
