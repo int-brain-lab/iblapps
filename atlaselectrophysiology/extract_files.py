@@ -107,7 +107,7 @@ def extract_data(ks_path, ephys_path, out_path):
 
     for efile in efiles:
         if efile.get('ap') and efile.ap.exists():
-            ks2_to_alf(ks_path, out_path, bin_file=efile.ap,
+            ks2_to_alf(ks_path, ephys_path, out_path, bin_file=efile.ap,
                        ampfactor=_sample2v(efile.ap), label=None, force=True)
             extract_rmsmap(efile.ap, out_folder=out_path, spectra=False)
         if efile.get('lf') and efile.lf.exists():
