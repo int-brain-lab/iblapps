@@ -68,38 +68,105 @@ class QcFromPath(object):
                 'goCue_times',
                 'goCueTrigger_times',
                 'errorCue_times',
+                'errorCueTrigger_times',
                 'valveOpen_times',
                 'stimFreeze_times',
                 'stimOff_times',
+                'stimOffTrigger_times',
                 'stimOn_times',
+                'stimOnTrigger_times',
                 'response_times',
                 'intervals_0',
                 'intervals_1'
             ]
 
+        # specific colors
+        tableau_colors = {'goCue_times': '#2ca02c',  # green
+                          'goCueTrigger_times': '#2ca02c',  # green
+                          'errorCue_times': '#d62728',  # red
+                          'errorCueTrigger_times': '#d62728',  # red
+                          'valveOpen_times': '#17becf',  # cyan
+                          'stimFreeze_times': '#e377c2',  # pink
+                          'stimOff_times': '#e377c2',  # pink
+                          'stimOffTrigger_times': '#e377c2',  # pink
+                          'stimOn_times': '#e377c2',  # pink
+                          'stimOnTrigger_times': '#e377c2',  # pink
+                          'response_times': '#8c564b',  # brown
+                          'intervals_0': '#bcbd22',  # olive
+                          'intervals_1': '#bcbd22'
+                          }
+        # specific markers
+        tableau_marker = {'goCue_times': 'v',
+                          'goCueTrigger_times': 'v',
+                          'errorCue_times': 'v',
+                          'errorCueTrigger_times': 'v',
+                          'valveOpen_times': 'v',
+                          'stimFreeze_times': '*',
+                          'stimOff_times': '',
+                          'stimOffTrigger_times': '',
+                          'stimOn_times': 'v',
+                          'stimOnTrigger_times': 'v',
+                          'response_times': '',
+                          'intervals_0': 'o',
+                          'intervals_1': ''
+                          }
+
+        # specific linestyle
+        tableau_lstyle = {'goCue_times': '-',
+                          'goCueTrigger_times': '--',
+                          'errorCue_times': '-',
+                          'errorCueTrigger_times': '--',
+                          'valveOpen_times': '-',
+                          'stimFreeze_times': ':',
+                          'stimOff_times': ':',
+                          'stimOffTrigger_times': '--',
+                          'stimOn_times': '-',
+                          'stimOnTrigger_times': '--',
+                          'response_times': '-',
+                          'intervals_0': '-',
+                          'intervals_1': ':'
+                          }
+
+        if len(tableau_colors) != len(trial_events):
+            print('assigning random colors')
+            tableau_colors = TABLEAU_COLORS
+
+        if len(tableau_marker) != len(trial_events):
+            print('assigning random markers')
+            tableau_marker = {'marker_none': ''}
+
+        if len(tableau_lstyle) != len(trial_events):
+            print('assigning random line style')
+            tableau_lstyle = {'ls_simple': '-'}
+
         plot_args = {
             'ymin': 0,
             'ymax': 3,
-            'linewidth': 0.5,
-            'ax': display
+            'linewidth': 2,
+            'ax': display,
         }
 
         plots.squares(self.bnc1['times'], self.bnc1['polarities'] * 0.4 + 1,
                       ax=display, color='k')
         plots.squares(self.bnc2['times'], self.bnc2['polarities'] * 0.4 + 2,
                       ax=display, color='k')
-        for event, c in zip(trial_events, cycle(TABLEAU_COLORS.keys())):
+        for event, ck, mk, lk in zip(trial_events, cycle(tableau_colors.keys()),
+                                     cycle(tableau_marker.keys()),
+                                     cycle(tableau_lstyle.keys())):
             if event == 'intervals_0':
                 label = 'trial_start'
             elif event == 'intervals_1':
                 label = 'trial_end'
             else:
                 label = event
-            plots.vertical_lines(self.trial_data[event], label=label, color=c, **plot_args)
-        display.legend()
+            plots.vertical_lines(self.trial_data[event], label=label,
+                                 color=tableau_colors[ck],
+                                 marker=tableau_marker[mk],
+                                 linestyle=tableau_lstyle[lk], **plot_args)
+        display.legend(loc='upper left', fontsize='xx-small', bbox_to_anchor=(1, 0.5))
         display.set_yticklabels(['', 'frame2ttl', 'sound', ''])
         display.set_yticks([0, 1, 2, 3])
-        display.set_ylim([0, 3])
+        display.set_ylim([-0.1, 3.1])
 
         if wheel_display:
             wheel_plot_args = {
@@ -109,8 +176,14 @@ class QcFromPath(object):
             plot_args = {**plot_args, **wheel_plot_args}
 
             wheel_display.plot(self.wheel['re_ts'], self.wheel['re_pos'], 'k-x')
-            for event, c in zip(trial_events, cycle(TABLEAU_COLORS.keys())):
-                plots.vertical_lines(self.trial_data[event], label=event, color=c, **plot_args)
+            for event, ck, mk, lk in zip(trial_events, cycle(tableau_colors.keys()),
+                                         cycle(tableau_marker.keys()),
+                                         cycle(tableau_lstyle.keys())):
+                # Todo marker not appearing on plot as at extremities of line
+                plots.vertical_lines(self.trial_data[event], label=event,
+                                     color=tableau_colors[ck],
+                                     marker=tableau_marker[mk],
+                                     linestyle=tableau_lstyle[lk], **plot_args)
 
 
 if __name__ == "__main__":
