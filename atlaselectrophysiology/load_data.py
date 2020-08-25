@@ -279,18 +279,18 @@ class LoadData:
                 hist_path_rd = files[1]
 
         index = brain_atlas.bc.xyz2i(xyz_channels)[:, brain_atlas.xyz2dims]
-        ccf_slice = brain_atlas.image[index[:, 0], index[:, 1], :]
+        ccf_slice = brain_atlas.image[index[:, 0], :, index[:, 2]]
         ccf_slice = np.swapaxes(ccf_slice, 0, 1)
 
-        label_slice = brain_atlas._label2rgb(brain_atlas.label[index[:, 0], index[:, 1], :])
+        label_slice = brain_atlas._label2rgb(brain_atlas.label[index[:, 0], :, index[:, 2]])
         label_slice = np.swapaxes(label_slice, 0, 1)
 
         width = [brain_atlas.bc.i2x(0), brain_atlas.bc.i2x(456)]
-        height = [brain_atlas.bc.i2z(index[0, 0]), brain_atlas.bc.i2z(index[-1, 0])]
+        height = [brain_atlas.bc.i2z(index[0, 2]), brain_atlas.bc.i2z(index[-1, 2])]
 
         if hist_path_rd:
             hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd)
-            hist_slice_rd = hist_atlas_rd.image[index[:, 0], index[:, 1], :]
+            hist_slice_rd = hist_atlas_rd.image[index[:, 0], :, index[:, 2]]
             hist_slice_rd = np.swapaxes(hist_slice_rd, 0, 1)
         else:
             print('Could not find red histology image for this subject')
@@ -298,10 +298,10 @@ class LoadData:
 
         if hist_path_gr:
             hist_atlas_gr = atlas.AllenAtlas(hist_path=hist_path_gr)
-            hist_slice_gr = hist_atlas_gr.image[index[:, 0], index[:, 1], :]
+            hist_slice_gr = hist_atlas_gr.image[index[:, 0], :, index[:, 2]]
             hist_slice_gr = np.swapaxes(hist_slice_gr, 0, 1)
         else:
-            print('Could not find histology image for this subject')
+            print('Could not find green histology image for this subject')
             hist_slice_gr = np.copy(ccf_slice)
 
         slice_data = {
