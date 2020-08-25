@@ -276,10 +276,14 @@ class PlotData:
             rms_amps = alf.io.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
                                                      format + '.rms.npy'))
         except Exception as err:
-            print('rms data was not found, some plots will not display')
-            data_img = None
-            data_probe = None
-            return data_img, data_probe
+            try:
+                rms_amps = alf.io.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
+                                                         format + '.amps.npy'))
+            except Exception as err:
+                print('rms data was not found, some plots will not display')
+                data_img = None
+                data_probe = None
+                return data_img, data_probe
 
         try:
             rms_times = alf.io.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
