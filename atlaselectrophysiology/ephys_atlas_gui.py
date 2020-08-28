@@ -1,5 +1,6 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
+import pyqtgraph.exporters
 import numpy as np
 from random import randrange
 from atlaselectrophysiology.load_data import LoadData
@@ -9,6 +10,7 @@ import atlaselectrophysiology.plot_data as pd
 import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 from pathlib import Path
+import os
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def __init__(self, offline=False):
@@ -137,6 +139,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if show:
             axis.show()
             axis.setPen(pen)
+            axis.setTextPen(pen)
             axis.setLabel(label)
             if not ticks:
                 axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
@@ -293,6 +296,117 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.reset_axis_button_pressed()
             self.fig_line.update()
             self.fig_probe.update()
+
+    def save_plots(self):
+        """
+        Saves all plots from the GUI into folder
+        """
+        # make folder to save plots to
+        image_path = self.alf_path.joinpath('GUI_plots')
+        os.makedirs(image_path, exist_ok=True)
+
+        # Reset all axis, put view back to 1 and remove any reference lines
+        self.reset_axis_button_pressed()
+        self.set_view(view=1, configure=False)
+        self.remove_lines_points()
+
+        # First go through all the image plots
+        self.fig_data_layout.removeItem(self.fig_probe)
+        self.fig_data_layout.removeItem(self.fig_probe_cb)
+        self.fig_data_layout.removeItem(self.fig_line)
+        plot = None
+        start_plot = self.img_options_group.checkedAction()
+        while plot != start_plot:
+            exporter = pg.exporters.ImageExporter(self.fig_data_layout)
+            exporter.export(str(image_path.joinpath('img_' +
+                                                self.img_options_group.checkedAction().text()
+                                                + '.png')))
+            self.toggle_plots(self.img_options_group)
+            plot = self.img_options_group.checkedAction()
+        self.fig_data_layout.removeItem(self.fig_img)
+        self.fig_data_layout.removeItem(self.fig_img_cb)
+        self.fig_data_layout.addItem(self.fig_img_cb, 0, 0)
+        self.fig_data_layout.addItem(self.fig_probe_cb, 0, 1, 1, 2)
+        self.fig_data_layout.addItem(self.fig_img, 1, 0)
+        self.fig_data_layout.addItem(self.fig_line, 1, 1)
+        self.fig_data_layout.addItem(self.fig_probe, 1, 2)
+
+        # Next go through all the probe plots
+        self.set_view(view=3, configure=False)
+        self.fig_data_layout.removeItem(self.fig_img)
+        self.fig_data_layout.removeItem(self.fig_img_cb)
+        self.fig_data_layout.removeItem(self.fig_line)
+        width = self.fig_data_area.width()
+        height = self.fig_data_area.height()
+        self.fig_data_area.resize(200, height)
+        plot = None
+        start_plot = self.probe_options_group.checkedAction()
+        while plot != start_plot:
+            exporter = pg.exporters.ImageExporter(self.fig_data_layout)
+            exporter.export(str(image_path.joinpath('probe_' +
+                                                    self.probe_options_group.checkedAction().text() + '.png')))
+            self.toggle_plots(self.probe_options_group)
+            plot = self.probe_options_group.checkedAction()
+        self.fig_data_layout.removeItem(self.fig_probe)
+        self.fig_data_layout.removeItem(self.fig_probe_cb)
+        self.fig_data_area.resize(width, height)
+        self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
+        self.fig_data_layout.addItem(self.fig_img_cb, 0, 2)
+        self.fig_data_layout.addItem(self.fig_probe, 1, 0)
+        self.fig_data_layout.addItem(self.fig_line, 1, 1)
+        self.fig_data_layout.addItem(self.fig_img, 1, 2)
+        self.set_view(view=1, configure=False)
+
+        # Next go through the line plots
+        self.fig_data_layout.removeItem(self.fig_img)
+        self.fig_data_layout.removeItem(self.fig_img_cb)
+        self.fig_data_layout.removeItem(self.fig_probe)
+        self.fig_data_layout.removeItem(self.fig_probe_cb)
+        self.fig_data_layout.removeItem(self.fig_line)
+        self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
+        cbar = self.fig_probe_cb.items[0]
+        self.fig_probe_cb.removeItem(cbar)
+        self.set_axis(self.fig_probe_cb, 'top', pen='w')
+        self.fig_data_layout.addItem(self.fig_line, 1, 0)
+        width = self.fig_data_area.width()
+        height = self.fig_data_area.height()
+        self.set_axis(self.fig_line, 'left', label='Distance from probe tip (uV)')
+        self.fig_data_area.resize(200, height)
+
+        plot = None
+        start_plot = self.line_options_group.checkedAction()
+        while plot != start_plot:
+            exporter = pg.exporters.ImageExporter(self.fig_data_layout)
+            exporter.export(str(image_path.joinpath('line_' + self.line_options_group.checkedAction().text() + '.png')))
+            self.toggle_plots(self.line_options_group)
+            plot = self.line_options_group.checkedAction()
+
+        self.fig_probe_cb.addItem(cbar)
+        self.set_axis(self.fig_probe_cb, 'top', pen='k')
+        self.fig_data_layout.removeItem(self.fig_line)
+        self.fig_data_layout.removeItem(self.fig_probe_cb)
+        self.fig_data_area.resize(width, height)
+        self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
+        self.fig_data_layout.addItem(self.fig_img_cb, 0, 2)
+        self.fig_data_layout.addItem(self.fig_probe, 1, 0)
+        self.fig_data_layout.addItem(self.fig_line, 1, 1)
+        self.fig_data_layout.addItem(self.fig_img, 1, 2)
+        self.set_view(view=1, configure=False)
+
+        # Save slice images
+        plot = None
+        start_plot = self.slice_options_group.checkedAction()
+        while plot != start_plot:
+            exporter = pg.exporters.ImageExporter(self.fig_slice)
+            exporter.export(str(image_path.joinpath('slice_' + self.slice_options_group.checkedAction().text() + '.png')))
+            self.toggle_plots(self.slice_options_group)
+            plot = self.slice_options_group.checkedAction()
+
+        # Save the brain regions image
+        exporter = pg.exporters.ImageExporter(self.fig_hist_layout)
+        exporter.export(str(image_path.joinpath('hist.png')))
+
+
 
     def toggle_plots(self, options_group):
         """
@@ -591,7 +705,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_slice_layout.addItem(self.fig_slice_hist, 0, 1)
             hist_levels = self.fig_slice_hist.getLevels()
             if hist_levels[0] != 0:
-                self.fig_slice_hist.setLevels(mn=hist_levels[0], mx=0.25 * hist_levels[1])
+                self.fig_slice_hist.setLevels(min=hist_levels[0], max=0.25 * hist_levels[1])
             self.slice_item = self.fig_slice_hist
 
         self.fig_slice.addItem(img)
@@ -866,15 +980,17 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.remove_lines_points()
         self.init_variables()
 
-        alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
+        self.alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
         xyz_picks = self.loaddata.get_xyzpicks()
 
         if np.any(self.feature_prev):
             self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths,
                                              track_prev=self.track_prev,
-                                             feature_prev=self.feature_prev)
+                                             feature_prev=self.feature_prev,
+                                             brain_atlas=self.loaddata.brain_atlas)
         else:
-            self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths)
+            self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths,
+                                             brain_atlas=self.loaddata.brain_atlas)
 
         self.features[self.idx], self.track[self.idx], self.xyz_track \
             = self.ephysalign.get_track_and_feature()
@@ -891,8 +1007,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                                       self.ephysalign.track_extent)
         self.hist_data_ref['colour'] = self.ephysalign.region_colour
 
-
-        self.plotdata = pd.PlotData(alf_path, ephys_path)
+        self.plotdata = pd.PlotData(self.alf_path, ephys_path)
         self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
         self.scat_drift_data = self.plotdata.get_depth_data_scatter()
         (self.scat_fr_data, self.scat_p2t_data,
@@ -934,7 +1049,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
     def compute_nearby_boundaries(self):
         nearby_bounds = self.ephysalign.get_nearest_boundary(self.ephysalign.xyz_samples,
-                                                             self.allen, steps=6)
+                                                             self.allen, self.loaddata.brain_atlas,
+                                                             steps=6)
         [self.hist_nearby_x, self.hist_nearby_y,
          self.hist_nearby_col] = self.ephysalign.arrange_into_regions(
             self.ephysalign.sampling_trk, nearby_bounds['id'], nearby_bounds['dist'],
@@ -1604,6 +1720,6 @@ if __name__ == '__main__':
 
     app = QtWidgets.QApplication([])
     mainapp = MainWindow(offline=args.offline)
-    # mainapp = MainWindow(offline=True)
+    #mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()

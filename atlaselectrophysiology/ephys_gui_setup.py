@@ -80,27 +80,27 @@ class Setup():
         # Add menu bar for 2D scatter/ image plot options
         img_options = menu_bar.addMenu('Image Plots')
         # Add action group so we can toggle through 2D scatter/ image plot options
-        img_options_group = QtGui.QActionGroup(img_options)
+        self.img_options_group = QtGui.QActionGroup(img_options)
         # Only allow one to plot to be selected at any one time
-        img_options_group.setExclusive(True)
+        self.img_options_group.setExclusive(True)
         img_options.addAction(img_fr)
-        img_options_group.addAction(img_fr)
+        self.img_options_group.addAction(img_fr)
         img_options.addAction(scatter_drift)
-        img_options_group.addAction(scatter_drift)
+        self.img_options_group.addAction(scatter_drift)
         img_options.addAction(img_corr)
-        img_options_group.addAction(img_corr)
+        self.img_options_group.addAction(img_corr)
         img_options.addAction(img_rmsAP)
-        img_options_group.addAction(img_rmsAP)
+        self.img_options_group.addAction(img_rmsAP)
         img_options.addAction(img_rmsLFP)
-        img_options_group.addAction(img_rmsLFP)
+        self.img_options_group.addAction(img_rmsLFP)
         img_options.addAction(img_LFP)
-        img_options_group.addAction(img_LFP)
+        self.img_options_group.addAction(img_LFP)
         img_options.addAction(scatter_fr)
-        img_options_group.addAction(scatter_fr)
+        self.img_options_group.addAction(scatter_fr)
         img_options.addAction(scatter_p2t)
-        img_options_group.addAction(scatter_p2t)
+        self.img_options_group.addAction(scatter_p2t)
         img_options.addAction(scatter_amp)
-        img_options_group.addAction(scatter_amp)
+        self.img_options_group.addAction(scatter_amp)
 
         # LINE PLOTS MENU BAR
         # Define all 1D line plot options
@@ -113,13 +113,13 @@ class Setup():
         # Add menu bar for 1D line plot options
         line_options = menu_bar.addMenu('Line Plots')
         # Add action group so we can toggle through 2D scatter/ image plot options
-        line_options_group = QtGui.QActionGroup(line_options)
+        self.line_options_group = QtGui.QActionGroup(line_options)
         # Only allow one to plot to be selected at any one time
-        line_options_group.setExclusive(True)
+        self.line_options_group.setExclusive(True)
         line_options.addAction(line_fr)
-        line_options_group.addAction(line_fr)
+        self.line_options_group.addAction(line_fr)
         line_options.addAction(line_amp)
-        line_options_group.addAction(line_amp)
+        self.line_options_group.addAction(line_amp)
 
         # PROBE PLOTS MENU BAR
         # Define all 2D probe plot options
@@ -134,12 +134,12 @@ class Setup():
         # Add menu bar for 2D probe plot options
         probe_options = menu_bar.addMenu("Probe Plots")
         # Add action group so we can toggle through probe plot options
-        probe_options_group = QtGui.QActionGroup(probe_options)
-        probe_options_group.setExclusive(True)
+        self.probe_options_group = QtGui.QActionGroup(probe_options)
+        self.probe_options_group.setExclusive(True)
         probe_options.addAction(probe_rmsAP)
-        probe_options_group.addAction(probe_rmsAP)
+        self.probe_options_group.addAction(probe_rmsAP)
         probe_options.addAction(probe_rmsLFP)
-        probe_options_group.addAction(probe_rmsLFP)
+        self.probe_options_group.addAction(probe_rmsLFP)
 
         # Add the different frequency band options in a loop. These bands must be the same as
         # defined in plot_data
@@ -150,7 +150,7 @@ class Setup():
             probe.triggered.connect(lambda checked, item=band: self.plot_probe(
                                     self.probe_lfp_data[item]))
             probe_options.addAction(probe)
-            probe_options_group.addAction(probe)
+            self.probe_options_group.addAction(probe)
 
         # SLICE PLOTS MENU BAR
         # Define all coronal slice plot options
@@ -165,19 +165,20 @@ class Setup():
         # Initialise with raw histology image
         self.slice_init = slice_hist_rd
 
-        # Add menu bar for slice plot options
+        # Add menu bar for slice plot
+
         slice_options = menu_bar.addMenu("Slice Plots")
         # Add action group so we can toggle through slice plot options
-        slice_options_group = QtGui.QActionGroup(slice_options)
-        slice_options_group.setExclusive(True)
+        self.slice_options_group = QtGui.QActionGroup(slice_options)
+        self.slice_options_group.setExclusive(True)
         slice_options.addAction(slice_hist_rd)
-        slice_options_group.addAction(slice_hist_rd)
+        self.slice_options_group.addAction(slice_hist_rd)
         slice_options.addAction(slice_hist_gr)
-        slice_options_group.addAction(slice_hist_gr)
+        self.slice_options_group.addAction(slice_hist_gr)
         slice_options.addAction(slice_ccf)
-        slice_options_group.addAction(slice_ccf)
+        self.slice_options_group.addAction(slice_ccf)
         slice_options.addAction(slice_label)
-        slice_options_group.addAction(slice_label)
+        self.slice_options_group.addAction(slice_label)
 
         # FILTER UNITS MENU BAR
         # Define unit filtering options
@@ -258,16 +259,16 @@ class Setup():
         # Shortcuts to toggle between plots options
         toggle1_option = QtGui.QAction('Toggle Image Plots', self)
         toggle1_option.setShortcut('Alt+1')
-        toggle1_option.triggered.connect(lambda: self.toggle_plots(img_options_group))
+        toggle1_option.triggered.connect(lambda: self.toggle_plots(self.img_options_group))
         toggle2_option = QtGui.QAction('Toggle Line Plots', self)
         toggle2_option.setShortcut('Alt+2')
-        toggle2_option.triggered.connect(lambda: self.toggle_plots(line_options_group))
+        toggle2_option.triggered.connect(lambda: self.toggle_plots(self.line_options_group))
         toggle3_option = QtGui.QAction('Toggle Probe Plots', self)
         toggle3_option.setShortcut('Alt+3')
-        toggle3_option.triggered.connect(lambda: self.toggle_plots(probe_options_group))
+        toggle3_option.triggered.connect(lambda: self.toggle_plots(self.probe_options_group))
         toggle4_option = QtGui.QAction('Toggle Slice Plots', self)
         toggle4_option.setShortcut('Alt+4')
-        toggle4_option.triggered.connect(lambda: self.toggle_plots(slice_options_group))
+        toggle4_option.triggered.connect(lambda: self.toggle_plots(self.slice_options_group))
 
         # Shortcuts to switch order of 3 panels in ephys plot
         view1_option = QtGui.QAction('View 1', self)
@@ -313,6 +314,10 @@ class Setup():
         popup_close.setShortcut('Alt+X')
         popup_close.triggered.connect(self.close_popups)
 
+        # Option to save all plots
+        save_plots = QtGui.QAction('Save Plots', self)
+        save_plots.triggered.connect(self.save_plots)
+
         # Add menu bar with all possible display options
         display_options = menu_bar.addMenu('Display Options')
         display_options.addAction(toggle1_option)
@@ -329,6 +334,7 @@ class Setup():
         display_options.addAction(toggle_histology_option)
         display_options.addAction(popup_minimise)
         display_options.addAction(popup_close)
+        display_options.addAction(save_plots)
 
         # SESSION INFORMATION MENU BAR
         # Define all session information options

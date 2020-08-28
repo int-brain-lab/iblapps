@@ -9,7 +9,7 @@ import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 # from atlaselectrophysiology import qc_table
-brain_atlas = atlas.AllenAtlas(25)
+# brain_atlas = atlas.AllenAtlas(25)
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 class LoadData:
@@ -17,7 +17,7 @@ class LoadData:
 
         self.one = ONE(base_url=ONE_BASE_URL)
         self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
-
+        self.brain_atlas = atlas.AllenAtlas(25)
         # Initialise all variables that get assigned
         self.sess_with_hist = None
         self.traj_ids = None
@@ -277,15 +277,15 @@ class LoadData:
                 hist_path_gr = files[0]
                 hist_path_rd = files[1]
 
-        index = brain_atlas.bc.xyz2i(xyz_channels)[:, brain_atlas.xyz2dims]
-        ccf_slice = brain_atlas.image[index[:, 0], :, index[:, 2]]
+        index = self.brain_atlas.bc.xyz2i(xyz_channels)[:, self.brain_atlas.xyz2dims]
+        ccf_slice = self.brain_atlas.image[index[:, 0], :, index[:, 2]]
         ccf_slice = np.swapaxes(ccf_slice, 0, 1)
 
-        label_slice = brain_atlas._label2rgb(brain_atlas.label[index[:, 0], :, index[:, 2]])
+        label_slice = self.brain_atlas._label2rgb(self.brain_atlas.label[index[:, 0], :, index[:, 2]])
         label_slice = np.swapaxes(label_slice, 0, 1)
 
-        width = [brain_atlas.bc.i2x(0), brain_atlas.bc.i2x(456)]
-        height = [brain_atlas.bc.i2z(index[0, 2]), brain_atlas.bc.i2z(index[-1, 2])]
+        width = [self.brain_atlas.bc.i2x(0), self.brain_atlas.bc.i2x(456)]
+        height = [self.brain_atlas.bc.i2z(index[0, 2]), self.brain_atlas.bc.i2z(index[-1, 2])]
 
         if hist_path_rd:
             hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd)
@@ -344,9 +344,9 @@ class LoadData:
                 original_json = ephys_traj_prev[0]['json']
 
             # Create new trajectory and overwrite previous one
-            insertion = atlas.Insertion.from_track(xyz_channels, brain_atlas)
+            insertion = atlas.Insertion.from_track(xyz_channels, self.brain_atlas)
             # NEEED TO ADD TIP TO DEPTH?
-            brain_regions = brain_atlas.regions.get(brain_atlas.get_labels(xyz_channels))
+            brain_regions = self.brain_atlas.regions.get(self.brain_atlas.get_labels(xyz_channels))
             brain_regions['xyz'] = xyz_channels
             brain_regions['lateral'] = self.chn_coords[:, 0]
             brain_regions['axial'] = self.chn_coords[:, 1]

@@ -17,7 +17,8 @@ class ColorBar(pg.GraphicsWidget):
             colors = (cmap(cbins)[np.newaxis, :, :3][0]).tolist()
         else:
             colors = cmap.colors
-        colors = [c + [1.] for c in colors]
+        colors = [(np.array(c)*255).astype(int).tolist() + [255.] for c in colors]
+        # colors = [c + [1.] for c in colors]
         positions = np.linspace(0, 1, len(colors))
         self.map = pg.ColorMap(positions, colors)
         self.lut = self.map.getLookupTable()
@@ -30,6 +31,7 @@ class ColorBar(pg.GraphicsWidget):
         self.cbar = HorizontalBar(width, height, self.grad)
         ax = fig.getAxis('top')
         ax.setPen('k')
+        ax.setTextPen('k')
         ax.setStyle(stopAxisAtTick=((True, True)))
         # labelStyle = {'font-size': '8pt'}
         ax.setLabel(label)
