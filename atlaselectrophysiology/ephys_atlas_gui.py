@@ -302,8 +302,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Saves all plots from the GUI into folder
         """
         # make folder to save plots to
-        image_path = self.alf_path.joinpath('GUI_plots')
+        #image_path = self.alf_path.joinpath('GUI_plots')
+        image_path = Path.home().joinpath('GUI_plots')
         os.makedirs(image_path, exist_ok=True)
+        sess_info = self.loaddata.subj + '_' + str(self.loaddata.date) + '_' +  \
+                    self.loaddata.probe_label + '_'
 
         # Reset all axis, put view back to 1 and remove any reference lines
         self.reset_axis_button_pressed()
@@ -318,7 +321,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         start_plot = self.img_options_group.checkedAction()
         while plot != start_plot:
             exporter = pg.exporters.ImageExporter(self.fig_data_layout)
-            exporter.export(str(image_path.joinpath('img_' +
+            exporter.export(str(image_path.joinpath(sess_info + 'img_' +
                                                 self.img_options_group.checkedAction().text()
                                                 + '.png')))
             self.toggle_plots(self.img_options_group)
@@ -343,7 +346,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         start_plot = self.probe_options_group.checkedAction()
         while plot != start_plot:
             exporter = pg.exporters.ImageExporter(self.fig_data_layout)
-            exporter.export(str(image_path.joinpath('probe_' +
+            exporter.export(str(image_path.joinpath(sess_info + 'probe_' +
                                                     self.probe_options_group.checkedAction().text() + '.png')))
             self.toggle_plots(self.probe_options_group)
             plot = self.probe_options_group.checkedAction()
@@ -377,7 +380,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         start_plot = self.line_options_group.checkedAction()
         while plot != start_plot:
             exporter = pg.exporters.ImageExporter(self.fig_data_layout)
-            exporter.export(str(image_path.joinpath('line_' + self.line_options_group.checkedAction().text() + '.png')))
+            exporter.export(str(image_path.joinpath(sess_info + 'line_' +
+                                                    self.line_options_group.checkedAction().text() + '.png')))
             self.toggle_plots(self.line_options_group)
             plot = self.line_options_group.checkedAction()
 
@@ -398,13 +402,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         start_plot = self.slice_options_group.checkedAction()
         while plot != start_plot:
             exporter = pg.exporters.ImageExporter(self.fig_slice)
-            exporter.export(str(image_path.joinpath('slice_' + self.slice_options_group.checkedAction().text() + '.png')))
+            exporter.export(str(image_path.joinpath(sess_info + 'slice_' + self.slice_options_group.checkedAction().text() + '.png')))
             self.toggle_plots(self.slice_options_group)
             plot = self.slice_options_group.checkedAction()
 
         # Save the brain regions image
         exporter = pg.exporters.ImageExporter(self.fig_hist_layout)
-        exporter.export(str(image_path.joinpath('hist.png')))
+        exporter.export(str(image_path.joinpath(sess_info + 'hist.png')))
 
 
 
