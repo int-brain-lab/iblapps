@@ -41,7 +41,7 @@ def FP_RP(ts):
 
         bin_count_normalized = c0[0,0]/total_spike_count/binSize*1000 #divide each bin's count by the unit's total spike count and the bin size
         num_bins_2s = len(c0[0,0]) #number of total bins that equal 2 seconds
-        num_bins_1s = int(num_bins_acg/2) #number of bins that equal 1 second
+        num_bins_1s = int(num_bins_2s/2) #number of bins that equal 1 second
         fr = np.sum(bin_count_normalized[num_bins_1s:num_bins_2s])/num_bins_1s #compute fr based on the  mean of bin_count_normalized from 1 to 2 s instead of as before (len(ts)/recDur) for a better estimate
         mfunc =np.vectorize(max_acceptable_cont)
         m = mfunc(fr,bTest,recDur,fr*acceptThresh,thresh) #compute the maximum allowed number of spikes per testing bin
