@@ -287,11 +287,12 @@ class PlotData:
 
         try:
             rms_times = alf.io.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
-                                                 format + '.timestamps.npy'))
+                                                      format + '.timestamps.npy'))
             xaxis = 'Time (s)'
         except Exception:
             rms_times = np.array([0, rms_amps.shape[0]])
             xaxis = 'Time samples'
+
 
         # Img data
         _rms = np.take(rms_amps, self.chn_ind, axis=1)

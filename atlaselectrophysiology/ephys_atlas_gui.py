@@ -1597,13 +1597,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 if __name__ == '__main__':
 
     import argparse
-#
+
     parser = argparse.ArgumentParser(description='Offline vs online mode')
     parser.add_argument('-o', '--offline', default=False, required=False, help='Offline mode')
     args = parser.parse_args()
-#
+
     app = QtWidgets.QApplication([])
     mainapp = MainWindow(offline=args.offline)
-    #mainapp = MainWindow(offline=False)
+    # mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()
