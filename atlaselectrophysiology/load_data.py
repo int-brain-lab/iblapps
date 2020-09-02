@@ -10,7 +10,7 @@ import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 
 brain_atlas = atlas.AllenAtlas(25)
-ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
+ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
 
 
 class LoadData:
@@ -130,14 +130,14 @@ class LoadData:
         :return track: reference points in track space
         :type: np.array
         """
-        align = self.prev_align[idx]
+        self.current_align = self.prev_align[idx]
 
-        if align == 'original':
+        if self.current_align == 'original':
             feature = None
             track = None
         else:
-            feature = np.array(self.alignments[align][0])
-            track = np.array(self.alignments[align][1])
+            feature = np.array(self.alignments[self.current_align][0])
+            track = np.array(self.alignments[self.current_align][1])
 
         return feature, track
 
@@ -380,4 +380,16 @@ class LoadData:
         self.qc.insert1(dict(probe_insertion_uuid=self.insertion_id, user_name=user,
                         alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
                         allow_direct_insert=True, replace=True)
+
+    def delete_data(self):
+        la = 1
+        # current key that is chosen,
+        # pop the key
+        # see if there is one at a later date
+        # if not, then need to update the trajectory object
+
+        #need to find the temporary new
+        self.current_align
+         #need to get xyz_channels or the next most recent one
+
 
