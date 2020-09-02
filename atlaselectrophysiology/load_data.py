@@ -8,13 +8,16 @@ from pathlib import Path
 import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
-# from atlaselectrophysiology import qc_table
+
 brain_atlas = atlas.AllenAtlas(25)
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
+
 
 class LoadData:
     def __init__(self):
 
+        from atlaselectrophysiology import qc_table
+        self.qc = qc_table.EphysQC()
         self.one = ONE(base_url=ONE_BASE_URL)
         self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
 
@@ -371,12 +374,10 @@ class LoadData:
 
     def upload_dj(self, align_qc, ephys_qc, ephys_desc):
         # Upload qc results to datajoint table
-
         user = self.one._par.ALYX_LOGIN
-        qc = qc_table.EphysQC()
         if ephys_desc == 'None':
             ephys_desc = None
-        qc.insert1(dict(probe_insertion_uuid=self.insertion_id, user_name=user,
+        self.qc.insert1(dict(probe_insertion_uuid=self.insertion_id, user_name=user,
                         alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
-                   allow_direct_insert=True, replace=True)
+                        allow_direct_insert=True, replace=True)
 

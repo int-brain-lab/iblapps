@@ -63,7 +63,7 @@ class DataGroup:
     
     def load_data(self):
         self.spikes = aio.load_object(self.probe_path, 'spikes')
-        self.trials = aio.load_object(self.alf_path, '_ibl_trials')
+        self.trials = aio.load_object(self.alf_path, 'trials')
         self.clusters = aio.load_object(self.probe_path, 'clusters')
         self.ids = np.unique(self.spikes.clusters)
         self.metrics = np.array(self.clusters.metrics.ks2_label[self.ids])

@@ -5,7 +5,7 @@ from pathlib import Path
 import alf.io
 import glob
 import json
-from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
+
 brain_atlas = atlas.AllenAtlas(25)
 
 
