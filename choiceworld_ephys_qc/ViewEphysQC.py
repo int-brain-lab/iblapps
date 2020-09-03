@@ -138,7 +138,6 @@ class GraphWindow(QtWidgets.QWidget):
         self.wplot = PlotWindow(wheel=wheel)
         self.wplot.show()
         self.wheel = wheel
-        print("toto")
 
     def loadFile(self):
         fileName, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open File", "",

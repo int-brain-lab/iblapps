@@ -21,7 +21,7 @@ cd /home/olivier/Documents/PYTHON/iblapps/choice_world_ephys_qc
 ```
 Launch the Viewer by typing `ipython bpod_qc.py session_UUID` , example:
 ```
-ipython bpod_qc.py c9fec76e-7a20-4da4-93ad-04510a89473b
+ipython task_qc.py c9fec76e-7a20-4da4-93ad-04510a89473b
 ```
 If you encouter the error `ModuleNotFoundError: No module named 'PyQt5'`, write in (conda) terminal (with iblenv activated):
 ```

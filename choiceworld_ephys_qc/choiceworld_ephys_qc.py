@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from oneibl.one import ONE
 import alf.io
 from ibllib.ephys import ephysqc
-from ibllib.io.extractors import ephys_fpga, training_wheel, ephys_trials
+from ibllib.io.extractors import ephys_fpga, training_wheel
 import ibllib.io.raw_data_loaders as rawio
 from iblapps import qt
 
@@ -53,13 +53,14 @@ def _qc_from_path(sess_path, display=True):
     tmax = raw_trials[-1]['behavior_data']['States timestamps']['exit_state'][0][-1] + 60
 
     sync, chmap = ephys_fpga._get_main_probe_sync(sess_path, bin_exists=False)
-    _ = ephys_trials.extract_all(sess_path, output_path=temp_alf_folder, save=True)
+    fpga_trials = ephys_fpga.FpgaTrials(sess_path).extract(save=True, path_out=temp_alf_folder)
+    # _ = ephys_trials.extract_all(sess_path, output_path=temp_alf_folder, save=True)
     # check that the output is complete
     fpga_trials = ephys_fpga.extract_behaviour_sync(sync, output_path=temp_alf_folder, tmax=tmax,
                                                     chmap=chmap, save=True, display=display)
     # align with the bpod
     bpod2fpga = ephys_fpga.align_with_bpod(temp_alf_folder.parent)
-    alf_trials = alf.io.load_object(temp_alf_folder, '_ibl_trials')
+    alf_trials = alf.io.load_object(temp_alf_folder, 'trials', namespace='ibl')
     shutil.rmtree(temp_alf_folder)
     # do the QC
     qcs, qct = ephysqc.qc_fpga_task(fpga_trials, alf_trials)
