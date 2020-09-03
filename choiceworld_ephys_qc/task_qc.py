@@ -12,7 +12,7 @@ from matplotlib.colors import TABLEAU_COLORS
 from oneibl.one import ONE
 import ibllib.plots as plots
 from ibllib.qc.task_metrics import TaskQC
-import ViewEphysQC as ViewEphysQC
+from choiceworld_ephys_qc import ViewEphysQC
 
 one = ONE()
 
@@ -30,6 +30,8 @@ class QcFrame(TaskQC):
         self.load_data(bpod_only=bpod_only)
         self.compute()
         self.n_trials = self.extractor.data['intervals_0'].size
+        self.wheel_data = {'re_pos': self.extractor.data.pop('wheel_position'),
+                           're_ts': self.extractor.data.pop('wheel_timestamps')}
 
         # Print failed
         outcome, results, outcomes = self.compute_session_status()
@@ -90,9 +92,9 @@ class QcFrame(TaskQC):
 
         plots.squares(bnc1['times'], bnc1['polarities'] * 0.4 + 1, ax=display, color='k')
         plots.squares(bnc2['times'], bnc2['polarities'] * 0.4 + 2, ax=display, color='k')
-        for event, c in zip(trial_events, cycle(TABLEAU_COLORS.keys())):
-            plot_args['linestyle'] = random.choice(('-', '--', '-.', ':'))
-            plots.vertical_lines(trial_data[event], label=event, color=c, **plot_args)
+        linestyles = random.choices(('-', '--', '-.', ':'), k=len(trial_events))
+        for event, c, l in zip(trial_events, cycle(TABLEAU_COLORS.keys()), linestyles):
+            plots.vertical_lines(trial_data[event], label=event, color=c, linestyle=l, **plot_args)
         display.legend()
         display.set_yticklabels(['', 'frame2ttl', 'sound', ''])
         display.set_yticks([0, 1, 2, 3])
@@ -101,13 +103,14 @@ class QcFrame(TaskQC):
         if wheel_display:
             wheel_plot_args = {
                 'ax': wheel_display,
-                'ymin': trial_data['wheel_position'].min(),
-                'ymax': trial_data['wheel_position'].max()}
+                'ymin': self.wheel_data['re_pos'].min(),
+                'ymax': self.wheel_data['re_pos'].max()}
             plot_args = {**plot_args, **wheel_plot_args}
 
-            wheel_display.plot(trial_data['wheel_timestamps'], trial_data['wheel_position'], 'k-x')
-            for event, c in zip(trial_events, cycle(TABLEAU_COLORS.keys())):
-                plots.vertical_lines(trial_data[event], label=event, color=c, **plot_args)
+            wheel_display.plot(self.wheel_data['re_ts'], self.wheel_data['re_pos'], 'k-x')
+            for event, c, l in zip(trial_events, cycle(TABLEAU_COLORS.keys()), linestyles):
+                plots.vertical_lines(trial_data[event],
+                                     label=event, color=c, linestyle=l, **plot_args)
 
 
 if __name__ == "__main__":
@@ -121,9 +124,7 @@ if __name__ == "__main__":
     WHEEL = True
     qc = QcFrame(args.session, bpod_only=args.bpod)
     if WHEEL:
-        wheel_data = {'re_pos': qc.extractor.data['wheel_position'],
-                      're_ts': qc.extractor.data['wheel_timestamps']}
-        w = ViewEphysQC.viewqc(wheel=wheel_data)
+        w = ViewEphysQC.viewqc(wheel=qc.wheel_data)
         qc.create_plots(w.wplot.canvas.ax, wheel_display=w.wplot.canvas.ax2)
     else:
         w = ViewEphysQC.viewqc()
