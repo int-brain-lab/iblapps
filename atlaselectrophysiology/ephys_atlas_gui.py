@@ -1268,6 +1268,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                       self.xyz_channels, overwrite=True)
             QtGui.QMessageBox.information(self, 'Status', ("Electrode locations "
                                                            "succesfully saved"))
+            self.prev_alignments = self.loaddata.get_previous_alignments()
+            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            self.loaddata.get_starting_alignment(0)
         else:
             pass
             QtGui.QMessageBox.information(self, 'Status', "Electrode locations not saved")
@@ -1280,8 +1283,15 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         align_qc = self.align_qc.currentText()
         ephys_qc = self.ephys_qc.currentText()
         ephys_desc = self.ephys_desc.currentText()
-        self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
+        #self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
         self.complete_button_pressed()
+
+    def delete_button_pressed(self):
+        self.loaddata.delete_data()
+        self.prev_alignments = self.loaddata.get_previous_alignments()
+        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        self.loaddata.get_starting_alignment(0)
+
 
     def reset_axis_button_pressed(self):
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra,

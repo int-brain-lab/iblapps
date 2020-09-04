@@ -378,8 +378,11 @@ class Setup():
         self.complete_button = QtWidgets.QPushButton('Upload')
         if not self.offline:
             self.complete_button.clicked.connect(self.display_qc_options)
+            self.delete_button = QtWidgets.QPushButton('Delete')
+            self.delete_button.clicked.connect(self.delete_button_pressed)
         else:
             self.complete_button.clicked.connect(self.complete_button_pressed)
+
 
         if not self.offline:
             # If offline mode is False, read in Subject and Session options from Alyx
@@ -434,6 +437,8 @@ class Setup():
         self.interaction_layout2 = QtWidgets.QHBoxLayout()
         self.interaction_layout2.addWidget(self.reset_button)
         self.interaction_layout2.addWidget(self.complete_button)
+        if not self.offline:
+            self.interaction_layout2.addWidget(self.delete_button)
         # Group 3 will depend on online/ offline mode
         self.interaction_layout3 = QtWidgets.QHBoxLayout()
         if not self.offline:

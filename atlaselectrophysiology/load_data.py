@@ -2,6 +2,7 @@ import scipy
 import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
+from ibllib.pipes.ephys_alignment import EphysAlignment
 import ibllib.atlas as atlas
 from oneibl.one import ONE
 from pathlib import Path
@@ -102,6 +103,9 @@ class LoadData:
         self.lab = self.sess[idx]['session']['lab']
         self.eid = self.sess[idx]['session']['id']
 
+        return self.get_previous_alignments()
+
+    def get_previous_alignments(self):
         # Looks for any previous alignments
         ephys_traj_prev = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                              provenance='Ephys aligned histology track')
@@ -112,7 +116,7 @@ class LoadData:
             if self.alignments:
                 self.prev_align = [*self.alignments.keys()]
             # To make sure they are ordered by date added, default to latest fit
-            self.prev_align.reverse()
+            self.prev_align = sorted(self.prev_align, reverse = True)
             self.prev_align.append('original')
         else:
             self.prev_align = ['original']
@@ -398,6 +402,7 @@ class LoadData:
         # If we only have one alignment then we want to delete that (i.e no aligned trajectory will
         # be registered anymore)
         if n_align == 1:
+            print('option 1')
             ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                             provenance='Ephys aligned histology track')
 
@@ -406,6 +411,7 @@ class LoadData:
         # Case where it is the latest trajectory that wants to be deleted, need to update the channels and trajectory
         # as well as the json field
         elif (n_align - 1) == idx_chosen:
+            print('option2')
             new_key = align[idx_chosen-1]
             self.alignments.pop(self.current_align)
             feature = np.array(self.alignments[new_key][0])
@@ -415,7 +421,7 @@ class LoadData:
                                         feature_prev=feature)
             xyz_channels = ephysalign.get_channel_locations(feature, track)
             insertion = atlas.Insertion.from_track(xyz_channels, brain_atlas)
-
+            overwrite=True
             # Create new trajectory and overwrite previous one
             insertion = atlas.Insertion.from_track(xyz_channels, brain_atlas)
             # NEEED TO ADD TIP TO DEPTH?
@@ -435,6 +441,7 @@ class LoadData:
                                data=patch_dict)
 
         else:
+            print('option 3')
             self.alignments.pop(self.current_align)
             patch_dict = {'json': self.alignments}
             ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
