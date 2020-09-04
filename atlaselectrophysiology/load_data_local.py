@@ -11,7 +11,7 @@ from atlaselectrophysiology.load_histology import download_histology_data, tif2n
 
 class LoadDataLocal:
     def __init__(self):
-        self.brain_atlas = atlas.AllenAtlas(25, nrrd=True)
+        self.brain_atlas = atlas.AllenAtlas(25)
         self.folder_path = []
         self.chn_coords = []
         self.sess_path = []
@@ -130,7 +130,7 @@ class LoadDataLocal:
         height = [self.brain_atlas.bc.i2z(index[0, 2]), self.brain_atlas.bc.i2z(index[-1, 2])]
 
         if hist_path_rd:
-            hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd, nrrd=True)
+            hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd)
             hist_slice_rd = hist_atlas_rd.image[index[:, 0], :, index[:, 2]]
             hist_slice_rd = np.swapaxes(hist_slice_rd, 0, 1)
         else:
@@ -138,7 +138,7 @@ class LoadDataLocal:
             hist_slice_rd = np.copy(ccf_slice)
 
         if hist_path_gr:
-            hist_atlas_gr = atlas.AllenAtlas(hist_path=hist_path_gr, nrrd=True)
+            hist_atlas_gr = atlas.AllenAtlas(hist_path=hist_path_gr)
             hist_slice_gr = hist_atlas_gr.image[index[:, 0], :, index[:, 2]]
             hist_slice_gr = np.swapaxes(hist_slice_gr, 0, 1)
         else:

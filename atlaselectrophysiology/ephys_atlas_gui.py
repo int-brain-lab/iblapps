@@ -9,8 +9,10 @@ from ibllib.pipes.ephys_alignment import EphysAlignment
 import atlaselectrophysiology.plot_data as pd
 import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
+from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
 import os
+import time
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def __init__(self, offline=False):
@@ -148,6 +150,24 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         return axis
 
+    def set_font(self, fig, ax, ptsize=8, width=None, height=None):
+
+        if type(fig) == pg.PlotItem:
+            axis = fig.getAxis(ax)
+        else:
+            axis = fig.plotItem.getAxis(ax)
+
+        font = QtGui.QFont()
+        font.setPointSize(ptsize)
+        axis.setStyle(tickFont=font)
+        labelStyle = {'font-size': f'{ptsize}pt'}
+        axis.setLabel(**labelStyle)
+
+        if width:
+            axis.setWidth(width)
+        if height:
+            axis.setHeight(height)
+
     def populate_lists(self, data, list_name, combobox):
         """
         Populate drop down lists with subject/session/alignment options
@@ -205,7 +225,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             self.set_axis(self.fig_img_cb, 'left', pen='w')
             self.set_axis(self.fig_probe_cb, 'left', show=False)
-            self.set_axis(self.fig_img, 'left', label='Distance from probe tip (uV)')
+            self.set_axis(self.fig_img, 'left', label='Distance from probe tip (um)')
             self.set_axis(self.fig_probe, 'left', show=False)
             self.set_axis(self.fig_line, 'left', show=False)
 
@@ -242,7 +262,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             self.set_axis(self.fig_img_cb, 'left', pen='w')
             self.set_axis(self.fig_probe_cb, 'left', show=False)
-            self.set_axis(self.fig_img, 'left', label='Distance from probe tip (uV)')
+            self.set_axis(self.fig_img, 'left', label='Distance from probe tip (um)')
             self.set_axis(self.fig_probe, 'left', show=False)
             self.set_axis(self.fig_line, 'left', show=False)
 
@@ -279,7 +299,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.set_axis(self.fig_line, 'left', show=False)
             self.set_axis(self.fig_img, 'left', pen='w')
             self.set_axis(self.fig_img, 'left', show=False)
-            self.set_axis(self.fig_probe, 'left', label='Distance from probe tip (uV)')
+            self.set_axis(self.fig_probe, 'left', label='Distance from probe tip (um)')
 
             self.fig_data_layout.layout.setColumnStretchFactor(0, 1)
             self.fig_data_layout.layout.setColumnStretchFactor(1, 2)
@@ -302,6 +322,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Saves all plots from the GUI into folder
         """
         # make folder to save plots to
+        # need to make sure that its always the same!!!!
         #image_path = self.alf_path.joinpath('GUI_plots')
         image_path = Path.home().joinpath('GUI_plots')
         os.makedirs(image_path, exist_ok=True)
@@ -317,64 +338,75 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.fig_data_layout.removeItem(self.fig_probe)
         self.fig_data_layout.removeItem(self.fig_probe_cb)
         self.fig_data_layout.removeItem(self.fig_line)
+
+        width1 = self.fig_data_area.width()
+        height1 = self.fig_data_area.height()
+        ax_width = self.fig_img.getAxis('left').width()
+        ax_height = self.fig_img_cb.getAxis('top').height()
+
+        self.set_font(self.fig_img, 'left', ptsize=15, width=ax_width+20)
+        self.set_font(self.fig_img, 'bottom', ptsize=15)
+        self.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height+15)
+
+        self.fig_data_area.resize(700, height1)
+
         plot = None
         start_plot = self.img_options_group.checkedAction()
+
         while plot != start_plot:
+            self.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height+15)
             exporter = pg.exporters.ImageExporter(self.fig_data_layout)
             exporter.export(str(image_path.joinpath(sess_info + 'img_' +
                                                 self.img_options_group.checkedAction().text()
                                                 + '.png')))
             self.toggle_plots(self.img_options_group)
             plot = self.img_options_group.checkedAction()
-        self.fig_data_layout.removeItem(self.fig_img)
-        self.fig_data_layout.removeItem(self.fig_img_cb)
-        self.fig_data_layout.addItem(self.fig_img_cb, 0, 0)
-        self.fig_data_layout.addItem(self.fig_probe_cb, 0, 1, 1, 2)
-        self.fig_data_layout.addItem(self.fig_img, 1, 0)
-        self.fig_data_layout.addItem(self.fig_line, 1, 1)
-        self.fig_data_layout.addItem(self.fig_probe, 1, 2)
 
-        # Next go through all the probe plots
-        self.set_view(view=3, configure=False)
+        self.set_font(self.fig_img, 'left', ptsize=8, width=ax_width)
+        self.set_font(self.fig_img, 'bottom', ptsize=8)
+        self.set_font(self.fig_img_cb, 'top', ptsize=8, height=ax_height)
         self.fig_data_layout.removeItem(self.fig_img)
         self.fig_data_layout.removeItem(self.fig_img_cb)
-        self.fig_data_layout.removeItem(self.fig_line)
-        width = self.fig_data_area.width()
-        height = self.fig_data_area.height()
-        self.fig_data_area.resize(200, height)
+        #self.fig_data_area.resize(width, height)
+
+        # Next go over probe plots
+        self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
+        self.fig_data_layout.addItem(self.fig_probe, 1, 0)
+        self.set_axis(self.fig_probe, 'left', label='Distance from probe tip (uV)')
+        self.fig_probe.setFixedWidth(self.fig_probe_width + self.fig_ax_width + 20)
+        self.set_font(self.fig_probe, 'left', ptsize=15, width=ax_width+20)
+        self.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height+15)
+        self.fig_data_area.resize(250, height1)
+
         plot = None
         start_plot = self.probe_options_group.checkedAction()
+
         while plot != start_plot:
+            self.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height+15)
             exporter = pg.exporters.ImageExporter(self.fig_data_layout)
             exporter.export(str(image_path.joinpath(sess_info + 'probe_' +
                                                     self.probe_options_group.checkedAction().text() + '.png')))
             self.toggle_plots(self.probe_options_group)
             plot = self.probe_options_group.checkedAction()
+
+        self.fig_probe.setFixedWidth(self.fig_probe_width + self.fig_ax_width)
+        self.set_font(self.fig_probe, 'left', ptsize=8, width=ax_width)
+        self.set_font(self.fig_probe_cb, 'top', ptsize=8, height=ax_height)
         self.fig_data_layout.removeItem(self.fig_probe)
         self.fig_data_layout.removeItem(self.fig_probe_cb)
-        self.fig_data_area.resize(width, height)
-        self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
-        self.fig_data_layout.addItem(self.fig_img_cb, 0, 2)
-        self.fig_data_layout.addItem(self.fig_probe, 1, 0)
-        self.fig_data_layout.addItem(self.fig_line, 1, 1)
-        self.fig_data_layout.addItem(self.fig_img, 1, 2)
-        self.set_view(view=1, configure=False)
 
         # Next go through the line plots
-        self.fig_data_layout.removeItem(self.fig_img)
-        self.fig_data_layout.removeItem(self.fig_img_cb)
-        self.fig_data_layout.removeItem(self.fig_probe)
-        self.fig_data_layout.removeItem(self.fig_probe_cb)
-        self.fig_data_layout.removeItem(self.fig_line)
         self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
         cbar = self.fig_probe_cb.items[0]
         self.fig_probe_cb.removeItem(cbar)
+        text = self.fig_probe_cb.getAxis('top').label.toPlainText()
         self.set_axis(self.fig_probe_cb, 'top', pen='w')
         self.fig_data_layout.addItem(self.fig_line, 1, 0)
-        width = self.fig_data_area.width()
-        height = self.fig_data_area.height()
-        self.set_axis(self.fig_line, 'left', label='Distance from probe tip (uV)')
-        self.fig_data_area.resize(200, height)
+
+        self.set_axis(self.fig_line, 'left', label='Distance from probe tip (um)')
+        self.set_font(self.fig_line, 'left', ptsize=15, width=ax_width+20)
+        self.set_font(self.fig_line, 'bottom', ptsize=15)
+        self.fig_data_area.resize(200, height1)
 
         plot = None
         start_plot = self.line_options_group.checkedAction()
@@ -386,10 +418,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             plot = self.line_options_group.checkedAction()
 
         self.fig_probe_cb.addItem(cbar)
-        self.set_axis(self.fig_probe_cb, 'top', pen='k')
+        self.set_axis(self.fig_probe_cb, 'top', pen='k', label=text)
+        self.set_font(self.fig_line, 'left', ptsize=8, width=ax_width)
+        self.set_font(self.fig_line, 'bottom', ptsize=8)
         self.fig_data_layout.removeItem(self.fig_line)
         self.fig_data_layout.removeItem(self.fig_probe_cb)
-        self.fig_data_area.resize(width, height)
+        self.fig_data_area.resize(width1, height1)
         self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
         self.fig_data_layout.addItem(self.fig_img_cb, 0, 2)
         self.fig_data_layout.addItem(self.fig_probe, 1, 0)
@@ -398,11 +432,40 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.set_view(view=1, configure=False)
 
         # Save slice images
+        width2 = self.fig_slice.width()
+        height2 = self.fig_slice.height()
+        rect = self.fig_slice.viewRect()
         plot = None
         start_plot = self.slice_options_group.checkedAction()
         while plot != start_plot:
+            self.toggle_channel_button_pressed()
+            self.traj_line.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2],
+                                   pen=self.rpen_dot)
+            self.fig_slice.addItem(self.traj_line)
+            slice_name = self.slice_options_group.checkedAction().text()
             exporter = pg.exporters.ImageExporter(self.fig_slice)
-            exporter.export(str(image_path.joinpath(sess_info + 'slice_' + self.slice_options_group.checkedAction().text() + '.png')))
+            exporter.export(str(image_path.joinpath(sess_info + 'slice_' + slice_name + '.png')))
+            self.toggle_plots(self.slice_options_group)
+            plot = self.slice_options_group.checkedAction()
+
+        plot = None
+        start_plot = self.slice_options_group.checkedAction()
+        while plot != start_plot:
+            self.toggle_channel_button_pressed()
+            self.traj_line.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2],
+                                   pen=self.rpen_dot)
+            self.fig_slice.addItem(self.traj_line)
+            slice_name = self.slice_options_group.checkedAction().text()
+            self.fig_slice.setXRange(min=np.min(self.xyz_channels[:, 0]) - 200 / 1e6,
+                                     max=np.max(self.xyz_channels[:, 0]) + 200 / 1e6)
+            self.fig_slice.setYRange(min=np.min(self.xyz_channels[:, 2]) - 500 / 1e6,
+                                     max=np.max(self.xyz_channels[:, 2]) + 500 / 1e6)
+            self.fig_slice.resize(50, height2)
+            exporter = pg.exporters.ImageExporter(self.fig_slice)
+            exporter.export(
+                str(image_path.joinpath(sess_info + 'slice_zoom_' + slice_name + '.png')))
+            self.fig_slice.resize(width2 + 10, height2 + 10)
+            self.fig_slice.setRange(rect=rect)
             self.toggle_plots(self.slice_options_group)
             plot = self.slice_options_group.checkedAction()
 
@@ -410,7 +473,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         exporter = pg.exporters.ImageExporter(self.fig_hist_layout)
         exporter.export(str(image_path.joinpath(sess_info + 'hist.png')))
 
-
+        make_overview_plot(image_path, sess_info)
 
     def toggle_plots(self, options_group):
         """
@@ -990,11 +1053,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if np.any(self.feature_prev):
             self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths,
                                              track_prev=self.track_prev,
-                                             feature_prev=self.feature_prev,
-                                             brain_atlas=self.loaddata.brain_atlas)
+                                             feature_prev=self.feature_prev)
         else:
-            self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths,
-                                             brain_atlas=self.loaddata.brain_atlas)
+            self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths)
 
         self.features[self.idx], self.track[self.idx], self.xyz_track \
             = self.ephysalign.get_track_and_feature()
@@ -1053,8 +1114,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
     def compute_nearby_boundaries(self):
         nearby_bounds = self.ephysalign.get_nearest_boundary(self.ephysalign.xyz_samples,
-                                                             self.allen, self.loaddata.brain_atlas,
-                                                             steps=6)
+                                                             self.allen, steps=6)
         [self.hist_nearby_x, self.hist_nearby_y,
          self.hist_nearby_col] = self.ephysalign.arrange_into_regions(
             self.ephysalign.sampling_trk, nearby_bounds['id'], nearby_bounds['dist'],
