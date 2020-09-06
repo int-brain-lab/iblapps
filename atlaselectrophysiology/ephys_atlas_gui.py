@@ -210,6 +210,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_img_width = self.fig_img.width() - self.fig_ax_width
             self.fig_line_width = self.fig_line.width()
             self.fig_probe_width = self.fig_probe.width()
+            self.slice_width = self.fig_slice.width()
+            self.slice_height = self.fig_slice.height()
+            self.slice_rect = self.fig_slice.viewRect()
 
         if view == 1:
             self.fig_data_layout.removeItem(self.fig_img_cb)
@@ -323,12 +326,14 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         # make folder to save plots to
         # need to make sure that its always the same!!!!
-        #image_path = self.alf_path.joinpath('GUI_plots')
-        image_path = Path.home().joinpath('GUI_plots')
-        os.makedirs(image_path, exist_ok=True)
+        # image_path = self.alf_path.joinpath('GUI_plots')
+        # image_path = Path.home().joinpath('GUI_plots')
         sess_info = self.loaddata.subj + '_' + str(self.loaddata.date) + '_' +  \
                     self.loaddata.probe_label + '_'
-
+        image_path_overview = Path.home().joinpath('GUI_plots')
+        image_path = image_path_overview.joinpath(sess_info[:-1])
+        os.makedirs(image_path_overview, exist_ok=True)
+        os.makedirs(image_path, exist_ok=True)
         # Reset all axis, put view back to 1 and remove any reference lines
         self.reset_axis_button_pressed()
         self.set_view(view=1, configure=False)
@@ -397,8 +402,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Next go through the line plots
         self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
-        cbar = self.fig_probe_cb.items[0]
-        self.fig_probe_cb.removeItem(cbar)
+        #[self.fig_probe_cb.removeItem(cbar) for cbar in self.fig_probe_cb.items]
+        #cbar = self.fig_probe_cb.items[0]
+        #self.fig_probe_cb.removeItem(cbar)
+        self.fig_probe_cb.clear()
         text = self.fig_probe_cb.getAxis('top').label.toPlainText()
         self.set_axis(self.fig_probe_cb, 'top', pen='w')
         self.fig_data_layout.addItem(self.fig_line, 1, 0)
@@ -417,7 +424,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.toggle_plots(self.line_options_group)
             plot = self.line_options_group.checkedAction()
 
-        self.fig_probe_cb.addItem(cbar)
+        #self.fig_probe_cb.addItem(cbar)
+        [self.fig_probe_cb.addItem(cbar) for cbar in self.probe_cbars]
         self.set_axis(self.fig_probe_cb, 'top', pen='k', label=text)
         self.set_font(self.fig_line, 'left', ptsize=8, width=ax_width)
         self.set_font(self.fig_line, 'bottom', ptsize=8)
@@ -432,9 +440,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.set_view(view=1, configure=False)
 
         # Save slice images
-        width2 = self.fig_slice.width()
-        height2 = self.fig_slice.height()
-        rect = self.fig_slice.viewRect()
         plot = None
         start_plot = self.slice_options_group.checkedAction()
         while plot != start_plot:
@@ -460,12 +465,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                      max=np.max(self.xyz_channels[:, 0]) + 200 / 1e6)
             self.fig_slice.setYRange(min=np.min(self.xyz_channels[:, 2]) - 500 / 1e6,
                                      max=np.max(self.xyz_channels[:, 2]) + 500 / 1e6)
-            self.fig_slice.resize(50, height2)
+            self.fig_slice.resize(50, self.slice_height)
             exporter = pg.exporters.ImageExporter(self.fig_slice)
             exporter.export(
                 str(image_path.joinpath(sess_info + 'slice_zoom_' + slice_name + '.png')))
-            self.fig_slice.resize(width2 + 10, height2 + 10)
-            self.fig_slice.setRange(rect=rect)
+            self.fig_slice.resize(self.slice_width, self.slice_height)
+            self.fig_slice.setRange(rect=self.slice_rect)
             self.toggle_plots(self.slice_options_group)
             plot = self.slice_options_group.checkedAction()
 
@@ -771,8 +776,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_slice_hist.autoHistogramRange()
             self.fig_slice_layout.addItem(self.fig_slice_hist, 0, 1)
             hist_levels = self.fig_slice_hist.getLevels()
+            hist_val, hist_count = img.getHistogram()
+            upper_idx = np.where(hist_count > 10)[0][-1]
+            upper_val = hist_val[upper_idx]
             if hist_levels[0] != 0:
-                self.fig_slice_hist.setLevels(min=hist_levels[0], max=0.25 * hist_levels[1])
+                #self.fig_slice_hist.setLevels(min=hist_levels[0], max=0.25 * hist_levels[1])
+                self.fig_slice_hist.setLevels(min=hist_levels[0], max=upper_val)
             self.slice_item = self.fig_slice_hist
 
         self.fig_slice.addItem(img)
@@ -1004,7 +1013,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         sessions = self.loaddata.get_sessions(idx)
         self.populate_lists(sessions, self.sess_list, self.sess_combobox)
         self.prev_alignments = self.loaddata.get_info(0)
-        self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
+        #self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
@@ -1015,7 +1024,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :type idx: int
         """
         self.prev_alignments = self.loaddata.get_info(idx)
-        self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
+        #self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
@@ -1098,7 +1107,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_line(self.line_fr_data)
 
         # Initialise histology plots
-        self.plot_histology_ref(self.fig_hist_ref)
+        #self.plot_histology_ref(self.fig_hist_ref)
+        self.compute_nearby_boundaries()
+        self.plot_histology_nearby(self.fig_hist_ref)
         self.plot_histology(self.fig_hist)
         self.plot_scale_factor()
         if np.any(self.feature_prev):

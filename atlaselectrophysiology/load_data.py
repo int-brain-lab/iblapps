@@ -75,10 +75,11 @@ class LoadData:
         :type: list of strings
         """
         self.subj = self.subjects[idx]
-        self.sess = self.one.alyx.rest('trajectories', 'list', subject=self.subj,
+        subj_sess = self.one.alyx.rest('trajectories', 'list', subject=self.subj,
                                        provenance='Histology track')
+        self.sess = [sess for sess in subj_sess if sess['x']]
         session = [(sess['session']['start_time'][:10] + ' ' + sess['probe_name']) for sess in
-                   self.sess if sess['x']]
+                   self.sess]
         return session
 
     def get_info(self, idx):
