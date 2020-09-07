@@ -52,7 +52,7 @@ class LoadData:
         all_hist = self.one.alyx.rest('trajectories', 'list', provenance='Histology track')
         # Some do not have tracing, exclude these ones
         self.sess_with_hist = [sess for sess in all_hist if sess['x'] is not None]
-        subjects = [sess['session']['subject'] for sess in self.sess_with_hist]
+        self.subj_with_hist = [sess['session']['subject'] for sess in self.sess_with_hist]
 
         # For all histology tracks find the trajectory and coordinates of active part (where
         # electrodes are located). Used in get_nearby trajectories to find sessions close-by
@@ -65,7 +65,7 @@ class LoadData:
             self.traj_coords[iT, :] = (histology.interpolate_along_track
                                        (np.vstack([traj.tip, traj.entry]), depths))
 
-        self.subjects = np.unique(subjects)
+        self.subjects = np.unique(self.subj_with_hist)
 
         return self.subjects
 
@@ -79,10 +79,10 @@ class LoadData:
         :type: list of strings
         """
         self.subj = self.subjects[idx]
-        self.sess = self.one.alyx.rest('trajectories', 'list', subject=self.subj,
-                                       provenance='Histology track')
+        sess_idx = [i for i, e in enumerate(self.subj_with_hist) if e == self.subj]
+        self.sess = [self.sess_with_hist[idx] for idx in sess_idx]
         session = [(sess['session']['start_time'][:10] + ' ' + sess['probe_name']) for sess in
-                   self.sess if sess['x']]
+                   self.sess]
         return session
 
     def get_info(self, idx):
@@ -114,9 +114,10 @@ class LoadData:
             self.alignments = ephys_traj_prev[0]['json']
             self.prev_align = []
             if self.alignments:
+                # Sort by date, latest first
                 self.prev_align = [*self.alignments.keys()]
             # To make sure they are ordered by date added, default to latest fit
-            self.prev_align = sorted(self.prev_align, reverse = True)
+            self.prev_align = sorted(self.prev_align, reverse=True)
             self.prev_align.append('original')
         else:
             self.prev_align = ['original']
@@ -352,7 +353,6 @@ class LoadData:
 
             # Create new trajectory and overwrite previous one
             insertion = atlas.Insertion.from_track(xyz_channels, brain_atlas)
-            # NEEED TO ADD TIP TO DEPTH?
             brain_regions = brain_atlas.regions.get(brain_atlas.get_labels(xyz_channels))
             brain_regions['xyz'] = xyz_channels
             brain_regions['lateral'] = self.chn_coords[:, 0]
@@ -386,33 +386,31 @@ class LoadData:
                         allow_direct_insert=True, replace=True)
 
     def delete_data(self):
-        la = 1
-        # current key that is chosen,
-        # pop the key
-        # see if there is one at a later date
-        # if not, then need to update the trajectory object
+        """
+        Delete a user alignment from alyx
+
+        """
+        # Cannot delete original trajectory
         if self.current_align == 'original':
             print('Cannot delete original trajectory')
             return
 
-
-        align = [*self.alignments.keys()]
-        n_align = len(align)
+        print('here')
+        # Find which alignment has been chosen to delete
+        align = self.prev_align[:-1]
         idx_chosen = align.index(self.current_align)
-        # If we only have one alignment then we want to delete that (i.e no aligned trajectory will
-        # be registered anymore)
-        if n_align == 1:
-            print('option 1')
+
+        # If only one user alignment, delete whole trajectory
+        if len(align) == 1:
             ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                             provenance='Ephys aligned histology track')
 
             self.one.alyx.rest('trajectories', 'delete', id=ephys_traj[0]['id'])
 
-        # Case where it is the latest trajectory that wants to be deleted, need to update the channels and trajectory
-        # as well as the json field
-        elif (n_align - 1) == idx_chosen:
-            print('option2')
-            new_key = align[idx_chosen-1]
+        # If more than one alignment and latest alignment chosen to delete, need to update
+        # the trajectory insertion, channels and json field
+        elif idx_chosen == 0:
+            new_key = align[idx_chosen+1]
             self.alignments.pop(self.current_align)
             feature = np.array(self.alignments[new_key][0])
             track = np.array(self.alignments[new_key][1])
@@ -420,28 +418,25 @@ class LoadData:
                                         track_prev=track,
                                         feature_prev=feature)
             xyz_channels = ephysalign.get_channel_locations(feature, track)
-            insertion = atlas.Insertion.from_track(xyz_channels, brain_atlas)
-            overwrite=True
+            overwrite = True
             # Create new trajectory and overwrite previous one
             insertion = atlas.Insertion.from_track(xyz_channels, brain_atlas)
-            # NEEED TO ADD TIP TO DEPTH?
             brain_regions = brain_atlas.regions.get(brain_atlas.get_labels(xyz_channels))
             brain_regions['xyz'] = xyz_channels
             brain_regions['lateral'] = self.chn_coords[:, 0]
             brain_regions['axial'] = self.chn_coords[:, 1]
-            assert np.unique([len(brain_regions[k]) for k in brain_regions]).size == 1
             histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=self.one,
                                              overwrite=overwrite)
-            # Get the new trajectoru
+            # Get the new trajectory
             ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                             provenance='Ephys aligned histology track')
 
             patch_dict = {'json': self.alignments}
             self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
                                data=patch_dict)
-
+        # If more than one alignment but latest alignment to delete no chosen, just need to update
+        # json field
         else:
-            print('option 3')
             self.alignments.pop(self.current_align)
             patch_dict = {'json': self.alignments}
             ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
