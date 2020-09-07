@@ -6,7 +6,7 @@ import alf.io
 import glob
 import json
 
-brain_atlas = atlas.AllenAtlas(25)
+# brain_atlas = atlas.AllenAtlas(25)
 
 
 class LoadDataLocal:
@@ -14,6 +14,7 @@ class LoadDataLocal:
         self.folder_path = []
         self.chn_coords = []
         self.sess_path = []
+        self.brain_atlas = atlas.AllenAtlas(25)
 
     def get_info(self, folder_path):
         """
@@ -118,15 +119,15 @@ class LoadDataLocal:
         else:
             hist_path_gr = []
 
-        index = brain_atlas.bc.xyz2i(xyz_channels)[:, brain_atlas.xyz2dims]
-        ccf_slice = brain_atlas.image[index[:, 0], :, index[:, 2]]
+        index = self.brain_atlas.bc.xyz2i(xyz_channels)[:, self.brain_atlas.xyz2dims]
+        ccf_slice = self.brain_atlas.image[index[:, 0], :, index[:, 2]]
         ccf_slice = np.swapaxes(ccf_slice, 0, 1)
 
-        label_slice = brain_atlas._label2rgb(brain_atlas.label[index[:, 0], :, index[:, 2]])
+        label_slice = self.brain_atlas._label2rgb(self.brain_atlas.label[index[:, 0], :, index[:, 2]])
         label_slice = np.swapaxes(label_slice, 0, 1)
 
-        width = [brain_atlas.bc.i2x(0), brain_atlas.bc.i2x(456)]
-        height = [brain_atlas.bc.i2z(index[0, 2]), brain_atlas.bc.i2z(index[-1, 2])]
+        width = [self.brain_atlas.bc.i2x(0), self.brain_atlas.bc.i2x(456)]
+        height = [self.brain_atlas.bc.i2z(index[0, 2]), self.brain_atlas.bc.i2z(index[-1, 2])]
 
         if hist_path_rd:
             hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd)

@@ -843,6 +843,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         Triggered in offline mode when folder button is clicked
         """
+        self.data_status = False
         folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
         self.folder_line.setText(str(folder_path))
         self.prev_alignments = self.loaddata.get_info(folder_path)
@@ -875,9 +876,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if np.any(self.feature_prev):
             self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
                                              track_prev=self.track_prev,
-                                             feature_prev=self.feature_prev)
+                                             feature_prev=self.feature_prev,
+                                             brain_atlas=self.loaddata.brain_atlas)
         else:
-            self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths)
+            self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
+                                             brain_atlas=self.loaddata.brain_atlas)
 
         self.features[self.idx], self.track[self.idx], self.xyz_track \
             = self.ephysalign.get_track_and_feature()
@@ -939,7 +942,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
     def compute_nearby_boundaries(self):
         nearby_bounds = self.ephysalign.get_nearest_boundary(self.ephysalign.xyz_samples,
-                                                             self.allen, steps=6)
+                                                             self.allen, steps=6,
+                                                             brain_atlas=self.loaddata.brain_atlas)
         [self.hist_nearby_x, self.hist_nearby_y,
          self.hist_nearby_col] = self.ephysalign.arrange_into_regions(
             self.ephysalign.sampling_trk, nearby_bounds['id'], nearby_bounds['dist'],
