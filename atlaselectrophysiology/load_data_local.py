@@ -22,6 +22,10 @@ class LoadDataLocal:
         """
         self.folder_path = folder_path
 
+        return self.get_previous_alignments()
+
+    def get_previous_alignments(self):
+
         # If previous alignment json file exists, read in previous alignments
         if Path(self.folder_path, 'prev_alignments.json').exists():
             with open(Path(self.folder_path, 'prev_alignments.json'), "r") as f:
@@ -29,7 +33,7 @@ class LoadDataLocal:
                 self.prev_align = []
                 if self.alignments:
                     self.prev_align = [*self.alignments.keys()]
-                self.prev_align.reverse()
+                self.prev_align = sorted(self.prev_align, reverse=True)
                 self.prev_align.append('original')
         else:
             self.alignments = []
@@ -177,7 +181,7 @@ class LoadDataLocal:
 
     def upload_data(self, feature, track, xyz_channels, overwrite=False):
 
-            brain_regions = brain_atlas.regions.get(brain_atlas.get_labels
+            brain_regions = self.brain_atlas.regions.get(self.brain_atlas.get_labels
                                                          (xyz_channels))
             brain_regions['xyz'] = xyz_channels
             brain_regions['lateral'] = self.chn_coords[:, 0]

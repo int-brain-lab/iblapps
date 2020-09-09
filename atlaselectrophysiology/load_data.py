@@ -1,4 +1,3 @@
-import scipy
 import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
@@ -10,8 +9,7 @@ import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 
-#brain_atlas = atlas.AllenAtlas(25)
-ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
+ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 
 class LoadData:
@@ -396,7 +394,6 @@ class LoadData:
             print('Cannot delete original trajectory')
             return
 
-        print('here')
         # Find which alignment has been chosen to delete
         align = self.prev_align[:-1]
         idx_chosen = align.index(self.current_align)
@@ -417,7 +414,7 @@ class LoadData:
             track = np.array(self.alignments[new_key][1])
             ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
                                         track_prev=track,
-                                        feature_prev=feature, brain_atlas=self.brain_atlas)
+                                        feature_prev=feature)
             xyz_channels = ephysalign.get_channel_locations(feature, track)
             overwrite = True
             # Create new trajectory and overwrite previous one

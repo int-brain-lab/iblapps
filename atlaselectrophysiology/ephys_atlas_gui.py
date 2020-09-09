@@ -590,8 +590,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_slice_hist.autoHistogramRange()
             self.fig_slice_layout.addItem(self.fig_slice_hist, 0, 1)
             hist_levels = self.fig_slice_hist.getLevels()
+            hist_val, hist_count = img.getHistogram()
+            upper_idx = np.where(hist_count > 10)[0][-1]
+            upper_val = hist_val[upper_idx]
             if hist_levels[0] != 0:
-                self.fig_slice_hist.setLevels(mn=hist_levels[0], mx=0.25 * hist_levels[1])
+                self.fig_slice_hist.setLevels(mn=hist_levels[0], mx=upper_val)
             self.slice_item = self.fig_slice_hist
 
         self.fig_slice.addItem(img)
@@ -819,6 +822,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :param idx: index chosen subject (item) in drop down list
         :type idx: int
         """
+        self.data_status = False
         self.sess_list.clear()
         sessions = self.loaddata.get_sessions(idx)
         self.populate_lists(sessions, self.sess_list, self.sess_combobox)
@@ -876,11 +880,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if np.any(self.feature_prev):
             self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
                                              track_prev=self.track_prev,
-                                             feature_prev=self.feature_prev,
-                                             brain_atlas=self.loaddata.brain_atlas)
+                                             feature_prev=self.feature_prev)
         else:
-            self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
-                                             brain_atlas=self.loaddata.brain_atlas)
+            self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths)
 
         self.features[self.idx], self.track[self.idx], self.xyz_track \
             = self.ephysalign.get_track_and_feature()
@@ -942,8 +944,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
     def compute_nearby_boundaries(self):
         nearby_bounds = self.ephysalign.get_nearest_boundary(self.ephysalign.xyz_samples,
-                                                             self.allen, steps=6,
-                                                             brain_atlas=self.loaddata.brain_atlas)
+                                                             self.allen, steps=6)
         [self.hist_nearby_x, self.hist_nearby_y,
          self.hist_nearby_col] = self.ephysalign.arrange_into_regions(
             self.ephysalign.sampling_trk, nearby_bounds['id'], nearby_bounds['dist'],
@@ -965,7 +966,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.plot_histology_nearby(self.fig_hist_ref)
         else:
             self.plot_histology_ref(self.fig_hist_ref)
-
 
 
     def filter_unit_pressed(self, type):
