@@ -1292,7 +1292,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         align_qc = self.align_qc.currentText()
         ephys_qc = self.ephys_qc.currentText()
         ephys_desc = self.ephys_desc.currentText()
-        #self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
+        self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
         self.complete_button_pressed()
 
     def delete_button_pressed(self):
