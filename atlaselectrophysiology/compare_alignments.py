@@ -35,7 +35,7 @@ probe_several = probes[idx_several]
 # date = '2019-12-10'
 # sess_no = 1
 # probe_label = 'probe00'
-#eid = one.search(subject=subject, date=date, number=sess_no)[0]
+# eid = one.search(subject=subject, date=date, number=sess_no)[0]
 # eid = 'e2448a52-2c22-4ecc-bd48-632789147d9c'
 
 for eid, probe_label in zip(eid_several, probe_several):
@@ -62,6 +62,7 @@ for eid, probe_label in zip(eid_several, probe_several):
 
         ax.set_yticks(label[:, 0].astype(int))
         ax.set_yticklabels(label[:, 1])
+        ax.yaxis.set_tick_params(labelsize=10)
         ax.tick_params(axis="y", direction="in", pad=-50)
         ax.set_ylim([20, 3840])
         ax.get_xaxis().set_visible(False)

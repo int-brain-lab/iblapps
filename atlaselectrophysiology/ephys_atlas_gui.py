@@ -590,8 +590,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_slice_hist.autoHistogramRange()
             self.fig_slice_layout.addItem(self.fig_slice_hist, 0, 1)
             hist_levels = self.fig_slice_hist.getLevels()
+            hist_val, hist_count = img.getHistogram()
+            upper_idx = np.where(hist_count > 10)[0][-1]
+            upper_val = hist_val[upper_idx]
             if hist_levels[0] != 0:
-                self.fig_slice_hist.setLevels(mn=hist_levels[0], mx=0.25 * hist_levels[1])
+                self.fig_slice_hist.setLevels(mn=hist_levels[0], mx=upper_val)
             self.slice_item = self.fig_slice_hist
 
         self.fig_slice.addItem(img)
@@ -819,6 +822,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :param idx: index chosen subject (item) in drop down list
         :type idx: int
         """
+        self.data_status = False
         self.sess_list.clear()
         sessions = self.loaddata.get_sessions(idx)
         self.populate_lists(sessions, self.sess_list, self.sess_combobox)
@@ -833,6 +837,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :param idx: index of chosen session (item) in drop down list
         :type idx: int
         """
+        self.data_status = False
         self.prev_alignments = self.loaddata.get_info(idx)
         self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
@@ -842,6 +847,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         Triggered in offline mode when folder button is clicked
         """
+        self.data_status = False
         folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
         self.folder_line.setText(str(folder_path))
         self.prev_alignments = self.loaddata.get_info(folder_path)
@@ -866,15 +872,17 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.remove_lines_points()
         self.init_variables()
 
-        alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
-        xyz_picks = self.loaddata.get_xyzpicks()
+        # Only run once
+        if not self.data_status:
+            alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
+            self.xyz_picks = self.loaddata.get_xyzpicks()
 
         if np.any(self.feature_prev):
-            self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths,
+            self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
                                              track_prev=self.track_prev,
                                              feature_prev=self.feature_prev)
         else:
-            self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths)
+            self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths)
 
         self.features[self.idx], self.track[self.idx], self.xyz_track \
             = self.ephysalign.get_track_and_feature()
@@ -891,19 +899,21 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                                       self.ephysalign.track_extent)
         self.hist_data_ref['colour'] = self.ephysalign.region_colour
 
+        if not self.data_status:
+            self.plotdata = pd.PlotData(alf_path, ephys_path)
+            self.scat_drift_data = self.plotdata.get_depth_data_scatter()
+            (self.scat_fr_data, self.scat_p2t_data,
+             self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
+            self.img_corr_data = self.plotdata.get_correlation_data_img()
+            self.img_fr_data = self.plotdata.get_fr_img()
+            self.img_rms_APdata, self.probe_rms_APdata = self.plotdata.get_rms_data_img_probe('AP')
+            self.img_rms_LFPdata, self.probe_rms_LFPdata = self.plotdata.get_rms_data_img_probe(
+                'LF')
+            self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
+            self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
+            self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
 
-        self.plotdata = pd.PlotData(alf_path, ephys_path)
-        self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
-        self.scat_drift_data = self.plotdata.get_depth_data_scatter()
-        (self.scat_fr_data, self.scat_p2t_data,
-         self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
-        self.img_corr_data = self.plotdata.get_correlation_data_img()
-        self.img_fr_data = self.plotdata.get_fr_img()
-        self.img_rms_APdata, self.probe_rms_APdata = self.plotdata.get_rms_data_img_probe('AP')
-        self.img_rms_LFPdata, self.probe_rms_LFPdata = self.plotdata.get_rms_data_img_probe('LF')
-        self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
-        self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
-
+            self.data_status = True
 
         # Initialise checked plots
         self.img_init.setChecked(True)
@@ -958,6 +968,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.plot_histology_nearby(self.fig_hist_ref)
         else:
             self.plot_histology_ref(self.fig_hist_ref)
+
 
     def filter_unit_pressed(self, type):
         self.plotdata.filter_units(type)
@@ -1268,6 +1279,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                       self.xyz_channels, overwrite=True)
             QtGui.QMessageBox.information(self, 'Status', ("Electrode locations "
                                                            "succesfully saved"))
+            self.prev_alignments = self.loaddata.get_previous_alignments()
+            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            self.loaddata.get_starting_alignment(0)
         else:
             pass
             QtGui.QMessageBox.information(self, 'Status', "Electrode locations not saved")
@@ -1282,6 +1296,19 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         ephys_desc = self.ephys_desc.currentText()
         self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
         self.complete_button_pressed()
+
+    def delete_button_pressed(self):
+        delete = QtGui.QMessageBox.question(self, '',
+                                            "Delete Alignment?",
+                                            QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+        if delete == QtGui.QMessageBox.Yes:
+            self.loaddata.delete_data()
+            self.prev_alignments = self.loaddata.get_previous_alignments()
+            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            self.loaddata.get_starting_alignment(0)
+            self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
+        else:
+            pass
 
     def reset_axis_button_pressed(self):
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra,
