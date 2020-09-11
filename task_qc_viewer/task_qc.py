@@ -12,7 +12,7 @@ from matplotlib.colors import TABLEAU_COLORS
 from oneibl.one import ONE
 import ibllib.plots as plots
 from ibllib.qc.task_metrics import TaskQC
-from choiceworld_ephys_qc import ViewEphysQC
+from task_qc_viewer import ViewEphysQC
 
 one = ONE()
 
@@ -29,7 +29,7 @@ class QcFrame(TaskQC):
         super().__init__(session_path, one=one, log=_logger)
         self.load_data(bpod_only=bpod_only)
         self.compute()
-        self.n_trials = self.extractor.data['intervals_0'].size
+        self.n_trials = self.extractor.data['intervals'].shape[0]
         self.wheel_data = {'re_pos': self.extractor.data.pop('wheel_position'),
                            're_ts': self.extractor.data.pop('wheel_timestamps')}
 
@@ -39,6 +39,8 @@ class QcFrame(TaskQC):
         for k, v in outcomes.items():
             map[v].append(k[6:])
         for k, v in map.items():
+            if k == 'PASS':
+                continue
             print(f'The following checks were labelled {k}:')
             print('\n'.join(v), '\n')
 
@@ -54,26 +56,27 @@ class QcFrame(TaskQC):
         new_col = np.empty((metrics.columns.size + passed.columns.size,), dtype=object)
         new_col[0::2], new_col[1::2] = metrics.columns, passed.columns
         self.frame = pd.concat([metrics, passed], axis=1)[new_col]
-        self.frame['intervals_0'] = self.extractor.data['intervals_0']
-        self.frame['intervals_1'] = self.extractor.data['intervals_1']
+        self.frame['intervals_0'] = self.extractor.data['intervals'][:, 0]
+        self.frame['intervals_1'] = self.extractor.data['intervals'][:, 1]
         self.frame.insert(loc=0, column='trial_no', value=self.frame.index)
 
-    def create_plots(self, display, wheel_display=None, trial_events=None):
+    def create_plots(self, axes, wheel_axes=None, trial_events=None, color_map=None):
         """
         Plots the data for bnc1 (sound) and bnc2 (frame2ttl)
-        :param display: An axes handle on which to plot the TTL events
-        :param wheel_display: An axes handle on which to plot the wheel trace
+        :param axes: An axes handle on which to plot the TTL events
+        :param wheel_axes: An axes handle on which to plot the wheel trace
         :param trial_events: A list of Bpod trial events to plot, e.g. ['stimFreeze_times'],
         if None, valve, sound and stimulus events are plotted
+        :param color_map: A color map to use for the events, default is the tableau color map
         :return: None
         """
+        color_map = color_map or TABLEAU_COLORS.keys()
         if trial_events is None:
             # Default trial events to plot as vertical lines
             trial_events = [
                 'goCue_times',
                 'goCueTrigger_times',
-                'errorCue_times',
-                'valveOpen_times',
+                'feedback_times',
                 'stimFreeze_times',
                 'stimOff_times',
                 'stimOn_times'
@@ -83,52 +86,66 @@ class QcFrame(TaskQC):
             'ymin': 0,
             'ymax': 3,
             'linewidth': 2,
-            'ax': display
+            'ax': axes
         }
 
-        bnc1 = self.extractor.BNC1
-        bnc2 = self.extractor.BNC2
+        bnc1 = self.extractor.frame_ttls
+        bnc2 = self.extractor.audio_ttls
         trial_data = self.extractor.data
 
-        plots.squares(bnc1['times'], bnc1['polarities'] * 0.4 + 1, ax=display, color='k')
-        plots.squares(bnc2['times'], bnc2['polarities'] * 0.4 + 2, ax=display, color='k')
-        linestyles = random.choices(('-', '--', '-.', ':'), k=len(trial_events))
-        for event, c, l in zip(trial_events, cycle(TABLEAU_COLORS.keys()), linestyles):
+        plots.squares(bnc1['times'], bnc1['polarities'] * 0.4 + 1, ax=axes, color='k')
+        plots.squares(bnc2['times'], bnc2['polarities'] * 0.4 + 2, ax=axes, color='k')
+        linestyle = random.choices(('-', '--', '-.', ':'), k=len(trial_events))
+        for event, c, l in zip(trial_events, cycle(color_map), linestyle):
             plots.vertical_lines(trial_data[event], label=event, color=c, linestyle=l, **plot_args)
-        display.legend()
-        display.set_yticklabels(['', 'frame2ttl', 'sound', ''])
-        display.set_yticks([0, 1, 2, 3])
-        display.set_ylim([0, 3])
+        axes.legend()
+        axes.set_yticklabels(['', 'frame2ttl', 'sound', ''])
+        axes.set_yticks([0, 1, 2, 3])
+        axes.set_ylim([0, 3])
 
-        if wheel_display:
+        if wheel_axes:
             wheel_plot_args = {
-                'ax': wheel_display,
+                'ax': wheel_axes,
                 'ymin': self.wheel_data['re_pos'].min(),
                 'ymax': self.wheel_data['re_pos'].max()}
             plot_args = {**plot_args, **wheel_plot_args}
 
-            wheel_display.plot(self.wheel_data['re_ts'], self.wheel_data['re_pos'], 'k-x')
-            for event, c, l in zip(trial_events, cycle(TABLEAU_COLORS.keys()), linestyles):
+            wheel_axes.plot(self.wheel_data['re_ts'], self.wheel_data['re_pos'], 'k-x')
+            for event, c, ln in zip(trial_events, cycle(color_map), linestyle):
                 plots.vertical_lines(trial_data[event],
-                                     label=event, color=c, linestyle=l, **plot_args)
+                                     label=event, color=c, linestyle=ln, **plot_args)
 
 
 if __name__ == "__main__":
-    # https://docs.google.com/document/d/1X-ypFEIxqwX6lU9pig4V_zrcR5lITpd8UJQWzW9I9zI/edit#
+    """Run TaskQC viewer with wheel data
+    For information on the QC checks see the QC Flags & failures document:
+    https://docs.google.com/document/d/1X-ypFEIxqwX6lU9pig4V_zrcR5lITpd8UJQWzW9I9zI/edit#
+    """
+    # Parse parameters
     parser = argparse.ArgumentParser(description='Quick viewer to see the behaviour data from'
                                                  'choice world sessions.')
     parser.add_argument('session', help='session uuid')
     parser.add_argument('--bpod', action='store_true', help='run QC on Bpod data only (no FPGA)')
     args = parser.parse_args()  # returns data from the options specified (echo)
-
-    WHEEL = True
+    event_map = {'goCue_times': '#2ca02c',  # green
+                 'goCueTrigger_times': '#2ca02c',  # green
+                 'errorCue_times': '#d62728',  # red
+                 'errorCueTrigger_times': '#d62728',  # red
+                 'valveOpen_times': '#17becf',  # cyan
+                 'stimFreeze_times': '#e377c2',  # pink
+                 'stimOff_times': '#e377c2',  # pink
+                 'stimOffTrigger_times': '#e377c2',  # pink
+                 'stimOn_times': '#e377c2',  # pink
+                 'stimOnTrigger_times': '#e377c2',  # pink
+                 'response_times': '#8c564b',  # brown
+                 }
+    # Run QC and plot
     qc = QcFrame(args.session, bpod_only=args.bpod)
-    if WHEEL:
-        w = ViewEphysQC.viewqc(wheel=qc.wheel_data)
-        qc.create_plots(w.wplot.canvas.ax, wheel_display=w.wplot.canvas.ax2)
-    else:
-        w = ViewEphysQC.viewqc()
-        qc.create_plots(w.wplot.canvas.ax)
-
+    w = ViewEphysQC.viewqc(wheel=qc.wheel_data)
+    qc.create_plots(w.wplot.canvas.ax,
+                    wheel_axes=w.wplot.canvas.ax2,
+                    trial_events=event_map.keys(),
+                    color_map=event_map.values())
+    # Update table and callbacks
     w.update_df(qc.frame)
     qt.run_app()
