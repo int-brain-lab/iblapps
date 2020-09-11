@@ -482,7 +482,5 @@ class FilterGroup:
             else:
                 but.setChecked(False)
 
-        
-
         return stim_contrast, case, sort_method
 

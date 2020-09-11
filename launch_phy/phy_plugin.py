@@ -119,6 +119,7 @@ class IBLMetricsPlugin(IPlugin):
             ts = controller.get_spike_times(cluster_id).data
             amps = controller.get_amplitudes(cluster_id).data
             metrics_label = int(FP_RP(ts) and noise_cutoff(amps, quartile_length=.25) < 20)
+            return metrics_label
             # if amplitudes are correct (i.e. raw data or sample wfs exist):
             #metrics_label = (FP_RP(ts) and noise_cutoff(amps,quartile_length=.25)<20 and np.mean(amps)>50)
 

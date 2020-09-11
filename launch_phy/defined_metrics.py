@@ -32,15 +32,20 @@ def FP_RP(ts):
 
     thresh = 0.2
     acceptThresh=0.1
-    if(len(ts)>0 and ts[-1]>ts[0]):
+    if(len(ts)>0 and ts[-1]>ts[0]): #only do this for units with samples
         recDur = (ts[-1]-ts[0])
-        fr = len(ts)/recDur
+        c0 = correlograms(ts,np.zeros(len(ts),dtype='int8'),cluster_ids=[0],bin_size=binSize/1000,sample_rate=20000,window_size=2,symmetrize=False) #compute acg
+        cumsumc0 = np.cumsum(c0[0,0,:]) #cumulative sum of acg, i.e. number of total spikes occuring from 0 to end of that bin
+        res = cumsumc0[bTestIdx] #cumulative sum at each of the testing bins
+        total_spike_count = len(ts)
+
+        bin_count_normalized = c0[0,0]/total_spike_count/binSize*1000 #divide each bin's count by the unit's total spike count and the bin size
+        num_bins_2s = len(c0[0,0]) #number of total bins that equal 2 seconds
+        num_bins_1s = int(num_bins_2s/2) #number of bins that equal 1 second
+        fr = np.sum(bin_count_normalized[num_bins_1s:num_bins_2s])/num_bins_1s #compute fr based on the  mean of bin_count_normalized from 1 to 2 s instead of as before (len(ts)/recDur) for a better estimate
         mfunc =np.vectorize(max_acceptable_cont)
-        m = mfunc(fr,bTest,recDur,fr*acceptThresh,thresh)
-        c0 = correlograms(ts,np.zeros(len(ts),dtype='int8'),cluster_ids=[0],bin_size=binSize/1000,sample_rate=20000,window_size=.05,symmetrize=False)
-        cumsumc0 = np.cumsum(c0[0,0,:])
-        res = cumsumc0[bTestIdx]
-        didpass = int(np.any(np.less_equal(res,m)))
+        m = mfunc(fr,bTest,recDur,fr*acceptThresh,thresh) #compute the maximum allowed number of spikes per testing bin
+        didpass = int(np.any(np.less_equal(res,m))) #did the unit pass (resulting number of spikes less than maximum allowed spikes) at any of the testing bins?
     else:
         didpass=0
 
