@@ -60,7 +60,8 @@ class QcFrame(TaskQC):
         self.frame['intervals_1'] = self.extractor.data['intervals'][:, 1]
         self.frame.insert(loc=0, column='trial_no', value=self.frame.index)
 
-    def create_plots(self, axes, wheel_axes=None, trial_events=None, color_map=None):
+    def create_plots(self, axes, wheel_axes=None, trial_events=None, color_map=None,
+                     line_style=None):
         """
         Plots the data for bnc1 (sound) and bnc2 (frame2ttl)
         :param axes: An axes handle on which to plot the TTL events
@@ -68,6 +69,7 @@ class QcFrame(TaskQC):
         :param trial_events: A list of Bpod trial events to plot, e.g. ['stimFreeze_times'],
         if None, valve, sound and stimulus events are plotted
         :param color_map: A color map to use for the events, default is the tableau color map
+        line_style: A line style map to use for the events, default is random.
         :return: None
         """
         color_map = color_map or TABLEAU_COLORS.keys()
@@ -95,7 +97,10 @@ class QcFrame(TaskQC):
 
         plots.squares(bnc1['times'], bnc1['polarities'] * 0.4 + 1, ax=axes, color='k')
         plots.squares(bnc2['times'], bnc2['polarities'] * 0.4 + 2, ax=axes, color='k')
-        linestyle = random.choices(('-', '--', '-.', ':'), k=len(trial_events))
+        if line_style is None:
+            linestyle = random.choices(('-', '--', '-.', ':'), k=len(trial_events))
+        else:
+            linestyle = line_style
         for event, c, l in zip(trial_events, cycle(color_map), linestyle):
             plots.vertical_lines(trial_data[event], label=event, color=c, linestyle=l, **plot_args)
         axes.legend()
@@ -127,25 +132,32 @@ if __name__ == "__main__":
     parser.add_argument('session', help='session uuid')
     parser.add_argument('--bpod', action='store_true', help='run QC on Bpod data only (no FPGA)')
     args = parser.parse_args()  # returns data from the options specified (echo)
-    event_map = {'goCue_times': '#2ca02c',  # green
-                 'goCueTrigger_times': '#2ca02c',  # green
-                 'errorCue_times': '#d62728',  # red
-                 'errorCueTrigger_times': '#d62728',  # red
-                 'valveOpen_times': '#17becf',  # cyan
-                 'stimFreeze_times': '#e377c2',  # pink
-                 'stimOff_times': '#e377c2',  # pink
-                 'stimOffTrigger_times': '#e377c2',  # pink
-                 'stimOn_times': '#e377c2',  # pink
-                 'stimOnTrigger_times': '#e377c2',  # pink
-                 'response_times': '#8c564b',  # brown
+    event_map = {'goCue_times': ['#2ca02c', '-'],  # green
+                 'goCueTrigger_times': ['#2ca02c', '--'],  # green
+                 'errorCue_times': ['#d62728', '-'],  # red
+                 'errorCueTrigger_times': ['#d62728', '--'],  # red
+                 'valveOpen_times': ['#17becf', '-'],  # cyan
+                 'stimFreeze_times': ['#0000ff', ':'],  # blue
+                 'stimOff_times': ['#9400d3', '-'],  # dark violet
+                 'stimOffTrigger_times': ['#9400d3', '--'],  # dark violet
+                 'stimOn_times': ['#e377c2', '-'],  # pink
+                 'stimOnTrigger_times': ['#e377c2', '--'],  # pink
+                 'response_times': ['#8c564b', '-'],  # brown
                  }
+    color_map_ev = []
+    line_style_ev = []
+    for v in event_map.values():
+        color_map_ev.append(v[0])
+        line_style_ev.append(v[1])
+
     # Run QC and plot
     qc = QcFrame(args.session, bpod_only=args.bpod)
     w = ViewEphysQC.viewqc(wheel=qc.wheel_data)
     qc.create_plots(w.wplot.canvas.ax,
                     wheel_axes=w.wplot.canvas.ax2,
                     trial_events=event_map.keys(),
-                    color_map=event_map.values())
+                    color_map=color_map_ev,
+                    line_style=line_style_ev)
     # Update table and callbacks
     w.update_df(qc.frame)
     qt.run_app()
