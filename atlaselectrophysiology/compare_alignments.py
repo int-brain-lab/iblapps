@@ -12,7 +12,9 @@ one = ONE()
 
 fig_path = Path('C:/Users/Mayo/Documents/PYTHON/alignment_figures/')
 # Find eid of interest
-aligned_sess = one.alyx.rest('trajectories', 'list', provenance='Ephys aligned histology track')
+aligned_sess = one.alyx.rest('trajectories', 'list', provenance='Ephys aligned histology track',
+                             django='probe_insertion__session__project__name__icontains,ibl_neuropixel_brainwide_01,'
+                                    'probe_insertion__session__qc__lt,30')
 eids = np.array([s['session']['id'] for s in aligned_sess])
 probes = np.array([s['probe_name'] for s in aligned_sess])
 
@@ -117,13 +119,7 @@ for eid, probe_label in zip(eid_several, probe_several):
         plot_scaling(region_scaled, scale_factor, mapper, ax_i)
         ax_i.set_title(user + '\n Avg dist = ' + str(np.around(avg_dist * 1e6, 2)))
 
-
     fig.suptitle(subject + '_' + str(date) + '_' + probe_label, fontsize=16)
     plt.show()
     fig.savefig(fig_path.joinpath(subject + '_' + str(date) + '_' + probe_label + '.png'), dpi=600)
     plt.close(fig)
-
-
-
-
-
