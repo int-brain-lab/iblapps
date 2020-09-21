@@ -103,7 +103,8 @@ class QcFrame(TaskQC):
             linestyle = line_style
         for event, c, l in zip(trial_events, cycle(color_map), linestyle):
             plots.vertical_lines(trial_data[event], label=event, color=c, linestyle=l, **plot_args)
-        axes.legend()
+
+        axes.legend(loc='upper left', fontsize='xx-small', bbox_to_anchor=(1, 0.5))
         axes.set_yticklabels(['', 'frame2ttl', 'sound', ''])
         axes.set_yticks([0, 1, 2, 3])
         axes.set_ylim([0, 3])
