@@ -46,8 +46,8 @@ class TopView(QtWidgets.QMainWindow):
         line_kwargs = {'movable': True, 'pen': pg.mkPen((0, 255, 0), width=3)}
         self.line_coronal = pg.InfiniteLine(angle=0, pos=0, **line_kwargs)
         self.line_sagittal = pg.InfiniteLine(angle=90, pos=0, **line_kwargs)
-        self.line_coronal.sigPositionChangeFinished.connect(self.coronal_line_moved)
-        self.line_sagittal.sigPositionChangeFinished.connect(self.sagittal_line_moved)
+        self.line_coronal.sigDragged.connect(self.coronal_line_moved)  # sigPositionChangeFinished
+        self.line_sagittal.sigDragged.connect(self.sagittal_line_moved)
         self.plotItem_topview.addItem(self.line_coronal)
         self.plotItem_topview.addItem(self.line_sagittal)
         # connect signals and slots
@@ -189,7 +189,7 @@ class Controller(PgImageController):
         dh = self.atlas.bc.dxyz[haxis]
         wl = self.atlas.bc.lim(waxis) - dw / 2
         hl = self.atlas.bc.lim(haxis) - dh / 2
-        fig.ctrl.set_image(self.atlas.slice(coord, axis=daxis), dw, dh, wl[0], hl[0])
+        fig.ctrl.set_image(self.atlas.slice(coord, axis=daxis, mode='clip'), dw, dh, wl[0], hl[0])
         fig.ctrl.slice_coord = coord
 
     def set_top(self):
