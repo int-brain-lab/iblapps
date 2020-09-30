@@ -1,8 +1,13 @@
-import sys  # We need sys so that we can pass argv to QApplication
+"""
+TopView is the main Widget with the related Controller Class
+There are several SliceView windows (sagittal, coronal, possibly tilted etc...) that each have
+a SliceController object
+The underlying data model object is an ibllib.atlas.AllenAtlas object
+"""
 from pathlib import Path
 
 import numpy as np
-from PyQt5 import QtWidgets, QtCore, uic
+from PyQt5 import QtWidgets, uic
 from PyQt5.QtGui import QTransform
 import pyqtgraph as pg
 
@@ -10,45 +15,85 @@ from ibllib.atlas import AllenAtlas
 import qt
 
 
-class AtlasView(QtWidgets.QMainWindow):
-
+class TopView(QtWidgets.QMainWindow):
+    """
+    Main Window of the application.
+    This is a top view of the brain with 2 movable lines allowing to select sagittal and coronal
+    slices.
+    """
     @staticmethod
     def _instances():
         app = QtWidgets.QApplication.instance()
-        return [w for w in app.topLevelWidgets() if isinstance(w, AtlasView)]
+        return [w for w in app.topLevelWidgets() if isinstance(w, TopView)]
 
     @staticmethod
     def _get_or_create(title=None):
         av = next(filter(lambda e: e.isVisible() and e.windowTitle() == title,
-                      AtlasView._instances()), None)
+                      TopView._instances()), None)
         if av is None:
-            av = AtlasView()
+            av = TopView()
             av.setWindowTitle(title)
         return av
 
-    def __init__(self, *args, **kwargs):
-        super(AtlasView, self).__init__(*args, **kwargs)
+    def __init__(self):
+        super(TopView, self).__init__()
         self.ctrl = Controller(self)
-        uic.loadUi(Path(__file__).parent.joinpath('atlasview.ui'), self)
-        # init the seismic density display
+        uic.loadUi(Path(__file__).parent.joinpath('topview.ui'), self)
+        self.plotItem_topview.setAspectLocked(True)
+        self.imageItem = pg.ImageItem()
+        self.plotItem_topview.addItem(self.imageItem)
+        # setup one horizontal and one vertical line that can be moved
+        line_kwargs = {'movable': True, 'pen': pg.mkPen((0, 255, 0), width=3)}
+        self.line_coronal = pg.InfiniteLine(angle=0, pos=0, **line_kwargs)
+        self.line_sagittal = pg.InfiniteLine(angle=90, pos=0, **line_kwargs)
+        self.line_coronal.sigPositionChangeFinished.connect(self.coronal_line_moved)
+        self.line_sagittal.sigPositionChangeFinished.connect(self.sagittal_line_moved)
+        self.plotItem_topview.addItem(self.line_coronal)
+        self.plotItem_topview.addItem(self.line_sagittal)
+        # connect signals and slots
+        s = self.plotItem_topview.getViewBox().scene()
+        self.proxy = pg.SignalProxy(s.sigMouseMoved, rateLimit=60, slot=self.mouseMoveEvent)
+        self.ctrl.set_top()
+
+    def coronal_line_moved(self):
+        self.ctrl.set_slice(self.ctrl.fig_coronal , self.line_coronal.value())
+
+    def sagittal_line_moved(self):
+        self.ctrl.set_slice(self.ctrl.fig_sagittal, self.line_sagittal.value())
+
+    def mouseMoveEvent(self, scenepos):
+        if isinstance(scenepos, tuple):
+            scenepos = scenepos[0]
+        else:
+            return
+        pass
+        # qpoint = self.imageItem.mapFromScene(scenepos)
+
+
+class SliceView(QtWidgets.QWidget):
+    """
+    Window containing a volume slice
+    """
+
+    def __init__(self, topview: TopView, waxis, haxis, daxis):
+        super(SliceView, self).__init__()
+        self.topview = topview
+        self.ctrl = SliceController(self, waxis, haxis, daxis)
+        uic.loadUi(Path(__file__).parent.joinpath('sliceview.ui'), self)
+        # init the image display
         self.plotItem_slice.setAspectLocked(True)
-        # self.plotItem_slice.invertY()
-        self.imageItem_slice = pg.ImageItem()
-        self.plotItem_slice.addItem(self.imageItem_slice)
+        self.imageItem = pg.ImageItem()
+        self.plotItem_slice.addItem(self.imageItem)
         # connect signals and slots
         s = self.plotItem_slice.getViewBox().scene()
         self.proxy = pg.SignalProxy(s.sigMouseMoved, rateLimit=60, slot=self.mouseMoveEvent)
         s.sigMouseClicked.connect(self.mouseClick)
         # self.comboBox_layer.activated[str].connect(self.ctrl.set_layer)
-    """
-    View Methods
-    """
+
     def closeEvent(self, event):
         self.destroy()
 
     def keyPressEvent(self, e):
-        """
-        """
         pass
 
     def mouseClick(self, event):
@@ -63,27 +108,36 @@ class AtlasView(QtWidgets.QMainWindow):
             scenepos = scenepos[0]
         else:
             return
-        qpoint = self.imageItem_slice.mapFromScene(scenepos)
-        iw, _, v, w, h = self.ctrl.cursor2timetraceamp(qpoint)
-        self.label_x.setText(f"{iw:.0f}")
-        self.label_t.setText(f"{h:.4f}")
-        self.label_amp.setText(f"{v:2.2E}")
-        self.label_h.setText(f"{w:.4f}")
+        qpoint = self.imageItem.mapFromScene(scenepos)
+        iw, ih, w, h, v, region = self.ctrl.cursor2xyamp(qpoint)
+        self.label_x.setText(f"{w:.4f}")
+        self.label_y.setText(f"{h:.4f}")
+        self.label_ix.setText(f"{iw:.0f}")
+        self.label_iy.setText(f"{ih:.0f}")
+        self.label_v.setText(f"{v:.4f}")
+        if region is None:
+            self.label_region.setText("")
+            self.label_acronym.setText("")
+        else:
+            self.label_region.setText(region['name'][0])
+            self.label_acronym.setText(region['acronym'][0])
 
 
-class Controller:
-
-    def __init__(self, view, res=25):
-        self.view = view
-        self.atlas = AllenAtlas(res)
+class PgImageController:
+    """
+    Abstract class that implements mapping from axes to voxels for any window.
+    Not instantiated directly.
+    """
+    def __init__(self, win, res=25):
+        self.qwidget = win
         self.transform = None  # affine transform image indices 2 data domain
 
-    def cursor2timetraceamp(self, qpoint):
+    def cursor2xyamp(self, qpoint):
         """Used for the mouse hover function over image display"""
         iw, ih = self.cursor2ind(qpoint)
         v = self.im[iw, ih]
         w, h, _ = np.matmul(self.transform, np.array([iw, ih, 1]))
-        return iw, ih, v, w, h
+        return iw, ih, w, h, v
 
     def cursor2ind(self, qpoint):
         """ image coordinates over the image display"""
@@ -91,39 +145,97 @@ class Controller:
         ih = np.max((0, np.min((int(np.round(qpoint.y())), self.nh - 1))))
         return iw, ih
 
-    def set_slice(self, ap=0):
+    def set_image(self, im, dw, dh, w0, h0):
         """
-        data is a 2d array [ntr, nsamples]
-        if 3d the first dimensions are merged in ntr and the last is nsamples
-        update_data(self, data=None, h=0.002, gain=None)
+        :param im:
+        :param dw:
+        :param dh:
+        :param w0:
+        :param h0:
+        :return:
         """
-        ## coronal slice
-        daxis = 1  # depth axis is ap
-        waxis = 0  # width axis is ml
-        haxis = 2  # height axis is dv
-        self.im = self.atlas.slice(ap, axis=daxis)
+        self.im = im
         self.nw, self.nh = self.im.shape
-        self.view.imageItem_slice.setImage(self.im)
+        self.qwidget.imageItem.setImage(self.im)
+        transform = [dw, 0., 0., 0., dh, 0., w0, h0, 1.]
+        self.transform = np.array(transform).reshape((3, 3)).T
+        self.qwidget.imageItem.setTransform(QTransform(*transform))
+        # self.view.plotItem.setLimits(xMin=wl[0], xMax=wl[1], yMin=hl[0], yMax=hl[1])
 
+
+class Controller(PgImageController):
+    """
+    TopView Controller
+    """
+    def __init__(self, qmain: TopView, res=25):
+        super(Controller, self).__init__(qmain)
+        self.atlas = AllenAtlas(res)
+        self.fig_top = self.qwidget = qmain
+        # Setup Coronal slice: width: ml, height: dv, depth: ap
+        self.fig_coronal = SliceView(qmain, waxis=0, haxis=2, daxis=1)
+        self.fig_coronal.setWindowTitle('Coronal Slice')
+        self.set_slice(self.fig_coronal)
+        self.fig_coronal.show()
+        # Setup Sagittal slice: width: ap, height: dv, depth: ml
+        self.fig_sagittal = SliceView(qmain, waxis=1, haxis=2, daxis=0)
+        self.fig_sagittal.setWindowTitle('Sagittal Slice')
+        self.set_slice(self.fig_sagittal)
+        self.fig_sagittal.show()
+
+    def set_slice(self, fig, coord=0):
+        waxis, haxis, daxis = (fig.ctrl.waxis, fig.ctrl.haxis, fig.ctrl.daxis)
         # construct the transform matrix image 2 ibl coordinates
         dw = self.atlas.bc.dxyz[waxis]
         dh = self.atlas.bc.dxyz[haxis]
         wl = self.atlas.bc.lim(waxis) - dw / 2
         hl = self.atlas.bc.lim(haxis) - dh / 2
+        fig.ctrl.set_image(self.atlas.slice(coord, axis=daxis), dw, dh, wl[0], hl[0])
+        fig.ctrl.slice_coord = coord
 
-        transform = [dw, 0., 0., 0., dh, 0., wl[0], hl[0], 1.]
-        self.transform = np.array(transform).reshape((3, 3)).T
-        self.view.imageItem_slice.setTransform(QTransform(*transform))
-        # self.view.plotItem_slice.setLimits(xMin=wl[0], xMax=wl[1], yMin=hl[0], yMax=hl[1])
+    def set_top(self):
+        img = self.atlas.top.transpose()
+        img[np.isnan(img)] = np.nanmin(img)  # img has dims ml, ap
+        dw, dh = (self.atlas.bc.dxyz[0], self.atlas.bc.dxyz[1])
+        wl, hl = (self.atlas.bc.xlim, self.atlas.bc.ylim)
+        self.set_image(img, dw, dh, wl[0], hl[0])
+        # self.qwidget.line_coronal.setData(x=wl, y=wl * 0, pen=pg.mkPen((0, 255, 0), width=3))
+        # self.qwidget.line_sagittal.setData(x=hl * 0, y=hl, pen=pg.mkPen((0, 255, 0), width=3))
 
 
-def viewatlas(res=25, title=None):
+class SliceController(PgImageController):
+
+    def __init__(self, fig, waxis=None, haxis=None, daxis=None):
+        """
+        :param waxis: brain atlas axis corresponding to display abscissa (coronal: 0, sagittal: 1)
+        :param haxis: brain atlas axis corresponding to display ordinate (coronal: 2, sagittal: 2)
+        :param daxis: brain atlas axis corresponding to display abscissa (coronal: 1, sagittal: 0)
+        """
+        super(SliceController, self).__init__(fig)
+        self.waxis = waxis
+        self.haxis = haxis
+        self.daxis = daxis
+
+    def cursor2xyamp(self, qpoint):
+        """
+        Extends the superclass method to also get the brain region from the model
+        :param qpoint:
+        :return:
+        """
+        iw, ih, w, h, v = super(SliceController, self).cursor2xyamp(qpoint)
+        ba = self.qwidget.topview.ctrl.atlas
+        xyz = np.zeros(3)
+        xyz[np.array([self.waxis, self.haxis, self.daxis])] = [w, h, self.slice_coord]
+        try:
+            region = ba.regions.get(ba.get_labels(xyz))
+        except ValueError:
+            region = None
+        return iw, ih, w, h, v, region
+
+
+def view(res=25, title=None):
     """
     """
     qt.create_app()
-    av = AtlasView._get_or_create(title=title)
-    if av is not None:
-        av.ctrl.set_slice()
+    av = TopView._get_or_create(title=title)
     av.show()
     return av
-
