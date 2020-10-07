@@ -1,0 +1,4 @@
+ibllib>=1.5.12
+pyqt5
+pyqtgraph==0.10.0
+simpleITK
