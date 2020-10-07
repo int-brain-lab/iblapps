@@ -17,6 +17,25 @@ from ibllib.qc.task_extractors import TaskQCExtractor
 
 from task_qc_viewer import ViewEphysQC
 
+EVENT_MAP = {'goCue_times': ['#2ca02c', '-'],  # green
+             'goCueTrigger_times': ['#2ca02c', '--'],  # green
+             'errorCue_times': ['#d62728', '-'],  # red
+             'errorCueTrigger_times': ['#d62728', '--'],  # red
+             'valveOpen_times': ['#17becf', '-'],  # cyan
+             'stimFreeze_times': ['#0000ff', ':'],  # blue
+             'stimOff_times': ['#9400d3', '-'],  # dark violet
+             'stimOffTrigger_times': ['#9400d3', '--'],  # dark violet
+             'stimOn_times': ['#e377c2', '-'],  # pink
+             'stimOnTrigger_times': ['#e377c2', '--'],  # pink
+             'response_times': ['#8c564b', '-'],  # brown
+             }
+
+color_map_ev = []
+line_style_ev = []
+for v in EVENT_MAP.values():
+    color_map_ev.append(v[0])
+    line_style_ev.append(v[1])
+
 one = ONE()
 
 _logger = logging.getLogger('ibllib')
@@ -136,6 +155,27 @@ class QcFrame(TaskQC):
                                      label=event, color=c, linestyle=ln, **plot_args)
 
 
+def show_session_task_qc(session=None, bpod_only=False, local=False):
+    """
+    Displays the task QC for a given session
+    :param session: session_path
+    :param bpod_only: (no FPGA)
+    :param local: set True for local extraction
+    :return:
+    """
+    # Run QC and plot
+    qc = QcFrame(session, bpod_only=bpod_only, local=local)
+    w = ViewEphysQC.viewqc(wheel=qc.wheel_data)
+    qc.create_plots(w.wplot.canvas.ax,
+                    wheel_axes=w.wplot.canvas.ax2,
+                    trial_events=EVENT_MAP.keys(),
+                    color_map=color_map_ev,
+                    line_style=line_style_ev)
+    # Update table and callbacks
+    w.update_df(qc.frame)
+    qt.run_app()
+
+
 if __name__ == "__main__":
     """Run TaskQC viewer with wheel data
     For information on the QC checks see the QC Flags & failures document:
@@ -150,32 +190,5 @@ if __name__ == "__main__":
     parser.add_argument('--bpod', action='store_true', help='run QC on Bpod data only (no FPGA)')
     parser.add_argument('--local', action='store_true', help='run from disk location (local server')
     args = parser.parse_args()  # returns data from the options specified (echo)
-    event_map = {'goCue_times': ['#2ca02c', '-'],  # green
-                 'goCueTrigger_times': ['#2ca02c', '--'],  # green
-                 'errorCue_times': ['#d62728', '-'],  # red
-                 'errorCueTrigger_times': ['#d62728', '--'],  # red
-                 'valveOpen_times': ['#17becf', '-'],  # cyan
-                 'stimFreeze_times': ['#0000ff', ':'],  # blue
-                 'stimOff_times': ['#9400d3', '-'],  # dark violet
-                 'stimOffTrigger_times': ['#9400d3', '--'],  # dark violet
-                 'stimOn_times': ['#e377c2', '-'],  # pink
-                 'stimOnTrigger_times': ['#e377c2', '--'],  # pink
-                 'response_times': ['#8c564b', '-'],  # brown
-                 }
-    color_map_ev = []
-    line_style_ev = []
-    for v in event_map.values():
-        color_map_ev.append(v[0])
-        line_style_ev.append(v[1])
 
-    # Run QC and plot
-    qc = QcFrame(args.session, bpod_only=args.bpod, local=args.local)
-    w = ViewEphysQC.viewqc(wheel=qc.wheel_data)
-    qc.create_plots(w.wplot.canvas.ax,
-                    wheel_axes=w.wplot.canvas.ax2,
-                    trial_events=event_map.keys(),
-                    color_map=color_map_ev,
-                    line_style=line_style_ev)
-    # Update table and callbacks
-    w.update_df(qc.frame)
-    qt.run_app()
+    show_session_task_qc(session=args.session, bpod_only=args.bpod, local=args.local)
