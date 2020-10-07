@@ -11,7 +11,10 @@ from matplotlib.colors import TABLEAU_COLORS
 
 from oneibl.one import ONE
 import ibllib.plots as plots
+from ibllib.io.extractors import ephys_fpga
 from ibllib.qc.task_metrics import TaskQC
+from ibllib.qc.task_extractors import TaskQCExtractor
+
 from task_qc_viewer import ViewEphysQC
 
 one = ONE()
@@ -20,15 +23,26 @@ _logger = logging.getLogger('ibllib')
 
 
 class QcFrame(TaskQC):
-    def __init__(self, session_path, bpod_only=False):
+
+    def __init__(self, session_path, bpod_only=False, local=False):
         """
         Loads and extracts the QC data for a given session path
         :param session_path: A str or Path to a Bpod session
         :param bpod_only: When True all data is extracted from Bpod instead of FPGA for ephys
         """
         super().__init__(session_path, one=one, log=_logger)
-        self.load_data(bpod_only=bpod_only)
-        self.compute()
+
+        if local:
+            dsets, out_files = ephys_fpga.extract_all(session_path, save=True)
+            self.extractor = TaskQCExtractor(session_path, lazy=True, one=one)
+            # Extract extra datasets required for QC
+            self.extractor.data = dsets
+            self.extractor.extract_data(partial=True)
+            # Aggregate and update Alyx QC fields
+            self.run(update=True)
+        else:
+            self.load_data(bpod_only=bpod_only)
+            self.compute()
         self.n_trials = self.extractor.data['intervals'].shape[0]
         self.wheel_data = {'re_pos': self.extractor.data.pop('wheel_position'),
                            're_ts': self.extractor.data.pop('wheel_timestamps')}
@@ -126,12 +140,15 @@ if __name__ == "__main__":
     """Run TaskQC viewer with wheel data
     For information on the QC checks see the QC Flags & failures document:
     https://docs.google.com/document/d/1X-ypFEIxqwX6lU9pig4V_zrcR5lITpd8UJQWzW9I9zI/edit#
+    ipython task_qc.py c9fec76e-7a20-4da4-93ad-04510a89473b
+    ipython task_qc.py /datadisk/Data/IntegrationTests/ephys/choice_world_init/KS022/2019-12-10/001 --local
     """
     # Parse parameters
     parser = argparse.ArgumentParser(description='Quick viewer to see the behaviour data from'
                                                  'choice world sessions.')
     parser.add_argument('session', help='session uuid')
     parser.add_argument('--bpod', action='store_true', help='run QC on Bpod data only (no FPGA)')
+    parser.add_argument('--local', action='store_true', help='run from disk location (local server')
     args = parser.parse_args()  # returns data from the options specified (echo)
     event_map = {'goCue_times': ['#2ca02c', '-'],  # green
                  'goCueTrigger_times': ['#2ca02c', '--'],  # green
@@ -152,7 +169,7 @@ if __name__ == "__main__":
         line_style_ev.append(v[1])
 
     # Run QC and plot
-    qc = QcFrame(args.session, bpod_only=args.bpod)
+    qc = QcFrame(args.session, bpod_only=args.bpod, local=args.local)
     w = ViewEphysQC.viewqc(wheel=qc.wheel_data)
     qc.create_plots(w.wplot.canvas.ax,
                     wheel_axes=w.wplot.canvas.ax2,
