@@ -385,7 +385,7 @@ class LoadData:
 
         if len(self.alignments) < 2:
             align_qc = base.QC(self.probe_id, one=self.one, endpoint='insertions')
-            align_qc.update_extended_qc({'_aligmnent_number': len(self.alignments),
+            align_qc.update_extended_qc({'_alignment_number': len(self.alignments),
                                          '_alignment_stored': self.current_align})
         else:
             align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
@@ -393,15 +393,24 @@ class LoadData:
                                depths=self.chn_depths, cluster_chns=self.cluster_chns)
             _, results = align_qc.run(update=True)
 
-        if results['_alignment_stored'] !=
-
-
+        # We need to upload the stored channels on alyx to a correct alignment
+        if results['_alignment_stored'] != self.current_align:
+            feature = np.array(self.alignments[results['_alignment_stored']][0])
+            track = np.array(self.alignments[results['_alignment_stored']][1])
+            ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
+                                        track_prev=track,
+                                        feature_prev=feature,
+                                        brain_atlas=self.brain_atlas)
+            xyz_channels = ephysalign.get_channel_locations(feature, track)
+            self.upload_data(xyz_channels)
 
     def delete_data(self):
         """
         Delete a user alignment from alyx
 
         """
+        if self.resolved:
+            print('Cannot delete this trajectory as this alignment has been resolved')
         # Cannot delete original trajectory
         if self.current_align == 'original':
             print('Cannot delete original trajectory')
