@@ -3,6 +3,8 @@ from datetime import datetime
 import ibllib.pipes.histology as histology
 from ibllib.pipes.ephys_alignment import EphysAlignment
 import ibllib.atlas as atlas
+from ibllib.qc import base
+from ibllib.qc.alignment_qc import AlignmentQC
 from oneibl.one import ONE
 from pathlib import Path
 import alf.io
@@ -199,6 +201,7 @@ class LoadData:
             'clusters.metrics',
             'clusters.peakToTrough',
             'clusters.waveforms',
+            'clusters.channels',
             '_iblqc_ephysTimeRms.rms',
             '_iblqc_ephysTimeRms.timestamps',
             '_iblqc_ephysSpectralDensity.freqs',
@@ -217,6 +220,7 @@ class LoadData:
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
         self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
         self.chn_depths = self.chn_coords[:, 1]
+        self.cluster_chns = np.load(Path(alf_path, 'clusters.channels.npy'))
 
         sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
         sess_notes = None
@@ -338,42 +342,35 @@ class LoadData:
 
         return description, region_lookup
 
-    def upload_data(self, feature, track, xyz_channels, overwrite=False):
+    def upload_data(self, xyz_channels):
 
-        if overwrite:
-            # Get the original stored trajectory
-            ephys_traj_prev = self.one.alyx.rest('trajectories', 'list',
-                                                 probe_insertion=self.probe_id,
-                                                 provenance='Ephys aligned histology track')
-            # Save the json field in memory
-            original_json = None
-            if np.any(ephys_traj_prev):
-                original_json = ephys_traj_prev[0]['json']
+        # Create new trajectory and overwrite previous one
+        insertion = atlas.Insertion.from_track(xyz_channels, self.brain_atlas)
+        brain_regions = self.brain_atlas.regions.get(self.brain_atlas.get_labels(xyz_channels))
+        brain_regions['xyz'] = xyz_channels
+        brain_regions['lateral'] = self.chn_coords[:, 0]
+        brain_regions['axial'] = self.chn_coords[:, 1]
+        assert np.unique([len(brain_regions[k]) for k in brain_regions]).size == 1
+        histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=self.one,
+                                         overwrite=True)
 
-            # Create new trajectory and overwrite previous one
-            insertion = atlas.Insertion.from_track(xyz_channels, self.brain_atlas)
-            brain_regions = self.brain_atlas.regions.get(self.brain_atlas.get_labels(xyz_channels))
-            brain_regions['xyz'] = xyz_channels
-            brain_regions['lateral'] = self.chn_coords[:, 0]
-            brain_regions['axial'] = self.chn_coords[:, 1]
-            assert np.unique([len(brain_regions[k]) for k in brain_regions]).size == 1
-            histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=self.one,
-                                             overwrite=overwrite)
+    def update_alignments(self, feature, track):
+        user = self.one._par.ALYX_LOGIN
+        date = datetime.now().replace(microsecond=0).isoformat()
+        data = {date + '_' + user: [feature.tolist(), track.tolist()]}
+        if self.alignments:
+            self.alignments.update(data)
+        else:
+            self.alignments = data
+        self.update_json(self.alignments)
 
-            # Get the new trajectoru
-            ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
-                                            provenance='Ephys aligned histology track')
-
-            name = self.one._par.ALYX_LOGIN
-            date = datetime.now().replace(microsecond=0).isoformat()
-            data = {date + '_' + name: [feature.tolist(), track.tolist()]}
-            if original_json:
-                original_json.update(data)
-            else:
-                original_json = data
-            patch_dict = {'json': original_json}
-            self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
-                               data=patch_dict)
+    def update_json(self, json_data):
+        # Get the new trajectory
+        ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+                                        provenance='Ephys aligned histology track')
+        patch_dict = {'json': json_data}
+        self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
+                           data=patch_dict)
 
     def upload_dj(self, align_qc, ephys_qc, ephys_desc):
         # Upload qc results to datajoint table
@@ -383,6 +380,22 @@ class LoadData:
         self.qc.insert1(dict(probe_insertion_uuid=self.insertion_id, user_name=user,
                         alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
                         allow_direct_insert=True, replace=True)
+
+    def update_qc(self):
+
+        if len(self.alignments) < 2:
+            align_qc = base.QC(self.probe_id, one=self.one, endpoint='insertions')
+            align_qc.update_extended_qc({'_aligmnent_number': len(self.alignments),
+                                         '_alignment_stored': self.current_align})
+        else:
+            align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
+            align_qc.load_data(prev_alignments=self.alignments, xyz_picks=self.xyz_picks,
+                               depths=self.chn_depths, cluster_chns=self.cluster_chns)
+            _, results = align_qc.run(update=True)
+
+        if results['_alignment_stored'] !=
+
+
 
     def delete_data(self):
         """
@@ -414,33 +427,18 @@ class LoadData:
             track = np.array(self.alignments[new_key][1])
             ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
                                         track_prev=track,
-                                        feature_prev=feature)
+                                        feature_prev=feature,
+                                        brain_atlas=self.brain_atlas)
             xyz_channels = ephysalign.get_channel_locations(feature, track)
-            overwrite = True
-            # Create new trajectory and overwrite previous one
-            insertion = atlas.Insertion.from_track(xyz_channels, self.brain_atlas)
-            brain_regions = self.brain_atlas.regions.get(self.brain_atlas.get_labels(xyz_channels))
-            brain_regions['xyz'] = xyz_channels
-            brain_regions['lateral'] = self.chn_coords[:, 0]
-            brain_regions['axial'] = self.chn_coords[:, 1]
-            histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=self.one,
-                                             overwrite=overwrite)
-            # Get the new trajectory
-            ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
-                                            provenance='Ephys aligned histology track')
+            self.upload_data(xyz_channels)
+            self.update_json(self.alignments)
 
-            patch_dict = {'json': self.alignments}
-            self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
-                               data=patch_dict)
         # If more than one alignment but latest alignment to delete no chosen, just need to update
         # json field
         else:
             self.alignments.pop(self.current_align)
-            patch_dict = {'json': self.alignments}
-            ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
-                                            provenance='Ephys aligned histology track')
-            self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
-                               data=patch_dict)
+            self.update_json(self.alignments)
+
 
 
 

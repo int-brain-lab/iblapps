@@ -1273,8 +1273,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                             "Save final channel locations?",
                                             QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
         if upload == QtGui.QMessageBox.Yes:
-            self.loaddata.upload_data(self.features[self.idx], self.track[self.idx],
-                                      self.xyz_channels, overwrite=True)
+            self.loaddata.upload_data(self.xyz_channels)
+            self.loaddata.update_alignments(self.features[self.idx], self.track[self.idx])
             QtGui.QMessageBox.information(self, 'Status', ("Electrode locations "
                                                            "succesfully saved"))
             self.prev_alignments = self.loaddata.get_previous_alignments()
