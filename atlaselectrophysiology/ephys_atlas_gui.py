@@ -1303,7 +1303,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.loaddata.delete_data()
             self.prev_alignments = self.loaddata.get_previous_alignments()
             self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-            self.loaddata.get_starting_alignment(0)
+            #self.loaddata.get_starting_alignment(0)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
         else:
             pass

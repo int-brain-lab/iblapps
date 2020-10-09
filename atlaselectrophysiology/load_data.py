@@ -2,6 +2,7 @@ import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
 from ibllib.pipes.ephys_alignment import EphysAlignment
+from ibllib.ephys.neuropixel import SITES_COORDINATES
 import ibllib.atlas as atlas
 from ibllib.qc import base
 from ibllib.qc.alignment_qc import AlignmentQC
@@ -11,17 +12,25 @@ import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 
-ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
+ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
 
 
 class LoadData:
-    def __init__(self):
+    def __init__(self, one=None, testing=False, probe_id=None):
 
-        from atlaselectrophysiology import qc_table
-        self.qc = qc_table.EphysQC()
-        self.one = ONE(base_url=ONE_BASE_URL)
-        self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
+        self.one = one or ONE(base_url=ONE_BASE_URL)
         self.brain_atlas = atlas.AllenAtlas(25)
+
+        if testing:
+            self.probe_id = probe_id
+            self.chn_coords = SITES_COORDINATES
+            self.chn_depths = SITES_COORDINATES[:, 1]
+        else:
+            from atlaselectrophysiology import qc_table
+            self.qc = qc_table.EphysQC()
+            self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
+            self.chn_coords = None
+            self.chn_depths = None
 
         # Initialise all variables that get assigned
         self.sess_with_hist = None
@@ -34,14 +43,13 @@ class LoadData:
         self.n_sess = None
         self.probe_label = None
         self.traj_id = None
-        self.probe_id = None
         self.date = None
         self.subj = None
         self.alignments = None
         self.prev_align = None
-        self.chn_coords = None
         self.sess_path = None
         self.allen_id = None
+        self.cluster_chns = None
 
     def get_subjects(self):
         """
@@ -107,6 +115,7 @@ class LoadData:
         return self.get_previous_alignments()
 
     def get_previous_alignments(self):
+
         # Looks for any previous alignments
         ephys_traj_prev = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                              provenance='Ephys aligned histology track')
@@ -252,10 +261,8 @@ class LoadData:
         :return xyz_picks: 3D coordinates of points relative to bregma
         :type: np.array(n_picks, 3)
         """
-        insertion = self.one.alyx.rest('insertions', 'list', session=self.eid,
-                                       name=self.probe_label)
-        self.insertion_id = insertion[0]['id']
-        self.xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
+        insertion = self.one.alyx.rest('insertions', 'read', id=self.probe_id)
+        self.xyz_picks = np.array(insertion['json']['xyz_picks']) / 1e6
 
         return self.xyz_picks
 
@@ -342,7 +349,7 @@ class LoadData:
 
         return description, region_lookup
 
-    def upload_data(self, xyz_channels):
+    def upload_data(self, xyz_channels, channels=True):
 
         # Create new trajectory and overwrite previous one
         insertion = atlas.Insertion.from_track(xyz_channels, self.brain_atlas)
@@ -352,12 +359,16 @@ class LoadData:
         brain_regions['axial'] = self.chn_coords[:, 1]
         assert np.unique([len(brain_regions[k]) for k in brain_regions]).size == 1
         histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=self.one,
-                                         overwrite=True)
+                                         overwrite=True, channels=channels)
 
-    def update_alignments(self, feature, track):
-        user = self.one._par.ALYX_LOGIN
-        date = datetime.now().replace(microsecond=0).isoformat()
-        data = {date + '_' + user: [feature.tolist(), track.tolist()]}
+    def update_alignments(self, feature, track, key=None):
+        if not key:
+            user = self.one._par.ALYX_LOGIN
+            date = datetime.now().replace(microsecond=0).isoformat()
+            data = {date + '_' + user: [feature.tolist(), track.tolist()]}
+        else:
+            data = {key: [feature.tolist(), track.tolist()]}
+
         if self.alignments:
             self.alignments.update(data)
         else:
@@ -377,11 +388,12 @@ class LoadData:
         user = self.one._par.ALYX_LOGIN
         if ephys_desc == 'None':
             ephys_desc = None
-        self.qc.insert1(dict(probe_insertion_uuid=self.insertion_id, user_name=user,
+        self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
                         alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
                         allow_direct_insert=True, replace=True)
 
     def update_qc(self):
+        # if resolved just update the alignment_number
 
         if len(self.alignments) < 2:
             align_qc = base.QC(self.probe_id, one=self.one, endpoint='insertions')
@@ -393,16 +405,16 @@ class LoadData:
                                depths=self.chn_depths, cluster_chns=self.cluster_chns)
             _, results = align_qc.run(update=True)
 
-        # We need to upload the stored channels on alyx to a correct alignment
-        if results['_alignment_stored'] != self.current_align:
-            feature = np.array(self.alignments[results['_alignment_stored']][0])
-            track = np.array(self.alignments[results['_alignment_stored']][1])
-            ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
-                                        track_prev=track,
-                                        feature_prev=feature,
-                                        brain_atlas=self.brain_atlas)
-            xyz_channels = ephysalign.get_channel_locations(feature, track)
-            self.upload_data(xyz_channels)
+            # We need to upload the stored channels on alyx to a correct alignment
+            if results['_alignment_stored'] != self.current_align and results['_alignment_resolved'] == 1:
+                feature = np.array(self.alignments[results['_alignment_stored']][0])
+                track = np.array(self.alignments[results['_alignment_stored']][1])
+                ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
+                                            track_prev=track,
+                                            feature_prev=feature,
+                                            brain_atlas=self.brain_atlas)
+                xyz_channels = ephysalign.get_channel_locations(feature, track)
+                self.upload_data(xyz_channels)
 
     def delete_data(self):
         """
