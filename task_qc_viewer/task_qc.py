@@ -52,7 +52,7 @@ class QcFrame(TaskQC):
             self.extractor = TaskQCExtractor(session_path, lazy=True, one=one)
             # Extract extra datasets required for QC
             self.extractor.data = dsets
-            self.extractor.extract_data(partial=True)
+            self.extractor.extract_data()
             # Aggregate and update Alyx QC fields
             self.run(update=True)
         else:
