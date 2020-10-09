@@ -2,7 +2,7 @@ import logging
 import argparse
 from itertools import cycle
 import random
-import collections
+from collections.abc import Sized
 
 import numpy as np
 import pandas as pd
@@ -17,24 +17,20 @@ from ibllib.qc.task_extractors import TaskQCExtractor
 
 from task_qc_viewer import ViewEphysQC
 
-EVENT_MAP = {'goCue_times': ['#2ca02c', '-'],  # green
-             'goCueTrigger_times': ['#2ca02c', '--'],  # green
-             'errorCue_times': ['#d62728', '-'],  # red
-             'errorCueTrigger_times': ['#d62728', '--'],  # red
-             'valveOpen_times': ['#17becf', '-'],  # cyan
-             'stimFreeze_times': ['#0000ff', ':'],  # blue
-             'stimOff_times': ['#9400d3', '-'],  # dark violet
-             'stimOffTrigger_times': ['#9400d3', '--'],  # dark violet
-             'stimOn_times': ['#e377c2', '-'],  # pink
-             'stimOnTrigger_times': ['#e377c2', '--'],  # pink
-             'response_times': ['#8c564b', '-'],  # brown
+EVENT_MAP = {'goCue_times': ['#2ca02c', 'solid'],  # green
+             'goCueTrigger_times': ['#2ca02c', 'dotted'],  # green
+             'errorCue_times': ['#d62728', 'solid'],  # red
+             'errorCueTrigger_times': ['#d62728', 'dotted'],  # red
+             'valveOpen_times': ['#17becf', 'solid'],  # cyan
+             'stimFreeze_times': ['#0000ff', 'solid'],  # blue
+             'stimOff_times': ['#9400d3', 'solid'],  # dark violet
+             'stimOffTrigger_times': ['#9400d3', 'dotted'],  # dark violet
+             'stimOn_times': ['#e377c2', 'solid'],  # pink
+             'stimOnTrigger_times': ['#e377c2', 'dotted'],  # pink
+             'response_times': ['#8c564b', 'solid'],  # brown
              }
-
-color_map_ev = []
-line_style_ev = []
-for v in EVENT_MAP.values():
-    color_map_ev.append(v[0])
-    line_style_ev.append(v[1])
+cm = [EVENT_MAP[k][0] for k in EVENT_MAP]
+ls = [EVENT_MAP[k][1] for k in EVENT_MAP]
 
 one = ONE()
 
@@ -80,7 +76,7 @@ class QcFrame(TaskQC):
         # Make DataFrame from the trail level metrics
         def get_trial_level_failed(d):
             new_dict = {k[6:]: v for k, v in d.items() if
-                        isinstance(v, collections.Sized) and len(v) == self.n_trials}
+                        isinstance(v, Sized) and len(v) == self.n_trials}
             return pd.DataFrame.from_dict(new_dict)
 
         metrics = get_trial_level_failed(self.metrics)
@@ -138,10 +134,10 @@ class QcFrame(TaskQC):
         if self.extractor.bpod_ttls is not None:
             bpttls = self.extractor.bpod_ttls
             plots.squares(bpttls['times'], bpttls['polarities'] * 0.4 + 3, ax=axes, color='k')
-            ymax = 4
+            plot_args['ymax'] = 4
             ylabels = ['', 'frame2ttl', 'sound', 'bpod', '']
         else:
-            ymax = 3
+            plot_args['ymax'] = 3
             ylabels = ['', 'frame2ttl', 'sound', '']
 
         for event, c, l in zip(trial_events, cycle(color_map), linestyle):
@@ -149,8 +145,8 @@ class QcFrame(TaskQC):
 
         axes.legend(loc='upper left', fontsize='xx-small', bbox_to_anchor=(1, 0.5))
         axes.set_yticklabels(ylabels)
-        axes.set_yticks(list(range(ymax + 1)))
-        axes.set_ylim([0, ymax])
+        axes.set_yticks(list(range(plot_args['ymax'] + 1)))
+        axes.set_ylim([0, plot_args['ymax']])
 
         if wheel_axes:
             wheel_plot_args = {
@@ -179,8 +175,8 @@ def show_session_task_qc(session=None, bpod_only=False, local=False):
     qc.create_plots(w.wplot.canvas.ax,
                     wheel_axes=w.wplot.canvas.ax2,
                     trial_events=EVENT_MAP.keys(),
-                    color_map=color_map_ev,
-                    line_style=line_style_ev)
+                    color_map=cm,
+                    line_style=ls)
     # Update table and callbacks
     w.update_df(qc.frame)
     qt.run_app()
