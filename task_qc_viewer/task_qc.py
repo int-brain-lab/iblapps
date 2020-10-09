@@ -134,13 +134,23 @@ class QcFrame(TaskQC):
             linestyle = random.choices(('-', '--', '-.', ':'), k=len(trial_events))
         else:
             linestyle = line_style
+
+        if self.extractor.bpod_ttls is not None:
+            bpttls = self.extractor.bpod_ttls
+            plots.squares(bpttls['times'], bpttls['polarities'] * 0.4 + 3, ax=axes, color='k')
+            ymax = 4
+            ylabels = ['', 'frame2ttl', 'sound', 'bpod', '']
+        else:
+            ymax = 3
+            ylabels = ['', 'frame2ttl', 'sound', '']
+
         for event, c, l in zip(trial_events, cycle(color_map), linestyle):
             plots.vertical_lines(trial_data[event], label=event, color=c, linestyle=l, **plot_args)
 
         axes.legend(loc='upper left', fontsize='xx-small', bbox_to_anchor=(1, 0.5))
-        axes.set_yticklabels(['', 'frame2ttl', 'sound', ''])
-        axes.set_yticks([0, 1, 2, 3])
-        axes.set_ylim([0, 3])
+        axes.set_yticklabels(ylabels)
+        axes.set_yticks(list(range(ymax + 1)))
+        axes.set_ylim([0, ymax])
 
         if wheel_axes:
             wheel_plot_args = {
