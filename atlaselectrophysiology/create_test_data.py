@@ -8,7 +8,7 @@ import numpy as np
 one = ONE(username='test_user', password='TapetesBloc18',
                base_url='https://test.alyx.internationalbrainlab.org')
 
-cluster_chns = np.load('clusters.channels.npy')
+
 cluster_chns = np.load('iblapps/atlaselectrophysiology/clusters.channels.npy')
 alignments_stored = {'2020-07-26T17:06:58_alejandro': [[-1.0016980364099322,
    0.00047877496991576273,
@@ -172,77 +172,152 @@ feature, track = ld.get_starting_alignment(0)
 assert(not feature)
 assert(not track)
 assert(not ld.alignments)
+assert(ld.resolved == 0)
 
 # Now add an alignment
 ephysalign = EphysAlignment(ld.xyz_picks, ld.chn_depths, brain_atlas=ld.brain_atlas)
-key = '2020-07-26T17:06:58_alejandro'
-feature = alignments_stored[key][0]
-track = alignments_stored[key][1]
+key1 = '2020-07-26T17:06:58_alejandro'
+feature = alignments_stored[key1][0]
+track = alignments_stored[key1][1]
 xyz_channels = ephysalign.get_channel_locations(feature, track)
 ld.upload_data(xyz_channels, channels=False)
-ld.update_alignments(np.array(feature), np.array(track), key=key)
+ld.update_alignments(np.array(feature), np.array(track), key_info=key1)
 prev_align = ld.get_previous_alignments()
 _ = ld.get_starting_alignment(0)
 
-traj = one.alyx.rest('trajectories', 'list', probe_id=probe_id, provenance='Ephys aligned histology track')
-first_traj_id = traj[0]['id']
-assert(ld.current_align == key)
+traj = one.alyx.rest('trajectories', 'list', probe_id=probe_id,
+                     provenance='Ephys aligned histology track')
+prev_traj_id = traj[0]['id']
+assert(ld.current_align == key1)
+assert(len(traj[0]['json']) == 1)
 ld.update_qc()
 insertion = one.alyx.rest('insertions', 'read', id=probe_id)
 assert(insertion['json']['extended_qc']['_alignment_number'] == 1)
-assert(insertion['json']['extended_qc']['_alignment_stored'] == key)
+assert(insertion['json']['extended_qc']['_alignment_stored'] == key1)
 assert(insertion['json']['qc'] == 'NOT_SET')
+assert(ld.resolved == 0)
 
-key = '2020-09-14T15:42:22_guido'
-feature = alignments_stored[key][0]
-track = alignments_stored[key][1]
+key2 = '2020-08-26T17:06:58_alejandro'
+ld.upload_data(xyz_channels, channels=False)
+ld.update_alignments(np.array(feature), np.array(track), key_info=key2)
+prev_align = ld.get_previous_alignments()
+_ = ld.get_starting_alignment(0)
+traj = one.alyx.rest('trajectories', 'list', probe_id=probe_id,
+                     provenance='Ephys aligned histology track')
+traj_id = traj[0]['id']
+assert(ld.current_align == key2)
+assert(len(traj[0]['json'] ) == 1)
+ld.update_qc()
+insertion = one.alyx.rest('insertions', 'read', id=probe_id)
+assert(insertion['json']['extended_qc']['_alignment_number'] == 1)
+assert(insertion['json']['extended_qc']['_alignment_stored'] == key2)
+assert(insertion['json']['qc'] == 'NOT_SET')
+assert(ld.resolved == 0)
+
+assert(traj_id != prev_traj_id)
+prev_traj_id = traj_id
+
+
+key3 = '2020-09-14T15:42:22_guido'
+feature = alignments_stored[key3][0]
+track = alignments_stored[key3][1]
 xyz_channels = ephysalign.get_channel_locations(feature, track)
 ld.upload_data(xyz_channels, channels=False)
-ld.update_alignments(np.array(feature), np.array(track), key=key)
+ld.update_alignments(np.array(feature), np.array(track), key_info=key3)
 prev_align = ld.get_previous_alignments()
 _ = ld.get_starting_alignment(0)
 
-assert(ld.current_align == key)
+assert(ld.current_align == key3)
 
-traj = one.alyx.rest('trajectories', 'list', probe_id=probe_id, provenance='Ephys aligned histology track')
-second_traj_id = traj[0]['id']
+traj = one.alyx.rest('trajectories', 'list', probe_id=probe_id,
+                     provenance='Ephys aligned histology track')
+traj_id = traj[0]['id']
 assert(len(traj[0]['json']) == 2)
-assert(first_traj_id != second_traj_id)
+# Also assert all the keys match
+assert(traj_id != prev_traj_id)
+prev_traj_id = traj_id
 
 ld.update_qc()
-
 insertion = one.alyx.rest('insertions', 'read', id=probe_id)
 assert(insertion['json']['qc'] == 'WARNING')
-assert(insertion['json']['extended_qc']['_alignment_stored'] == key)
+assert(insertion['json']['extended_qc']['_alignment_stored'] == key3)
 assert(insertion['json']['extended_qc']['_alignment_resolved'] == 0)
 assert(insertion['json']['extended_qc']['_alignment_qc'] < 0.8)
+assert(ld.resolved == 0)
 
 # Now let's add another one
-key = '2020-09-14T15:44:56_nate'
-feature = alignments_stored[key][0]
-track = alignments_stored[key][1]
+key4 = '2020-09-14T15:44:56_nate'
+feature = alignments_stored[key4][0]
+track = alignments_stored[key4][1]
 xyz_channels = ephysalign.get_channel_locations(feature, track)
 ld.upload_data(xyz_channels, channels=False)
-ld.update_alignments(np.array(feature), np.array(track), key=key)
+ld.update_alignments(np.array(feature), np.array(track), key_info=key4)
 prev_align = ld.get_previous_alignments()
 _ = ld.get_starting_alignment(0)
 
-assert(ld.current_align == key)
+assert(ld.current_align == key4)
 
 traj = one.alyx.rest('trajectories', 'list', probe_id=probe_id,
                      provenance='Ephys aligned histology track')
 traj_id = traj[0]['id']
 assert(len(traj[0]['json']) == 3)
-assert(traj_id != second_traj_id)
+assert(traj_id != prev_traj_id)
+prev_traj_id = traj_id
 
 ld.update_qc()
+insertion = one.alyx.rest('insertions', 'read', id=probe_id)
+assert(insertion['json']['qc'] == 'PASS')
+assert(insertion['json']['extended_qc']['_alignment_stored'] == key4)
+assert(insertion['json']['extended_qc']['_alignment_resolved'] == 1)
+assert(insertion['json']['extended_qc']['_alignment_qc'] > 0.8)
+
+
+# Now try to add an extra alignment
+key5 = '2020-09-16T15:44:56_mayo'
+ld.upload_data(xyz_channels, channels=False)
+ld.update_alignments(np.array(feature), np.array(track), key_info=key5)
+prev_align = ld.get_previous_alignments()
+_ = ld.get_starting_alignment(0)
+traj = one.alyx.rest('trajectories', 'list', probe_id=probe_id,
+                     provenance='Ephys aligned histology track')
+traj_id = traj[0]['id']
+assert(len(traj[0]['json']) == 4)
+# insertion should not have changed
+assert(traj_id == prev_traj_id)
+
+ld.update_qc()
+insertion = one.alyx.rest('insertions', 'read', id=probe_id)
+assert(insertion['json']['qc'] == 'PASS')
+assert(insertion['json']['extended_qc']['_alignment_stored'] == key4)
+assert(insertion['json']['extended_qc']['_alignment_resolved'] == 1)
+assert(insertion['json']['extended_qc']['_alignment_number'] == 4)
+
+# Now try to add an extra alignment with same user name
+key6 = '2020-10-14T15:44:56_nate'
+ld.upload_data(xyz_channels, channels=False)
+ld.update_alignments(np.array(feature), np.array(track), key_info=key6)
+prev_align = ld.get_previous_alignments()
+_ = ld.get_starting_alignment(0)
+
+assert(ld.current_align == key6)
+
+traj = one.alyx.rest('trajectories', 'list', probe_id=probe_id,
+                     provenance='Ephys aligned histology track')
+traj_id = traj[0]['id']
+assert(len(traj[0]['json']) == 5)
+assert(traj_id == prev_traj_id)
+
+ld.update_qc()
+insertion = one.alyx.rest('insertions', 'read', id=probe_id)
+assert(insertion['json']['qc'] == 'PASS')
+assert(insertion['json']['extended_qc']['_alignment_stored'] == key4)
+assert(insertion['json']['extended_qc']['_alignment_resolved'] == 1)
+assert(insertion['json']['extended_qc']['_alignment_number'] == 5)
+
+# Now we need to look into deletions
 
 
 
-# Now let's add a second key
-
-
-# build it up and ensure that if it is resolved you can't delete
-
+# next look at case where the alignments are already there
 
 # Now delete anyways and strip down

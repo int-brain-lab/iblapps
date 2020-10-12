@@ -45,11 +45,12 @@ class LoadData:
         self.traj_id = None
         self.date = None
         self.subj = None
-        self.alignments = None
+        self.alignments = {}
         self.prev_align = None
         self.sess_path = None
         self.allen_id = None
         self.cluster_chns = None
+        self.resolved = None
 
     def get_subjects(self):
         """
@@ -121,16 +122,24 @@ class LoadData:
                                              provenance='Ephys aligned histology track')
 
         if ephys_traj_prev:
-            self.alignments = ephys_traj_prev[0]['json']
-            self.prev_align = []
-            if self.alignments:
-                # Sort by date, latest first
-                self.prev_align = [*self.alignments.keys()]
-            # To make sure they are ordered by date added, default to latest fit
+            self.alignments = ephys_traj_prev[0]['json'] or {}
+            self.prev_align = [*self.alignments.keys()]
             self.prev_align = sorted(self.prev_align, reverse=True)
             self.prev_align.append('original')
         else:
             self.prev_align = ['original']
+
+        #if ephys_traj_prev:
+        #    self.alignments = ephys_traj_prev[0]['json']
+        #    self.prev_align = []
+        #    if self.alignments:
+        #        # Sort by date, latest first
+        #        self.prev_align = [*self.alignments.keys()]
+        #    # To make sure they are ordered by date added, default to latest fit
+        #    self.prev_align = sorted(self.prev_align, reverse=True)
+        #    self.prev_align.append('original')
+        #else:
+        #    self.prev_align = ['original']
 
         return self.prev_align
 
@@ -263,6 +272,7 @@ class LoadData:
         """
         insertion = self.one.alyx.rest('insertions', 'read', id=self.probe_id)
         self.xyz_picks = np.array(insertion['json']['xyz_picks']) / 1e6
+        self.resolved = insertion['json']['extended_qc'].get('_alignments_resolved', 0)
 
         return self.xyz_picks
 
@@ -350,29 +360,28 @@ class LoadData:
         return description, region_lookup
 
     def upload_data(self, xyz_channels, channels=True):
+        if self.resolved == 0:
+            # Create new trajectory and overwrite previous one
+            histology.register_aligned_track(self.probe_id, xyz_channels,
+                                             chn_coords=self.chn_coords, one=self.one,
+                                             overwrite=True, channels=channels)
 
-        # Create new trajectory and overwrite previous one
-        insertion = atlas.Insertion.from_track(xyz_channels, self.brain_atlas)
-        brain_regions = self.brain_atlas.regions.get(self.brain_atlas.get_labels(xyz_channels))
-        brain_regions['xyz'] = xyz_channels
-        brain_regions['lateral'] = self.chn_coords[:, 0]
-        brain_regions['axial'] = self.chn_coords[:, 1]
-        assert np.unique([len(brain_regions[k]) for k in brain_regions]).size == 1
-        histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=self.one,
-                                         overwrite=True, channels=channels)
-
-    def update_alignments(self, feature, track, key=None):
-        if not key:
+    def update_alignments(self, feature, track, key_info=None):
+        if not key_info:
             user = self.one._par.ALYX_LOGIN
             date = datetime.now().replace(microsecond=0).isoformat()
             data = {date + '_' + user: [feature.tolist(), track.tolist()]}
         else:
-            data = {key: [feature.tolist(), track.tolist()]}
+            user = key_info[20:]
+            data = {key_info: [feature.tolist(), track.tolist()]}
 
-        if self.alignments:
-            self.alignments.update(data)
-        else:
-            self.alignments = data
+        old_user = [key for key in self.alignments.keys() if user in key]
+        # Only delete duplicated if trajectory is not resolved
+        if len(old_user) > 0 and self.resolved == 0:
+            print('here')
+            self.alignments.pop(old_user[0])
+
+        self.alignments.update(data)
         self.update_json(self.alignments)
 
     def update_json(self, json_data):
@@ -394,35 +403,43 @@ class LoadData:
 
     def update_qc(self):
         # if resolved just update the alignment_number
+        if self.resolved == 1:
+            align_qc = base.QC(self.probe_id, one=self.one, endpoint='insertions')
+            align_qc.update_extended_qc({'_alignment_number': len(self.alignments)})
 
-        if len(self.alignments) < 2:
+        elif len(self.alignments) < 2:
             align_qc = base.QC(self.probe_id, one=self.one, endpoint='insertions')
             align_qc.update_extended_qc({'_alignment_number': len(self.alignments),
                                          '_alignment_stored': self.current_align})
+
+            self.resolved = 0
         else:
             align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
             align_qc.load_data(prev_alignments=self.alignments, xyz_picks=self.xyz_picks,
                                depths=self.chn_depths, cluster_chns=self.cluster_chns)
             _, results = align_qc.run(update=True)
 
-            # We need to upload the stored channels on alyx to a correct alignment
-            if results['_alignment_stored'] != self.current_align and results['_alignment_resolved'] == 1:
-                feature = np.array(self.alignments[results['_alignment_stored']][0])
-                track = np.array(self.alignments[results['_alignment_stored']][1])
-                ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
-                                            track_prev=track,
-                                            feature_prev=feature,
-                                            brain_atlas=self.brain_atlas)
-                xyz_channels = ephysalign.get_channel_locations(feature, track)
-                self.upload_data(xyz_channels)
+            ## We need to upload the stored channels on alyx to a correct alignment
+            #if results['_alignment_stored'] != self.current_align and results['_alignment_resolved'] == 1:
+            #    feature = np.array(self.alignments[results['_alignment_stored']][0])
+            #    track = np.array(self.alignments[results['_alignment_stored']][1])
+            #    ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
+            #                                track_prev=track,
+            #                                feature_prev=feature,
+            #                                brain_atlas=self.brain_atlas)
+            #    xyz_channels = ephysalign.get_channel_locations(feature, track)
+            #    self.upload_data(xyz_channels)
+
+            self.resolved = results['_alignment_resolved']
 
     def delete_data(self):
         """
         Delete a user alignment from alyx
 
         """
-        if self.resolved:
+        if self.resolved == 1:
             print('Cannot delete this trajectory as this alignment has been resolved')
+            return
         # Cannot delete original trajectory
         if self.current_align == 'original':
             print('Cannot delete original trajectory')
@@ -439,6 +456,7 @@ class LoadData:
 
             self.one.alyx.rest('trajectories', 'delete', id=ephys_traj[0]['id'])
 
+
         # If more than one alignment and latest alignment chosen to delete, need to update
         # the trajectory insertion, channels and json field
         elif idx_chosen == 0:
@@ -453,6 +471,9 @@ class LoadData:
             xyz_channels = ephysalign.get_channel_locations(feature, track)
             self.upload_data(xyz_channels)
             self.update_json(self.alignments)
+
+            self.get_previous_alignments()
+            self.update_qc()
 
         # If more than one alignment but latest alignment to delete no chosen, just need to update
         # json field
