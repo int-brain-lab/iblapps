@@ -38,22 +38,6 @@ alignments_stored = {'2020-07-26T17:06:58_alejandro': [[-1.0016980364099322,
    0.003545543307086614,
    0.0038238897637795266,
    1.1396363475848257]],
- '2020-06-12T11:33:02_guido': [[-1.0016980364099322,
-   0.00047877496991576273,
-   0.0012435066185318888,
-   0.0018371095066185312,
-   0.002601841155234657,
-   0.0030670974729241885,
-   0.003141966305655836,
-   1.0051440753904748],
-  [-1.138461638877023,
-   0.0006501531566169838,
-   0.001548329723225031,
-   0.0021740192539109497,
-   0.0029173598074608924,
-   0.0035415451180881596,
-   0.003815011822220497,
-   1.1425738337640625]],
  '2020-09-14T15:42:22_guido': [[-1.0016980364099322,
    0.00047877496991576273,
    0.0012435066185318888,
@@ -160,6 +144,8 @@ insertion = one.alyx.rest('insertions', 'read', id=probe_id)
 assert(insertion['json']['qc'] == 'NOT_SET')
 assert(insertion['json']['extended_qc']['_tracing_exists'] == 1)
 
+
+# GUI implementation
 
 # Now lets look at the alignments
 ld = LoadData(one=one, testing=True, probe_id=probe_id)
@@ -316,7 +302,12 @@ assert(insertion['json']['extended_qc']['_alignment_number'] == 5)
 
 # Now we need to look into deletions
 
+# Already present automated implementation
 
+
+
+
+# Manual implementation
 
 # next look at case where the alignments are already there
 

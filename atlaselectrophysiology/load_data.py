@@ -16,10 +16,10 @@ ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
 
 
 class LoadData:
-    def __init__(self, one=None, testing=False, probe_id=None):
+    def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None):
 
         self.one = one or ONE(base_url=ONE_BASE_URL)
-        self.brain_atlas = atlas.AllenAtlas(25)
+        self.brain_atlas = brain_atlas or atlas.AllenAtlas(25)
 
         if testing:
             self.probe_id = probe_id
@@ -365,6 +365,7 @@ class LoadData:
             histology.register_aligned_track(self.probe_id, xyz_channels,
                                              chn_coords=self.chn_coords, one=self.one,
                                              overwrite=True, channels=channels)
+
 
     def update_alignments(self, feature, track, key_info=None):
         if not key_info:
