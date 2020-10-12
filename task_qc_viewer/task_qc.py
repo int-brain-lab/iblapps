@@ -54,7 +54,7 @@ class QcFrame(TaskQC):
             self.extractor.data = dsets
             self.extractor.extract_data()
             # Aggregate and update Alyx QC fields
-            self.run(update=True)
+            self.run(update=False)
         else:
             self.load_data(bpod_only=bpod_only)
             self.compute()
