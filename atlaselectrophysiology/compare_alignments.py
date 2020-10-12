@@ -10,7 +10,7 @@ from pathlib import Path
 brain_atlas = atlas.AllenAtlas(25)
 one = ONE()
 
-fig_path = Path('C:/Users/Mayo/Documents/PYTHON/alignment_figures/')
+fig_path = Path('C:/Users/Mayo/Documents/PYTHON/alignment_figures/scale_factor')
 # Find eid of interest
 aligned_sess = one.alyx.rest('trajectories', 'list', provenance='Ephys aligned histology track')
 eids = np.array([s['session']['id'] for s in aligned_sess])
@@ -38,7 +38,45 @@ probe_several = probes[idx_several]
 # eid = one.search(subject=subject, date=date, number=sess_no)[0]
 # eid = 'e2448a52-2c22-4ecc-bd48-632789147d9c'
 
-for eid, probe_label in zip(eid_several, probe_several):
+small_scaling = [["CSHL045", "2020-02-25", "probe00", "2020-06-12T10:40:22_noam.roth"],
+                 ["CSHL045", "2020-02-25", "probe01", "2020-09-12T23:43:03_petrina.lau"],
+                 ["CSHL047", "2020-01-20", "probe00", "2020-09-28T08:18:19_noam.roth"],
+                 ["CSHL047", "2020-01-27", "probe00", "2020-09-13T15:51:21_petrina.lau"],
+                 ["CSHL049", "2020-01-08", "probe00", "2020-09-14T15:44:56_nate"],
+                 ["CSHL051", "2020-02-05", "probe00", "2020-06-12T14:05:49_guido"],
+                 ["CSHL055", "2020-02-18", "probe00", "2020-08-13T12:07:08_jeanpaul"],
+                 ["CSH_ZAD_001", "2020-01-13", "probe00", "2020-09-22T17:23:50_petrina.lau"],
+                 ["KS014", "2019-12-03", "probe01", "2020-06-17T19:42:02_Karolina_Socha"],
+                 ["KS016", "2019-12-05", "probe01", "2020-06-18T10:26:54_Karolina_Socha"],
+                 ["KS020", "2020-02-06", "probe00", "2020-09-13T15:08:15_petrina.lau"],
+                 ["NYU-11", "2020-02-21", "probe01", "2020-09-13T11:19:59_petrina.lau"],
+                 ["SWC_014", "2019-12-15", "probe01", "2020-07-26T22:24:39_noam.roth"],
+                 ["ZM_2240", "2020-01-23", "probe00", "2020-06-05T14:57:46_guido"]]
+
+big_scaling = [["CSHL045", "2020-02-25", "probe00", "2020-06-12T10:40:22_noam.roth"],
+               ["CSHL045", "2020-02-25", "probe01", "2020-09-12T23:43:03_petrina.lau"],
+               ["CSH_ZAD_001", "2020-01-13", "probe00", "2020-09-22T17:23:50_petrina.lau"],
+               ["KS014", "2019-12-03", "probe00", "2020-06-17T15:15:01_Karolina_Socha"],
+               ["KS014", "2019-12-03", "probe01", "2020-06-17T19:42:02_Karolina_Socha"],
+               ["KS014", "2019-12-04", "probe00", "2020-09-12T16:39:14_petrina.lau"],
+               ["KS014", "2019-12-06", "probe00", "2020-06-17T13:40:00_Karolina_Socha"],
+               ["KS014", "2019-12-07", "probe00", "2020-06-17T16:21:35_Karolina_Socha"],
+               ["KS016", "2019-12-04", "probe00", "2020-08-13T14:02:44_jeanpaul"],
+               ["KS016", "2019-12-05", "probe00", "2020-06-18T10:49:53_Karolina_Socha"],
+               ["KS023", "2019-12-07", "probe00", "2020-09-09T14:21:35_nate"],
+               ["KS023", "2019-12-07", "probe01", "2020-06-18T15:50:55_Karolina_Socha"],
+               ["KS023", "2019-12-10", "probe01", "2020-06-12T13:59:02_guido"],
+               ["KS023", "2019-12-11", "probe01", "2020-06-18T16:04:18_Karolina_Socha"],
+               ["NYU-11", "2020-02-21", "probe01", "2020-09-13T11:19:59_petrina.lau"],
+               ["NYU-12", "2020-01-22", "probe00", "2020-09-13T19:53:43_petrina.lau"],
+               ["SWC_014", "2019-12-12", "probe00", "2020-07-27T11:27:16_noam.roth"],
+               ["SWC_038", "2020-08-01", "probe01", "2020-08-31T12:32:05_nate"],
+               ["ibl_witten_14", "2019-12-11", "probe00", "2020-06-14T15:33:45_noam.roth"]]
+
+for sess in small_scaling:
+    eid = one.search(subject=sess[0], date=sess[1])[0]
+    probe_label = sess[2]
+# for eid, probe_label in zip(eid_several, probe_several):
     trajectory = one.alyx.rest('trajectories', 'list', provenance='Ephys aligned histology track',
                                session=eid, probe=probe_label)
 
@@ -83,7 +121,7 @@ for eid, probe_label in zip(eid_several, probe_several):
 
 
     fig, ax = plt.subplots(1, len(alignments)+1, figsize=(15, 15))
-    ephysalign = EphysAlignment(xyz_picks, depths)
+    ephysalign = EphysAlignment(xyz_picks, depths, brain_atlas=brain_atlas)
     feature, track, _ = ephysalign.get_track_and_feature()
     channels_orig = ephysalign.get_channel_locations(feature, track)
     region, region_label = ephysalign.scale_histology_regions(feature, track)
@@ -105,7 +143,8 @@ for eid, probe_label in zip(eid_several, probe_several):
         track = np.array(alignments[key][1])
         user = key[20:]
         # Instantiate EphysAlignment object
-        ephysalign = EphysAlignment(xyz_picks, depths, track_prev=track, feature_prev=feature)
+        ephysalign = EphysAlignment(xyz_picks, depths, track_prev=track, feature_prev=feature,
+                                    brain_atlas=brain_atlas)
 
         channels = ephysalign.get_channel_locations(feature, track)
         avg_dist = np.mean(np.sqrt(np.sum((channels - channels_orig) ** 2, axis=1)), axis=0)
@@ -120,7 +159,7 @@ for eid, probe_label in zip(eid_several, probe_several):
 
     fig.suptitle(subject + '_' + str(date) + '_' + probe_label, fontsize=16)
     plt.show()
-    fig.savefig(fig_path.joinpath(subject + '_' + str(date) + '_' + probe_label + '.png'), dpi=600)
+    fig.savefig(fig_path.joinpath(subject + '_' + str(date) + '_' + probe_label + '.png'), dpi=100)
     plt.close(fig)
 
 
