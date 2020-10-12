@@ -72,6 +72,7 @@ class QcFrame(TaskQC):
                 continue
             print(f'The following checks were labelled {k}:')
             print('\n'.join(v), '\n')
+        print(outcomes)
 
         # Make DataFrame from the trail level metrics
         def get_trial_level_failed(d):
@@ -187,14 +188,14 @@ if __name__ == "__main__":
     For information on the QC checks see the QC Flags & failures document:
     https://docs.google.com/document/d/1X-ypFEIxqwX6lU9pig4V_zrcR5lITpd8UJQWzW9I9zI/edit#
     ipython task_qc.py c9fec76e-7a20-4da4-93ad-04510a89473b
-    ipython task_qc.py /datadisk/Data/IntegrationTests/ephys/choice_world_init/KS022/2019-12-10/001 --local
+    ipython task_qc.py ./KS022/2019-12-10/001 --local
     """
     # Parse parameters
     parser = argparse.ArgumentParser(description='Quick viewer to see the behaviour data from'
                                                  'choice world sessions.')
     parser.add_argument('session', help='session uuid')
     parser.add_argument('--bpod', action='store_true', help='run QC on Bpod data only (no FPGA)')
-    parser.add_argument('--local', action='store_true', help='run from disk location (local server')
+    parser.add_argument('--local', action='store_true', help='run from disk location (lab server')
     args = parser.parse_args()  # returns data from the options specified (echo)
 
     show_session_task_qc(session=args.session, bpod_only=args.bpod, local=args.local)
