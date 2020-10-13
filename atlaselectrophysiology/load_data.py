@@ -272,7 +272,7 @@ class LoadData:
         """
         insertion = self.one.alyx.rest('insertions', 'read', id=self.probe_id)
         self.xyz_picks = np.array(insertion['json']['xyz_picks']) / 1e6
-        self.resolved = insertion['json']['extended_qc'].get('_alignments_resolved', 0)
+        self.resolved = insertion['json']['extended_qc'].get('_alignment_resolved', 0)
 
         return self.xyz_picks
 
@@ -379,7 +379,6 @@ class LoadData:
         old_user = [key for key in self.alignments.keys() if user in key]
         # Only delete duplicated if trajectory is not resolved
         if len(old_user) > 0 and self.resolved == 0:
-            print('here')
             self.alignments.pop(old_user[0])
 
         self.alignments.update(data)
