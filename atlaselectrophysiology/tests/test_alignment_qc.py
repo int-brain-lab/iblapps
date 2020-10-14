@@ -127,7 +127,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
         assert (len(traj[0]['json']) == 1)
 
-        self.ld.update_qc()
+        self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['extended_qc']['_alignment_number'] == 1)
         assert (insertion['json']['extended_qc']['_alignment_stored'] == key)
@@ -152,7 +152,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (len(traj[0]['json']) == 1)
         assert (traj_id != self.prev_traj_id)
 
-        self.ld.update_qc()
+        self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['extended_qc']['_alignment_number'] == 1)
         assert (insertion['json']['extended_qc']['_alignment_stored'] == key)
@@ -179,7 +179,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (traj_id != self.prev_traj_id)
         # Also assert all the keys match
 
-        self.ld.update_qc()
+        self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'WARNING')
         assert (insertion['json']['extended_qc']['_alignment_number'] == 2)
@@ -208,7 +208,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
         assert (traj_id != self.prev_traj_id)
 
-        self.ld.update_qc()
+        self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'PASS')
         assert (insertion['json']['extended_qc']['_alignment_number'] == 3)
@@ -236,7 +236,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
         assert (traj_id == self.prev_traj_id)
 
-        self.ld.update_qc()
+        self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'PASS')
         assert (insertion['json']['extended_qc']['_alignment_number'] == 4)
@@ -264,7 +264,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (len(traj[0]['json']) == 5)
         assert (traj_id == self.prev_traj_id)
 
-        self.ld.update_qc()
+        self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'PASS')
         assert (insertion['json']['extended_qc']['_alignment_number'] == 5)
@@ -320,7 +320,7 @@ class TestAlignmentQcExisting(unittest.TestCase):
         assert(len(insertion['json']['extended_qc']) == 0)
         align_qc.load_data(prev_alignments=traj['json'], xyz_picks=np.array(self.xyz_picks) / 1e6,
                            cluster_chns=self.cluster_chns)
-        align_qc.run(update=True, upload=True)
+        align_qc.run(update=True, upload_alyx=True, upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'WARNING')
         assert (insertion['json']['extended_qc']['_alignment_number'] == 2)
@@ -343,7 +343,7 @@ class TestAlignmentQcExisting(unittest.TestCase):
         align_qc = AlignmentQC(self.probe_id, one=one, brain_atlas=brain_atlas, channels=False)
         align_qc.load_data(prev_alignments=traj['json'], xyz_picks=np.array(self.xyz_picks) / 1e6,
                            cluster_chns=self.cluster_chns)
-        align_qc.run(update=True, upload=True)
+        align_qc.run(update=True, upload_alyx=True, upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'PASS')
         assert (insertion['json']['extended_qc']['_alignment_number'] == 2)
@@ -364,7 +364,7 @@ class TestAlignmentQcExisting(unittest.TestCase):
         align_qc = AlignmentQC(self.probe_id, one=one, brain_atlas=brain_atlas, channels=False)
         align_qc.load_data(prev_alignments=traj['json'], xyz_picks=np.array(self.xyz_picks) / 1e6,
                            cluster_chns=self.cluster_chns)
-        align_qc.run(update=True, upload=True)
+        align_qc.run(update=True, upload_alyx=True, upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'PASS')
         assert (insertion['json']['extended_qc']['_alignment_number'] == 4)
@@ -415,7 +415,7 @@ class TestAlignmentQcManual(unittest.TestCase):
         align_qc.load_data(prev_alignments=self.traj['json'],
                            xyz_picks=np.array(self.xyz_picks) / 1e6,
                            cluster_chns=self.cluster_chns)
-        align_qc.run(update=True, upload=True)
+        align_qc.run(update=True, upload_alyx=True, upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'WARNING')
         assert(insertion['json']['extended_qc']['alignment'] == 'WARNING')
@@ -433,7 +433,8 @@ class TestAlignmentQcManual(unittest.TestCase):
         align_qc.load_data(prev_alignments=self.traj['json'],
                            xyz_picks=np.array(self.xyz_picks) / 1e6,
                            cluster_chns=self.cluster_chns)
-        align_qc.resolve_manual('2020-09-28T15:57:25_mayo', update=True, upload=True)
+        align_qc.resolve_manual('2020-09-28T15:57:25_mayo', update=True, upload_alyx=True,
+                                upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'PASS')
         assert(insertion['json']['extended_qc']['alignment'] == 'WARNING')
@@ -452,7 +453,8 @@ class TestAlignmentQcManual(unittest.TestCase):
         align_qc.load_data(prev_alignments=self.traj['json'],
                            xyz_picks=np.array(self.xyz_picks) / 1e6,
                            cluster_chns=self.cluster_chns)
-        align_qc.resolve_manual('2020-09-28T10:03:06_alejandro', update=True, upload=True)
+        align_qc.resolve_manual('2020-09-28T10:03:06_alejandro', update=True, upload_alyx=True,
+                                upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'PASS')
         assert(insertion['json']['extended_qc']['alignment'] == 'WARNING')
@@ -470,6 +472,68 @@ class TestAlignmentQcManual(unittest.TestCase):
     @classmethod
     def tearDownClass(cls) -> None:
         one.alyx.rest('insertions', 'delete', id=cls.probe_id)
+
+
+class TestUploadToFlatIron(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        data = np.load(Path(Path(__file__).parent.
+                            joinpath('fixtures', 'data_alignmentqc_manual.npz')),
+                       allow_pickle=True)
+        # data = np.load('data_alignmentqc_manual.npz', allow_pickle=True)
+        cls.xyz_picks = (data['xyz_picks'] * 1e6).tolist()
+        cls.alignments = data['alignments'].tolist()
+        cls.cluster_chns = data['cluster_chns']
+
+        data = np.load(Path(Path(__file__).parent.
+                            joinpath('fixtures', 'data_alignmentqc_existing.npz')),
+                       allow_pickle=True)
+        insertion = data['insertion'].tolist()
+        insertion['json'] = {'xyz_picks': cls.xyz_picks}
+        probe_insertion = one.alyx.rest('insertions', 'create', data=insertion)
+        cls.probe_id = probe_insertion['id']
+        cls.probe_name = probe_insertion['name']
+        cls.trajectory = data['trajectory'].tolist()
+        cls.trajectory.update({'probe_insertion': cls.probe_id})
+        cls.trajectory.update({'json': cls.alignments})
+        cls.traj = one.alyx.rest('trajectories', 'create', data=cls.trajectory)
+
+        align_qc = AlignmentQC(cls.probe_id, one=one, brain_atlas=brain_atlas, channels=False)
+        align_qc.load_data(prev_alignments=cls.traj['json'],
+                           xyz_picks=np.array(cls.xyz_picks) / 1e6,
+                           cluster_chns=cls.cluster_chns)
+        cls.file_paths = align_qc.resolve_manual('2020-09-28T15:57:25_mayo', update=True,
+                                                 upload_alyx=True, upload_flatiron=True)
+
+    def test_data_content(self):
+        alf_path = one.path_from_eid(EPHYS_SESSION).joinpath('alf', self.probe_name)
+        channels_mlapdv = np.load(alf_path.joinpath('channels.mlapdv.npy'))
+        assert(all(np.abs(channels_mlapdv) > 1000))
+        channels_id = np.load(alf_path.joinpath('channels.brainLocationIds_ccf_2017.npy'))
+        assert(channels_mlapdv.shape == channels_id.shape)
+
+        clusters_mlapdv = np.load(alf_path.joinpath('clusters.mlapdv.npy'))
+        assert(all(np.abs(clusters_mlapdv) > 1000))
+        clusters_id = np.load(alf_path.joinpath('clusters.brainLocationIds_ccf_2017.npy'))
+        assert(clusters_mlapdv.shape == channels_id.shape)
+
+
+    def test_upload_to_flatiron(self):
+        align_qc = AlignmentQC(self.probe_id, one=one, brain_atlas=brain_atlas, channels=False)
+        align_qc.load_data(prev_alignments=self.traj['json'],
+                           xyz_picks=np.array(self.xyz_picks) / 1e6,
+                           cluster_chns=self.cluster_chns)
+        file_paths = align_qc.resolve_manual('2020-09-28T15:57:25_mayo', update=True,
+                                             upload_alyx=True, upload_flatiron=True)
+
+        files_registered = one.alyx.rest('datasets', 'list', session=EPHYS_SESSION)
+        print(files_registered)
+        files = [file['file_records']['relative_path'] for file in files_registered]
+
+        assert(all(files in files_registered))
+
+
+
 
 
 if __name__ == "__main__":

@@ -401,7 +401,7 @@ class LoadData:
                         alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
                         allow_direct_insert=True, replace=True)
 
-    def update_qc(self):
+    def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number
         if self.resolved == 1:
             align_qc = base.QC(self.probe_id, one=self.one, endpoint='insertions')
@@ -417,18 +417,8 @@ class LoadData:
             align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
             align_qc.load_data(prev_alignments=self.alignments, xyz_picks=self.xyz_picks,
                                depths=self.chn_depths, cluster_chns=self.cluster_chns)
-            _, results = align_qc.run(update=True)
-
-            ## We need to upload the stored channels on alyx to a correct alignment
-            #if results['_alignment_stored'] != self.current_align and results['_alignment_resolved'] == 1:
-            #    feature = np.array(self.alignments[results['_alignment_stored']][0])
-            #    track = np.array(self.alignments[results['_alignment_stored']][1])
-            #    ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
-            #                                track_prev=track,
-            #                                feature_prev=feature,
-            #                                brain_atlas=self.brain_atlas)
-            #    xyz_channels = ephysalign.get_channel_locations(feature, track)
-            #    self.upload_data(xyz_channels)
+            _, results = align_qc.run(update=True, upload_alyx=upload_alyx,
+                                      upload_flatiron=upload_flatiron)
 
             self.resolved = results['_alignment_resolved']
 
