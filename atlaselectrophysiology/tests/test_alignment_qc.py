@@ -516,7 +516,9 @@ class TestUploadToFlatIron(unittest.TestCase):
         assert(all(np.abs(clusters_mlapdv) > 1000))
         clusters_id = np.load(alf_path.joinpath('clusters.brainLocationIds_ccf_2017.npy'))
         assert(clusters_mlapdv.shape == channels_id.shape)
-
+        assert(all())
+        clusters_acro = np.load(alf_path.joinpath('clusters.brainLocationAcronyms_ccf_2017.npy'))
+        assert(clusters_acro.shape == channels_id.shape)
 
     def test_upload_to_flatiron(self):
         align_qc = AlignmentQC(self.probe_id, one=one, brain_atlas=brain_atlas, channels=False)
