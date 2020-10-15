@@ -308,19 +308,38 @@ class TestAlignmentQcExisting(unittest.TestCase):
         if traj:
             self.prev_traj_id = traj[0]['id']
 
-    def test_01_alignments_disagree(self):
+    def test_01_no_alignments(self):
+        align_qc = AlignmentQC(self.probe_id, one=one, brain_atlas=brain_atlas, channels=False)
+        align_qc.run(update=True, upload_alyx=True, upload_flatiron=False)
+        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
+        assert (insertion['json']['qc'] == 'NOT_SET')
+        assert (len(insertion['json']['extended_qc']) == 0)
+
+    def test_02_one_alignment(self):
+        alignments = {'2020-06-26T16:40:14_Karolina_Socha':
+                      self.alignments['2020-06-26T16:40:14_Karolina_Socha']}
+        trajectory = copy.deepcopy(self.trajectory)
+        trajectory.update({'json': alignments})
+        traj = one.alyx.rest('trajectories', 'create', data=trajectory)
+        align_qc = AlignmentQC(self.probe_id, one=one, brain_atlas=brain_atlas, channels=False)
+        align_qc.run(update=True, upload_alyx=True, upload_flatiron=False)
+        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
+        assert (insertion['json']['qc'] == 'NOT_SET')
+        assert (insertion['json']['extended_qc']['_alignment_number'] == 1)
+        assert (insertion['json']['extended_qc']['_alignment_stored'] ==
+                '2020-06-26T16:40:14_Karolina_Socha')
+        assert (insertion['json']['extended_qc']['_alignment_resolved'] == 0)
+
+    def test_03_alignments_disagree(self):
         alignments = {'2020-06-26T16:40:14_Karolina_Socha':
                       self.alignments['2020-06-26T16:40:14_Karolina_Socha'],
                       '2020-06-12T00:39:15_nate': self.alignments['2020-06-12T00:39:15_nate']}
         trajectory = copy.deepcopy(self.trajectory)
         trajectory.update({'json': alignments})
-        traj = one.alyx.rest('trajectories', 'create', data=trajectory)
+        traj = one.alyx.rest('trajectories', 'update', id=self.prev_traj_id, data=trajectory)
         traj_id = traj['id']
         align_qc = AlignmentQC(self.probe_id, one=one, brain_atlas=brain_atlas, channels=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
-        # Make sure the qc fields have been added to the insertion object
-        assert(insertion['json']['qc'] == 'NOT_SET')
-        assert(len(insertion['json']['extended_qc']) == 0)
         align_qc.load_data(prev_alignments=traj['json'], xyz_picks=np.array(self.xyz_picks) / 1e6,
                            cluster_chns=self.cluster_chns)
         align_qc.run(update=True, upload_alyx=True, upload_flatiron=False)
@@ -335,7 +354,7 @@ class TestAlignmentQcExisting(unittest.TestCase):
                              provenance='Ephys aligned histology track')
         assert(traj_id == traj[0]['id'])
 
-    def test_02_alignments_agree(self):
+    def test_04_alignments_agree(self):
         alignments = {'2020-06-19T10:52:36_noam.roth':
                       self.alignments['2020-06-19T10:52:36_noam.roth'],
                       '2020-06-12T00:39:15_nate': self.alignments['2020-06-12T00:39:15_nate']}
@@ -344,8 +363,9 @@ class TestAlignmentQcExisting(unittest.TestCase):
         traj = one.alyx.rest('trajectories', 'update', id=self.prev_traj_id, data=trajectory)
         assert(self.prev_traj_id == traj['id'])
         align_qc = AlignmentQC(self.probe_id, one=one, brain_atlas=brain_atlas, channels=False)
-        align_qc.load_data(prev_alignments=traj['json'], xyz_picks=np.array(self.xyz_picks) / 1e6,
-                           cluster_chns=self.cluster_chns)
+        #align_qc.load_data(prev_alignments=traj['json'], xyz_picks=np.array(self.xyz_picks) / 1e6,
+        #                   cluster_chns=self.cluster_chns)
+        align_qc.load_data(cluster_chns=self.cluster_chns)
         align_qc.run(update=True, upload_alyx=True, upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'PASS')
@@ -358,7 +378,7 @@ class TestAlignmentQcExisting(unittest.TestCase):
                              provenance='Ephys aligned histology track')
         assert(self.prev_traj_id == traj[0]['id'])
 
-    def test_03_not_latest_alignments_agree(self):
+    def test_05_not_latest_alignments_agree(self):
         alignments = copy.deepcopy(self.alignments)
         trajectory = copy.deepcopy(self.trajectory)
         trajectory.update({'json': alignments})
@@ -367,7 +387,7 @@ class TestAlignmentQcExisting(unittest.TestCase):
         align_qc = AlignmentQC(self.probe_id, one=one, brain_atlas=brain_atlas, channels=False)
         align_qc.load_data(prev_alignments=traj['json'], xyz_picks=np.array(self.xyz_picks) / 1e6,
                            cluster_chns=self.cluster_chns)
-        align_qc.run(update=True, upload_alyx=True, upload_flatiron=False)
+        align_qc.run(update=True, upload_alyx=True, upload_flatiron=False, force=True)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'PASS')
         assert (insertion['json']['extended_qc']['_alignment_number'] == 4)
@@ -457,7 +477,7 @@ class TestAlignmentQcManual(unittest.TestCase):
                            xyz_picks=np.array(self.xyz_picks) / 1e6,
                            cluster_chns=self.cluster_chns)
         align_qc.resolve_manual('2020-09-28T10:03:06_alejandro', update=True, upload_alyx=True,
-                                upload_flatiron=False)
+                                upload_flatiron=False, force=True)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'PASS')
         assert(insertion['json']['extended_qc']['alignment'] == 'WARNING')

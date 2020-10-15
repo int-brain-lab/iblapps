@@ -366,7 +366,6 @@ class LoadData:
                                              chn_coords=self.chn_coords, one=self.one,
                                              overwrite=True, channels=channels)
 
-
     def update_alignments(self, feature, track, key_info=None):
         if not key_info:
             user = self.one._par.ALYX_LOGIN
@@ -403,24 +402,14 @@ class LoadData:
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number
-        if self.resolved == 1:
-            align_qc = base.QC(self.probe_id, one=self.one, endpoint='insertions')
-            align_qc.update_extended_qc({'_alignment_number': len(self.alignments)})
 
-        elif len(self.alignments) < 2:
-            align_qc = base.QC(self.probe_id, one=self.one, endpoint='insertions')
-            align_qc.update_extended_qc({'_alignment_number': len(self.alignments),
-                                         '_alignment_stored': self.current_align})
-
-            self.resolved = 0
-        else:
-            align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
-            align_qc.load_data(prev_alignments=self.alignments, xyz_picks=self.xyz_picks,
+        align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
+        align_qc.load_data(prev_alignments=self.alignments, xyz_picks=self.xyz_picks,
                                depths=self.chn_depths, cluster_chns=self.cluster_chns)
-            _, results = align_qc.run(update=True, upload_alyx=upload_alyx,
-                                      upload_flatiron=upload_flatiron)
+        _, results = align_qc.run(update=True, upload_alyx=upload_alyx,
+                                  upload_flatiron=upload_flatiron)
 
-            self.resolved = results['_alignment_resolved']
+        self.resolved = results['_alignment_resolved']
 
     def delete_data(self):
         """
