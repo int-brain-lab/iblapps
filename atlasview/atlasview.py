@@ -60,6 +60,7 @@ class TopView(QtWidgets.QMainWindow):
 
     def sagittal_line_moved(self):
         self.ctrl.set_slice(self.ctrl.fig_sagittal, self.line_sagittal.value())
+        # self.ctrl.set_scatter(self.ctrl.fig_coronal, self.line_coronal.value())
 
     def mouseMoveEvent(self, scenepos):
         if isinstance(scenepos, tuple):
@@ -68,6 +69,21 @@ class TopView(QtWidgets.QMainWindow):
             return
         pass
         # qpoint = self.imageItem.mapFromScene(scenepos)
+
+    def add_scatter_feature(self, data):
+        self.ctrl.scatter_data = data / 1e6
+        self.ctrl.scatter_data_ind = self.ctrl.atlas.bc.xyz2i(self.ctrl.scatter_data)
+        self.ctrl.fig_coronal.add_scatter()
+        self.ctrl.fig_sagittal.add_scatter()
+        self.line_coronal.sigDragged.connect(
+            lambda: self.ctrl.set_scatter(self.ctrl.fig_coronal, self.line_coronal.value()))
+        self.line_sagittal.sigDragged.connect(
+            lambda: self.ctrl.set_scatter(self.ctrl.fig_sagittal, self.line_sagittal.value()))
+        self.ctrl.set_scatter(self.ctrl.fig_coronal)
+        self.ctrl.set_scatter(self.ctrl.fig_sagittal)
+
+    def add_image_feature(self):
+        la = 1
 
 
 class SliceView(QtWidgets.QWidget):
@@ -122,6 +138,10 @@ class SliceView(QtWidgets.QWidget):
             self.label_region.setText(region['name'][0])
             self.label_acronym.setText(region['acronym'][0])
 
+    def add_scatter(self):
+        self.scatterItem = pg.ScatterPlotItem()
+        self.plotItem_slice.addItem(self.scatterItem)
+
 
 class PgImageController:
     """
@@ -162,6 +182,14 @@ class PgImageController:
         self.qwidget.imageItem.setTransform(QTransform(*transform))
         # self.view.plotItem.setLimits(xMin=wl[0], xMax=wl[1], yMin=hl[0], yMax=hl[1])
 
+    def set_points(self, x, y):
+        #self.qwidget.scatterItem.setData(x=np.arange(0, 1000)/1e6, y=np.arange(0, 1000)/1e6,
+        #                                 brush='b', size=10)
+        #x = np.random.randint(low=-6000, high=6000, size=1000) / 1e6
+        #y = np.random.randint(low=-6000, high=0, size=1000) / 1e6
+        self.qwidget.scatterItem.setData(x=x, y=y,
+                                         brush='b', size=5)
+
 
 class Controller(PgImageController):
     """
@@ -200,6 +228,22 @@ class Controller(PgImageController):
         self.set_image(img, dw, dh, wl[0], hl[0])
         # self.qwidget.line_coronal.setData(x=wl, y=wl * 0, pen=pg.mkPen((0, 255, 0), width=3))
         # self.qwidget.line_sagittal.setData(x=hl * 0, y=hl, pen=pg.mkPen((0, 255, 0), width=3))
+
+    def set_scatter(self, fig, coord=0):
+        waxis = fig.ctrl.waxis
+        # dealing with coronal slice
+        if waxis == 0:
+            idx = np.where(self.scatter_data_ind[:, 1] == self.atlas.bc.y2i(coord))[0]
+            x = self.scatter_data[idx, 0]
+            y = self.scatter_data[idx, 2]
+        else:
+            idx = np.where(self.scatter_data_ind[:, 0] == self.atlas.bc.x2i(coord))[0]
+            x = self.scatter_data[idx, 1]
+            y = self.scatter_data[idx, 2]
+
+        fig.ctrl.set_points(x, y)
+
+
 
 
 class SliceController(PgImageController):
