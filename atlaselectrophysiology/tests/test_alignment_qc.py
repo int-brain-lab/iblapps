@@ -41,6 +41,9 @@ class TestTracingQc(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        probe = ['probe00', 'probe01']
+        create_alyx_probe_insertions(session_path=EPHYS_SESSION, model='3B2', labels=probe,
+                                     one=one, force=True)
         cls.probe00_id = one.alyx.rest('insertions', 'list', session=EPHYS_SESSION,
                                        name='probe00')[0]['id']
         cls.probe01_id = one.alyx.rest('insertions', 'list', session=EPHYS_SESSION,
@@ -504,38 +507,36 @@ class TestUploadToFlatIron(unittest.TestCase):
                            cluster_chns=cls.cluster_chns)
         cls.file_paths = align_qc.resolve_manual('2020-09-28T15:57:25_mayo', update=True,
                                                  upload_alyx=True, upload_flatiron=True)
+        print(cls.file_paths)
 
     def test_data_content(self):
         alf_path = one.path_from_eid(EPHYS_SESSION).joinpath('alf', self.probe_name)
         channels_mlapdv = np.load(alf_path.joinpath('channels.mlapdv.npy'))
-        assert(all(np.abs(channels_mlapdv) > 1000))
+        assert(np.all(np.abs(channels_mlapdv) > 0))
         channels_id = np.load(alf_path.joinpath('channels.brainLocationIds_ccf_2017.npy'))
-        assert(channels_mlapdv.shape == channels_id.shape)
+        assert(channels_mlapdv.shape[0] == channels_id.shape[0])
 
         clusters_mlapdv = np.load(alf_path.joinpath('clusters.mlapdv.npy'))
-        assert(all(np.abs(clusters_mlapdv) > 1000))
+        assert(np.all(np.abs(clusters_mlapdv) > 0))
         clusters_id = np.load(alf_path.joinpath('clusters.brainLocationIds_ccf_2017.npy'))
-        assert(clusters_mlapdv.shape == channels_id.shape)
-        assert(all())
-        clusters_acro = np.load(alf_path.joinpath('clusters.brainLocationAcronyms_ccf_2017.npy'))
-        assert(clusters_acro.shape == channels_id.shape)
+        assert(clusters_mlapdv.shape[0] == clusters_id.shape[0])
+        assert(np.all(np.in1d(clusters_mlapdv, channels_mlapdv)))
+        assert (np.all(np.in1d(clusters_id, channels_id)))
+        clusters_acro = np.load(alf_path.joinpath('clusters.brainLocationAcronyms_ccf_2017.npy'),
+                                allow_pickle=True)
+        assert(clusters_acro.shape == clusters_id.shape)
 
     def test_upload_to_flatiron(self):
-        align_qc = AlignmentQC(self.probe_id, one=one, brain_atlas=brain_atlas, channels=False)
-        align_qc.load_data(prev_alignments=self.traj['json'],
-                           xyz_picks=np.array(self.xyz_picks) / 1e6,
-                           cluster_chns=self.cluster_chns)
-        file_paths = align_qc.resolve_manual('2020-09-28T15:57:25_mayo', update=True,
-                                             upload_alyx=True, upload_flatiron=True)
+        for file in self.file_paths:
+            file_registered = one.alyx.rest('datasets', 'list', session=EPHYS_SESSION,
+                                            dataset_type=file.stem)
+            data_id = file_registered[0]['url'][-36:]
+            assert(len(file_registered) == 1)
+            one.alyx.rest('datasets', 'delete', id=data_id)
 
-        files_registered = one.alyx.rest('datasets', 'list', session=EPHYS_SESSION)
-        print(files_registered)
-        files = [file['file_records']['relative_path'] for file in files_registered]
-
-        assert(all(files in files_registered))
-
-
-
+    @classmethod
+    def tearDownClass(cls) -> None:
+        one.alyx.rest('insertions', 'delete', id=cls.probe_id)
 
 
 if __name__ == "__main__":
