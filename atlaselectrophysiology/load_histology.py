@@ -75,9 +75,3 @@ def tif2nrrd(path_to_image):
         writer.Execute(new_img)
 
     return path_to_nrrd
-
-
-
-
-
-
