@@ -10,6 +10,7 @@ import numpy as np
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtGui import QTransform
 import pyqtgraph as pg
+import matplotlib
 
 from ibllib.atlas import AllenAtlas
 import qt
@@ -82,8 +83,27 @@ class TopView(QtWidgets.QMainWindow):
         self.ctrl.set_scatter(self.ctrl.fig_coronal)
         self.ctrl.set_scatter(self.ctrl.fig_sagittal)
 
-    def add_image_feature(self):
-        la = 1
+    def add_image_feature(self, values, cmap, levels=None):
+        self.ctrl.values = values
+        # creat cmap look up table
+        colormap = matplotlib.cm.get_cmap(cmap)
+        colormap._init()
+        self.ctrl.lut = (colormap._lut * 255).view(np.ndarray)
+        self.ctrl.lut = np.insert(self.ctrl.lut, 0, [0, 0, 0, 0], axis=0)
+        if levels is None:
+            self.ctrl.levels = [np.min(values[np.nonzero(values)]), np.max(values)]
+        else:
+            self.ctrl.levels = [levels[0], levels[1]]
+
+        self.ctrl.fig_coronal.add_image()
+        self.ctrl.fig_sagittal.add_image()
+        self.line_coronal.sigDragged.connect(
+            lambda: self.ctrl.set_slice_with_value(self.ctrl.fig_coronal, self.line_coronal.value()))
+        self.line_sagittal.sigDragged.connect(
+            lambda: self.ctrl.set_slice_with_value(self.ctrl.fig_sagittal, self.line_sagittal.value()))
+        self.ctrl.set_slice_with_value(self.ctrl.fig_coronal)
+        self.ctrl.set_slice_with_value(self.ctrl.fig_sagittal)
+
 
 
 class SliceView(QtWidgets.QWidget):
@@ -99,6 +119,7 @@ class SliceView(QtWidgets.QWidget):
         # init the image display
         self.plotItem_slice.setAspectLocked(True)
         self.imageItem = pg.ImageItem()
+        self.imageItem2 = None
         self.plotItem_slice.addItem(self.imageItem)
         # connect signals and slots
         s = self.plotItem_slice.getViewBox().scene()
@@ -142,6 +163,11 @@ class SliceView(QtWidgets.QWidget):
         self.scatterItem = pg.ScatterPlotItem()
         self.plotItem_slice.addItem(self.scatterItem)
 
+    def add_image(self):
+        if self.imageItem2:
+            self.plotItem_slice.removeItem(self.imageItem2)
+        self.imageItem2 = pg.ImageItem()
+        self.plotItem_slice.addItem(self.imageItem2)
 
 class PgImageController:
     """
@@ -165,7 +191,7 @@ class PgImageController:
         ih = np.max((0, np.min((int(np.round(qpoint.y())), self.nh - 1))))
         return iw, ih
 
-    def set_image(self, im, dw, dh, w0, h0):
+    def set_image(self, imItem, im, dw, dh, w0, h0, value=False, lut=None, levels=None):
         """
         :param im:
         :param dw:
@@ -175,20 +201,20 @@ class PgImageController:
         :return:
         """
         self.im = im
-        self.nw, self.nh = self.im.shape
-        self.qwidget.imageItem.setImage(self.im)
+        self.nw, self.nh = self.im.shape[0:2]
+        if not value:
+            imItem.setImage(self.im)
+        else:
+            imItem.setImage(self.im)
+            imItem.setLookupTable(lut)
+            imItem.setLevels((levels[0], levels[1]))
         transform = [dw, 0., 0., 0., dh, 0., w0, h0, 1.]
         self.transform = np.array(transform).reshape((3, 3)).T
-        self.qwidget.imageItem.setTransform(QTransform(*transform))
+        imItem.setTransform(QTransform(*transform))
         # self.view.plotItem.setLimits(xMin=wl[0], xMax=wl[1], yMin=hl[0], yMax=hl[1])
 
-    def set_points(self, x, y):
-        #self.qwidget.scatterItem.setData(x=np.arange(0, 1000)/1e6, y=np.arange(0, 1000)/1e6,
-        #                                 brush='b', size=10)
-        #x = np.random.randint(low=-6000, high=6000, size=1000) / 1e6
-        #y = np.random.randint(low=-6000, high=0, size=1000) / 1e6
-        self.qwidget.scatterItem.setData(x=x, y=y,
-                                         brush='b', size=5)
+    def set_points(self, x=None, y=None):
+        self.qwidget.scatterItem.setData(x=x, y=y, brush='b', size=5)
 
 
 class Controller(PgImageController):
@@ -217,7 +243,8 @@ class Controller(PgImageController):
         dh = self.atlas.bc.dxyz[haxis]
         wl = self.atlas.bc.lim(waxis) - dw / 2
         hl = self.atlas.bc.lim(haxis) - dh / 2
-        fig.ctrl.set_image(self.atlas.slice(coord, axis=daxis, mode='clip'), dw, dh, wl[0], hl[0])
+        fig.ctrl.set_image(fig.imageItem,
+                           self.atlas.slice(coord, axis=daxis, mode='clip'), dw, dh, wl[0], hl[0])
         fig.ctrl.slice_coord = coord
 
     def set_top(self):
@@ -225,7 +252,7 @@ class Controller(PgImageController):
         img[np.isnan(img)] = np.nanmin(img)  # img has dims ml, ap
         dw, dh = (self.atlas.bc.dxyz[0], self.atlas.bc.dxyz[1])
         wl, hl = (self.atlas.bc.xlim, self.atlas.bc.ylim)
-        self.set_image(img, dw, dh, wl[0], hl[0])
+        self.set_image(self.fig_top.imageItem, img, dw, dh, wl[0], hl[0])
         # self.qwidget.line_coronal.setData(x=wl, y=wl * 0, pen=pg.mkPen((0, 255, 0), width=3))
         # self.qwidget.line_sagittal.setData(x=hl * 0, y=hl, pen=pg.mkPen((0, 255, 0), width=3))
 
@@ -243,7 +270,18 @@ class Controller(PgImageController):
 
         fig.ctrl.set_points(x, y)
 
-
+    def set_slice_with_value(self, fig, coord=0):
+        waxis, haxis, daxis = (fig.ctrl.waxis, fig.ctrl.haxis, fig.ctrl.daxis)
+        # construct the transform matrix image 2 ibl coordinates
+        dw = self.atlas.bc.dxyz[waxis]
+        dh = self.atlas.bc.dxyz[haxis]
+        wl = self.atlas.bc.lim(waxis) - dw / 2
+        hl = self.atlas.bc.lim(haxis) - dh / 2
+        fig.ctrl.set_image(fig.imageItem2,
+                           self.atlas.slice(coord, axis=daxis, volume='value', mode='clip',
+                                            region_values=self.values), dw, dh, wl[0], hl[0],
+                           value=True, lut=self.lut, levels=self.levels)
+        fig.ctrl.slice_coord = coord
 
 
 class SliceController(PgImageController):
