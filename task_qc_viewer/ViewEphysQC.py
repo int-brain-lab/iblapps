@@ -103,8 +103,8 @@ class PlotCanvas(FigureCanvasQTAgg):
             QtWidgets.QSizePolicy.Expanding)
         FigureCanvasQTAgg.updateGeometry(self)
         if wheel:
-            self.ax = fig.add_subplot(211)
-            self.ax2 = fig.add_subplot(212, sharex=self.ax)
+            self.ax, self.ax2 = fig.subplots(
+                2, 1, gridspec_kw={'height_ratios': [2, 1]}, sharex=True)
         else:
             self.ax = fig.add_subplot(111)
         self.draw()

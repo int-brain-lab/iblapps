@@ -10,8 +10,26 @@ from matplotlib.colors import TABLEAU_COLORS
 
 from oneibl.one import ONE
 import ibllib.plots as plots
+from ibllib.io.extractors import ephys_fpga
 from ibllib.qc.task_metrics import TaskQC
+from ibllib.qc.task_extractors import TaskQCExtractor
+
 from task_qc_viewer import ViewEphysQC
+
+EVENT_MAP = {'goCue_times': ['#2ca02c', 'solid'],  # green
+             'goCueTrigger_times': ['#2ca02c', 'dotted'],  # green
+             'errorCue_times': ['#d62728', 'solid'],  # red
+             'errorCueTrigger_times': ['#d62728', 'dotted'],  # red
+             'valveOpen_times': ['#17becf', 'solid'],  # cyan
+             'stimFreeze_times': ['#0000ff', 'solid'],  # blue
+             'stimOff_times': ['#9400d3', 'solid'],  # dark violet
+             'stimOffTrigger_times': ['#9400d3', 'dotted'],  # dark violet
+             'stimOn_times': ['#e377c2', 'solid'],  # pink
+             'stimOnTrigger_times': ['#e377c2', 'dotted'],  # pink
+             'response_times': ['#8c564b', 'solid'],  # brown
+             }
+cm = [EVENT_MAP[k][0] for k in EVENT_MAP]
+ls = [EVENT_MAP[k][1] for k in EVENT_MAP]
 
 one = ONE()
 
@@ -19,15 +37,26 @@ _logger = logging.getLogger('ibllib')
 
 
 class QcFrame(TaskQC):
-    def __init__(self, session_path, bpod_only=False):
+
+    def __init__(self, session_path, bpod_only=False, local=False):
         """
         Loads and extracts the QC data for a given session path
         :param session_path: A str or Path to a Bpod session
         :param bpod_only: When True all data is extracted from Bpod instead of FPGA for ephys
         """
         super().__init__(session_path, one=one, log=_logger)
-        self.load_data(bpod_only=bpod_only)
-        self.compute()
+
+        if local:
+            dsets, out_files = ephys_fpga.extract_all(session_path, save=True)
+            self.extractor = TaskQCExtractor(session_path, lazy=True, one=one)
+            # Extract extra datasets required for QC
+            self.extractor.data = dsets
+            self.extractor.extract_data()
+            # Aggregate and update Alyx QC fields
+            self.run(update=False)
+        else:
+            self.load_data(bpod_only=bpod_only)
+            self.compute()
         self.n_trials = self.extractor.data['intervals'].shape[0]
         self.wheel_data = {'re_pos': self.extractor.data.pop('wheel_position'),
                            're_ts': self.extractor.data.pop('wheel_timestamps')}
@@ -63,7 +92,7 @@ class QcFrame(TaskQC):
         :param trial_events: A list of Bpod trial events to plot, e.g. ['stimFreeze_times'],
         if None, valve, sound and stimulus events are plotted
         :param color_map: A color map to use for the events, default is the tableau color map
-        line_style: A line style map to use for the events, default is random.
+        linestyle: A line style map to use for the events, default is random.
         :return: None
         """
         color_map = color_map or TABLEAU_COLORS.keys()
@@ -87,20 +116,28 @@ class QcFrame(TaskQC):
 
         bnc1 = self.extractor.frame_ttls
         bnc2 = self.extractor.audio_ttls
-        bnc3 = self.extractor.bpod_ttls
         trial_data = self.extractor.data
 
         plots.squares(bnc1['times'], bnc1['polarities'] * 0.4 + 1, ax=axes, color='k')
         plots.squares(bnc2['times'], bnc2['polarities'] * 0.4 + 2, ax=axes, color='k')
-        plots.squares(bnc3['times'], bnc3['polarities'] * 0.4 + 3, ax=axes, color='k')
         linestyle = linestyle or random.choices(('-', '--', '-.', ':'), k=len(trial_events))
+
+        if self.extractor.bpod_ttls is not None:
+            bpttls = self.extractor.bpod_ttls
+            plots.squares(bpttls['times'], bpttls['polarities'] * 0.4 + 3, ax=axes, color='k')
+            plot_args['ymax'] = 4
+            ylabels = ['', 'frame2ttl', 'sound', 'bpod', '']
+        else:
+            plot_args['ymax'] = 3
+            ylabels = ['', 'frame2ttl', 'sound', '']
+
         for event, c, l in zip(trial_events, cycle(color_map), linestyle):
             plots.vertical_lines(trial_data[event], label=event, color=c, linestyle=l, **plot_args)
 
         axes.legend(loc='upper left', fontsize='xx-small', bbox_to_anchor=(1, 0.5))
-        axes.set_yticklabels(['', 'frame2ttl', 'sound', 'bpod', ''])
-        axes.set_yticks([0, 1, 2, 3])
-        axes.set_ylim([0, 4])
+        axes.set_yticklabels(ylabels)
+        axes.set_yticks(list(range(plot_args['ymax'] + 1)))
+        axes.set_ylim([0, plot_args['ymax']])
 
         if wheel_axes:
             wheel_plot_args = {
@@ -115,43 +152,40 @@ class QcFrame(TaskQC):
                                      label=event, color=c, linestyle=ln, **plot_args)
 
 
+def show_session_task_qc(session=None, bpod_only=False, local=False):
+    """
+    Displays the task QC for a given session
+    :param session: session_path
+    :param bpod_only: (no FPGA)
+    :param local: set True for local extraction
+    :return:
+    """
+    # Run QC and plot
+    qc = QcFrame(session, bpod_only=bpod_only, local=local)
+    w = ViewEphysQC.viewqc(wheel=qc.wheel_data)
+    qc.create_plots(w.wplot.canvas.ax,
+                    wheel_axes=w.wplot.canvas.ax2,
+                    trial_events=EVENT_MAP.keys(),
+                    color_map=cm,
+                    linestyle=ls)
+    # Update table and callbacks
+    w.update_df(qc.frame)
+    qt.run_app()
+
+
 if __name__ == "__main__":
     """Run TaskQC viewer with wheel data
     For information on the QC checks see the QC Flags & failures document:
     https://docs.google.com/document/d/1X-ypFEIxqwX6lU9pig4V_zrcR5lITpd8UJQWzW9I9zI/edit#
+    ipython task_qc.py c9fec76e-7a20-4da4-93ad-04510a89473b
+    ipython task_qc.py ./KS022/2019-12-10/001 --local
     """
     # Parse parameters
     parser = argparse.ArgumentParser(description='Quick viewer to see the behaviour data from'
                                                  'choice world sessions.')
     parser.add_argument('session', help='session uuid')
     parser.add_argument('--bpod', action='store_true', help='run QC on Bpod data only (no FPGA)')
+    parser.add_argument('--local', action='store_true', help='run from disk location (lab server')
     args = parser.parse_args()  # returns data from the options specified (echo)
-    event_map = {'goCue_times': ['#2ca02c', '-'],  # green
-                 'goCueTrigger_times': ['#2ca02c', '--'],  # green
-                 'errorCue_times': ['#d62728', '-'],  # red
-                 'errorCueTrigger_times': ['#d62728', '--'],  # red
-                 'valveOpen_times': ['#17becf', '-'],  # cyan
-                 'stimFreeze_times': ['#0000ff', ':'],  # blue
-                 'stimOff_times': ['#9400d3', '-'],  # dark violet
-                 'stimOffTrigger_times': ['#9400d3', '--'],  # dark violet
-                 'stimOn_times': ['#e377c2', '-'],  # pink
-                 'stimOnTrigger_times': ['#e377c2', '--'],  # pink
-                 'response_times': ['#8c564b', '-'],  # brown
-                 }
-    color_map_ev = []
-    line_style_ev = []
-    for v in event_map.values():
-        color_map_ev.append(v[0])
-        line_style_ev.append(v[1])
 
-    # Run QC and plot
-    qc = QcFrame(args.session, bpod_only=args.bpod)
-    w = ViewEphysQC.viewqc(wheel=qc.wheel_data)
-    qc.create_plots(w.wplot.canvas.ax,
-                    wheel_axes=w.wplot.canvas.ax2,
-                    trial_events=event_map.keys(),
-                    color_map=color_map_ev,
-                    linestyle=line_style_ev)
-    # Update table and callbacks
-    w.update_df(qc.frame)
-    qt.run_app()
+    show_session_task_qc(session=args.session, bpod_only=args.bpod, local=args.local)
