@@ -88,7 +88,10 @@ class TopView(QtWidgets.QMainWindow):
         # creat cmap look up table
         colormap = matplotlib.cm.get_cmap(cmap)
         colormap._init()
+        # pyqtgraph v=0.11.0
         self.ctrl.lut = (colormap._lut * 255).view(np.ndarray)
+        # pyqtgraph v=0.10.0
+        # self.ctrl.lut = (colormap._lut).view(np.ndarray)
         self.ctrl.lut = np.insert(self.ctrl.lut, 0, [0, 0, 0, 0], axis=0)
         if levels is None:
             self.ctrl.levels = [np.min(values[np.nonzero(values)]), np.max(values)]
@@ -214,6 +217,8 @@ class PgImageController:
         # self.view.plotItem.setLimits(xMin=wl[0], xMax=wl[1], yMin=hl[0], yMax=hl[1])
 
     def set_points(self, x=None, y=None):
+        # at the moment brush and size are fixed! These need to be arguments
+        # For the colour need to convert the colour to QtGui.QColor
         self.qwidget.scatterItem.setData(x=x, y=y, brush='b', size=5)
 
 
