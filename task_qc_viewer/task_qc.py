@@ -2,9 +2,8 @@ import logging
 import argparse
 from itertools import cycle
 import random
-import collections
+from collections.abc import Sized
 
-import numpy as np
 import pandas as pd
 import qt as qt
 from matplotlib.colors import TABLEAU_COLORS
@@ -47,21 +46,16 @@ class QcFrame(TaskQC):
         # Make DataFrame from the trail level metrics
         def get_trial_level_failed(d):
             new_dict = {k[6:]: v for k, v in d.items() if
-                        isinstance(v, collections.Sized) and len(v) == self.n_trials}
+                        isinstance(v, Sized) and len(v) == self.n_trials}
             return pd.DataFrame.from_dict(new_dict)
 
-        metrics = get_trial_level_failed(self.metrics)
-        passed = get_trial_level_failed(self.passed)
-        passed = passed.add_suffix('_passed')
-        new_col = np.empty((metrics.columns.size + passed.columns.size,), dtype=object)
-        new_col[0::2], new_col[1::2] = metrics.columns, passed.columns
-        self.frame = pd.concat([metrics, passed], axis=1)[new_col]
+        self.frame = get_trial_level_failed(self.metrics)
         self.frame['intervals_0'] = self.extractor.data['intervals'][:, 0]
         self.frame['intervals_1'] = self.extractor.data['intervals'][:, 1]
         self.frame.insert(loc=0, column='trial_no', value=self.frame.index)
 
-    def create_plots(self, axes, wheel_axes=None, trial_events=None, color_map=None,
-                     line_style=None):
+    def create_plots(self, axes,
+                     wheel_axes=None, trial_events=None, color_map=None, linestyle=None):
         """
         Plots the data for bnc1 (sound) and bnc2 (frame2ttl)
         :param axes: An axes handle on which to plot the TTL events
@@ -86,28 +80,27 @@ class QcFrame(TaskQC):
 
         plot_args = {
             'ymin': 0,
-            'ymax': 3,
+            'ymax': 4,
             'linewidth': 2,
             'ax': axes
         }
 
         bnc1 = self.extractor.frame_ttls
         bnc2 = self.extractor.audio_ttls
+        bnc3 = self.extractor.bpod_ttls
         trial_data = self.extractor.data
 
         plots.squares(bnc1['times'], bnc1['polarities'] * 0.4 + 1, ax=axes, color='k')
         plots.squares(bnc2['times'], bnc2['polarities'] * 0.4 + 2, ax=axes, color='k')
-        if line_style is None:
-            linestyle = random.choices(('-', '--', '-.', ':'), k=len(trial_events))
-        else:
-            linestyle = line_style
+        plots.squares(bnc3['times'], bnc3['polarities'] * 0.4 + 3, ax=axes, color='k')
+        linestyle = linestyle or random.choices(('-', '--', '-.', ':'), k=len(trial_events))
         for event, c, l in zip(trial_events, cycle(color_map), linestyle):
             plots.vertical_lines(trial_data[event], label=event, color=c, linestyle=l, **plot_args)
 
         axes.legend(loc='upper left', fontsize='xx-small', bbox_to_anchor=(1, 0.5))
-        axes.set_yticklabels(['', 'frame2ttl', 'sound', ''])
+        axes.set_yticklabels(['', 'frame2ttl', 'sound', 'bpod', ''])
         axes.set_yticks([0, 1, 2, 3])
-        axes.set_ylim([0, 3])
+        axes.set_ylim([0, 4])
 
         if wheel_axes:
             wheel_plot_args = {
@@ -158,7 +151,7 @@ if __name__ == "__main__":
                     wheel_axes=w.wplot.canvas.ax2,
                     trial_events=event_map.keys(),
                     color_map=color_map_ev,
-                    line_style=line_style_ev)
+                    linestyle=line_style_ev)
     # Update table and callbacks
     w.update_df(qc.frame)
     qt.run_app()
