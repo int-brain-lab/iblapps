@@ -139,7 +139,7 @@ class SliceView(QtWidgets.QWidget):
     def mouseClick(self, event):
         if not event.double():
             return
-        qxy = self.imageItem_seismic.mapFromScene(event.scenePos())
+        qxy = self.imageItem.mapFromScene(event.scenePos())
         tr, s = (qxy.x(), qxy.y())
         print(tr, s)
 
