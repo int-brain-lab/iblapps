@@ -209,7 +209,8 @@ class LoadData:
             '_iblqc_ephysTimeRms.rms',
             '_iblqc_ephysTimeRms.timestamps',
             '_iblqc_ephysSpectralDensity.freqs',
-            '_iblqc_ephysSpectralDensity.power'
+            '_iblqc_ephysSpectralDensity.power',
+            '_iblqc_ephysSpectralDensity.amps'
         ]
 
         print(self.subj)
@@ -218,7 +219,7 @@ class LoadData:
         print(self.eid)
 
         data_path = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
-        self.sess_path = alf.io.get_session_path(data_path[0])
+        self.sess_path = self.one.path_from_eid(self.eid)
 
         alf_path = Path(self.sess_path, 'alf', self.probe_label)
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)

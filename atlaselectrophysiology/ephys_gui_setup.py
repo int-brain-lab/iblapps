@@ -85,10 +85,10 @@ class Setup():
         img_options_group.setExclusive(True)
         img_options.addAction(img_fr)
         img_options_group.addAction(img_fr)
-        img_options.addAction(scatter_drift)
-        img_options_group.addAction(scatter_drift)
         img_options.addAction(img_corr)
         img_options_group.addAction(img_corr)
+        img_options.addAction(scatter_drift)
+        img_options_group.addAction(scatter_drift)
         img_options.addAction(img_rmsAP)
         img_options_group.addAction(img_rmsAP)
         img_options.addAction(img_rmsLFP)
@@ -605,7 +605,7 @@ class Setup():
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
         self.set_axis(self.fig_hist, 'bottom', pen='w', ticks=False)
-        self.ax_hist = self.set_axis(self.fig_hist, 'left', pen='k')
+        self.ax_hist = self.set_axis(self.fig_hist, 'left', pen=None)
         self.ax_hist.setWidth(0)
         self.ax_hist.setStyle(tickTextOffset=-70)
 
@@ -633,7 +633,7 @@ class Setup():
                                     self.probe_extra, padding=self.pad)
         self.set_axis(self.fig_hist_ref, 'bottom', pen='w')
         self.set_axis(self.fig_hist_ref, 'left', show=False)
-        self.ax_hist_ref = self.set_axis(self.fig_hist_ref, 'right', pen='k')
+        self.ax_hist_ref = self.set_axis(self.fig_hist_ref, 'right', pen=None)
         self.ax_hist_ref.setWidth(0)
         self.ax_hist_ref.setStyle(tickTextOffset=-70)
 

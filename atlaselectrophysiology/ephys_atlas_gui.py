@@ -931,6 +931,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Initialise histology plots
         self.plot_histology_ref(self.fig_hist_ref)
         self.plot_histology(self.fig_hist)
+        self.label_status = False
+        self.toggle_labels_button_pressed()
         self.plot_scale_factor()
         if np.any(self.feature_prev):
             self.create_lines(self.feature_prev[1:-1] * 1e6)

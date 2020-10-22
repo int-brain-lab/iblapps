@@ -56,6 +56,9 @@ def download_histology_data(subject, lab):
         path_to_nrrd = tif2nrrd(path_to_image)
         path_to_files.append(path_to_nrrd)
 
+    if len(path_to_files) > 3:
+        path_to_files = path_to_files[1:3]
+
     return path_to_files
 
 
@@ -69,6 +72,7 @@ def tif2nrrd(path_to_image):
 
         new_img = sitk.PermuteAxes(img, [2, 1, 0])
         new_img = sitk.Flip(new_img, [True, False, False])
+        new_img.SetSpacing([1, 1, 1])
         writer = sitk.ImageFileWriter()
         writer.SetImageIO("NrrdImageIO")
         writer.SetFileName(str(path_to_nrrd))
