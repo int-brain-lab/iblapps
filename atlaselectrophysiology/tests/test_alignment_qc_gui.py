@@ -74,8 +74,8 @@ class TestsAlignmentQcGUI(unittest.TestCase):
 
         self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
-        assert (insertion['json']['extended_qc']['_alignment_number'] == 1)
-        assert (insertion['json']['extended_qc']['_alignment_stored'] == key)
+        assert (insertion['json']['extended_qc']['alignment_count'] == 1)
+        assert (insertion['json']['extended_qc']['alignment_stored'] == key)
         assert (insertion['json']['qc'] == 'NOT_SET')
         assert (self.ld.resolved == 0)
 
@@ -99,8 +99,8 @@ class TestsAlignmentQcGUI(unittest.TestCase):
 
         self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
-        assert (insertion['json']['extended_qc']['_alignment_number'] == 1)
-        assert (insertion['json']['extended_qc']['_alignment_stored'] == key)
+        assert (insertion['json']['extended_qc']['alignment_count'] == 1)
+        assert (insertion['json']['extended_qc']['alignment_stored'] == key)
         assert (insertion['json']['extended_qc']['alignment_resolved'] == 0)
         assert (insertion['json']['qc'] == 'NOT_SET')
         assert (self.ld.resolved == 0)
@@ -128,10 +128,10 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'NOT_SET')
-        assert (insertion['json']['extended_qc']['_alignment_number'] == 2)
-        assert (insertion['json']['extended_qc']['_alignment_stored'] == key)
+        assert (insertion['json']['extended_qc']['alignment_count'] == 2)
+        assert (insertion['json']['extended_qc']['alignment_stored'] == key)
         assert (insertion['json']['extended_qc']['alignment_resolved'] == 0)
-        assert (insertion['json']['extended_qc']['_alignment_qc'] < 0.8)
+        assert (insertion['json']['extended_qc']['alignment_qc'] < 0.8)
         assert (self.ld.resolved == 0)
 
     def test_05_three_alignments(self):
@@ -157,11 +157,11 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'NOT_SET')
-        assert (insertion['json']['extended_qc']['_alignment_number'] == 3)
-        assert (insertion['json']['extended_qc']['_alignment_stored'] == key)
+        assert (insertion['json']['extended_qc']['alignment_count'] == 3)
+        assert (insertion['json']['extended_qc']['alignment_stored'] == key)
         assert (insertion['json']['extended_qc']['alignment_resolved'] == 1)
-        assert (insertion['json']['extended_qc']['_alignment_resolved_by'] == 'qc')
-        assert (insertion['json']['extended_qc']['_alignment_qc'] > 0.8)
+        assert (insertion['json']['extended_qc']['alignment_resolved_by'] == 'qc')
+        assert (insertion['json']['extended_qc']['alignment_qc'] > 0.8)
         assert(self.ld.resolved == 1)
 
     def test_06_new_user_after_resolved(self):
@@ -186,11 +186,11 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'NOT_SET')
-        assert (insertion['json']['extended_qc']['_alignment_number'] == 4)
-        assert (insertion['json']['extended_qc']['_alignment_stored'] == self.resolved_key)
+        assert (insertion['json']['extended_qc']['alignment_count'] == 4)
+        assert (insertion['json']['extended_qc']['alignment_stored'] == self.resolved_key)
         assert (insertion['json']['extended_qc']['alignment_resolved'] == 1)
-        assert (insertion['json']['extended_qc']['_alignment_resolved_by'] == 'qc')
-        assert (insertion['json']['extended_qc']['_alignment_qc'] > 0.8)
+        assert (insertion['json']['extended_qc']['alignment_resolved_by'] == 'qc')
+        assert (insertion['json']['extended_qc']['alignment_qc'] > 0.8)
         assert (self.ld.resolved == 1)
 
     def test_07_same_user_after_resolved(self):
@@ -215,11 +215,11 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['qc'] == 'NOT_SET')
-        assert (insertion['json']['extended_qc']['_alignment_number'] == 5)
-        assert (insertion['json']['extended_qc']['_alignment_stored'] == self.resolved_key)
+        assert (insertion['json']['extended_qc']['alignment_count'] == 5)
+        assert (insertion['json']['extended_qc']['alignment_stored'] == self.resolved_key)
         assert (insertion['json']['extended_qc']['alignment_resolved'] == 1)
-        assert (insertion['json']['extended_qc']['_alignment_resolved_by'] == 'qc')
-        assert (insertion['json']['extended_qc']['_alignment_qc'] > 0.8)
+        assert (insertion['json']['extended_qc']['alignment_resolved_by'] == 'qc')
+        assert (insertion['json']['extended_qc']['alignment_qc'] > 0.8)
         assert (self.ld.resolved == 1)
 
     @classmethod

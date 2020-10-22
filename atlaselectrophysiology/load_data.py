@@ -259,7 +259,7 @@ class LoadData:
         insertion = self.one.alyx.rest('insertions', 'read', id=self.probe_id)
         self.xyz_picks = np.array(insertion['json']['xyz_picks']) / 1e6
         self.resolved = (insertion.get('json', {'temp': 0}).get('extended_qc', {'temp': 0}).
-                         get('alignment_resolved', 0))
+                         get('alignment_resolved', False))
 
         return self.xyz_picks
 
@@ -348,7 +348,7 @@ class LoadData:
         return description, region_lookup
 
     def upload_data(self, xyz_channels, channels=True):
-        if self.resolved == 0:
+        if not self.resolved:
             channel_upload = True
             # Create new trajectory and overwrite previous one
             histology.register_aligned_track(self.probe_id, xyz_channels,
@@ -370,7 +370,7 @@ class LoadData:
 
         old_user = [key for key in self.alignments.keys() if user in key]
         # Only delete duplicated if trajectory is not resolved
-        if len(old_user) > 0 and self.resolved == 0:
+        if len(old_user) > 0 and not self.resolved:
             self.alignments.pop(old_user[0])
 
         self.alignments.update(data)
