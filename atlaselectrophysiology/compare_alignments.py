@@ -13,7 +13,8 @@ one = ONE()
 fig_path = Path('C:/Users/Mayo/Documents/PYTHON/alignment_figures/scale_factor')
 # Find eid of interest
 aligned_sess = one.alyx.rest('trajectories', 'list', provenance='Ephys aligned histology track',
-                             django='probe_insertion__session__project__name__icontains,ibl_neuropixel_brainwide_01,'
+                             django='probe_insertion__session__project__name__icontains,'
+                                    'ibl_neuropixel_brainwide_01,'
                                     'probe_insertion__session__qc__lt,30')
 eids = np.array([s['session']['id'] for s in aligned_sess])
 probes = np.array([s['probe_name'] for s in aligned_sess])
@@ -92,11 +93,9 @@ for sess in small_scaling:
 
     alignments = trajectory[0]['json']
 
-
     def plot_regions(region, label, colour, ax):
         for reg, col in zip(region, colour):
             height = np.abs(reg[1] - reg[0])
-            bottom = reg[0]
             color = col / 255
             ax.bar(x=0.5, height=height, width=1, color=color, bottom=reg[0], edgecolor='w')
 
@@ -107,11 +106,9 @@ for sess in small_scaling:
         ax.set_ylim([20, 3840])
         ax.get_xaxis().set_visible(False)
 
-
     def plot_scaling(region, scale, mapper, ax):
         for reg, col in zip(region_scaled, scale_factor):
             height = np.abs(reg[1] - reg[0])
-            bottom = reg[0]
             color = np.array(mapper.to_rgba(col, bytes=True)) / 255
             ax.bar(x=1.1, height=height, width=0.2, color=color, bottom=reg[0], edgecolor='w')
 
@@ -121,8 +118,7 @@ for sess in small_scaling:
         sec_ax.tick_params(axis="y", direction="in")
         sec_ax.set_ylim([20, 3840])
 
-
-    fig, ax = plt.subplots(1, len(alignments)+1, figsize=(15, 15))
+    fig, ax = plt.subplots(1, len(alignments) + 1, figsize=(15, 15))
     ephysalign = EphysAlignment(xyz_picks, depths, brain_atlas=brain_atlas)
     feature, track, _ = ephysalign.get_track_and_feature()
     channels_orig = ephysalign.get_channel_locations(feature, track)
@@ -138,7 +134,6 @@ for sess in small_scaling:
     plot_scaling(region_scaled, scale_factor, mapper, ax_i)
     ax_i.set_title('Original')
 
-
     for iK, key in enumerate(alignments):
         # Location of reference lines used for alignmnet
         feature = np.array(alignments[key][0])
@@ -153,7 +148,7 @@ for sess in small_scaling:
         region, region_label = ephysalign.scale_histology_regions(feature, track)
         region_scaled, scale_factor = ephysalign.get_scale_factor(region)
 
-        ax_i = fig.axes[iK+1]
+        ax_i = fig.axes[iK + 1]
         plot_regions(region, region_label, region_colour, ax_i)
         plot_scaling(region_scaled, scale_factor, mapper, ax_i)
         ax_i.set_title(user + '\n Avg dist = ' + str(np.around(avg_dist * 1e6, 2)))

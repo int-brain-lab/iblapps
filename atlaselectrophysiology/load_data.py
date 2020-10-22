@@ -218,7 +218,7 @@ class LoadData:
         print(self.date)
         print(self.eid)
 
-        data_path = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
+        _ = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
         self.sess_path = self.one.path_from_eid(self.eid)
 
         alf_path = Path(self.sess_path, 'alf', self.probe_label)
@@ -390,9 +390,9 @@ class LoadData:
         user = self.one._par.ALYX_LOGIN
         if ephys_desc == 'None':
             ephys_desc = None
-        #self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
-        #                alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
-        #                allow_direct_insert=True, replace=True)
+        self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
+                        alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
+                        allow_direct_insert=True, replace=True)
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number
@@ -406,4 +406,3 @@ class LoadData:
         self.resolved = results['alignment_resolved']
 
         return self.resolved
-

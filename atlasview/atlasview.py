@@ -29,7 +29,7 @@ class TopView(QtWidgets.QMainWindow):
     @staticmethod
     def _get_or_create(title=None):
         av = next(filter(lambda e: e.isVisible() and e.windowTitle() == title,
-                      TopView._instances()), None)
+                         TopView._instances()), None)
         if av is None:
             av = TopView()
             av.setWindowTitle(title)
@@ -56,7 +56,7 @@ class TopView(QtWidgets.QMainWindow):
         self.ctrl.set_top()
 
     def coronal_line_moved(self):
-        self.ctrl.set_slice(self.ctrl.fig_coronal , self.line_coronal.value())
+        self.ctrl.set_slice(self.ctrl.fig_coronal, self.line_coronal.value())
 
     def sagittal_line_moved(self):
         self.ctrl.set_slice(self.ctrl.fig_sagittal, self.line_sagittal.value())
