@@ -14,7 +14,7 @@ class TestChoiceWorldEphysQC(unittest.TestCase):
         os.system(f"ipython {self.iblapps_path}/scripts/choiceworld_ephys_qc.py {self.UUID}")
 
     def test_build_fail(self):
-        os.system(f"ipython {self.iblapps_path}/scripts/choiceworld_ephys_qc.py {"dlsfksdlfkj"}")
+        os.system(f'ipython {self.iblapps_path}/scripts/choiceworld_ephys_qc.py {"dlsfksdlfkj"}')
 
     def tearDown(self):
         pass
