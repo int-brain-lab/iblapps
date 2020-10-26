@@ -48,7 +48,6 @@ for traj in trajectory:
         # Location of reference lines used for alignmnet
         feature = np.array(alignments[key][0])
         track = np.array(alignments[key][1])
-        #user = key[20:]
         user = key[:19]
         # Instantiate EphysAlignment object
         ephysalign = EphysAlignment(xyz_picks, depths, track_prev=track, feature_prev=feature)
