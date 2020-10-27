@@ -1,0 +1,18 @@
+[flake8]
+max-line-length = 99
+ignore = W504
+exclude =
+    .git,
+    __pycache__,
+    __init__.py,
+    data_expoloration_gui/
+    dlc/
+    launch_phy/
+    histology/
+
+    tutorial_script.py,
+    venv,
+    test_imports.py,
+    build,
+    dist
+    brainbox/

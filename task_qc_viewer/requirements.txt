@@ -1,0 +1,8 @@
+flake8
+ibllib
+matplotlib
+pandas
+pyqt5
+pyqtgraph
+ipython
+
