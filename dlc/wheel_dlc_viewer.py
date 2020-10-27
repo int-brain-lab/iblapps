@@ -31,7 +31,7 @@ from alf.io import is_uuid_string
 from oneibl.one import ONE
 from oneibl.webclient import http_download_file_list
 import brainbox.behavior.wheel as wh
-from dlc.exp_ref import eid2ref
+from ibllib.misc.exp_ref import eid2ref
 
 
 def get_video_frame(video_path, frame_number):
