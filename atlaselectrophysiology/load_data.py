@@ -223,9 +223,13 @@ class LoadData:
 
         alf_path = Path(self.sess_path, 'alf', self.probe_label)
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
-        self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
-        self.chn_depths = self.chn_coords[:, 1]
-        self.cluster_chns = np.load(Path(alf_path, 'clusters.channels.npy'))
+        try:
+            self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
+            self.chn_depths = self.chn_coords[:, 1]
+            self.cluster_chns = np.load(Path(alf_path, 'clusters.channels.npy'))
+        except Exception:
+            print('Could not download alf data for this probe - gui will not work')
+            return [None] * 4
 
         sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
         sess_notes = None
