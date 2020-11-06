@@ -1,23 +1,35 @@
-import scipy
 import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
+from ibllib.ephys.neuropixel import SITES_COORDINATES
 import ibllib.atlas as atlas
+from ibllib.qc.alignment_qc import AlignmentQC
 from oneibl.one import ONE
 from pathlib import Path
 import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
-# from atlaselectrophysiology import qc_table
-# brain_atlas = atlas.AllenAtlas(25)
+
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
-class LoadData:
-    def __init__(self):
 
-        self.one = ONE(base_url=ONE_BASE_URL)
-        self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
-        self.brain_atlas = atlas.AllenAtlas(25)
+class LoadData:
+    def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None):
+
+        self.one = one or ONE(base_url=ONE_BASE_URL)
+        self.brain_atlas = brain_atlas or atlas.AllenAtlas(25)
+
+        if testing:
+            self.probe_id = probe_id
+            self.chn_coords = SITES_COORDINATES
+            self.chn_depths = SITES_COORDINATES[:, 1]
+        else:
+            from atlaselectrophysiology import qc_table
+            self.qc = qc_table.EphysQC()
+            self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
+            self.chn_coords = None
+            self.chn_depths = None
+
         # Initialise all variables that get assigned
         self.sess_with_hist = None
         self.traj_ids = None
@@ -29,14 +41,14 @@ class LoadData:
         self.n_sess = None
         self.probe_label = None
         self.traj_id = None
-        self.probe_id = None
         self.date = None
         self.subj = None
-        self.alignments = None
+        self.alignments = {}
         self.prev_align = None
-        self.chn_coords = None
         self.sess_path = None
         self.allen_id = None
+        self.cluster_chns = None
+        self.resolved = None
 
     def get_subjects(self):
         """
@@ -48,7 +60,7 @@ class LoadData:
         all_hist = self.one.alyx.rest('trajectories', 'list', provenance='Histology track')
         # Some do not have tracing, exclude these ones
         self.sess_with_hist = [sess for sess in all_hist if sess['x'] is not None]
-        subjects = [sess['session']['subject'] for sess in self.sess_with_hist]
+        self.subj_with_hist = [sess['session']['subject'] for sess in self.sess_with_hist]
 
         # For all histology tracks find the trajectory and coordinates of active part (where
         # electrodes are located). Used in get_nearby trajectories to find sessions close-by
@@ -61,7 +73,7 @@ class LoadData:
             self.traj_coords[iT, :] = (histology.interpolate_along_track
                                        (np.vstack([traj.tip, traj.entry]), depths))
 
-        self.subjects = np.unique(subjects)
+        self.subjects = np.unique(self.subj_with_hist)
 
         return self.subjects
 
@@ -75,9 +87,8 @@ class LoadData:
         :type: list of strings
         """
         self.subj = self.subjects[idx]
-        subj_sess = self.one.alyx.rest('trajectories', 'list', subject=self.subj,
-                                       provenance='Histology track')
-        self.sess = [sess for sess in subj_sess if sess['x']]
+        sess_idx = [i for i, e in enumerate(self.subj_with_hist) if e == self.subj]
+        self.sess = [self.sess_with_hist[idx] for idx in sess_idx]
         session = [(sess['session']['start_time'][:10] + ' ' + sess['probe_name']) for sess in
                    self.sess]
         return session
@@ -100,17 +111,18 @@ class LoadData:
         self.lab = self.sess[idx]['session']['lab']
         self.eid = self.sess[idx]['session']['id']
 
+        return self.get_previous_alignments()
+
+    def get_previous_alignments(self):
+
         # Looks for any previous alignments
         ephys_traj_prev = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                              provenance='Ephys aligned histology track')
 
         if ephys_traj_prev:
-            self.alignments = ephys_traj_prev[0]['json']
-            self.prev_align = []
-            if self.alignments:
-                self.prev_align = [*self.alignments.keys()]
-            # To make sure they are ordered by date added, default to latest fit
-            self.prev_align.reverse()
+            self.alignments = ephys_traj_prev[0]['json'] or {}
+            self.prev_align = [*self.alignments.keys()]
+            self.prev_align = sorted(self.prev_align, reverse=True)
             self.prev_align.append('original')
         else:
             self.prev_align = ['original']
@@ -128,14 +140,14 @@ class LoadData:
         :return track: reference points in track space
         :type: np.array
         """
-        align = self.prev_align[idx]
+        self.current_align = self.prev_align[idx]
 
-        if align == 'original':
+        if self.current_align == 'original':
             feature = None
             track = None
         else:
-            feature = np.array(self.alignments[align][0])
-            track = np.array(self.alignments[align][1])
+            feature = np.array(self.alignments[self.current_align][0])
+            track = np.array(self.alignments[self.current_align][1])
 
         return feature, track
 
@@ -193,10 +205,12 @@ class LoadData:
             'clusters.metrics',
             'clusters.peakToTrough',
             'clusters.waveforms',
+            'clusters.channels',
             '_iblqc_ephysTimeRms.rms',
             '_iblqc_ephysTimeRms.timestamps',
             '_iblqc_ephysSpectralDensity.freqs',
-            '_iblqc_ephysSpectralDensity.power'
+            '_iblqc_ephysSpectralDensity.power',
+            '_iblqc_ephysSpectralDensity.amps'
         ]
 
         print(self.subj)
@@ -204,13 +218,18 @@ class LoadData:
         print(self.date)
         print(self.eid)
 
-        data_path = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
-        self.sess_path = alf.io.get_session_path(data_path[0])
+        _ = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
+        self.sess_path = self.one.path_from_eid(self.eid)
 
         alf_path = Path(self.sess_path, 'alf', self.probe_label)
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
-        self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
-        chn_depths = self.chn_coords[:, 1]
+        try:
+            self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
+            self.chn_depths = self.chn_coords[:, 1]
+            self.cluster_chns = np.load(Path(alf_path, 'clusters.channels.npy'))
+        except Exception:
+            print('Could not download alf data for this probe - gui will not work')
+            return [None] * 4
 
         sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
         sess_notes = None
@@ -221,7 +240,7 @@ class LoadData:
         if not sess_notes:
             sess_notes = 'No notes for this session'
 
-        return alf_path, ephys_path, chn_depths, sess_notes
+        return alf_path, ephys_path, self.chn_depths, sess_notes
 
     def get_allen_csv(self):
         """
@@ -242,12 +261,12 @@ class LoadData:
         :return xyz_picks: 3D coordinates of points relative to bregma
         :type: np.array(n_picks, 3)
         """
-        insertion = self.one.alyx.rest('insertions', 'list', session=self.eid,
-                                       name=self.probe_label)
-        self.insertion_id = insertion[0]['id']
-        xyz_picks = np.array(insertion[0]['json']['xyz_picks']) / 1e6
+        insertion = self.one.alyx.rest('insertions', 'read', id=self.probe_id)
+        self.xyz_picks = np.array(insertion['json']['xyz_picks']) / 1e6
+        self.resolved = (insertion.get('json', {'temp': 0}).get('extended_qc', {'temp': 0}).
+                         get('alignment_resolved', False))
 
-        return xyz_picks
+        return self.xyz_picks
 
     def get_slice_images(self, xyz_channels):
         # First see if the histology file exists before attempting to connect with FlatIron and
@@ -282,7 +301,8 @@ class LoadData:
         ccf_slice = self.brain_atlas.image[index[:, 0], :, index[:, 2]]
         ccf_slice = np.swapaxes(ccf_slice, 0, 1)
 
-        label_slice = self.brain_atlas._label2rgb(self.brain_atlas.label[index[:, 0], :, index[:, 2]])
+        label_slice = self.brain_atlas._label2rgb(self.brain_atlas.label[index[:, 0], :,
+                                                  index[:, 2]])
         label_slice = np.swapaxes(label_slice, 0, 1)
 
         width = [self.brain_atlas.bc.i2x(0), self.brain_atlas.bc.i2x(456)]
@@ -309,8 +329,8 @@ class LoadData:
             'hist_gr': hist_slice_gr,
             'ccf': ccf_slice,
             'label': label_slice,
-            'scale': np.array([(width[-1] - width[0])/ccf_slice.shape[0],
-                               (height[-1] - height[0])/ccf_slice.shape[1]]),
+            'scale': np.array([(width[-1] - width[0]) / ccf_slice.shape[0],
+                               (height[-1] - height[0]) / ccf_slice.shape[1]]),
             'offset': np.array([width[0], height[0]])
         }
 
@@ -332,52 +352,61 @@ class LoadData:
 
         return description, region_lookup
 
-    def upload_data(self, feature, track, xyz_channels, overwrite=False):
-
-        if overwrite:
-            # Get the original stored trajectory
-            ephys_traj_prev = self.one.alyx.rest('trajectories', 'list',
-                                                 probe_insertion=self.probe_id,
-                                                 provenance='Ephys aligned histology track')
-            # Save the json field in memory
-            original_json = None
-            if np.any(ephys_traj_prev):
-                original_json = ephys_traj_prev[0]['json']
-
+    def upload_data(self, xyz_channels, channels=True):
+        if not self.resolved:
+            channel_upload = True
             # Create new trajectory and overwrite previous one
-            insertion = atlas.Insertion.from_track(xyz_channels, self.brain_atlas)
-            # NEEED TO ADD TIP TO DEPTH?
-            brain_regions = self.brain_atlas.regions.get(self.brain_atlas.get_labels(xyz_channels))
-            brain_regions['xyz'] = xyz_channels
-            brain_regions['lateral'] = self.chn_coords[:, 0]
-            brain_regions['axial'] = self.chn_coords[:, 1]
-            assert np.unique([len(brain_regions[k]) for k in brain_regions]).size == 1
-            histology.register_aligned_track(self.probe_id, insertion, brain_regions, one=self.one,
-                                             overwrite=overwrite)
+            histology.register_aligned_track(self.probe_id, xyz_channels,
+                                             chn_coords=self.chn_coords, one=self.one,
+                                             overwrite=True, channels=channels)
+        else:
+            channel_upload = False
 
-            # Get the new trajectoru
-            ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
-                                            provenance='Ephys aligned histology track')
+        return channel_upload
 
-            name = self.one._par.ALYX_LOGIN
+    def update_alignments(self, feature, track, key_info=None):
+        if not key_info:
+            user = self.one._par.ALYX_LOGIN
             date = datetime.now().replace(microsecond=0).isoformat()
-            data = {date + '_' + name: [feature.tolist(), track.tolist()]}
-            if original_json:
-                original_json.update(data)
-            else:
-                original_json = data
-            patch_dict = {'json': original_json}
-            self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
-                               data=patch_dict)
+            data = {date + '_' + user: [feature.tolist(), track.tolist()]}
+        else:
+            user = key_info[20:]
+            data = {key_info: [feature.tolist(), track.tolist()]}
+
+        old_user = [key for key in self.alignments.keys() if user in key]
+        # Only delete duplicated if trajectory is not resolved
+        if len(old_user) > 0 and not self.resolved:
+            self.alignments.pop(old_user[0])
+
+        self.alignments.update(data)
+        self.update_json(self.alignments)
+
+    def update_json(self, json_data):
+        # Get the new trajectory
+        ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+                                        provenance='Ephys aligned histology track')
+        patch_dict = {'json': json_data}
+        self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
+                           data=patch_dict)
 
     def upload_dj(self, align_qc, ephys_qc, ephys_desc):
         # Upload qc results to datajoint table
-
         user = self.one._par.ALYX_LOGIN
-        qc = qc_table.EphysQC()
         if ephys_desc == 'None':
             ephys_desc = None
-        qc.insert1(dict(probe_insertion_uuid=self.insertion_id, user_name=user,
+        self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
                         alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
-                   allow_direct_insert=True, replace=True)
+                        allow_direct_insert=True, replace=True)
 
+    def update_qc(self, upload_alyx=True, upload_flatiron=True):
+        # if resolved just update the alignment_number
+
+        align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
+        align_qc.load_data(prev_alignments=self.alignments, xyz_picks=self.xyz_picks,
+                           depths=self.chn_depths, cluster_chns=self.cluster_chns)
+        results = align_qc.run(update=True, upload_alyx=upload_alyx,
+                               upload_flatiron=upload_flatiron)
+
+        self.resolved = results['alignment_resolved']
+
+        return self.resolved

@@ -1,5 +1,3 @@
-import numpy as np
-
 from brainbox.io.one import load_spike_sorting, load_channel_locations
 from oneibl.one import ONE
 

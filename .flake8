@@ -5,7 +5,11 @@ exclude =
     .git,
     __pycache__,
     __init__.py,
-    scratch_*.py,
+    data_expoloration_gui/
+    dlc/
+    launch_phy/
+    histology/
+
     tutorial_script.py,
     venv,
     test_imports.py,

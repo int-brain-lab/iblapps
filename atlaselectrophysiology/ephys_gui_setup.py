@@ -240,7 +240,7 @@ class Setup():
         if not self.offline:
             complete_option.triggered.connect(self.display_qc_options)
         else:
-            complete_option.triggered.connect(self.complete_button_pressed)
+            complete_option.triggered.connect(self.complete_button_pressed_offline)
 
         # Add menu bar with all possible keyboard interactions
         fit_options = menu_bar.addMenu("Fit Options")
@@ -385,7 +385,7 @@ class Setup():
         if not self.offline:
             self.complete_button.clicked.connect(self.display_qc_options)
         else:
-            self.complete_button.clicked.connect(self.complete_button_pressed)
+            self.complete_button.clicked.connect(self.complete_button_pressed_offline)
 
         if not self.offline:
             # If offline mode is False, read in Subject and Session options from Alyx
@@ -440,6 +440,7 @@ class Setup():
         self.interaction_layout2 = QtWidgets.QHBoxLayout()
         self.interaction_layout2.addWidget(self.reset_button)
         self.interaction_layout2.addWidget(self.complete_button)
+
         # Group 3 will depend on online/ offline mode
         self.interaction_layout3 = QtWidgets.QHBoxLayout()
         if not self.offline:
@@ -483,7 +484,6 @@ class Setup():
             dialog_layout.addWidget(self.ephys_desc)
             dialog_layout.addWidget(buttonBox)
             self.qc_dialog.setLayout(dialog_layout)
-
 
     def init_region_lookup(self, allen):
         """
@@ -611,7 +611,7 @@ class Setup():
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
         self.set_axis(self.fig_hist, 'bottom', pen='w', ticks=False)
-        self.ax_hist = self.set_axis(self.fig_hist, 'left', pen='k')
+        self.ax_hist = self.set_axis(self.fig_hist, 'left', pen=None)
         self.ax_hist.setWidth(0)
         self.ax_hist.setStyle(tickTextOffset=-70)
 
@@ -639,7 +639,7 @@ class Setup():
                                     self.probe_extra, padding=self.pad)
         self.set_axis(self.fig_hist_ref, 'bottom', pen='w')
         self.set_axis(self.fig_hist_ref, 'left', show=False)
-        self.ax_hist_ref = self.set_axis(self.fig_hist_ref, 'right', pen='k')
+        self.ax_hist_ref = self.set_axis(self.fig_hist_ref, 'right', pen=None)
         self.ax_hist_ref.setWidth(0)
         self.ax_hist_ref.setStyle(tickTextOffset=-70)
 
@@ -674,7 +674,6 @@ class Setup():
         self.fig_slice_area.addItem(self.fig_slice_layout)
         self.slice_item = self.fig_slice_hist_alt
 
-
         # Figure to show fit and offset applied by user
         self.fig_fit = pg.PlotWidget(background='w')
         self.fig_fit.setMouseEnabled(x=False, y=False)
@@ -700,8 +699,8 @@ class Setup():
         self.on_fig_size_changed()
 
     def on_fig_size_changed(self):
-        fig_width = self.fig_fit_exporter.getTargetRect().width()
-        fig_height = self.fig_fit_exporter.getTargetRect().width()
+        # fig_width = self.fig_fit_exporter.getTargetRect().width()
+        # fig_height = self.fig_fit_exporter.getTargetRect().width()
         self.lin_fit_option.move(70, 10)
 
 
@@ -709,7 +708,7 @@ class PopupWindow(QtGui.QMainWindow):
     closed = QtCore.pyqtSignal(QtGui.QMainWindow)
     moved = QtCore.pyqtSignal()
 
-    def __init__(self, title, parent=None, size=(300,300), graphics=True):
+    def __init__(self, title, parent=None, size=(300, 300), graphics=True):
         super(PopupWindow, self).__init__()
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         self.resize(size[0], size[1])
@@ -730,7 +729,3 @@ class PopupWindow(QtGui.QMainWindow):
 
     def leaveEvent(self, event):
         self.moved.emit()
-
-
-
-

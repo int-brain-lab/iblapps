@@ -56,7 +56,7 @@ class HorizontalBar(pg.GraphicsWidget):
         self.width = width
         self.height = height
         self.grad = grad
-        p = QtGui.QPainter()
+        QtGui.QPainter()
 
     def paint(self, p, *args):
         p.setPen(QtCore.Qt.NoPen)
@@ -72,7 +72,7 @@ class VerticalBar(pg.GraphicsWidget):
         self.width = width
         self.height = height
         self.grad = grad
-        p = QtGui.QPainter()
+        QtGui.QPainter()
 
     def paint(self, p, *args):
         p.setPen(QtCore.Qt.NoPen)

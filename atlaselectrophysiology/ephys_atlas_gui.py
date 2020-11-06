@@ -14,6 +14,7 @@ from pathlib import Path
 import os
 import time
 
+
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def __init__(self, offline=False):
         super(MainWindow, self).__init__()
@@ -80,12 +81,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.probe_cbars = []
         self.scale_regions = np.empty((0, 1))
         self.slice_lines = []
+        self.slice_items = []
 
         # Variables to keep track of popup plots
         self.cluster_popups = []
         self.label_popup = []
         self.popup_status = True
-
 
         self.hist_data = {
             'region': [0] * (self.max_idx + 1),
@@ -529,7 +530,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             # Need to keep track of each histology region for label pressed interaction
             self.hist_regions = np.vstack([self.hist_regions, region])
 
-
         self.selected_region = self.hist_regions[-2]
 
         # Boundary for final region
@@ -629,7 +629,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                            self.hist_nearby_col)):
             colour = QtGui.QColor(c)
             plot = pg.PlotCurveItem()
-            plot.setData(x=x, y=y*1e6, fillLevel=10, fillOutline=True)
+            plot.setData(x=x, y=y * 1e6, fillLevel=10, fillOutline=True)
             plot.setBrush(colour)
             plot.setPen(colour)
             fig.addItem(plot)
@@ -639,7 +639,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             colour = QtGui.QColor(c)
             colour.setAlpha(70)
             plot = pg.PlotCurveItem()
-            plot.setData(x=x, y=y*1e6, fillLevel=10, fillOutline=True)
+            plot.setData(x=x, y=y * 1e6, fillLevel=10, fillOutline=True)
             plot.setBrush(colour)
             plot.setPen(colour)
             fig.addItem(plot)
@@ -658,8 +658,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         Offset location of probe tip along probe track
         """
-        self.track[self.idx] = (self.track[self.idx_prev] +
-                                         self.tip_pos.value() / 1e6)
+        self.track[self.idx] = (self.track[self.idx_prev] + self.tip_pos.value() / 1e6)
         self.features[self.idx] = (self.features[self.idx_prev])
 
         self.hist_data['region'][self.idx], self.hist_data['axis_label'][self.idx] \
@@ -679,10 +678,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         depths_track = np.sort(np.r_[self.track[self.idx_prev][[0, -1]], line_track])
 
         self.track[self.idx] = self.ephysalign.feature2track(depths_track,
-                                        self.features[self.idx_prev], self.track[self.idx_prev])
+                                                             self.features[self.idx_prev],
+                                                             self.track[self.idx_prev])
 
         self.features[self.idx] = np.sort(np.r_[self.features[self.idx_prev]
-                                                         [[0, -1]], line_feature])
+                                                [[0, -1]], line_feature])
 
         if (self.features[self.idx].size >= 5) & self.lin_fit:
             self.features[self.idx], self.track[self.idx] = \
@@ -752,7 +752,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fit_plot_lin.setData()
 
     def plot_slice(self, data, img_type):
-        self.fig_slice.clear()
+        [self.fig_slice.removeItem(it) for it in self.slice_items]
         self.slice_chns = []
         self.slice_lines = []
         img = pg.ImageItem()
@@ -785,8 +785,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.slice_item = self.fig_slice_hist
 
         self.fig_slice.addItem(img)
+        self.slice_items.append(img)
         self.traj_line = pg.PlotCurveItem()
         self.traj_line.setData(x=self.xyz_track[:, 0], y=self.xyz_track[:, 2], pen=self.kpen_solid)
+        self.slice_items.append(self.traj_line)
         self.fig_slice.addItem(self.traj_line)
         self.plot_channels()
 
@@ -800,6 +802,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.slice_chns.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2], pen='r',
                                     brush='r')
             self.fig_slice.addItem(self.slice_chns)
+            self.slice_items.append(self.slice_chns)
             track_lines = self.ephysalign.get_perp_vector(self.features[self.idx],
                                                           self.track[self.idx])
 
@@ -901,7 +904,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_line.addItem(line)
             self.fig_line.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
             self.fig_line.setYRange(min=self.probe_tip - self.probe_extra,
-                                    max=self.probe_top +self.probe_extra, padding=self.pad)
+                                    max=self.probe_top + self.probe_extra, padding=self.pad)
             self.set_axis(self.fig_line, 'bottom', label=data['xaxis'])
             self.line_plots.append(line)
 
@@ -1009,6 +1012,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :param idx: index chosen subject (item) in drop down list
         :type idx: int
         """
+        self.data_status = False
         self.sess_list.clear()
         sessions = self.loaddata.get_sessions(idx)
         self.populate_lists(sessions, self.sess_list, self.sess_combobox)
@@ -1023,6 +1027,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :param idx: index of chosen session (item) in drop down list
         :type idx: int
         """
+        self.data_status = False
         self.prev_alignments = self.loaddata.get_info(idx)
         #self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
@@ -1032,6 +1037,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         Triggered in offline mode when folder button is clicked
         """
+        self.data_status = False
         folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
         self.folder_line.setText(str(folder_path))
         self.prev_alignments = self.loaddata.get_info(folder_path)
@@ -1052,19 +1058,30 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         [self.fig_line.removeItem(plot) for plot in self.line_plots]
         [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
         [self.fig_probe.removeItem(cbar) for cbar in self.probe_cbars]
+        [self.fig_slice.removeItem(it) for it in self.slice_items]
+        self.fig_hist.clear()
+        self.fig_hist_ref.clear()
+        self.fig_scale.clear()
         self.fit_plot.setData()
         self.remove_lines_points()
         self.init_variables()
 
-        self.alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
-        xyz_picks = self.loaddata.get_xyzpicks()
+        # Only run once
+        if not self.data_status:
+            alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
+            if not alf_path:
+                return
+            else:
+                self.xyz_picks = self.loaddata.get_xyzpicks()
 
         if np.any(self.feature_prev):
-            self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths,
+            self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
                                              track_prev=self.track_prev,
-                                             feature_prev=self.feature_prev)
+                                             feature_prev=self.feature_prev,
+                                             brain_atlas=self.loaddata.brain_atlas)
         else:
-            self.ephysalign = EphysAlignment(xyz_picks, self.chn_depths)
+            self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
+                                             brain_atlas=self.loaddata.brain_atlas)
 
         self.features[self.idx], self.track[self.idx], self.xyz_track \
             = self.ephysalign.get_track_and_feature()
@@ -1081,18 +1098,21 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                                       self.ephysalign.track_extent)
         self.hist_data_ref['colour'] = self.ephysalign.region_colour
 
-        self.plotdata = pd.PlotData(self.alf_path, ephys_path)
-        self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
-        self.scat_drift_data = self.plotdata.get_depth_data_scatter()
-        (self.scat_fr_data, self.scat_p2t_data,
-         self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
-        self.img_corr_data = self.plotdata.get_correlation_data_img()
-        self.img_fr_data = self.plotdata.get_fr_img()
-        self.img_rms_APdata, self.probe_rms_APdata = self.plotdata.get_rms_data_img_probe('AP')
-        self.img_rms_LFPdata, self.probe_rms_LFPdata = self.plotdata.get_rms_data_img_probe('LF')
-        self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
-        self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
+        if not self.data_status:
+            self.plotdata = pd.PlotData(alf_path, ephys_path)
+            self.scat_drift_data = self.plotdata.get_depth_data_scatter()
+            (self.scat_fr_data, self.scat_p2t_data,
+             self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
+            self.img_corr_data = self.plotdata.get_correlation_data_img()
+            self.img_fr_data = self.plotdata.get_fr_img()
+            self.img_rms_APdata, self.probe_rms_APdata = self.plotdata.get_rms_data_img_probe('AP')
+            self.img_rms_LFPdata, self.probe_rms_LFPdata = self.plotdata.get_rms_data_img_probe(
+                'LF')
+            self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
+            self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
+            self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
 
+            self.data_status = True
 
         # Initialise checked plots
         self.img_init.setChecked(True)
@@ -1111,6 +1131,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.compute_nearby_boundaries()
         self.plot_histology_nearby(self.fig_hist_ref)
         self.plot_histology(self.fig_hist)
+        self.label_status = False
+        self.toggle_labels_button_pressed()
         self.plot_scale_factor()
         if np.any(self.feature_prev):
             self.create_lines(self.feature_prev[1:-1] * 1e6)
@@ -1125,7 +1147,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
     def compute_nearby_boundaries(self):
         nearby_bounds = self.ephysalign.get_nearest_boundary(self.ephysalign.xyz_samples,
-                                                             self.allen, steps=6)
+                                                             self.allen, steps=6,
+                                                             brain_atlas=self.loaddata.brain_atlas)
         [self.hist_nearby_x, self.hist_nearby_y,
          self.hist_nearby_col] = self.ephysalign.arrange_into_regions(
             self.ephysalign.sampling_trk, nearby_bounds['id'], nearby_bounds['dist'],
@@ -1147,8 +1170,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.plot_histology_nearby(self.fig_hist_ref)
         else:
             self.plot_histology_ref(self.fig_hist_ref)
-
-
 
     def filter_unit_pressed(self, type):
         self.plotdata.filter_units(type)
@@ -1451,18 +1472,55 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
         Alyx
         """
-        upload = QtGui.QMessageBox.question(self, '',
-                                            "Save final channel locations?",
+        upload = QtGui.QMessageBox.question(self, '', "Upload alignment?",
                                             QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+
         if upload == QtGui.QMessageBox.Yes:
-            self.loaddata.upload_data(self.features[self.idx], self.track[self.idx],
-                                      self.xyz_channels, overwrite=True)
-            QtGui.QMessageBox.information(self, 'Status', ("Electrode locations "
-                                                           "succesfully saved"))
+            upload_channels = self.loaddata.upload_data(self.xyz_channels)
+            self.loaddata.update_alignments(self.features[self.idx], self.track[self.idx])
+            self.prev_alignments = self.loaddata.get_previous_alignments()
+            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            self.loaddata.get_starting_alignment(0)
+            resolved = self.loaddata.update_qc()
+
+            if upload_channels and resolved == 0:
+                # channels saved alignment not resolved
+                QtGui.QMessageBox.information(self, 'Status', ("Channels locations saved to Alyx. "
+                                                               "Alignment not resolved"))
+            if upload_channels and resolved == 1:
+                # channels saved alignment resolved, writen to flatiron
+                QtGui.QMessageBox.information(self, 'Status', ("Channel locations saved to Alyx. "
+                                                               "Alignment resolved and channels "
+                                                               "datasets written to flatiron"))
+            if not upload_channels and resolved == 1:
+                # alignment already resolved, save alignment but channels not written
+                QtGui.QMessageBox.information(self,
+                                              'Status', ("Channel locations not saved to Alyx"
+                                                         " as alignment has already been "
+                                                         "resolved. New user reference lines"
+                                                         " have been saved"))
         else:
             pass
-            QtGui.QMessageBox.information(self, 'Status', "Electrode locations not saved")
+            QtGui.QMessageBox.information(self, 'Status', "Channels not saved")
 
+    def complete_button_pressed_offline(self):
+        """
+        Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
+        json file
+        """
+        upload = QtGui.QMessageBox.question(self, '', "Upload alignment?",
+                                            QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+
+        if upload == QtGui.QMessageBox.Yes:
+            self.loaddata.upload_data(self.features[self.idx], self.track[self.idx],
+                                      self.xyz_channels)
+            self.prev_alignments = self.loaddata.get_previous_alignments()
+            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            self.loaddata.get_starting_alignment(0)
+            QtGui.QMessageBox.information(self, 'Status', "Channels locations saved")
+        else:
+            pass
+            QtGui.QMessageBox.information(self, 'Status', "Channels not saved")
 
     def display_qc_options(self):
         self.qc_dialog.exec()
@@ -1634,7 +1692,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         if len(items) > 1:
             self.selected_line = []
-            #self.selected_region = []
             if type(items[0]) == pg.InfiniteLine:
                 self.selected_line = items[0]
             elif (items[0] == self.fig_scale) & (type(items[1]) == pg.LinearRegionItem):
@@ -1645,8 +1702,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 self.selected_region = items[1]
             elif (items[0] == self.fig_hist_ref) & (type(items[1]) == pg.LinearRegionItem):
                 self.selected_region = items[1]
-
-
 
     def update_lines_features(self, line):
         """
@@ -1758,8 +1813,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                           symbolBrush=brush, symbol='o', symbolSize=10)
             self.fig_fit.addItem(point)
             self.points = np.vstack([self.points, point])
-
-
 
     def create_line_style(self):
         """

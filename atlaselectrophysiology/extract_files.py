@@ -51,7 +51,8 @@ def rmsmap(fbin, spectra=True):
                 continue
             # compute a smoothed spectrum using welch method
             _, w = signal.welch(D, fs=sglx.fs, window='hanning', nperseg=WELCH_WIN_LENGTH_SAMPLES,
-                            detrend='constant', return_onesided=True, scaling='density', axis=-1)
+                                detrend='constant', return_onesided=True, scaling='density',
+                                axis=-1)
             win['spectral_density'] += w.T
         # print at least every 20 windows
         if (iw % min(20, max(int(np.floor(wingen.nwin / 75)), 1))) == 0:
