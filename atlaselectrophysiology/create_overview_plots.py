@@ -54,7 +54,7 @@ def make_overview_plot(folder, sess_info):
 
     for iF, file in enumerate(slice_files_sort):
         ax = fig.add_subplot(gs[slice_row_order[iF],
-                                 slice_column_order[iF]:slice_column_order[iF] + 3])
+                                slice_column_order[iF]:slice_column_order[iF] + 3])
         load_image(Path(file), ax)
 
     slice_files = glob.glob(str(image_folder.joinpath(image_info + 'slice_zoom*.png')))
@@ -75,7 +75,5 @@ def make_overview_plot(folder, sess_info):
     ax.text(0.5, 0, image_info[:-1], va="center", ha="center", transform=ax.transAxes)
 
     plt.savefig(image_folder.joinpath(image_info + "overview.png"),
-                bbox_inches='tight',  pad_inches=0)
+                bbox_inches='tight', pad_inches=0)
     plt.show()
-
-

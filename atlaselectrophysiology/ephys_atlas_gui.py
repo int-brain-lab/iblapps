@@ -12,7 +12,6 @@ import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
 import os
-import time
 
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
@@ -326,12 +325,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Saves all plots from the GUI into folder
         """
         # make folder to save plots to
-        # need to make sure that its always the same!!!!
-        # image_path = self.alf_path.joinpath('GUI_plots')
-        # image_path = Path.home().joinpath('GUI_plots')
-        sess_info = self.loaddata.subj + '_' + str(self.loaddata.date) + '_' +  \
-                    self.loaddata.probe_label + '_'
-        image_path_overview = Path.home().joinpath('GUI_plots')
+        sess_info = (self.loaddata.subj + '_' + str(self.loaddata.date) + '_' +
+                     self.loaddata.probe_label + '_')
+        image_path_overview = self.alf_path.joinpath('GUI_plots')
         image_path = image_path_overview.joinpath(sess_info[:-1])
         os.makedirs(image_path_overview, exist_ok=True)
         os.makedirs(image_path, exist_ok=True)
@@ -350,9 +346,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         ax_width = self.fig_img.getAxis('left').width()
         ax_height = self.fig_img_cb.getAxis('top').height()
 
-        self.set_font(self.fig_img, 'left', ptsize=15, width=ax_width+20)
+        self.set_font(self.fig_img, 'left', ptsize=15, width=ax_width + 20)
         self.set_font(self.fig_img, 'bottom', ptsize=15)
-        self.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height+15)
+        self.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height + 15)
 
         self.fig_data_area.resize(700, height1)
 
@@ -360,11 +356,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         start_plot = self.img_options_group.checkedAction()
 
         while plot != start_plot:
-            self.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height+15)
+            self.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height + 15)
             exporter = pg.exporters.ImageExporter(self.fig_data_layout)
             exporter.export(str(image_path.joinpath(sess_info + 'img_' +
-                                                self.img_options_group.checkedAction().text()
-                                                + '.png')))
+                                                    self.img_options_group.checkedAction()
+                                                    .text() + '.png')))
             self.toggle_plots(self.img_options_group)
             plot = self.img_options_group.checkedAction()
 
@@ -373,25 +369,25 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.set_font(self.fig_img_cb, 'top', ptsize=8, height=ax_height)
         self.fig_data_layout.removeItem(self.fig_img)
         self.fig_data_layout.removeItem(self.fig_img_cb)
-        #self.fig_data_area.resize(width, height)
 
         # Next go over probe plots
         self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
         self.fig_data_layout.addItem(self.fig_probe, 1, 0)
         self.set_axis(self.fig_probe, 'left', label='Distance from probe tip (uV)')
         self.fig_probe.setFixedWidth(self.fig_probe_width + self.fig_ax_width + 20)
-        self.set_font(self.fig_probe, 'left', ptsize=15, width=ax_width+20)
-        self.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height+15)
+        self.set_font(self.fig_probe, 'left', ptsize=15, width=ax_width + 20)
+        self.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height + 15)
         self.fig_data_area.resize(250, height1)
 
         plot = None
         start_plot = self.probe_options_group.checkedAction()
 
         while plot != start_plot:
-            self.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height+15)
+            self.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height + 15)
             exporter = pg.exporters.ImageExporter(self.fig_data_layout)
             exporter.export(str(image_path.joinpath(sess_info + 'probe_' +
-                                                    self.probe_options_group.checkedAction().text() + '.png')))
+                                                    self.probe_options_group.checkedAction().
+                                                    text() + '.png')))
             self.toggle_plots(self.probe_options_group)
             plot = self.probe_options_group.checkedAction()
 
@@ -403,16 +399,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Next go through the line plots
         self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
-        #[self.fig_probe_cb.removeItem(cbar) for cbar in self.fig_probe_cb.items]
-        #cbar = self.fig_probe_cb.items[0]
-        #self.fig_probe_cb.removeItem(cbar)
         self.fig_probe_cb.clear()
         text = self.fig_probe_cb.getAxis('top').label.toPlainText()
         self.set_axis(self.fig_probe_cb, 'top', pen='w')
         self.fig_data_layout.addItem(self.fig_line, 1, 0)
 
         self.set_axis(self.fig_line, 'left', label='Distance from probe tip (um)')
-        self.set_font(self.fig_line, 'left', ptsize=15, width=ax_width+20)
+        self.set_font(self.fig_line, 'left', ptsize=15, width=ax_width + 20)
         self.set_font(self.fig_line, 'bottom', ptsize=15)
         self.fig_data_area.resize(200, height1)
 
@@ -421,11 +414,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         while plot != start_plot:
             exporter = pg.exporters.ImageExporter(self.fig_data_layout)
             exporter.export(str(image_path.joinpath(sess_info + 'line_' +
-                                                    self.line_options_group.checkedAction().text() + '.png')))
+                                                    self.line_options_group.checkedAction().
+                                                    text() + '.png')))
             self.toggle_plots(self.line_options_group)
             plot = self.line_options_group.checkedAction()
 
-        #self.fig_probe_cb.addItem(cbar)
         [self.fig_probe_cb.addItem(cbar) for cbar in self.probe_cbars]
         self.set_axis(self.fig_probe_cb, 'top', pen='k', label=text)
         self.set_font(self.fig_line, 'left', ptsize=8, width=ax_width)
@@ -752,7 +745,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fit_plot_lin.setData()
 
     def plot_slice(self, data, img_type):
-        [self.fig_slice.removeItem(it) for it in self.slice_items]
+        # [self.fig_slice.removeItem(it) for it in self.slice_items]
+        self.fig_slice.clear()
         self.slice_chns = []
         self.slice_lines = []
         img = pg.ImageItem()
@@ -780,7 +774,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             upper_idx = np.where(hist_count > 10)[0][-1]
             upper_val = hist_val[upper_idx]
             if hist_levels[0] != 0:
-                #self.fig_slice_hist.setLevels(min=hist_levels[0], max=0.25 * hist_levels[1])
                 self.fig_slice_hist.setLevels(min=hist_levels[0], max=upper_val)
             self.slice_item = self.fig_slice_hist
 
@@ -1017,7 +1010,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         sessions = self.loaddata.get_sessions(idx)
         self.populate_lists(sessions, self.sess_list, self.sess_combobox)
         self.prev_alignments = self.loaddata.get_info(0)
-        #self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
+        self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
@@ -1029,7 +1022,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         self.data_status = False
         self.prev_alignments = self.loaddata.get_info(idx)
-        #self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
+        self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
@@ -1058,7 +1051,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         [self.fig_line.removeItem(plot) for plot in self.line_plots]
         [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
         [self.fig_probe.removeItem(cbar) for cbar in self.probe_cbars]
-        [self.fig_slice.removeItem(it) for it in self.slice_items]
+        # [self.fig_slice.removeItem(it) for it in self.slice_items]
+        self.fig_slice.clear()
         self.fig_hist.clear()
         self.fig_hist_ref.clear()
         self.fig_scale.clear()
@@ -1068,8 +1062,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Only run once
         if not self.data_status:
-            alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
-            if not alf_path:
+            self.alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
+            if not self.alf_path:
                 return
             else:
                 self.xyz_picks = self.loaddata.get_xyzpicks()
@@ -1099,7 +1093,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.hist_data_ref['colour'] = self.ephysalign.region_colour
 
         if not self.data_status:
-            self.plotdata = pd.PlotData(alf_path, ephys_path)
+            self.plotdata = pd.PlotData(self.alf_path, ephys_path)
             self.scat_drift_data = self.plotdata.get_depth_data_scatter()
             (self.scat_fr_data, self.scat_p2t_data,
              self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
@@ -1127,9 +1121,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_line(self.line_fr_data)
 
         # Initialise histology plots
-        #self.plot_histology_ref(self.fig_hist_ref)
-        self.compute_nearby_boundaries()
-        self.plot_histology_nearby(self.fig_hist_ref)
+        self.plot_histology_ref(self.fig_hist_ref)
         self.plot_histology(self.fig_hist)
         self.label_status = False
         self.toggle_labels_button_pressed()
@@ -1280,13 +1272,17 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.label_status = not self.label_status
         if not self.label_status:
             self.ax_hist_ref.setPen(None)
+            self.ax_hist_ref.setTextPen(None)
             self.ax_hist.setPen(None)
+            self.ax_hist.setTextPen(None)
             self.fig_hist_ref.update()
             self.fig_hist.update()
 
         else:
             self.ax_hist_ref.setPen('k')
+            self.ax_hist_ref.setTextPen('k')
             self.ax_hist.setPen('k')
+            self.ax_hist.setTextPen('k')
             self.fig_hist_ref.update()
             self.fig_hist.update()
 
@@ -1848,6 +1844,6 @@ if __name__ == '__main__':
 
     app = QtWidgets.QApplication([])
     mainapp = MainWindow(offline=args.offline)
-    #mainapp = MainWindow(offline=True)
+    # mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()

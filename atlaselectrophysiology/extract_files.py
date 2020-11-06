@@ -121,4 +121,3 @@ def extract_data(ks_path, ephys_path, out_path):
 #    ks_path = Path('C:/Users/Mayo/Downloads/KS2')
 #    out_path = Path('C:/Users/Mayo/Downloads/alf')
 #    extract_data(ks_path, ephys_path, out_path)
-
