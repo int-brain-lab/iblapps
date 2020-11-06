@@ -6,7 +6,8 @@ import cv2
 import os
 from oneibl.webclient import http_download_file_list
 import matplotlib
-
+import pandas as pd
+# conda install -c conda-forge pyarrow
 
 def find_nearest(array, value):
     array = np.asarray(array)
@@ -58,11 +59,17 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     eid: session id, e.g. '3663d82b-f197-4e8b-b299-7b803a155b84'
     video_type: one of 'left', 'right', 'body'
     trial_range: first and last trial number of range to be shown, e.g. [5,7]
-    save_video: video is displayed and saved next to original video
+    save_video: video is displayed and saved in local folder
+
     Example usage to view and save labeled video with wheel angle:
     Viewer('3663d82b-f197-4e8b-b299-7b803a155b84', 'left', [5,7])
+    3D example: 'cb2ad999-a6cb-42ff-bf71-1774c57e5308', [5,7]
     '''
-
+ 
+    save_vids_here = '/home/mic/3D-Animal-Pose-master/IBL_example/%s_trials_%s_%s/' %(eid, trial_range[0], trial_range[1])
+    if save_vids_here[-1] != '/':
+        return 'Last character of save_vids_here must be slash' 
+ 
     one = ONE()
     dataset_types = ['camera.times',
                      'wheel.position',
@@ -77,7 +84,6 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
 
     D = one.load(eid, dataset_types=dataset_types, dclass_output=True)
     alf_path = Path(D.local_path[0]).parent.parent / 'alf'
-    
 
     # Download a single video
     video_data = alf_path.parent / 'raw_video_data'     
@@ -86,9 +92,16 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     print(video_path) 
 
     # that gives cam time stamps and DLC output (change to alf_path eventually)
-    cam0 = alf.io.load_object(alf_path, '_ibl_%sCamera' % video_type)        
-    cam1 = alf.io.load_object(video_path.parent, '_ibl_%sCamera' % video_type)
-    cam = {'times':cam0['times'],**cam1}
+    
+    cam1 = alf.io.load_object(alf_path, '%sCamera' % video_type, namespace = 'ibl')     
+    try:
+        cam0 = alf.io.load_object(alf_path, '%sCamera' % video_type, namespace = 'ibl')          
+    except:
+        cam0 = {}    
+    cam = {**cam0,**cam1}
+
+    # just to read in times for newer data (which has DLC results in pqt format
+    #cam = alf.io.load_object(alf_path, '_ibl_%sCamera' % video_type)
 
     # set where to read and save video and get video info
     cap = cv2.VideoCapture(video_path.as_uri())
@@ -97,9 +110,11 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     size = (int(cap.get(3)), int(cap.get(4)))
 
     assert length < len(cam['times']), '#frames > #stamps'
+    print(eid,', ', video_type,', fsp:', fps,', #frames:', length, ', #stamps:', len(cam['times']), ', #frames - #stamps = ', length - len(cam['times'])) 
+
 
     # pick trial range for which to display stuff
-    trials = alf.io.load_object(alf_path, '_ibl_trials')
+    trials = alf.io.load_object(alf_path, 'trials', namespace = 'ibl')
     num_trials = len(trials['intervals'])
     if trial_range[-1] > num_trials - 1:
         print('There are only %s trials' % num_trials)
@@ -113,7 +128,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     wheel related stuff
     '''
 
-    wheel = alf.io.load_object(alf_path, '_ibl_wheel')
+    wheel = alf.io.load_object(alf_path, 'wheel', namespace ='ibl')
     import brainbox.behavior.wheel as wh
     try:
         pos, t = wh.interpolate_position(
@@ -144,8 +159,15 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     Times = cam['times'][frame_start:frame_stop] 
     del cam['times']      
 
+#    dlc_name = '_ibl_%sCamera.dlc.pqt' % video_type
+#    dlc_path = alf_path / dlc_name
+#    cam=pd.read_parquet(dlc_path)    
+
+
     points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
-    
+    if len(points)==1:
+        cam = cam['dlc']
+        points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
 
     if video_type != 'body':
         d = list(points) 
@@ -154,18 +176,21 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         points = np.array(d)
 
 
-    # Set values to nan if likelyhood is too low
+    # Set values to nan if likelyhood is too low # for pqt: .to_numpy()
     XYs = {}
     for point in points:
         x = np.ma.masked_where(
-            cam[point + '_likelihood'] < 0.9, cam[point + '_x'])
+            cam[point + '_likelihood'].to_numpy() < 0.9, cam[point + '_x'].to_numpy())
         x = x.filled(np.nan)
         y = np.ma.masked_where(
-            cam[point + '_likelihood'] < 0.9, cam[point + '_y'])
+            cam[point + '_likelihood'].to_numpy() < 0.9, cam[point + '_y'].to_numpy())
         y = y.filled(np.nan)
         XYs[point] = np.array(
             [x[frame_start:frame_stop], y[frame_start:frame_stop]])
 
+    # Just for 3D testing
+    #return XYs
+    
     # Zoom at eye
     if eye_zoom:
         pivot = np.nanmean(XYs['pupil_top_r'], axis=1)
@@ -188,11 +213,10 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         
 
     if save_video:
-        f_name = '%s_trials_%s_%s_%s.mp4' % (eid,trial_range[0],
-                                             trial_range[-1],video_type)
-        save_path = video_data / f_name
-        save_path = str(save_path)
-        out = cv2.VideoWriter(save_path,
+        out = cv2.VideoWriter(save_vids_here + '%s_trials_%s_%s_%s.mp4' % (eid,
+                                                          trial_range[0],
+                                                          trial_range[-1],
+                                                          video_type),
                               cv2.VideoWriter_fourcc(*'mp4v'),
                               fps,
                               size)  # put , 0 if grey scale
@@ -294,4 +318,3 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         out.release()
     cap.release()
     cv2.destroyAllWindows()
-    print('Saved labelled video at %s' % save_path)
