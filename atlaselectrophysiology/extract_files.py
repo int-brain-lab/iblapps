@@ -115,9 +115,9 @@ def extract_data(ks_path, ephys_path, out_path):
             extract_rmsmap(efile.lf, out_folder=out_path)
 
 
-# from pathlib import Path
-# from atlaselectrophysiology.extract_files import extract_data
-# ks_path = Path('C:/Users/Mayo/Downloads/FlatIron/SWC_023_test')
-# ephys_path = ks_path
-# out_path = Path('C:/Users/Mayo/Downloads/FlatIron/SWC_023_test/alf')
-# extract_data(ks_path, ephys_path, out_path)
+# if __name__ == '__main__':
+#
+#    ephys_path = Path('C:/Users/Mayo/Downloads/raw_ephys_data')
+#    ks_path = Path('C:/Users/Mayo/Downloads/KS2')
+#    out_path = Path('C:/Users/Mayo/Downloads/alf')
+#    extract_data(ks_path, ephys_path, out_path)

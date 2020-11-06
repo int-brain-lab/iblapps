@@ -11,6 +11,7 @@ import json
 
 class LoadDataLocal:
     def __init__(self):
+        self.brain_atlas = atlas.AllenAtlas(25)
         self.folder_path = []
         self.chn_coords = []
         self.sess_path = []
