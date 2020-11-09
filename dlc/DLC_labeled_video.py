@@ -93,12 +93,8 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
 
     # that gives cam time stamps and DLC output (change to alf_path eventually)
     
-    cam1 = alf.io.load_object(alf_path, '%sCamera' % video_type, namespace = 'ibl')     
-    try:
-        cam0 = alf.io.load_object(alf_path, '%sCamera' % video_type, namespace = 'ibl')          
-    except:
-        cam0 = {}    
-    cam = {**cam0,**cam1}
+    cam = alf.io.load_object(alf_path, '%sCamera' % video_type, namespace = 'ibl')     
+
 
     # just to read in times for newer data (which has DLC results in pqt format
     #cam = alf.io.load_object(alf_path, '_ibl_%sCamera' % video_type)
@@ -158,10 +154,15 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     '''
     Times = cam['times'][frame_start:frame_stop] 
     del cam['times']      
-
-#    dlc_name = '_ibl_%sCamera.dlc.pqt' % video_type
-#    dlc_path = alf_path / dlc_name
-#    cam=pd.read_parquet(dlc_path)    
+    
+    # some exception for inconsisitent data formats
+    try:
+        dlc_name = '_ibl_%sCamera.dlc.pqt' % video_type
+        dlc_path = alf_path / dlc_name
+        cam = pd.read_parquet(dlc_path ,engine = "fastparquet")    
+    except:
+        raw_vid_path = alf_path.parent / 'raw_video_data'
+        cam = alf.io.load_object(raw_vid_path, '%sCamera' % video_type, namespace = 'ibl')  
 
 
     points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
