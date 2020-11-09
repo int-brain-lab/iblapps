@@ -745,7 +745,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fit_plot_lin.setData()
 
     def plot_slice(self, data, img_type):
-        # [self.fig_slice.removeItem(it) for it in self.slice_items]
         self.fig_slice.clear()
         self.slice_chns = []
         self.slice_lines = []
@@ -765,6 +764,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             lut = color_bar.getColourMap()
             img.setLookupTable(lut)
             self.fig_slice_layout.removeItem(self.slice_item)
+            self.fig_slice_hist = pg.HistogramLUTItem()
+            self.fig_slice_hist.axis.hide()
             self.fig_slice_hist.setImageItem(img)
             self.fig_slice_hist.gradient.setColorMap(color_bar.map)
             self.fig_slice_hist.autoHistogramRange()
@@ -778,10 +779,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.slice_item = self.fig_slice_hist
 
         self.fig_slice.addItem(img)
-        self.slice_items.append(img)
         self.traj_line = pg.PlotCurveItem()
         self.traj_line.setData(x=self.xyz_track[:, 0], y=self.xyz_track[:, 2], pen=self.kpen_solid)
-        self.slice_items.append(self.traj_line)
         self.fig_slice.addItem(self.traj_line)
         self.plot_channels()
 
@@ -795,7 +794,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.slice_chns.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2], pen='r',
                                     brush='r')
             self.fig_slice.addItem(self.slice_chns)
-            self.slice_items.append(self.slice_chns)
             track_lines = self.ephysalign.get_perp_vector(self.features[self.idx],
                                                           self.track[self.idx])
 
@@ -1051,7 +1049,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         [self.fig_line.removeItem(plot) for plot in self.line_plots]
         [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
         [self.fig_probe.removeItem(cbar) for cbar in self.probe_cbars]
-        # [self.fig_slice.removeItem(it) for it in self.slice_items]
         self.fig_slice.clear()
         self.fig_hist.clear()
         self.fig_hist_ref.clear()
