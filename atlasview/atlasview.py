@@ -77,13 +77,25 @@ class TopView(QtWidgets.QMainWindow):
         self.ctrl.set_scatter(self.ctrl.fig_coronal)
         self.ctrl.set_scatter(self.ctrl.fig_sagittal)
 
-    def add_image_feature(self, values, cmap, levels=None, alpha=None):
+    def add_image_layer(self, **kwargs):
+        """
+        :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None, 'opacity': 1.0}
+        :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+        :return:
+        """
+        self.ctrl.fig_sagittal.add_image_layer(**kwargs)
+        self.ctrl.fig_coronal.add_image_layer(**kwargs)
+
+    def add_regions_feature(self, values, cmap, opacity=1.0):
         self.ctrl.values = values
         # creat cmap look up table
         colormap = matplotlib.cm.get_cmap(cmap)
         colormap._init()
         lut = (colormap._lut * 255).view(np.ndarray)
         lut = np.insert(lut, 0, [0, 0, 0, 0], axis=0)
+        self.add_image_layer(pg_kwargs={'lut': lut, 'opacity': opacity}, slice_kwargs={
+            'volume': 'value', 'region_values': values, 'mode': 'clip'})
+        self._refresh()
 
     def slider_alpha_move(self):
         annotation_alpha = self.slider_alpha.value() / 100
@@ -138,6 +150,11 @@ class SliceView(QtWidgets.QWidget):
         self.plotItem_slice.addItem(self.scatterItem)
 
     def add_image_layer(self, **kwargs):
+        """
+        :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None, 'opacity': 1.0}
+        :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+        :return:
+        """
         il = ImageLayer(**kwargs)
         self.ctrl.image_layers.append(il)
         self.plotItem_slice.addItem(il.image_item)
@@ -151,9 +168,6 @@ class SliceView(QtWidgets.QWidget):
     def mouseClick(self, event):
         if not event.double():
             return
-        qxy = self.imageItem.mapFromScene(event.scenePos())
-        tr, s = (qxy.x(), qxy.y())
-        print(tr, s)
 
     def mouseMoveEvent(self, scenepos):
         if isinstance(scenepos, tuple):
@@ -326,10 +340,14 @@ class SliceController(PgImageController):
 
 @dataclass
 class ImageLayer:
-    """Class for keeping track of image layers."""
+    """
+    Class for keeping track of image layers.
+    :param image_item
+    :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None, 'opacity': 1.0}
+    :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+    :param
+    """
     image_item: pg.ImageItem = field(default_factory=pg.ImageItem)
-    levels: list = None
-    lut: int = None  # {'levels': None, 'lut': None, 'opacity': 1.0}
     pg_kwargs: dict = field(default_factory=lambda: {})
     slice_kwargs: dict = field(default_factory=lambda: {'volume': 'image', 'mode': 'clip'})
 
