@@ -9,6 +9,7 @@ import matplotlib
 import pandas as pd
 # conda install -c conda-forge pyarrow
 
+
 def find_nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
@@ -36,7 +37,7 @@ def download_raw_video(eid, cameras=None):
         if not os.path.exists(str(cache_dir)):
             os.mkdir(str(cache_dir))
         else:  # Check if file already downloaded
-            #cam_files = [fi[:-4] for fi in cam_files]  # Remove ext
+            # cam_files = [fi[:-4] for fi in cam_files]  # Remove ext
             filenames = [f for f in os.listdir(str(cache_dir))
                          if any([cam in f for cam in cam_files])]
             if filenames:
@@ -46,9 +47,9 @@ def download_raw_video(eid, cameras=None):
             urls,
             username=one._par.HTTP_DATA_SERVER_LOGIN,
             password=one._par.HTTP_DATA_SERVER_PWD,
-            cache_dir=str(cache_dir))        
-        
-        return 
+            cache_dir=str(cache_dir))
+
+        return
 
     else:
         return one.load(eid, ['_iblrig_Camera.raw'], download_only=True)
@@ -65,11 +66,11 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     Viewer('3663d82b-f197-4e8b-b299-7b803a155b84', 'left', [5,7])
     3D example: 'cb2ad999-a6cb-42ff-bf71-1774c57e5308', [5,7]
     '''
- 
-    save_vids_here = '/home/mic/3D-Animal-Pose-master/IBL_example/%s_trials_%s_%s/' %(eid, trial_range[0], trial_range[1])
+
+    save_vids_here = '/home/mic/'
     if save_vids_here[-1] != '/':
-        return 'Last character of save_vids_here must be slash' 
- 
+        return 'Last character of save_vids_here must be slash'
+
     one = ONE()
     dataset_types = ['camera.times',
                      'wheel.position',
@@ -86,22 +87,24 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     alf_path = Path(D.local_path[0]).parent.parent / 'alf'
 
     # Download a single video
-    video_data = alf_path.parent / 'raw_video_data'     
+    video_data = alf_path.parent / 'raw_video_data'
     download_raw_video(eid, cameras=[video_type])
-    video_path = list(video_data.rglob('_iblrig_%sCamera.raw.*' % video_type))[0] 
-    print(video_path) 
+    video_path = list(
+        video_data.rglob(
+            '_iblrig_%sCamera.raw.*' %
+            video_type))[0]
+    print(video_path)
 
     # that gives cam time stamps and DLC output (change to alf_path eventually)
-    
-    cam1 = alf.io.load_object(alf_path, '%sCamera' % video_type, namespace = 'ibl')     
-    try:
-        cam0 = alf.io.load_object(alf_path, '%sCamera' % video_type, namespace = 'ibl')          
-    except:
-        cam0 = {}    
-    cam = {**cam0,**cam1}
+
+    cam = alf.io.load_object(
+        alf_path,
+        '%sCamera' %
+        video_type,
+        namespace='ibl')
 
     # just to read in times for newer data (which has DLC results in pqt format
-    #cam = alf.io.load_object(alf_path, '_ibl_%sCamera' % video_type)
+    # cam = alf.io.load_object(alf_path, '_ibl_%sCamera' % video_type)
 
     # set where to read and save video and get video info
     cap = cv2.VideoCapture(video_path.as_uri())
@@ -110,11 +113,20 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     size = (int(cap.get(3)), int(cap.get(4)))
 
     assert length < len(cam['times']), '#frames > #stamps'
-    print(eid,', ', video_type,', fsp:', fps,', #frames:', length, ', #stamps:', len(cam['times']), ', #frames - #stamps = ', length - len(cam['times'])) 
-
+    print(eid,
+          ', ',
+          video_type,
+          ', fsp:',
+          fps,
+          ', #frames:',
+          length,
+          ', #stamps:',
+          len(cam['times']),
+          ', #frames - #stamps = ',
+          length - len(cam['times']))
 
     # pick trial range for which to display stuff
-    trials = alf.io.load_object(alf_path, 'trials', namespace = 'ibl')
+    trials = alf.io.load_object(alf_path, 'trials', namespace='ibl')
     num_trials = len(trials['intervals'])
     if trial_range[-1] > num_trials - 1:
         print('There are only %s trials' % num_trials)
@@ -128,14 +140,14 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     wheel related stuff
     '''
 
-    wheel = alf.io.load_object(alf_path, 'wheel', namespace ='ibl')
+    wheel = alf.io.load_object(alf_path, 'wheel', namespace='ibl')
     import brainbox.behavior.wheel as wh
     try:
         pos, t = wh.interpolate_position(
             wheel['timestamps'], wheel['position'], freq=1000)
-    except:
+    except BaseException:
         pos, t = wh.interpolate_position(
-            wheel['times'], wheel['position'], freq=1000)        
+            wheel['times'], wheel['position'], freq=1000)
 
     w_start = find_nearest(t, trials['intervals'][trial_range[0]][0])
     w_stop = find_nearest(t, trials['intervals'][trial_range[-1]][1])
@@ -156,41 +168,49 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     '''
     DLC related stuff
     '''
-    Times = cam['times'][frame_start:frame_stop] 
-    del cam['times']      
+    Times = cam['times'][frame_start:frame_stop]
+    del cam['times']
 
-#    dlc_name = '_ibl_%sCamera.dlc.pqt' % video_type
-#    dlc_path = alf_path / dlc_name
-#    cam=pd.read_parquet(dlc_path)    
-
+    # some exception for inconsisitent data formats
+    try:
+        dlc_name = '_ibl_%sCamera.dlc.pqt' % video_type
+        dlc_path = alf_path / dlc_name
+        cam = pd.read_parquet(dlc_path, engine="fastparquet")
+        print('it is pqt')
+    except BaseException:
+        raw_vid_path = alf_path.parent / 'raw_video_data'
+        cam = alf.io.load_object(
+            raw_vid_path,
+            '%sCamera' %
+            video_type,
+            namespace='ibl')
 
     points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
-    if len(points)==1:
+    if len(points) == 1:
         cam = cam['dlc']
         points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
 
     if video_type != 'body':
-        d = list(points) 
+        d = list(points)
         d.remove('tube_top')
-        d.remove('tube_bottom')   
+        d.remove('tube_bottom')
         points = np.array(d)
-
 
     # Set values to nan if likelyhood is too low # for pqt: .to_numpy()
     XYs = {}
     for point in points:
         x = np.ma.masked_where(
-            cam[point + '_likelihood'].to_numpy() < 0.9, cam[point + '_x'].to_numpy())
+            cam[point + '_likelihood'] < 0.9, cam[point + '_x'])
         x = x.filled(np.nan)
         y = np.ma.masked_where(
-            cam[point + '_likelihood'].to_numpy() < 0.9, cam[point + '_y'].to_numpy())
+            cam[point + '_likelihood'] < 0.9, cam[point + '_y'])
         y = y.filled(np.nan)
         XYs[point] = np.array(
             [x[frame_start:frame_stop], y[frame_start:frame_stop]])
 
     # Just for 3D testing
-    #return XYs
-    
+    # return XYs
+
     # Zoom at eye
     if eye_zoom:
         pivot = np.nanmean(XYs['pupil_top_r'], axis=1)
@@ -208,15 +228,15 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         y1 = size[1]
         if video_type == 'left':
             dot_s = 10  # [px] for painting DLC dots
-        else: 
+        else:
             dot_s = 5
-        
 
     if save_video:
-        out = cv2.VideoWriter(save_vids_here + '%s_trials_%s_%s_%s.mp4' % (eid,
-                                                          trial_range[0],
-                                                          trial_range[-1],
-                                                          video_type),
+        loc = save_vids_here + '%s_trials_%s_%s_%s.mp4' % (eid,
+                                                           trial_range[0],
+                                                           trial_range[-1],
+                                                           video_type)
+        out = cv2.VideoWriter(loc,
                               cv2.VideoWriter_fourcc(*'mp4v'),
                               fps,
                               size)  # put , 0 if grey scale
@@ -231,7 +251,6 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         bottomLeftCornerOfText = (10, 500)
         fontScale = 2
 
-    
     lineType = 2
 
     # assign a color to each DLC point (now: all points red)
@@ -247,59 +266,57 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     while(cap.isOpened()):
         ret, frame = cap.read()
         gray = frame
-        
+
         # print wheel angle
         fontColor = (255, 255, 255)
         Angle = round(wheel_pos[k], 2)
-        Time = round(Times[k], 3) 
-        cv2.putText(gray, 
+        Time = round(Times[k], 3)
+        cv2.putText(gray,
                     'Wheel angle: ' + str(Angle),
                     bottomLeftCornerOfText,
                     font,
-                    fontScale/2,
+                    fontScale / 2,
                     fontColor,
                     lineType)
 
-
-        a,b = bottomLeftCornerOfText
-        bottomLeftCornerOfText0 = (int(a*10 + b/2), b)
-        cv2.putText(gray, 
+        a, b = bottomLeftCornerOfText
+        bottomLeftCornerOfText0 = (int(a * 10 + b / 2), b)
+        cv2.putText(gray,
                     '  time: ' + str(Time),
                     bottomLeftCornerOfText0,
                     font,
-                    fontScale/2,
+                    fontScale / 2,
                     fontColor,
                     lineType)
 
-            
         # print DLC dots
         ll = 0
         for point in points:
-               
+
             # Put point color legend
             fontColor = (np.array([cmap(CR[ll])]) * 255)[0][:3]
-            a ,b = bottomLeftCornerOfText
+            a, b = bottomLeftCornerOfText
             if video_type == 'right':
-                bottomLeftCornerOfText2 = (a, a * 2*(1 + ll))
-            else: 
-                bottomLeftCornerOfText2 = (b, a * 2*(1 + ll))
-            fontScale2 = fontScale/4
+                bottomLeftCornerOfText2 = (a, a * 2 * (1 + ll))
+            else:
+                bottomLeftCornerOfText2 = (b, a * 2 * (1 + ll))
+            fontScale2 = fontScale / 4
             cv2.putText(gray, point,
                         bottomLeftCornerOfText2,
                         font,
                         fontScale2,
                         fontColor,
-                        lineType)                            
-        
+                        lineType)
+
             X0 = XYs[point][0][k]
             Y0 = XYs[point][1][k]
             # transform for opencv?
             X = Y0
             Y = X0
-            
+
             if not np.isnan(X) and not np.isnan(Y):
                 col = (np.array([cmap(CR[ll])]) * 255)[0][:3]
-                #col = np.array([0, 0, 255]) # all points red
+                # col = np.array([0, 0, 255]) # all points red
                 X = X.astype(int)
                 Y = Y.astype(int)
                 gray[X - dot_s:X + dot_s, Y - dot_s:Y + dot_s] = block * col
