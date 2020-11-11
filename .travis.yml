@@ -9,6 +9,10 @@ install:
   - pip install git+https://github.com/int-brain-lab/ibllib.git@develop
 
  # command to run tests
+before_script:
+  - echo "exec('from oneibl.one import ONE; ONE(silent=True)')" | python
+  # command to run tests
+
 script:
   - bash ./run_tests
   - flake8 .
