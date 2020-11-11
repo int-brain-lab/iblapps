@@ -325,10 +325,16 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Saves all plots from the GUI into folder
         """
         # make folder to save plots to
-        sess_info = (self.loaddata.subj + '_' + str(self.loaddata.date) + '_' +
-                     self.loaddata.probe_label + '_')
-        image_path_overview = self.alf_path.joinpath('GUI_plots')
-        image_path = image_path_overview.joinpath(sess_info[:-1])
+        try:
+            sess_info = (self.loaddata.subj + '_' + str(self.loaddata.date) + '_' +
+                        self.loaddata.probe_label + '_')
+            image_path_overview = self.alf_path.joinpath('GUI_plots')
+            image_path = image_path_overview.joinpath(sess_info[:-1])
+        except Exception:
+            sess_info = ''
+            image_path_overview = self.alf_path.joinpath('GUI_plots')
+            image_path = image_path_overview
+
         os.makedirs(image_path_overview, exist_ok=True)
         os.makedirs(image_path, exist_ok=True)
         # Reset all axis, put view back to 1 and remove any reference lines
