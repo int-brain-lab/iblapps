@@ -79,7 +79,8 @@ class TopView(QtWidgets.QMainWindow):
 
     def add_image_layer(self, **kwargs):
         """
-        :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None, 'opacity': 1.0}
+        :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None,
+        'opacity': 1.0}
         :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
         :return:
         """
@@ -151,7 +152,8 @@ class SliceView(QtWidgets.QWidget):
 
     def add_image_layer(self, **kwargs):
         """
-        :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None, 'opacity': 1.0}
+        :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None,
+        'opacity': 1.0}
         :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
         :return:
         """

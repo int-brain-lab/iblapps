@@ -1,3 +1,5 @@
+from pathlib import Path
+import numpy as np
 from atlasview import atlasview  # mouais il va falloir changer ça
 av = atlasview.view()  # need to have an output argument here or the garbage collector will clean
 # it up and boom
@@ -12,8 +14,6 @@ av = atlasview.view()  # need to have an output argument here or the garbage col
     - should we add horizontal slices ?
 """
 
-from pathlib import Path
-import numpy as np
 # add brain regions feature:
 reg_values = np.load(Path(atlasview.__file__).parent.joinpath('region_values.npy'))
 av.add_regions_feature(reg_values, 'Blues', opacity=0.7)

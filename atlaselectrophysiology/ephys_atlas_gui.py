@@ -327,7 +327,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # make folder to save plots to
         try:
             sess_info = (self.loaddata.subj + '_' + str(self.loaddata.date) + '_' +
-                        self.loaddata.probe_label + '_')
+                         self.loaddata.probe_label + '_')
             image_path_overview = self.alf_path.joinpath('GUI_plots')
             image_path = image_path_overview.joinpath(sess_info[:-1])
         except Exception:
