@@ -3,7 +3,7 @@ from datetime import datetime
 import ibllib.pipes.histology as histology
 from ibllib.ephys.neuropixel import SITES_COORDINATES
 import ibllib.atlas as atlas
-from ibllib.qc.alignment_qc import AlignmentQC
+# from ibllib.qc.alignment_qc import AlignmentQC
 from oneibl.one import ONE
 from pathlib import Path
 import alf.io
@@ -15,7 +15,7 @@ ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 class LoadData:
     def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None):
-
+        from ibllib.qc.alignment_qc import AlignmentQC
         self.one = one or ONE(base_url=ONE_BASE_URL)
         self.brain_atlas = brain_atlas or atlas.AllenAtlas(25)
 
