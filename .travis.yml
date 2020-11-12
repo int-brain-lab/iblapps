@@ -11,6 +11,7 @@ install:
  # command to run tests
 before_script:
   - echo "exec('from oneibl.one import ONE; ONE(silent=True)')" | python
+  - sed -i 's|null|"'$IBLFLATIRONPASS'"|g' /home/travis/.one_params
   # command to run tests
 
 script:

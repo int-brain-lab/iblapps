@@ -5,14 +5,8 @@ exclude =
     .git,
     __pycache__,
     __init__.py,
-    data_expoloration_gui/
+    data_exploration_gui/
     dlc/
     launch_phy/
     histology/
 
-    tutorial_script.py,
-    venv,
-    test_imports.py,
-    build,
-    dist
-    brainbox/
