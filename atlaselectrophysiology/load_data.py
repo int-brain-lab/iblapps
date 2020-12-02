@@ -15,7 +15,6 @@ ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 class LoadData:
     def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None):
-
         self.one = one or ONE(base_url=ONE_BASE_URL)
         self.brain_atlas = brain_atlas or atlas.AllenAtlas(25)
 

@@ -1,4 +1,4 @@
 ibllib
 pyqtgraph
 simpleITK
-pyqt
+PyQt5

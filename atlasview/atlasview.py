@@ -1,15 +1,24 @@
 """
-TopView is the main Widget with the related Controller Class
+TopView is the main Widget with the related ControllerTopView Class
 There are several SliceView windows (sagittal, coronal, possibly tilted etc...) that each have
 a SliceController object
 The underlying data model object is an ibllib.atlas.AllenAtlas object
+
+    TopView(QMainWindow)
+    ControllerTopView(PgImageController)
+
+    SliceView(QWidget)
+    SliceController(PgImageController)
+
 """
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtGui import QTransform
 import pyqtgraph as pg
+import matplotlib
 
 from ibllib.atlas import AllenAtlas
 import qt
@@ -27,39 +36,75 @@ class TopView(QtWidgets.QMainWindow):
         return [w for w in app.topLevelWidgets() if isinstance(w, TopView)]
 
     @staticmethod
-    def _get_or_create(title=None):
+    def _get_or_create(title=None, **kwargs):
         av = next(filter(lambda e: e.isVisible() and e.windowTitle() == title,
                          TopView._instances()), None)
         if av is None:
-            av = TopView()
+            av = TopView(**kwargs)
             av.setWindowTitle(title)
         return av
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         super(TopView, self).__init__()
-        self.ctrl = Controller(self)
+        self.ctrl = ControllerTopView(self, **kwargs)
+        self.ctrl.image_layers = [ImageLayer()]
         uic.loadUi(Path(__file__).parent.joinpath('topview.ui'), self)
         self.plotItem_topview.setAspectLocked(True)
-        self.imageItem = pg.ImageItem()
-        self.plotItem_topview.addItem(self.imageItem)
+        self.plotItem_topview.addItem(self.ctrl.imageItem)
         # setup one horizontal and one vertical line that can be moved
         line_kwargs = {'movable': True, 'pen': pg.mkPen((0, 255, 0), width=3)}
         self.line_coronal = pg.InfiniteLine(angle=0, pos=0, **line_kwargs)
         self.line_sagittal = pg.InfiniteLine(angle=90, pos=0, **line_kwargs)
-        self.line_coronal.sigDragged.connect(self.coronal_line_moved)  # sigPositionChangeFinished
-        self.line_sagittal.sigDragged.connect(self.sagittal_line_moved)
+        self.line_coronal.sigDragged.connect(self._refresh_coronal)  # sigPositionChangeFinished
+        self.line_sagittal.sigDragged.connect(self._refresh_sagittal)
         self.plotItem_topview.addItem(self.line_coronal)
         self.plotItem_topview.addItem(self.line_sagittal)
         # connect signals and slots
         s = self.plotItem_topview.getViewBox().scene()
         self.proxy = pg.SignalProxy(s.sigMouseMoved, rateLimit=60, slot=self.mouseMoveEvent)
+        self.slider_alpha.sliderMoved.connect(self.slider_alpha_move)
         self.ctrl.set_top()
 
-    def coronal_line_moved(self):
-        self.ctrl.set_slice(self.ctrl.fig_coronal, self.line_coronal.value())
+    def add_scatter_feature(self, data):
+        self.ctrl.scatter_data = data / 1e6
+        self.ctrl.scatter_data_ind = self.ctrl.atlas.bc.xyz2i(self.ctrl.scatter_data)
+        self.ctrl.fig_coronal.add_scatter()
+        self.ctrl.fig_sagittal.add_scatter()
+        self.line_coronal.sigDragged.connect(
+            lambda: self.ctrl.set_scatter(self.ctrl.fig_coronal, self.line_coronal.value()))
+        self.line_sagittal.sigDragged.connect(
+            lambda: self.ctrl.set_scatter(self.ctrl.fig_sagittal, self.line_sagittal.value()))
+        self.ctrl.set_scatter(self.ctrl.fig_coronal)
+        self.ctrl.set_scatter(self.ctrl.fig_sagittal)
 
-    def sagittal_line_moved(self):
-        self.ctrl.set_slice(self.ctrl.fig_sagittal, self.line_sagittal.value())
+    def add_image_layer(self, **kwargs):
+        """
+        :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None,
+        'opacity': 1.0}
+        :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+        :return:
+        """
+        self.ctrl.fig_sagittal.add_image_layer(**kwargs)
+        self.ctrl.fig_coronal.add_image_layer(**kwargs)
+
+    def add_regions_feature(self, values, cmap, opacity=1.0):
+        self.ctrl.values = values
+        # creat cmap look up table
+        colormap = matplotlib.cm.get_cmap(cmap)
+        colormap._init()
+        lut = (colormap._lut * 255).view(np.ndarray)
+        lut = np.insert(lut, 0, [0, 0, 0, 0], axis=0)
+        self.add_image_layer(pg_kwargs={'lut': lut, 'opacity': opacity}, slice_kwargs={
+            'volume': 'value', 'region_values': values, 'mode': 'clip'})
+        self._refresh()
+
+    def slider_alpha_move(self):
+        annotation_alpha = self.slider_alpha.value() / 100
+        self.ctrl.fig_coronal.ctrl.image_layers[0].pg_kwargs['opacity'] = 1 - annotation_alpha
+        self.ctrl.fig_sagittal.ctrl.image_layers[0].pg_kwargs['opacity'] = 1 - annotation_alpha
+        self.ctrl.fig_coronal.ctrl.image_layers[1].pg_kwargs['opacity'] = annotation_alpha
+        self.ctrl.fig_sagittal.ctrl.image_layers[1].pg_kwargs['opacity'] = annotation_alpha
+        self._refresh()
 
     def mouseMoveEvent(self, scenepos):
         if isinstance(scenepos, tuple):
@@ -68,6 +113,16 @@ class TopView(QtWidgets.QMainWindow):
             return
         pass
         # qpoint = self.imageItem.mapFromScene(scenepos)
+
+    def _refresh(self):
+        self._refresh_sagittal()
+        self._refresh_coronal()
+
+    def _refresh_coronal(self):
+        self.ctrl.set_slice(self.ctrl.fig_coronal, self.line_coronal.value())
+
+    def _refresh_sagittal(self):
+        self.ctrl.set_slice(self.ctrl.fig_sagittal, self.line_sagittal.value())
 
 
 class SliceView(QtWidgets.QWidget):
@@ -80,15 +135,31 @@ class SliceView(QtWidgets.QWidget):
         self.topview = topview
         self.ctrl = SliceController(self, waxis, haxis, daxis)
         uic.loadUi(Path(__file__).parent.joinpath('sliceview.ui'), self)
+        self.add_image_layer(slice_kwargs={'volume': 'image', 'mode': 'clip'},
+                             pg_kwargs={'opacity': 0.8})
+        self.add_image_layer(slice_kwargs={'volume': 'annotation', 'mode': 'clip'},
+                             pg_kwargs={'opacity': 0.2})
         # init the image display
         self.plotItem_slice.setAspectLocked(True)
-        self.imageItem = pg.ImageItem()
-        self.plotItem_slice.addItem(self.imageItem)
         # connect signals and slots
         s = self.plotItem_slice.getViewBox().scene()
         self.proxy = pg.SignalProxy(s.sigMouseMoved, rateLimit=60, slot=self.mouseMoveEvent)
         s.sigMouseClicked.connect(self.mouseClick)
-        # self.comboBox_layer.activated[str].connect(self.ctrl.set_layer)
+
+    def add_scatter(self):
+        self.scatterItem = pg.ScatterPlotItem()
+        self.plotItem_slice.addItem(self.scatterItem)
+
+    def add_image_layer(self, **kwargs):
+        """
+        :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None,
+        'opacity': 1.0}
+        :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+        :return:
+        """
+        il = ImageLayer(**kwargs)
+        self.ctrl.image_layers.append(il)
+        self.plotItem_slice.addItem(il.image_item)
 
     def closeEvent(self, event):
         self.destroy()
@@ -99,28 +170,34 @@ class SliceView(QtWidgets.QWidget):
     def mouseClick(self, event):
         if not event.double():
             return
-        qxy = self.imageItem_seismic.mapFromScene(event.scenePos())
-        tr, s = (qxy.x(), qxy.y())
-        print(tr, s)
 
     def mouseMoveEvent(self, scenepos):
         if isinstance(scenepos, tuple):
             scenepos = scenepos[0]
         else:
             return
-        qpoint = self.imageItem.mapFromScene(scenepos)
+        qpoint = self.ctrl.image_layers[0].image_item.mapFromScene(scenepos)
         iw, ih, w, h, v, region = self.ctrl.cursor2xyamp(qpoint)
         self.label_x.setText(f"{w:.4f}")
         self.label_y.setText(f"{h:.4f}")
         self.label_ix.setText(f"{iw:.0f}")
         self.label_iy.setText(f"{ih:.0f}")
-        self.label_v.setText(f"{v:.4f}")
+        if isinstance(v, np.ndarray):
+            self.label_v.setText(str(v))
+        else:
+            self.label_v.setText(f"{v:.4f}")
         if region is None:
             self.label_region.setText("")
             self.label_acronym.setText("")
         else:
             self.label_region.setText(region['name'][0])
             self.label_acronym.setText(region['acronym'][0])
+
+    def replace_image_layer(self, index, **kwargs):
+        if index and len(self.imageItem) >= index:
+            il = self.image_layers.pop(index)
+            self.plotItem_slice.removeItem(il.image_item)
+        self.add_image_layer(**kwargs)
 
 
 class PgImageController:
@@ -131,6 +208,7 @@ class PgImageController:
     def __init__(self, win, res=25):
         self.qwidget = win
         self.transform = None  # affine transform image indices 2 data domain
+        self.image_layers = []
 
     def cursor2xyamp(self, qpoint):
         """Used for the mouse hover function over image display"""
@@ -145,30 +223,41 @@ class PgImageController:
         ih = np.max((0, np.min((int(np.round(qpoint.y())), self.nh - 1))))
         return iw, ih
 
-    def set_image(self, im, dw, dh, w0, h0):
+    @property
+    def imageItem(self):
+        """returns the first image item"""
+        return self.image_layers[0].image_item
+
+    def set_image(self, pg_image_item, im, dw, dh, w0, h0, **pg_kwargs):
         """
         :param im:
         :param dw:
         :param dh:
         :param w0:
         :param h0:
+        :param pgkwargs: og.ImageItem.setImage() parameters: level=None, lut=None, opacity=1
         :return:
         """
         self.im = im
-        self.nw, self.nh = self.im.shape
-        self.qwidget.imageItem.setImage(self.im)
+        self.nw, self.nh = self.im.shape[0:2]
+        pg_image_item.setImage(self.im, **pg_kwargs)
         transform = [dw, 0., 0., 0., dh, 0., w0, h0, 1.]
         self.transform = np.array(transform).reshape((3, 3)).T
-        self.qwidget.imageItem.setTransform(QTransform(*transform))
-        # self.view.plotItem.setLimits(xMin=wl[0], xMax=wl[1], yMin=hl[0], yMax=hl[1])
+        pg_image_item.setTransform(QTransform(*transform))
+
+    def set_points(self, x=None, y=None):
+        # at the moment brush and size are fixed! These need to be arguments
+        # For the colour need to convert the colour to QtGui.QColor
+        self.qwidget.scatterItem.setData(x=x, y=y, brush='b', size=5)
 
 
-class Controller(PgImageController):
+class ControllerTopView(PgImageController):
     """
-    TopView Controller
+    TopView ControllerTopView
     """
-    def __init__(self, qmain: TopView, res=25):
-        super(Controller, self).__init__(qmain)
+    def __init__(self, qmain: TopView, res: int = 25, volume='image'):
+        super(ControllerTopView, self).__init__(qmain)
+        self.volume = volume
         self.atlas = AllenAtlas(res)
         self.fig_top = self.qwidget = qmain
         # Setup Coronal slice: width: ml, height: dv, depth: ap
@@ -189,7 +278,11 @@ class Controller(PgImageController):
         dh = self.atlas.bc.dxyz[haxis]
         wl = self.atlas.bc.lim(waxis) - dw / 2
         hl = self.atlas.bc.lim(haxis) - dh / 2
-        fig.ctrl.set_image(self.atlas.slice(coord, axis=daxis, mode='clip'), dw, dh, wl[0], hl[0])
+        # the ImageLayer object carries slice kwargs and pyqtgraph ImageSet kwargs
+        # reversed order so the self.im is set with the base layer
+        for layer in reversed(fig.ctrl.image_layers):
+            _slice = self.atlas.slice(coord, axis=daxis, **layer.slice_kwargs)
+            fig.ctrl.set_image(layer.image_item, _slice, dw, dh, wl[0], hl[0], **layer.pg_kwargs)
         fig.ctrl.slice_coord = coord
 
     def set_top(self):
@@ -197,9 +290,24 @@ class Controller(PgImageController):
         img[np.isnan(img)] = np.nanmin(img)  # img has dims ml, ap
         dw, dh = (self.atlas.bc.dxyz[0], self.atlas.bc.dxyz[1])
         wl, hl = (self.atlas.bc.xlim, self.atlas.bc.ylim)
-        self.set_image(img, dw, dh, wl[0], hl[0])
-        # self.qwidget.line_coronal.setData(x=wl, y=wl * 0, pen=pg.mkPen((0, 255, 0), width=3))
-        # self.qwidget.line_sagittal.setData(x=hl * 0, y=hl, pen=pg.mkPen((0, 255, 0), width=3))
+        self.set_image(self.image_layers[0].image_item, img, dw, dh, wl[0], hl[0])
+
+    def set_scatter(self, fig, coord=0):
+        waxis = fig.ctrl.waxis
+        # dealing with coronal slice
+        if waxis == 0:
+            idx = np.where(self.scatter_data_ind[:, 1] == self.atlas.bc.y2i(coord))[0]
+            x = self.scatter_data[idx, 0]
+            y = self.scatter_data[idx, 2]
+        else:
+            idx = np.where(self.scatter_data_ind[:, 0] == self.atlas.bc.x2i(coord))[0]
+            x = self.scatter_data[idx, 1]
+            y = self.scatter_data[idx, 2]
+
+        fig.ctrl.set_points(x, y)
+
+    def set_volume(self, volume):
+        self.volume = volume
 
 
 class SliceController(PgImageController):
@@ -232,10 +340,24 @@ class SliceController(PgImageController):
         return iw, ih, w, h, v, region
 
 
-def view(res=25, title=None):
+@dataclass
+class ImageLayer:
+    """
+    Class for keeping track of image layers.
+    :param image_item
+    :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None, 'opacity': 1.0}
+    :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+    :param
+    """
+    image_item: pg.ImageItem = field(default_factory=pg.ImageItem)
+    pg_kwargs: dict = field(default_factory=lambda: {})
+    slice_kwargs: dict = field(default_factory=lambda: {'volume': 'image', 'mode': 'clip'})
+
+
+def view(res=25, title=None, volume='image', levels=None):
     """
     """
     qt.create_app()
-    av = TopView._get_or_create(title=title)
+    av = TopView._get_or_create(title=title, res=res)
     av.show()
     return av

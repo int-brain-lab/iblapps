@@ -663,8 +663,6 @@ class Setup():
         # Figure to show coronal slice through the brain
         self.fig_slice_area = pg.GraphicsLayoutWidget()
         self.fig_slice_layout = pg.GraphicsLayout()
-        self.fig_slice_hist = pg.HistogramLUTItem()
-        self.fig_slice_hist.axis.hide()
         self.fig_slice_hist_alt = pg.ViewBox()
         self.fig_slice = pg.ViewBox()
         self.fig_slice_layout.addItem(self.fig_slice, 0, 0)
