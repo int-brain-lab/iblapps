@@ -455,7 +455,7 @@ class PlotData:
         if not self.rfmap_data_status:
             data_img_on = None
             data_img_off = None
-            return data_img_on, data_img_off
+            return data_img_on, data_img_off, None
         else:
 
             x_bin = self.rf_stim.shape[1]

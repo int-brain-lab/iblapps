@@ -10,7 +10,7 @@ import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 
-ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
+ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
 
 
 class LoadData:
@@ -373,7 +373,7 @@ class LoadData:
         if not key_info:
             user = self.one._par.ALYX_LOGIN
             date = datetime.now().replace(microsecond=0).isoformat()
-            data = {date + '_' + user: [feature.tolist(), track.tolist()]}
+            data = {date + '_' + user: [feature.tolist(), track.tolist(), self.alyx_str]}
         else:
             user = key_info[20:]
             data = {key_info: [feature.tolist(), track.tolist()]}
@@ -397,11 +397,16 @@ class LoadData:
     def upload_dj(self, align_qc, ephys_qc, ephys_desc):
         # Upload qc results to datajoint table
         user = self.one._par.ALYX_LOGIN
-        if ephys_desc == 'None':
-            ephys_desc = None
+        if len(ephys_desc) == 0:
+            ephys_desc_str = None
+        else:
+            ephys_desc_str = ", ".join(ephys_desc)
+
         self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
                         alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
                         allow_direct_insert=True, replace=True)
+        self.alyx_str = ephys_qc.upper() + ': ' + ephys_desc_str
+
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number
@@ -411,6 +416,7 @@ class LoadData:
                            depths=self.chn_depths, cluster_chns=self.cluster_chns)
         results = align_qc.run(update=True, upload_alyx=upload_alyx,
                                upload_flatiron=upload_flatiron)
+        align_qc.update_experimenter_evaluation(prev_alignments=self.alignments)
 
         self.resolved = results['alignment_resolved']
 

@@ -482,10 +482,24 @@ class Setup():
             ephys_qc_label = QtGui.QLabel("QC for ephys recording")
             self.ephys_qc = QtGui.QComboBox()
             self.ephys_qc.addItems(["Pass", "Warning", "Critical"])
-            ephys_desc_label = QtGui.QLabel("Describe problem with recording")
-            self.ephys_desc = QtGui.QComboBox()
-            self.ephys_desc.addItems(["None", "Noise and artifact", "Drift", "Poor neural yield",
-                                      "Brain Damage", "Other"])
+            #ephys_desc_label = QtGui.QLabel("Describe problem with recording")
+
+            self.desc_buttons = QtWidgets.QButtonGroup()
+            self.desc_group = QtWidgets.QGroupBox("Describe problem with recording")
+            self.desc_layout = QtWidgets.QVBoxLayout()
+            self.desc_layout.setSpacing(5)
+            self.desc_buttons.setExclusive(False)
+            options = ["Noise and artifact", "Drift", "Poor neural yield", "Brain Damage", "Other"]
+            for i, val in enumerate(options):
+
+                button = QtWidgets.QCheckBox(val)
+                button.setCheckState(QtCore.Qt.Unchecked)
+
+                self.desc_buttons.addButton(button, id=i)
+                self.desc_layout.addWidget(button)
+
+            self.desc_group.setLayout(self.desc_layout)
+
             self.qc_dialog = QtGui.QDialog(self)
             self.qc_dialog.setWindowTitle('QC assessment')
             self.qc_dialog.resize(300, 150)
@@ -500,8 +514,7 @@ class Setup():
             dialog_layout.addWidget(self.align_qc)
             dialog_layout.addWidget(ephys_qc_label)
             dialog_layout.addWidget(self.ephys_qc)
-            dialog_layout.addWidget(ephys_desc_label)
-            dialog_layout.addWidget(self.ephys_desc)
+            dialog_layout.addWidget(self.desc_group)
             dialog_layout.addWidget(buttonBox)
             self.qc_dialog.setLayout(dialog_layout)
 
@@ -747,3 +760,17 @@ class PopupWindow(QtGui.QMainWindow):
 
     def leaveEvent(self, event):
         self.moved.emit()
+
+
+class CheckableComboBox(QtGui.QComboBox):
+    def __init__(self):
+        super(CheckableComboBox, self).__init__()
+        self.view().pressed.connect(self.handleItemPressed)
+        self.setModel(QtGui.QStandardItemModel(self))
+
+    def handleItemPressed(self, index):
+        item = self.model().itemFromIndex(index)
+        if item.checkState() == QtCore.Qt.Checked:
+            item.setCheckState(QtCore.Qt.Unchecked)
+        else:
+            item.setCheckState(QtCore.Qt.Checked)

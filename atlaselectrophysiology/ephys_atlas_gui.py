@@ -1540,7 +1540,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def qc_button_clicked(self):
         align_qc = self.align_qc.currentText()
         ephys_qc = self.ephys_qc.currentText()
-        ephys_desc = self.ephys_desc.currentText()
+        ephys_desc = []
+        for button in self.desc_buttons.buttons():
+            if button.isChecked():
+                ephys_desc.append(button.text())
+
+        #ephys_desc = self.ephys_desc.currentText()
         self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
         self.complete_button_pressed()
 
