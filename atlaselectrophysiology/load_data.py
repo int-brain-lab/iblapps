@@ -209,8 +209,14 @@ class LoadData:
             '_iblqc_ephysTimeRms.timestamps',
             '_iblqc_ephysSpectralDensity.freqs',
             '_iblqc_ephysSpectralDensity.power',
-            '_iblqc_ephysSpectralDensity.amps'
+            '_iblqc_ephysSpectralDensity.amps',
+            '_ibl_passiveGabor.table',
+            '_ibl_passivePeriods.intervalsTable',
+            '_ibl_passiveRFM.frames',
+            '_ibl_passiveRFM.times',
+            '_ibl_passiveStims.table'
         ]
+
 
         print(self.subj)
         print(self.probe_label)

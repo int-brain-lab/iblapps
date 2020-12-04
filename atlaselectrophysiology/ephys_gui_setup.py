@@ -74,6 +74,7 @@ class Setup():
         img_rmsLFP.triggered.connect(lambda: self.plot_image(self.img_rms_LFPdata))
         img_LFP = QtGui.QAction('LFP Spectrum', self, checkable=True, checked=False)
         img_LFP.triggered.connect(lambda: self.plot_image(self.img_lfp_data))
+
         # Initialise with firing rate 2D plot
         self.img_init = img_fr
 
@@ -102,6 +103,14 @@ class Setup():
         img_options.addAction(scatter_amp)
         self.img_options_group.addAction(scatter_amp)
 
+        stim_type = ['valveOn', 'toneOn', 'noiseOn', 'leftGabor', 'rightGabor']
+        for stim in stim_type:
+            img = QtGui.QAction(stim, self, checkable=True, checked=False)
+            img.triggered.connect(lambda checked, item=stim: self.plot_image(
+                                    self.img_stim_data[item]))
+            img_options.addAction(img)
+            self.img_options_group.addAction(img)
+
         # LINE PLOTS MENU BAR
         # Define all 1D line plot options
         line_fr = QtGui.QAction('Firing Rate', self, checkable=True, checked=True)
@@ -128,6 +137,12 @@ class Setup():
         probe_rmsAP.triggered.connect(lambda: self.plot_probe(self.probe_rms_APdata))
         probe_rmsLFP = QtGui.QAction('rms LFP', self, checkable=True, checked=False)
         probe_rmsLFP.triggered.connect(lambda: self.plot_probe(self.probe_rms_LFPdata))
+        probe_on_rfmap = QtGui.QAction('RF Map - On', self, checkable=True, checked=False)
+        probe_on_rfmap.triggered.connect(lambda: self.plot_probe(self.probe_rfmap_on_data,
+                                                                 bounds=self.rfmap_boundaries))
+        probe_off_rfmap = QtGui.QAction('RF Map - Off', self, checkable=True, checked=False)
+        probe_off_rfmap.triggered.connect(lambda: self.plot_probe(self.probe_rfmap_off_data,
+                                                                  bounds=self.rfmap_boundaries))
         # Initialise with rms of AP probe plot
         self.probe_init = probe_rmsAP
 
@@ -151,6 +166,11 @@ class Setup():
                                     self.probe_lfp_data[item]))
             probe_options.addAction(probe)
             self.probe_options_group.addAction(probe)
+
+        probe_options.addAction(probe_on_rfmap)
+        self.probe_options_group.addAction(probe_on_rfmap)
+        probe_options.addAction(probe_off_rfmap)
+        self.probe_options_group.addAction(probe_off_rfmap)
 
         # SLICE PLOTS MENU BAR
         # Define all coronal slice plot options

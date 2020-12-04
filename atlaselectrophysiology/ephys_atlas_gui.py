@@ -81,6 +81,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.scale_regions = np.empty((0, 1))
         self.slice_lines = []
         self.slice_items = []
+        self.probe_bounds = []
 
         # Variables to keep track of popup plots
         self.cluster_popups = []
@@ -905,7 +906,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.set_axis(self.fig_line, 'bottom', label=data['xaxis'])
             self.line_plots.append(line)
 
-    def plot_probe(self, data):
+    def plot_probe(self, data, bounds=None):
         """
         Plots a 2D image with probe geometry
         param data: dictionary of data to plot
@@ -925,9 +926,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         else:
             [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
             [self.fig_probe_cb.removeItem(cbar) for cbar in self.probe_cbars]
+            [self.fig_probe.removeItem(line) for line in self.probe_bounds]
             self.set_axis(self.fig_probe_cb, 'top', pen='w')
             self.probe_plots = []
             self.probe_cbars = []
+            self.probe_bounds = []
             color_bar = cb.ColorBar(data['cmap'])
             lut = color_bar.getColourMap()
             for img, scale, offset in zip(data['img'], data['scale'], data['offset']):
@@ -936,18 +939,24 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 image.translate(offset[0], offset[1])
                 image.scale(scale[0], scale[1])
                 image.setLookupTable(lut)
-                image.setLevels((data['level'][0], data['level'][1]))
+                image.setLevels((data['levels'][0], data['levels'][1]))
                 self.fig_probe.addItem(image)
                 self.probe_plots.append(image)
 
-            cbar = color_bar.makeColourBar(20, 5, self.fig_probe_cb, min=data['level'][0],
-                                           max=data['level'][1], label=data['title'], lim=True)
+            cbar = color_bar.makeColourBar(20, 5, self.fig_probe_cb, min=data['levels'][0],
+                                           max=data['levels'][1], label=data['title'], lim=True)
             self.fig_probe_cb.addItem(cbar)
             self.probe_cbars.append(cbar)
 
             self.fig_probe.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
             self.fig_probe.setYRange(min=self.probe_tip - self.probe_extra,
                                      max=self.probe_top + self.probe_extra, padding=self.pad)
+            if bounds is not None:
+                # add some infinite line stuff
+                for bound in bounds:
+                    line = pg.InfiniteLine(pos=bound, angle=0, pen='w')
+                    self.fig_probe.addItem(line)
+                    self.probe_bounds.append(line)
 
     def plot_image(self, data):
         """
@@ -975,6 +984,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             image = pg.ImageItem()
             image.setImage(data['img'])
+            image.translate(data['offset'][0], data['offset'][1])
             image.scale(data['scale'][0], data['scale'][1])
             cmap = data.get('cmap', [])
             if cmap:
@@ -1107,6 +1117,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 'LF')
             self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
             self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
+            (self.probe_rfmap_on_data, self.probe_rfmap_off_data,
+             self.rfmap_boundaries) = self.plotdata.get_rfmap_data()
+            self.img_stim_data = self.plotdata.get_passive_events()
             self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
 
             self.data_status = True

@@ -6,6 +6,7 @@ from brainbox.processing import bincount2D
 from brainbox.population import xcorr
 import scipy
 from PyQt5 import QtGui
+from scipy.linalg import svd
 
 N_BNK = 4
 BNK_SIZE = 10
@@ -17,6 +18,7 @@ np.seterr(divide='ignore', invalid='ignore')
 
 class PlotData:
     def __init__(self, alf_path, ephys_path):
+
         self.alf_path = alf_path
         self.ephys_path = ephys_path
 
@@ -54,6 +56,41 @@ class PlotData:
         except Exception:
             print('lfp data was not found, some plots will not display')
             self.lfp_data_status = False
+
+        try:
+            rf_map = alf.io.load_object(self.alf_path, object='passiveRFM', namespace='ibl')
+            if len(rf_map) == 2:
+                self.rf_stim_times = rf_map['times']
+                self.rf_stim = rf_map['frames'].astype('float')
+                self.rfmap_data_status = True
+            else:
+                print('rfmap data was not found, some plots will not display')
+                self.rfmap_data_status = False
+        except Exception:
+            print('rfmp data was not found, some plots will not display')
+            self.rfmap_data_status = False
+
+        try:
+            self.aud_stim = alf.io.load_object(alf_path, object='passiveStims',
+                                               namespace='ibl')['table']
+            if len(self.aud_stim) > 0:
+                self.passive_data_status = True
+        except Exception:
+            print('passive stim data was not found, some plots will not display')
+            self.passive_data_status = False
+
+        try:
+            gabor = alf.io.load_object(alf_path, object='passiveGabor',
+                                       namespace='ibl')['table']
+            self.vis_stim = dict()
+            self.vis_stim['leftGabor'] = gabor['start'][(gabor['position'] == 35) &
+                                                        (gabor['contrast'] > 0.1)]
+            self.vis_stim['rightGabor'] = gabor['start'][(gabor['position'] == -35) &
+                                                         (gabor['contrast'] > 0.1)]
+            self.gabor_data_status = True
+        except Exception:
+            print('passive gabor data was not found, some plots will not display')
+            self.gabor_data_status = False
 
     def filter_units(self, type):
         if type == 'all':
@@ -197,6 +234,7 @@ class PlotData:
                 'img': img,
                 'scale': np.array([xscale, yscale]),
                 'levels': np.quantile(np.mean(img, axis=0), [0, 1]),
+                'offset': np.array([0, 0]),
                 'xrange': np.array([times[0], times[-1]]),
                 'xaxis': 'Time (s)',
                 'cmap': 'binary',
@@ -262,6 +300,7 @@ class PlotData:
                 'img': corr,
                 'scale': np.array([scale, scale]),
                 'levels': np.array([np.min(corr), np.max(corr)]),
+                'offset': np.array([0, 0]),
                 'xrange': np.array([np.min(self.chn_coords[:, 1]), np.max(self.chn_coords[:, 1])]),
                 'cmap': 'viridis',
                 'title': 'Correlation',
@@ -325,6 +364,7 @@ class PlotData:
             'img': img,
             'scale': np.array([xscale, yscale]),
             'levels': levels,
+            'offset': np.array([0, 0]),
             'cmap': cmap,
             'xrange': np.array([rms_times[0], rms_times[-1]]),
             'xaxis': xaxis,
@@ -340,7 +380,7 @@ class PlotData:
             'img': probe_img,
             'scale': probe_scale,
             'offset': probe_offset,
-            'level': probe_levels,
+            'levels': probe_levels,
             'cmap': cmap,
             'xrange': np.array([0 * BNK_SIZE, (N_BNK) * BNK_SIZE]),
             'title': format + ' RMS (uV)'
@@ -382,6 +422,7 @@ class PlotData:
                 'img': img,
                 'scale': np.array([xscale, yscale]),
                 'levels': levels,
+                'offset': np.array([0, 0]),
                 'cmap': 'viridis',
                 'xrange': np.array([freq_range[0], freq_range[-1]]),
                 'xaxis': 'Frequency (Hz)',
@@ -400,7 +441,7 @@ class PlotData:
                     'img': probe_img,
                     'scale': probe_scale,
                     'offset': probe_offset,
-                    'level': probe_levels,
+                    'levels': probe_levels,
                     'cmap': 'viridis',
                     'xaxis': 'Time (s)',
                     'xrange': np.array([0 * BNK_SIZE, (N_BNK) * BNK_SIZE]),
@@ -409,6 +450,189 @@ class PlotData:
                 data_probe.update(lfp_band_data)
 
             return data_img, data_probe
+
+    def get_rfmap_data(self):
+        if not self.rfmap_data_status:
+            data_img_on = None
+            data_img_off = None
+            return data_img_on, data_img_off
+        else:
+
+            x_bin = self.rf_stim.shape[1]
+            y_bin = self.rf_stim.shape[2]
+
+            T_BIN = 0.01
+            D_BIN = 160
+
+            R, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
+                                          self.spikes['depths'][self.spike_idx][self.kp_idx],
+                                          T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
+
+            pre_stim = 0.05
+            post_stim = 0.15
+            n_bins = int((pre_stim + post_stim) / T_BIN)
+            gray = np.median(self.rf_stim)
+
+            on_map = np.zeros(shape=(depths.shape[0], x_bin, y_bin, n_bins))
+            off_map = np.zeros(shape=(depths.shape[0], x_bin, y_bin, n_bins))
+
+            for x_pos in np.arange(x_bin):
+                for y_pos in np.arange(y_bin):
+
+                    pixel_val = self.rf_stim[:, x_pos, y_pos] - gray
+                    pixel_non_grey = np.where(pixel_val != 0)[0]
+                    # Find cases where the frame before was gray (i.e when the stim came on)
+                    frame_change = np.where(self.rf_stim[pixel_non_grey - 1, x_pos, y_pos] ==
+                                            gray)[0]
+
+                    # On stimulus, white squares
+                    on_pix = np.where(pixel_val[pixel_non_grey[frame_change]] > 0)[0]
+                    stim_on = pixel_non_grey[frame_change[on_pix]]
+                    stim_on_times = self.rf_stim_times[stim_on]
+                    stim_on_intervals = np.c_[stim_on_times - pre_stim, stim_on_times + post_stim]
+
+                    # Off stimulus, black squares
+                    off_pix = np.where(pixel_val[pixel_non_grey[frame_change]] < 0)[0]
+                    stim_off = pixel_non_grey[frame_change[off_pix]]
+                    stim_off_times = self.rf_stim_times[stim_off]
+                    stim_off_intervals = np.c_[stim_off_times - pre_stim,
+                                               stim_off_times + post_stim]
+
+                    idx_on = np.searchsorted(times, stim_on_intervals)
+                    idx_off = np.searchsorted(times, stim_off_intervals)
+
+                    on_trials = np.zeros((depths.shape[0], n_bins, idx_on.shape[0]))
+                    for i, on in enumerate(idx_on):
+                        on_trials[:, :, i] = R[:, on[0]:on[1]]
+                    avg_on_trials = np.mean(on_trials, axis=2)
+
+                    off_trials = np.zeros((depths.shape[0], n_bins, idx_off.shape[0]))
+                    for i, off in enumerate(idx_off):
+                        off_trials[:, :, i] = R[:, off[0]:off[1]]
+                    avg_off_trials = np.mean(off_trials, axis=2)
+
+                    on_map[:, x_pos, y_pos, :] = avg_on_trials
+                    off_map[:, x_pos, y_pos, :] = avg_off_trials
+
+            rfs_map = {'on': on_map,
+                       'off': off_map}
+
+            rfs_svd = {}
+            for stim_type, stim_vals in rfs_map.items():
+                svd_stim = []
+                for dep in stim_vals:
+                    x_pix, y_pix, n_bins = dep.shape
+                    sub_reshaped = np.reshape(dep, (y_pix * x_pix, n_bins))
+                    bsl = np.mean(sub_reshaped[:, 0])
+
+                    u, s, v = svd(sub_reshaped - bsl)
+                    sign = -1 if np.median(v[0, :]) < 0 else 1
+                    rfs = sign * np.reshape(u[:, 0], (y_pix, x_pix))
+                    rfs *= s[0]
+
+                    svd_stim.append(rfs)
+
+                svd_dict = {stim_type: svd_stim}
+                rfs_svd.update(svd_dict)
+
+            img_on = np.vstack(rfs_svd['on'])
+            img_off = np.vstack(rfs_svd['off'])
+            yscale = ((np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1]))
+                      / img_on.shape[0])
+            xscale = 1
+            levels = np.quantile(np.c_[img_on, img_off], [0, 1])
+
+            data_img_on = {
+                'img': [img_on.T],
+                'scale': [np.array([xscale, yscale])],
+                'levels': levels,
+                'offset': [np.array([0, 0])],
+                'cmap': 'viridis',
+                'xrange': np.array([0, 15]),
+                'xaxis': 'Position',
+                'title': 'rfmap (dB)'
+            }
+
+            data_img_off = {
+                'img': [img_off.T],
+                'scale': [np.array([xscale, yscale])],
+                'levels': levels,
+                'offset': [np.array([0, 0])],
+                'cmap': 'viridis',
+                'xrange': np.array([0, 15]),
+                'xaxis': 'Position',
+                'title': 'rfmap (dB)'
+            }
+
+            return data_img_on, data_img_off, depths
+
+    def get_passive_events(self):
+        stim_keys = ['valveOn', 'toneOn', 'noiseOn', 'leftGabor', 'rightGabor']
+        data_img = {stim: None for stim in stim_keys}
+        if not self.passive_data_status and not self.gabor_data_status:
+            return data_img
+        elif not self.passive_data_status and self.gabor_data_status:
+            stim_types = ['leftGabor', 'rightGabor']
+            stims = self.vis_stim
+        elif self.passive_data_status and not self.gabor_data_status:
+            stim_types = ['valveOn', 'toneOn', 'noiseOn']
+            stims = self.aud_stim
+        else:
+            stim_types = stim_keys
+            stims = {**self.vis_stim, **self.aud_stim}
+
+        T_BIN = 0.01
+        D_BIN = 20
+        base_stim = 1
+        pre_stim = 0.4
+        post_stim = 1
+        n_bins = int((pre_stim + post_stim) / T_BIN)
+        n_bins_base = int(np.ceil((base_stim - pre_stim) / T_BIN))
+        R, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
+                                      self.spikes['depths'][self.spike_idx][self.kp_idx],
+                                      T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
+
+        for stim_type in stim_types:
+
+            stim_times = stims[stim_type]
+            stim_intervals = np.c_[stim_times - pre_stim, stim_times + post_stim]
+            base_intervals = np.c_[stim_times - base_stim, stim_times - pre_stim]
+            idx_stim = np.searchsorted(times, stim_intervals)
+            idx_base = np.searchsorted(times, base_intervals)
+
+            stim_trials = np.zeros((depths.shape[0], n_bins, idx_stim.shape[0]))
+            noise_trials = np.zeros((depths.shape[0], n_bins_base, idx_stim.shape[0]))
+            for i, (st, ba) in enumerate(zip(idx_stim, idx_base)):
+                stim_trials[:, :, i] = R[:, st[0]:st[1]]
+                noise_trials[:, :, i] = R[:, ba[0]:ba[1]]
+
+            # Average across trials
+            avg_stim_trials = np.mean(stim_trials, axis=2)
+            # Average across trials and time
+            avg_base_trials = np.mean(np.mean(noise_trials, axis=2), axis=1)[:, np.newaxis]
+            std_base_trials = np.std(np.mean(noise_trials, axis=2), axis=1)[:, np.newaxis]
+            z_score = (avg_stim_trials - avg_base_trials) / std_base_trials
+            z_score[np.isnan(z_score)] = 0
+
+            xscale = (post_stim + pre_stim)/z_score.shape[1]
+            yscale = ((np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1]))
+                      / z_score.shape[0])
+
+            levels = [-10, 10]
+
+            stim_data = {stim_type: {
+                'img': z_score.T,
+                'scale': np.array([xscale, yscale]),
+                'levels': levels,
+                'offset': np.array([-1*pre_stim, 0]),
+                'cmap': 'bwr',
+                'xrange': [-1 * pre_stim, post_stim],
+                'xaxis': 'Time from Stim Onset (s)',
+                'title': 'Firing rate (z score)'}
+            }
+            data_img.update(stim_data)
+
+        return data_img
 
     def get_autocorr(self, clust_idx):
         idx = np.where(self.spikes['clusters'] == self.clust_id[clust_idx])[0]
