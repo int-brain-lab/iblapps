@@ -4,6 +4,7 @@ import numpy as np
 import alf.io
 from brainbox.processing import bincount2D
 from brainbox.population import xcorr
+from brainbox.task import passive
 import scipy
 from PyQt5 import QtGui
 from scipy.linalg import svd
@@ -58,10 +59,8 @@ class PlotData:
             self.lfp_data_status = False
 
         try:
-            rf_map = alf.io.load_object(self.alf_path, object='passiveRFM', namespace='ibl')
-            if len(rf_map) == 2:
-                self.rf_stim_times = rf_map['times']
-                self.rf_stim = rf_map['frames'].astype('float')
+            self.rf_map = alf.io.load_object(self.alf_path, object='passiveRFM', namespace='ibl')
+            if len(self.rf_map) == 2:
                 self.rfmap_data_status = True
             else:
                 print('rfmap data was not found, some plots will not display')
@@ -458,82 +457,15 @@ class PlotData:
             return data_img_on, data_img_off, None
         else:
 
-            x_bin = self.rf_stim.shape[1]
-            y_bin = self.rf_stim.shape[2]
+            (rf_map_times, rf_map_pos,
+             rf_stim_frames) = passive.get_on_off_times_and_positions(self.rf_map)
 
-            T_BIN = 0.01
-            D_BIN = 160
-
-            R, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
-                                          self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                          T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
-
-            pre_stim = 0.05
-            post_stim = 0.15
-            n_bins = int((pre_stim + post_stim) / T_BIN)
-            gray = np.median(self.rf_stim)
-
-            on_map = np.zeros(shape=(depths.shape[0], x_bin, y_bin, n_bins))
-            off_map = np.zeros(shape=(depths.shape[0], x_bin, y_bin, n_bins))
-
-            for x_pos in np.arange(x_bin):
-                for y_pos in np.arange(y_bin):
-
-                    pixel_val = self.rf_stim[:, x_pos, y_pos] - gray
-                    pixel_non_grey = np.where(pixel_val != 0)[0]
-                    # Find cases where the frame before was gray (i.e when the stim came on)
-                    frame_change = np.where(self.rf_stim[pixel_non_grey - 1, x_pos, y_pos] ==
-                                            gray)[0]
-
-                    # On stimulus, white squares
-                    on_pix = np.where(pixel_val[pixel_non_grey[frame_change]] > 0)[0]
-                    stim_on = pixel_non_grey[frame_change[on_pix]]
-                    stim_on_times = self.rf_stim_times[stim_on]
-                    stim_on_intervals = np.c_[stim_on_times - pre_stim, stim_on_times + post_stim]
-
-                    # Off stimulus, black squares
-                    off_pix = np.where(pixel_val[pixel_non_grey[frame_change]] < 0)[0]
-                    stim_off = pixel_non_grey[frame_change[off_pix]]
-                    stim_off_times = self.rf_stim_times[stim_off]
-                    stim_off_intervals = np.c_[stim_off_times - pre_stim,
-                                               stim_off_times + post_stim]
-
-                    idx_on = np.searchsorted(times, stim_on_intervals)
-                    idx_off = np.searchsorted(times, stim_off_intervals)
-
-                    on_trials = np.zeros((depths.shape[0], n_bins, idx_on.shape[0]))
-                    for i, on in enumerate(idx_on):
-                        on_trials[:, :, i] = R[:, on[0]:on[1]]
-                    avg_on_trials = np.mean(on_trials, axis=2)
-
-                    off_trials = np.zeros((depths.shape[0], n_bins, idx_off.shape[0]))
-                    for i, off in enumerate(idx_off):
-                        off_trials[:, :, i] = R[:, off[0]:off[1]]
-                    avg_off_trials = np.mean(off_trials, axis=2)
-
-                    on_map[:, x_pos, y_pos, :] = avg_on_trials
-                    off_map[:, x_pos, y_pos, :] = avg_off_trials
-
-            rfs_map = {'on': on_map,
-                       'off': off_map}
-
-            rfs_svd = {}
-            for stim_type, stim_vals in rfs_map.items():
-                svd_stim = []
-                for dep in stim_vals:
-                    x_pix, y_pix, n_bins = dep.shape
-                    sub_reshaped = np.reshape(dep, (y_pix * x_pix, n_bins))
-                    bsl = np.mean(sub_reshaped[:, 0])
-
-                    u, s, v = svd(sub_reshaped - bsl)
-                    sign = -1 if np.median(v[0, :]) < 0 else 1
-                    rfs = sign * np.reshape(u[:, 0], (y_pix, x_pix))
-                    rfs *= s[0]
-
-                    svd_stim.append(rfs)
-
-                svd_dict = {stim_type: svd_stim}
-                rfs_svd.update(svd_dict)
+            rf_map, depths = \
+                passive.get_rf_map_over_depth(rf_map_times, rf_map_pos, rf_stim_frames,
+                                              self.spikes['times'][self.spike_idx][self.kp_idx],
+                                              self.spikes['depths'][self.spike_idx][self.kp_idx],
+                                              D_BIN=160)
+            rfs_svd = passive.get_svd_map(rf_map)
 
             img_on = np.vstack(rfs_svd['on'])
             img_off = np.vstack(rfs_svd['off'])
@@ -581,39 +513,46 @@ class PlotData:
             stim_types = stim_keys
             stims = {**self.vis_stim, **self.aud_stim}
 
-        T_BIN = 0.01
-        D_BIN = 20
         base_stim = 1
         pre_stim = 0.4
         post_stim = 1
-        n_bins = int((pre_stim + post_stim) / T_BIN)
-        n_bins_base = int(np.ceil((base_stim - pre_stim) / T_BIN))
-        R, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
-                                      self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                      T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
+        stim_events = passive.get_stim_aligned_activity(stims, self.spikes['times'][self.spike_idx][self.kp_idx],
+                                          self.spikes['depths'][self.spike_idx][self.kp_idx],
+                                          pre_stim=pre_stim,post_stim=post_stim, base_stim=base_stim)
 
-        for stim_type in stim_types:
-
-            stim_times = stims[stim_type]
-            stim_intervals = np.c_[stim_times - pre_stim, stim_times + post_stim]
-            base_intervals = np.c_[stim_times - base_stim, stim_times - pre_stim]
-            idx_stim = np.searchsorted(times, stim_intervals)
-            idx_base = np.searchsorted(times, base_intervals)
-
-            stim_trials = np.zeros((depths.shape[0], n_bins, idx_stim.shape[0]))
-            noise_trials = np.zeros((depths.shape[0], n_bins_base, idx_stim.shape[0]))
-            for i, (st, ba) in enumerate(zip(idx_stim, idx_base)):
-                stim_trials[:, :, i] = R[:, st[0]:st[1]]
-                noise_trials[:, :, i] = R[:, ba[0]:ba[1]]
-
-            # Average across trials
-            avg_stim_trials = np.mean(stim_trials, axis=2)
-            # Average across trials and time
-            avg_base_trials = np.mean(np.mean(noise_trials, axis=2), axis=1)[:, np.newaxis]
-            std_base_trials = np.std(np.mean(noise_trials, axis=2), axis=1)[:, np.newaxis]
-            z_score = (avg_stim_trials - avg_base_trials) / std_base_trials
-            z_score[np.isnan(z_score)] = 0
-
+        #T_BIN = 0.01
+        #D_BIN = 20
+        #base_stim = 1
+        #pre_stim = 0.4
+        #post_stim = 1
+        #n_bins = int((pre_stim + post_stim) / T_BIN)
+        #n_bins_base = int(np.ceil((base_stim - pre_stim) / T_BIN))
+        #R, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
+        #                              self.spikes['depths'][self.spike_idx][self.kp_idx],
+        #                              T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
+#
+        #for stim_type in stim_types:
+#
+        #    stim_times = stims[stim_type]
+        #    stim_intervals = np.c_[stim_times - pre_stim, stim_times + post_stim]
+        #    base_intervals = np.c_[stim_times - base_stim, stim_times - pre_stim]
+        #    idx_stim = np.searchsorted(times, stim_intervals)
+        #    idx_base = np.searchsorted(times, base_intervals)
+#
+        #    stim_trials = np.zeros((depths.shape[0], n_bins, idx_stim.shape[0]))
+        #    noise_trials = np.zeros((depths.shape[0], n_bins_base, idx_stim.shape[0]))
+        #    for i, (st, ba) in enumerate(zip(idx_stim, idx_base)):
+        #        stim_trials[:, :, i] = R[:, st[0]:st[1]]
+        #        noise_trials[:, :, i] = R[:, ba[0]:ba[1]]
+#
+        #    # Average across trials
+        #    avg_stim_trials = np.mean(stim_trials, axis=2)
+        #    # Average across trials and time
+        #    avg_base_trials = np.mean(np.mean(noise_trials, axis=2), axis=1)[:, np.newaxis]
+        #    std_base_trials = np.std(np.mean(noise_trials, axis=2), axis=1)[:, np.newaxis]
+        #    z_score = (avg_stim_trials - avg_base_trials) / std_base_trials
+        #    z_score[np.isnan(z_score)] = 0
+        for stim_type, z_score in stim_events.items():
             xscale = (post_stim + pre_stim)/z_score.shape[1]
             yscale = ((np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1]))
                       / z_score.shape[0])

@@ -10,7 +10,7 @@ import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 
-ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
+ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 
 class LoadData:
@@ -124,7 +124,10 @@ class LoadData:
             self.prev_align = sorted(self.prev_align, reverse=True)
             self.prev_align.append('original')
         else:
+            self.alignments = {}
             self.prev_align = ['original']
+
+        print(self.alignments)
 
         return self.prev_align
 
@@ -402,15 +405,15 @@ class LoadData:
         else:
             ephys_desc_str = ", ".join(ephys_desc)
 
-        self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
-                        alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
-                        allow_direct_insert=True, replace=True)
+        #self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
+        #                alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
+        #                allow_direct_insert=True, replace=True)
         self.alyx_str = ephys_qc.upper() + ': ' + ephys_desc_str
 
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number
-
+        upload_flatiron=False
         align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
         align_qc.load_data(prev_alignments=self.alignments, xyz_picks=self.xyz_picks,
                            depths=self.chn_depths, cluster_chns=self.cluster_chns)
