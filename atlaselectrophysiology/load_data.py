@@ -124,6 +124,7 @@ class LoadData:
             self.prev_align = sorted(self.prev_align, reverse=True)
             self.prev_align.append('original')
         else:
+            self.alignments = {}
             self.prev_align = ['original']
 
         return self.prev_align
