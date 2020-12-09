@@ -508,10 +508,11 @@ class PlotData:
             stims = self.vis_stim
         elif self.passive_data_status and not self.gabor_data_status:
             stim_types = ['valveOn', 'toneOn', 'noiseOn']
-            stims = self.aud_stim
+            stims = {stim_type: self.aud_stim[stim_type] for stim_type in stim_types}
         else:
             stim_types = stim_keys
-            stims = {**self.vis_stim, **self.aud_stim}
+            stims = {stim_type: self.aud_stim[stim_type] for stim_type in stim_types[0:3]}
+            stims.update(self.vis_stim)
 
         base_stim = 1
         pre_stim = 0.4

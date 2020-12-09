@@ -10,7 +10,7 @@ import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 
-ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
+ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
 
 
 class LoadData:
@@ -126,8 +126,6 @@ class LoadData:
         else:
             self.alignments = {}
             self.prev_align = ['original']
-
-        print(self.alignments)
 
         return self.prev_align
 
@@ -372,14 +370,17 @@ class LoadData:
 
         return channel_upload
 
-    def update_alignments(self, feature, track, key_info=None):
+    def update_alignments(self, feature, track, key_info=None, user_eval=None):
         if not key_info:
             user = self.one._par.ALYX_LOGIN
             date = datetime.now().replace(microsecond=0).isoformat()
             data = {date + '_' + user: [feature.tolist(), track.tolist(), self.alyx_str]}
         else:
             user = key_info[20:]
-            data = {key_info: [feature.tolist(), track.tolist()]}
+            if user_eval:
+                data = {key_info: [feature.tolist(), track.tolist(), user_eval]}
+            else:
+                data = {key_info: [feature.tolist(), track.tolist()]}
 
         old_user = [key for key in self.alignments.keys() if user in key]
         # Only delete duplicated if trajectory is not resolved
