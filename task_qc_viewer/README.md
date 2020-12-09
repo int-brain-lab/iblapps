@@ -20,7 +20,9 @@ cd /home/olivier/Documents/PYTHON/iblapps/task_qc_viewer
 ```
 Launch the Viewer by typing `ipython task_qc.py session_UUID` , example:
 ```
-ipython task_qc.py c9fec76e-7a20-4da4-93ad-04510a89473b
+python task_qc.py c9fec76e-7a20-4da4-93ad-04510a89473b
+# or with ipython
+ipython task_qc.py -- c9fec76e-7a20-4da4-93ad-04510a89473b
 ```
 
 Or just using a local path (on a local server for example):
