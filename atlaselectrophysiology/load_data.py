@@ -402,19 +402,21 @@ class LoadData:
         # Upload qc results to datajoint table
         user = self.one._par.ALYX_LOGIN
         if len(ephys_desc) == 0:
-            ephys_desc_str = None
+            ephys_desc_str = 'None'
+            ephys_dj_str = None
         else:
             ephys_desc_str = ", ".join(ephys_desc)
+            ephys_dj_str = ephys_desc_str
 
-        #self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
-        #                alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
-        #                allow_direct_insert=True, replace=True)
+        self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
+                             alignment_qc=align_qc, ephys_qc=ephys_qc,
+                             ephys_qc_description=ephys_dj_str),
+                        allow_direct_insert=True, replace=True)
         self.alyx_str = ephys_qc.upper() + ': ' + ephys_desc_str
 
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number
-        upload_flatiron=False
         align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
         align_qc.load_data(prev_alignments=self.alignments, xyz_picks=self.xyz_picks,
                            depths=self.chn_depths, cluster_chns=self.cluster_chns)

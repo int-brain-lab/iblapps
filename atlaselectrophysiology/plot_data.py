@@ -517,42 +517,12 @@ class PlotData:
         base_stim = 1
         pre_stim = 0.4
         post_stim = 1
-        stim_events = passive.get_stim_aligned_activity(stims, self.spikes['times'][self.spike_idx][self.kp_idx],
-                                          self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                          pre_stim=pre_stim,post_stim=post_stim, base_stim=base_stim)
+        stim_events = passive.get_stim_aligned_activity(stims, self.spikes['times'][self.spike_idx]
+                                                        [self.kp_idx], self.spikes['depths']
+                                                        [self.spike_idx][self.kp_idx],
+                                                        pre_stim=pre_stim, post_stim=post_stim,
+                                                        base_stim=base_stim)
 
-        #T_BIN = 0.01
-        #D_BIN = 20
-        #base_stim = 1
-        #pre_stim = 0.4
-        #post_stim = 1
-        #n_bins = int((pre_stim + post_stim) / T_BIN)
-        #n_bins_base = int(np.ceil((base_stim - pre_stim) / T_BIN))
-        #R, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
-        #                              self.spikes['depths'][self.spike_idx][self.kp_idx],
-        #                              T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
-#
-        #for stim_type in stim_types:
-#
-        #    stim_times = stims[stim_type]
-        #    stim_intervals = np.c_[stim_times - pre_stim, stim_times + post_stim]
-        #    base_intervals = np.c_[stim_times - base_stim, stim_times - pre_stim]
-        #    idx_stim = np.searchsorted(times, stim_intervals)
-        #    idx_base = np.searchsorted(times, base_intervals)
-#
-        #    stim_trials = np.zeros((depths.shape[0], n_bins, idx_stim.shape[0]))
-        #    noise_trials = np.zeros((depths.shape[0], n_bins_base, idx_stim.shape[0]))
-        #    for i, (st, ba) in enumerate(zip(idx_stim, idx_base)):
-        #        stim_trials[:, :, i] = R[:, st[0]:st[1]]
-        #        noise_trials[:, :, i] = R[:, ba[0]:ba[1]]
-#
-        #    # Average across trials
-        #    avg_stim_trials = np.mean(stim_trials, axis=2)
-        #    # Average across trials and time
-        #    avg_base_trials = np.mean(np.mean(noise_trials, axis=2), axis=1)[:, np.newaxis]
-        #    std_base_trials = np.std(np.mean(noise_trials, axis=2), axis=1)[:, np.newaxis]
-        #    z_score = (avg_stim_trials - avg_base_trials) / std_base_trials
-        #    z_score[np.isnan(z_score)] = 0
         for stim_type, z_score in stim_events.items():
             xscale = (post_stim + pre_stim)/z_score.shape[1]
             yscale = ((np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1]))
