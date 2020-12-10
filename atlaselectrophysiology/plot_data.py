@@ -451,10 +451,9 @@ class PlotData:
             return data_img, data_probe
 
     def get_rfmap_data(self):
+        data_img = dict()
         if not self.rfmap_data_status:
-            data_img_on = None
-            data_img_off = None
-            return data_img_on, data_img_off, None
+            return data_img, None
         else:
 
             (rf_map_times, rf_map_pos,
@@ -466,43 +465,35 @@ class PlotData:
                                               self.spikes['depths'][self.spike_idx][self.kp_idx],
                                               D_BIN=160)
             rfs_svd = passive.get_svd_map(rf_map)
-
-            img_on = np.vstack(rfs_svd['on'])
-            img_off = np.vstack(rfs_svd['off'])
+            img = dict()
+            img['on'] = np.vstack(rfs_svd['on'])
+            img['off'] = np.vstack(rfs_svd['off'])
             yscale = ((np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1]))
-                      / img_on.shape[0])
+                      / img['on'].shape[0])
             xscale = 1
-            levels = np.quantile(np.c_[img_on, img_off], [0, 1])
+            levels = np.quantile(np.c_[img['on'], img['off']], [0, 1])
 
-            data_img_on = {
-                'img': [img_on.T],
-                'scale': [np.array([xscale, yscale])],
-                'levels': levels,
-                'offset': [np.array([0, 0])],
-                'cmap': 'viridis',
-                'xrange': np.array([0, 15]),
-                'xaxis': 'Position',
-                'title': 'rfmap (dB)'
-            }
+            sub_type = ['on', 'off']
+            for sub in sub_type:
+                sub_data = {sub: {
+                    'img': [img[sub].T],
+                    'scale': [np.array([xscale, yscale])],
+                    'levels': levels,
+                    'offset': [np.array([0, 0])],
+                    'cmap': 'viridis',
+                    'xrange': np.array([0, 15]),
+                    'xaxis': 'Position',
+                    'title': 'rfmap (dB)'}
+                }
+                data_img.update(sub_data)
 
-            data_img_off = {
-                'img': [img_off.T],
-                'scale': [np.array([xscale, yscale])],
-                'levels': levels,
-                'offset': [np.array([0, 0])],
-                'cmap': 'viridis',
-                'xrange': np.array([0, 15]),
-                'xaxis': 'Position',
-                'title': 'rfmap (dB)'
-            }
-
-            return data_img_on, data_img_off, depths
+            return data_img, depths
 
     def get_passive_events(self):
         stim_keys = ['valveOn', 'toneOn', 'noiseOn', 'leftGabor', 'rightGabor']
-        data_img = {stim: None for stim in stim_keys}
+        data_img = dict()
         if not self.passive_data_status and not self.gabor_data_status:
-            return data_img
+            return  data_img
         elif not self.passive_data_status and self.gabor_data_status:
             stim_types = ['leftGabor', 'rightGabor']
             stims = self.vis_stim

@@ -16,7 +16,7 @@ class Setup():
         main_widget = QtWidgets.QWidget()
         self.setCentralWidget(main_widget)
 
-        self.init_menubar()
+        #self.init_menubar()
         self.init_interaction_features()
         self.init_figures()
 
@@ -103,7 +103,7 @@ class Setup():
         img_options.addAction(scatter_amp)
         self.img_options_group.addAction(scatter_amp)
 
-        stim_type = ['valveOn', 'toneOn', 'noiseOn', 'leftGabor', 'rightGabor']
+        stim_type = list(self.img_stim_data.keys())
         for stim in stim_type:
             img = QtGui.QAction(stim, self, checkable=True, checked=False)
             img.triggered.connect(lambda checked, item=stim: self.plot_image(
@@ -137,12 +137,15 @@ class Setup():
         probe_rmsAP.triggered.connect(lambda: self.plot_probe(self.probe_rms_APdata))
         probe_rmsLFP = QtGui.QAction('rms LFP', self, checkable=True, checked=False)
         probe_rmsLFP.triggered.connect(lambda: self.plot_probe(self.probe_rms_LFPdata))
-        probe_on_rfmap = QtGui.QAction('RF Map - On', self, checkable=True, checked=False)
-        probe_on_rfmap.triggered.connect(lambda: self.plot_probe(self.probe_rfmap_on_data,
-                                                                 bounds=self.rfmap_boundaries))
-        probe_off_rfmap = QtGui.QAction('RF Map - Off', self, checkable=True, checked=False)
-        probe_off_rfmap.triggered.connect(lambda: self.plot_probe(self.probe_rfmap_off_data,
-                                                                  bounds=self.rfmap_boundaries))
+
+
+
+        #probe_on_rfmap = QtGui.QAction('RF Map - On', self, checkable=True, checked=False)
+        #probe_on_rfmap.triggered.connect(lambda: self.plot_probe(self.probe_rfmap_on_data,
+        #                                                         bounds=self.rfmap_boundaries))
+        #probe_off_rfmap = QtGui.QAction('RF Map - Off', self, checkable=True, checked=False)
+        #probe_off_rfmap.triggered.connect(lambda: self.plot_probe(self.probe_rfmap_off_data,
+        #                                                          bounds=self.rfmap_boundaries))
         # Initialise with rms of AP probe plot
         self.probe_init = probe_rmsAP
 
@@ -167,10 +170,14 @@ class Setup():
             probe_options.addAction(probe)
             self.probe_options_group.addAction(probe)
 
-        probe_options.addAction(probe_on_rfmap)
-        self.probe_options_group.addAction(probe_on_rfmap)
-        probe_options.addAction(probe_off_rfmap)
-        self.probe_options_group.addAction(probe_off_rfmap)
+        sub_types = list(self.probe_rfmap.keys())
+        for sub in sub_types:
+            probe = QtGui.QAction(f'RF Map - {sub}', self, checkable=True, checked=False)
+            probe.triggered.connect(lambda checked, item=sub: self.plot_probe(
+                                    self.probe_rfmap[item], bounds=self.rfmap_boundaries))
+            probe_options.addAction(probe)
+            self.probe_options_group.addAction(probe)
+
 
         # SLICE PLOTS MENU BAR
         # Define all coronal slice plot options
