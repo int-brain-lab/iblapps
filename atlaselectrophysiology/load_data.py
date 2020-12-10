@@ -10,7 +10,7 @@ import alf.io
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 
-ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
+ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 
 class LoadData:
@@ -417,7 +417,6 @@ class LoadData:
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number
-        upload_flatiron=False
         align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
         align_qc.load_data(prev_alignments=self.alignments, xyz_picks=self.xyz_picks,
                            depths=self.chn_depths, cluster_chns=self.cluster_chns)
