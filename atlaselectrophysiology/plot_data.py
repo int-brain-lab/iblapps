@@ -468,8 +468,8 @@ class PlotData:
             img = dict()
             img['on'] = np.vstack(rfs_svd['on'])
             img['off'] = np.vstack(rfs_svd['off'])
-            yscale = ((np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1]))
-                      / img['on'].shape[0])
+            yscale = ((np.max(self.chn_coords[:, 1]) - np.min(
+                self.chn_coords[:, 1])) / img['on'].shape[0])
             xscale = 1
             levels = np.quantile(np.c_[img['on'], img['off']], [0, 1])
 
@@ -493,7 +493,7 @@ class PlotData:
         stim_keys = ['valveOn', 'toneOn', 'noiseOn', 'leftGabor', 'rightGabor']
         data_img = dict()
         if not self.passive_data_status and not self.gabor_data_status:
-            return  data_img
+            return data_img
         elif not self.passive_data_status and self.gabor_data_status:
             stim_types = ['leftGabor', 'rightGabor']
             stims = self.vis_stim
@@ -515,9 +515,9 @@ class PlotData:
                                                         base_stim=base_stim)
 
         for stim_type, z_score in stim_events.items():
-            xscale = (post_stim + pre_stim)/z_score.shape[1]
-            yscale = ((np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1]))
-                      / z_score.shape[0])
+            xscale = (post_stim + pre_stim) / z_score.shape[1]
+            yscale = ((np.max(self.chn_coords[:, 1]) - np.min(
+                self.chn_coords[:, 1])) / z_score.shape[0])
 
             levels = [-10, 10]
 
@@ -525,7 +525,7 @@ class PlotData:
                 'img': z_score.T,
                 'scale': np.array([xscale, yscale]),
                 'levels': levels,
-                'offset': np.array([-1*pre_stim, 0]),
+                'offset': np.array([-1 * pre_stim, 0]),
                 'cmap': 'bwr',
                 'xrange': [-1 * pre_stim, post_stim],
                 'xaxis': 'Time from Stim Onset (s)',

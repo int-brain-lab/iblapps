@@ -16,7 +16,6 @@ class Setup():
         main_widget = QtWidgets.QWidget()
         self.setCentralWidget(main_widget)
 
-        #self.init_menubar()
         self.init_interaction_features()
         self.init_figures()
 
@@ -107,7 +106,7 @@ class Setup():
         for stim in stim_type:
             img = QtGui.QAction(stim, self, checkable=True, checked=False)
             img.triggered.connect(lambda checked, item=stim: self.plot_image(
-                                    self.img_stim_data[item]))
+                                  self.img_stim_data[item]))
             img_options.addAction(img)
             self.img_options_group.addAction(img)
 
@@ -138,14 +137,6 @@ class Setup():
         probe_rmsLFP = QtGui.QAction('rms LFP', self, checkable=True, checked=False)
         probe_rmsLFP.triggered.connect(lambda: self.plot_probe(self.probe_rms_LFPdata))
 
-
-
-        #probe_on_rfmap = QtGui.QAction('RF Map - On', self, checkable=True, checked=False)
-        #probe_on_rfmap.triggered.connect(lambda: self.plot_probe(self.probe_rfmap_on_data,
-        #                                                         bounds=self.rfmap_boundaries))
-        #probe_off_rfmap = QtGui.QAction('RF Map - Off', self, checkable=True, checked=False)
-        #probe_off_rfmap.triggered.connect(lambda: self.plot_probe(self.probe_rfmap_off_data,
-        #                                                          bounds=self.rfmap_boundaries))
         # Initialise with rms of AP probe plot
         self.probe_init = probe_rmsAP
 
@@ -177,7 +168,6 @@ class Setup():
                                     self.probe_rfmap[item], bounds=self.rfmap_boundaries))
             probe_options.addAction(probe)
             self.probe_options_group.addAction(probe)
-
 
         # SLICE PLOTS MENU BAR
         # Define all coronal slice plot options
@@ -489,7 +479,6 @@ class Setup():
             ephys_qc_label = QtGui.QLabel("QC for ephys recording")
             self.ephys_qc = QtGui.QComboBox()
             self.ephys_qc.addItems(["Pass", "Warning", "Critical"])
-            #ephys_desc_label = QtGui.QLabel("Describe problem with recording")
 
             self.desc_buttons = QtWidgets.QButtonGroup()
             self.desc_group = QtWidgets.QGroupBox("Describe problem with recording")
