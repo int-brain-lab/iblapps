@@ -70,7 +70,7 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
     controller = TemplateController(dat_path=raw_file, dir_path=alf_probe_dir, dtype=np.int16,
                                     n_channels_dat=384, sample_rate=3e4,
                                     plugins=['IBLMetricsPlugin'],
-                                    plugin_dirs=[Path(__file__).resolve().parent])
+                                    plugin_dirs=[Path(__file__).resolve().parent / 'plugins'])
     gui = controller.create_gui()
     gui.show()
     run_app()
