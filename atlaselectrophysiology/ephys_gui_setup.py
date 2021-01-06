@@ -16,7 +16,6 @@ class Setup():
         main_widget = QtWidgets.QWidget()
         self.setCentralWidget(main_widget)
 
-        self.init_menubar()
         self.init_interaction_features()
         self.init_figures()
 
@@ -74,6 +73,7 @@ class Setup():
         img_rmsLFP.triggered.connect(lambda: self.plot_image(self.img_rms_LFPdata))
         img_LFP = QtGui.QAction('LFP Spectrum', self, checkable=True, checked=False)
         img_LFP.triggered.connect(lambda: self.plot_image(self.img_lfp_data))
+
         # Initialise with firing rate 2D plot
         self.img_init = img_fr
 
@@ -102,6 +102,14 @@ class Setup():
         img_options.addAction(scatter_amp)
         self.img_options_group.addAction(scatter_amp)
 
+        stim_type = list(self.img_stim_data.keys())
+        for stim in stim_type:
+            img = QtGui.QAction(stim, self, checkable=True, checked=False)
+            img.triggered.connect(lambda checked, item=stim: self.plot_image(
+                                  self.img_stim_data[item]))
+            img_options.addAction(img)
+            self.img_options_group.addAction(img)
+
         # LINE PLOTS MENU BAR
         # Define all 1D line plot options
         line_fr = QtGui.QAction('Firing Rate', self, checkable=True, checked=True)
@@ -128,6 +136,7 @@ class Setup():
         probe_rmsAP.triggered.connect(lambda: self.plot_probe(self.probe_rms_APdata))
         probe_rmsLFP = QtGui.QAction('rms LFP', self, checkable=True, checked=False)
         probe_rmsLFP.triggered.connect(lambda: self.plot_probe(self.probe_rms_LFPdata))
+
         # Initialise with rms of AP probe plot
         self.probe_init = probe_rmsAP
 
@@ -149,6 +158,14 @@ class Setup():
             probe = QtGui.QAction(band, self, checkable=True, checked=False)
             probe.triggered.connect(lambda checked, item=band: self.plot_probe(
                                     self.probe_lfp_data[item]))
+            probe_options.addAction(probe)
+            self.probe_options_group.addAction(probe)
+
+        sub_types = list(self.probe_rfmap.keys())
+        for sub in sub_types:
+            probe = QtGui.QAction(f'RF Map - {sub}', self, checkable=True, checked=False)
+            probe.triggered.connect(lambda checked, item=sub: self.plot_probe(
+                                    self.probe_rfmap[item], bounds=self.rfmap_boundaries))
             probe_options.addAction(probe)
             self.probe_options_group.addAction(probe)
 
@@ -462,10 +479,23 @@ class Setup():
             ephys_qc_label = QtGui.QLabel("QC for ephys recording")
             self.ephys_qc = QtGui.QComboBox()
             self.ephys_qc.addItems(["Pass", "Warning", "Critical"])
-            ephys_desc_label = QtGui.QLabel("Describe problem with recording")
-            self.ephys_desc = QtGui.QComboBox()
-            self.ephys_desc.addItems(["None", "Noise and artifact", "Drift", "Poor neural yield",
-                                      "Brain Damage", "Other"])
+
+            self.desc_buttons = QtWidgets.QButtonGroup()
+            self.desc_group = QtWidgets.QGroupBox("Describe problem with recording")
+            self.desc_layout = QtWidgets.QVBoxLayout()
+            self.desc_layout.setSpacing(5)
+            self.desc_buttons.setExclusive(False)
+            options = ["Noise and artifact", "Drift", "Poor neural yield", "Brain Damage", "Other"]
+            for i, val in enumerate(options):
+
+                button = QtWidgets.QCheckBox(val)
+                button.setCheckState(QtCore.Qt.Unchecked)
+
+                self.desc_buttons.addButton(button, id=i)
+                self.desc_layout.addWidget(button)
+
+            self.desc_group.setLayout(self.desc_layout)
+
             self.qc_dialog = QtGui.QDialog(self)
             self.qc_dialog.setWindowTitle('QC assessment')
             self.qc_dialog.resize(300, 150)
@@ -480,8 +510,7 @@ class Setup():
             dialog_layout.addWidget(self.align_qc)
             dialog_layout.addWidget(ephys_qc_label)
             dialog_layout.addWidget(self.ephys_qc)
-            dialog_layout.addWidget(ephys_desc_label)
-            dialog_layout.addWidget(self.ephys_desc)
+            dialog_layout.addWidget(self.desc_group)
             dialog_layout.addWidget(buttonBox)
             self.qc_dialog.setLayout(dialog_layout)
 
@@ -727,3 +756,17 @@ class PopupWindow(QtGui.QMainWindow):
 
     def leaveEvent(self, event):
         self.moved.emit()
+
+
+class CheckableComboBox(QtGui.QComboBox):
+    def __init__(self):
+        super(CheckableComboBox, self).__init__()
+        self.view().pressed.connect(self.handleItemPressed)
+        self.setModel(QtGui.QStandardItemModel(self))
+
+    def handleItemPressed(self, index):
+        item = self.model().itemFromIndex(index)
+        if item.checkState() == QtCore.Qt.Checked:
+            item.setCheckState(QtCore.Qt.Unchecked)
+        else:
+            item.setCheckState(QtCore.Qt.Checked)

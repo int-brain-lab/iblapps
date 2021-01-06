@@ -18,17 +18,21 @@ brain_atlas = AllenAtlas(25)
 class TestsAlignmentQcGUI(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        probe = ['probe00']
+        probe = ['probe00', 'probe01']
         create_alyx_probe_insertions(session_path=EPHYS_SESSION, model='3B2', labels=probe,
                                      one=one, force=True)
         cls.probe_id = one.alyx.rest('insertions', 'list', session=EPHYS_SESSION,
                                      name='probe00')[0]['id']
+        cls.probe_id2 = one.alyx.rest('insertions', 'list', session=EPHYS_SESSION,
+                                      name='probe01')[0]['id']
         data = np.load(Path(Path(__file__).parent.
                             joinpath('fixtures', 'data_alignmentqc_gui.npz')), allow_pickle=True)
         cls.xyz_picks = data['xyz_picks']
         cls.alignments = data['alignments'].tolist()
         cls.cluster_chns = data['cluster_chns']
         register_track(cls.probe_id, picks=cls.xyz_picks, one=one, overwrite=True,
+                       channels=False)
+        register_track(cls.probe_id2, picks=cls.xyz_picks, one=one, overwrite=True,
                        channels=False)
 
     def setUp(self) -> None:
@@ -71,21 +75,26 @@ class TestsAlignmentQcGUI(unittest.TestCase):
                              provenance='Ephys aligned histology track')
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
         assert (len(traj[0]['json']) == 1)
+        # Not added user evaluation so should just contain feature and track lists
+        assert(len(traj[0]['json'][key]) == 2)
 
         self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
         assert (insertion['json']['extended_qc']['alignment_count'] == 1)
         assert (insertion['json']['extended_qc']['alignment_stored'] == key)
+        assert (not insertion['json']['extended_qc'].get('experimenter', None))
         assert (insertion['json']['qc'] == 'NOT_SET')
         assert (self.ld.resolved == 0)
 
     def test_03_same_user(self):
         key = '2020-08-26T17:06:58_alejandro'
+        eval_str = 'PASS: Noise and artifact'
         feature = self.alignments[key][0]
         track = self.alignments[key][1]
         xyz_channels = self.ephysalign.get_channel_locations(feature, track)
         self.ld.upload_data(xyz_channels, channels=False)
-        self.ld.update_alignments(np.array(feature), np.array(track), key_info=key)
+        self.ld.update_alignments(np.array(feature), np.array(track), key_info=key,
+                                  user_eval=eval_str)
         _ = self.ld.get_previous_alignments()
         _ = self.ld.get_starting_alignment(0)
         assert (self.ld.current_align == key)
@@ -95,6 +104,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         traj_id = traj[0]['id']
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
         assert (len(traj[0]['json']) == 1)
+        assert(len(traj[0]['json'][key]) == 3)
         assert (traj_id != self.prev_traj_id)
 
         self.ld.update_qc(upload_flatiron=False)
@@ -102,7 +112,8 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (insertion['json']['extended_qc']['alignment_count'] == 1)
         assert (insertion['json']['extended_qc']['alignment_stored'] == key)
         assert (insertion['json']['extended_qc']['alignment_resolved'] == 0)
-        assert (insertion['json']['qc'] == 'NOT_SET')
+        assert(insertion['json']['extended_qc']['experimenter'] == 'PASS')
+        assert (insertion['json']['qc'] == 'PASS')
         assert (self.ld.resolved == 0)
 
     def test_04_two_alignments(self):
@@ -122,12 +133,14 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         traj_id = traj[0]['id']
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
         assert (len(traj[0]['json']) == 2)
+        assert(len(traj[0]['json'][key]) == 2)
         assert (traj_id != self.prev_traj_id)
         # Also assert all the keys match
 
         self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
-        assert (insertion['json']['qc'] == 'NOT_SET')
+        assert (insertion['json']['qc'] == 'PASS')
+        assert (insertion['json']['extended_qc']['experimenter'] == 'PASS')
         assert (insertion['json']['extended_qc']['alignment_count'] == 2)
         assert (insertion['json']['extended_qc']['alignment_stored'] == key)
         assert (insertion['json']['extended_qc']['alignment_resolved'] == 0)
@@ -137,11 +150,13 @@ class TestsAlignmentQcGUI(unittest.TestCase):
     def test_05_three_alignments(self):
 
         key = '2020-09-14T15:44:56_nate'
+        eval_str = 'WARNING: Drift'
         feature = self.alignments[key][0]
         track = self.alignments[key][1]
         xyz_channels = self.ephysalign.get_channel_locations(feature, track)
         self.ld.upload_data(xyz_channels, channels=False)
-        self.ld.update_alignments(np.array(feature), np.array(track), key_info=key)
+        self.ld.update_alignments(np.array(feature), np.array(track), key_info=key,
+                                  user_eval=eval_str)
         _ = self.ld.get_previous_alignments()
         _ = self.ld.get_starting_alignment(0)
 
@@ -152,11 +167,13 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         traj_id = traj[0]['id']
         assert (len(traj[0]['json']) == 3)
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
+        assert(len(traj[0]['json'][key]) == 3)
         assert (traj_id != self.prev_traj_id)
 
         self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
-        assert (insertion['json']['qc'] == 'NOT_SET')
+        assert (insertion['json']['qc'] == 'WARNING')
+        assert (insertion['json']['extended_qc']['experimenter'] == 'WARNING')
         assert (insertion['json']['extended_qc']['alignment_count'] == 3)
         assert (insertion['json']['extended_qc']['alignment_stored'] == key)
         assert (insertion['json']['extended_qc']['alignment_resolved'] == 1)
@@ -166,11 +183,13 @@ class TestsAlignmentQcGUI(unittest.TestCase):
 
     def test_06_new_user_after_resolved(self):
         key = '2020-09-16T15:44:56_mayo'
+        eval_str = 'PASS: Drift'
         feature = self.alignments[key][0]
         track = self.alignments[key][1]
         xyz_channels = self.ephysalign.get_channel_locations(feature, track)
         self.ld.upload_data(xyz_channels, channels=False)
-        self.ld.update_alignments(np.array(feature), np.array(track), key_info=key)
+        self.ld.update_alignments(np.array(feature), np.array(track), key_info=key,
+                                  user_eval=eval_str)
         _ = self.ld.get_previous_alignments()
         _ = self.ld.get_starting_alignment(0)
 
@@ -185,7 +204,8 @@ class TestsAlignmentQcGUI(unittest.TestCase):
 
         self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
-        assert (insertion['json']['qc'] == 'NOT_SET')
+        assert (insertion['json']['qc'] == 'WARNING')
+        assert (insertion['json']['extended_qc']['experimenter'] == 'WARNING')
         assert (insertion['json']['extended_qc']['alignment_count'] == 4)
         assert (insertion['json']['extended_qc']['alignment_stored'] == self.resolved_key)
         assert (insertion['json']['extended_qc']['alignment_resolved'] == 1)
@@ -195,11 +215,13 @@ class TestsAlignmentQcGUI(unittest.TestCase):
 
     def test_07_same_user_after_resolved(self):
         key = '2020-10-14T15:44:56_nate'
+        eval_str = 'CRITICAL: Brain Damage'
         feature = self.alignments[key][0]
         track = self.alignments[key][1]
         xyz_channels = self.ephysalign.get_channel_locations(feature, track)
         self.ld.upload_data(xyz_channels, channels=False)
-        self.ld.update_alignments(np.array(feature), np.array(track), key_info=key)
+        self.ld.update_alignments(np.array(feature), np.array(track), key_info=key,
+                                  user_eval=eval_str)
         _ = self.ld.get_previous_alignments()
         _ = self.ld.get_starting_alignment(0)
 
@@ -214,7 +236,8 @@ class TestsAlignmentQcGUI(unittest.TestCase):
 
         self.ld.update_qc(upload_flatiron=False)
         insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
-        assert (insertion['json']['qc'] == 'NOT_SET')
+        assert (insertion['json']['qc'] == 'CRITICAL')
+        assert (insertion['json']['extended_qc']['experimenter'] == 'CRITICAL')
         assert (insertion['json']['extended_qc']['alignment_count'] == 5)
         assert (insertion['json']['extended_qc']['alignment_stored'] == self.resolved_key)
         assert (insertion['json']['extended_qc']['alignment_resolved'] == 1)
@@ -222,9 +245,34 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (insertion['json']['extended_qc']['alignment_qc'] > 0.8)
         assert (self.ld.resolved == 1)
 
+    def test_08_starting_alignments(self):
+        key = '2020-10-14T15:44:56_nate'
+        # Starting from original
+        self.ld.probe_id = self.probe_id2
+        prev_align = self.ld.get_previous_alignments()
+        assert(len(prev_align) == 1)
+        assert(prev_align[0] == 'original')
+        assert(self.ld.alignments == {})
+
+        # Loading in one with alignments
+        self.ld.probe_id = self.probe_id
+        prev_align = self.ld.get_previous_alignments()
+        assert(len(prev_align) == 6)
+        assert(prev_align[-1] == 'original')
+        assert(len(self.ld.alignments) == 5)
+        assert(sorted(self.ld.alignments, reverse=True)[0] == key)
+
+        # Now loading back one with nothing
+        self.ld.probe_id = self.probe_id2
+        prev_align = self.ld.get_previous_alignments()
+        assert(len(prev_align) == 1)
+        assert(prev_align[0] == 'original')
+        assert(self.ld.alignments == {})
+
     @classmethod
     def tearDownClass(cls) -> None:
         one.alyx.rest('insertions', 'delete', id=cls.probe_id)
+        one.alyx.rest('insertions', 'delete', id=cls.probe_id2)
 
 
 if __name__ == "__main__":

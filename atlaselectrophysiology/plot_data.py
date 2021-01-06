@@ -4,6 +4,7 @@ import numpy as np
 import alf.io
 from brainbox.processing import bincount2D
 from brainbox.population import xcorr
+from brainbox.task import passive
 import scipy
 from PyQt5 import QtGui
 
@@ -17,6 +18,7 @@ np.seterr(divide='ignore', invalid='ignore')
 
 class PlotData:
     def __init__(self, alf_path, ephys_path):
+
         self.alf_path = alf_path
         self.ephys_path = ephys_path
 
@@ -54,6 +56,40 @@ class PlotData:
         except Exception:
             print('lfp data was not found, some plots will not display')
             self.lfp_data_status = False
+
+        try:
+            self.rf_map = alf.io.load_object(self.alf_path.parent, object='passiveRFM',
+                                             namespace='ibl')
+            if len(self.rf_map) == 2:
+                self.rfmap_data_status = True
+            else:
+                print('rfmap data was not found, some plots will not display')
+                self.rfmap_data_status = False
+        except Exception:
+            print('rfmp data was not found, some plots will not display')
+            self.rfmap_data_status = False
+
+        try:
+            self.aud_stim = alf.io.load_object(self.alf_path.parent, object='passiveStims',
+                                               namespace='ibl')['table']
+            if len(self.aud_stim) > 0:
+                self.passive_data_status = True
+        except Exception:
+            print('passive stim data was not found, some plots will not display')
+            self.passive_data_status = False
+
+        try:
+            gabor = alf.io.load_object(self.alf_path.parent, object='passiveGabor',
+                                       namespace='ibl')['table']
+            self.vis_stim = dict()
+            self.vis_stim['leftGabor'] = gabor['start'][(gabor['position'] == 35) &
+                                                        (gabor['contrast'] > 0.1)]
+            self.vis_stim['rightGabor'] = gabor['start'][(gabor['position'] == -35) &
+                                                         (gabor['contrast'] > 0.1)]
+            self.gabor_data_status = True
+        except Exception:
+            print('passive gabor data was not found, some plots will not display')
+            self.gabor_data_status = False
 
     def filter_units(self, type):
         if type == 'all':
@@ -197,6 +233,7 @@ class PlotData:
                 'img': img,
                 'scale': np.array([xscale, yscale]),
                 'levels': np.quantile(np.mean(img, axis=0), [0, 1]),
+                'offset': np.array([0, 0]),
                 'xrange': np.array([times[0], times[-1]]),
                 'xaxis': 'Time (s)',
                 'cmap': 'binary',
@@ -262,6 +299,7 @@ class PlotData:
                 'img': corr,
                 'scale': np.array([scale, scale]),
                 'levels': np.array([np.min(corr), np.max(corr)]),
+                'offset': np.array([0, 0]),
                 'xrange': np.array([np.min(self.chn_coords[:, 1]), np.max(self.chn_coords[:, 1])]),
                 'cmap': 'viridis',
                 'title': 'Correlation',
@@ -325,6 +363,7 @@ class PlotData:
             'img': img,
             'scale': np.array([xscale, yscale]),
             'levels': levels,
+            'offset': np.array([0, 0]),
             'cmap': cmap,
             'xrange': np.array([rms_times[0], rms_times[-1]]),
             'xaxis': xaxis,
@@ -340,7 +379,7 @@ class PlotData:
             'img': probe_img,
             'scale': probe_scale,
             'offset': probe_offset,
-            'level': probe_levels,
+            'levels': probe_levels,
             'cmap': cmap,
             'xrange': np.array([0 * BNK_SIZE, (N_BNK) * BNK_SIZE]),
             'title': format + ' RMS (uV)'
@@ -382,6 +421,7 @@ class PlotData:
                 'img': img,
                 'scale': np.array([xscale, yscale]),
                 'levels': levels,
+                'offset': np.array([0, 0]),
                 'cmap': 'viridis',
                 'xrange': np.array([freq_range[0], freq_range[-1]]),
                 'xaxis': 'Frequency (Hz)',
@@ -400,7 +440,7 @@ class PlotData:
                     'img': probe_img,
                     'scale': probe_scale,
                     'offset': probe_offset,
-                    'level': probe_levels,
+                    'levels': probe_levels,
                     'cmap': 'viridis',
                     'xaxis': 'Time (s)',
                     'xrange': np.array([0 * BNK_SIZE, (N_BNK) * BNK_SIZE]),
@@ -409,6 +449,91 @@ class PlotData:
                 data_probe.update(lfp_band_data)
 
             return data_img, data_probe
+
+    def get_rfmap_data(self):
+        data_img = dict()
+        if not self.rfmap_data_status:
+            return data_img, None
+        else:
+
+            (rf_map_times, rf_map_pos,
+             rf_stim_frames) = passive.get_on_off_times_and_positions(self.rf_map)
+
+            rf_map, depths = \
+                passive.get_rf_map_over_depth(rf_map_times, rf_map_pos, rf_stim_frames,
+                                              self.spikes['times'][self.spike_idx][self.kp_idx],
+                                              self.spikes['depths'][self.spike_idx][self.kp_idx],
+                                              d_bin=160)
+            rfs_svd = passive.get_svd_map(rf_map)
+            img = dict()
+            img['on'] = np.vstack(rfs_svd['on'])
+            img['off'] = np.vstack(rfs_svd['off'])
+            yscale = ((np.max(self.chn_coords[:, 1]) - np.min(
+                self.chn_coords[:, 1])) / img['on'].shape[0])
+            xscale = 1
+            levels = np.quantile(np.c_[img['on'], img['off']], [0, 1])
+
+            sub_type = ['on', 'off']
+            for sub in sub_type:
+                sub_data = {sub: {
+                    'img': [img[sub].T],
+                    'scale': [np.array([xscale, yscale])],
+                    'levels': levels,
+                    'offset': [np.array([0, 0])],
+                    'cmap': 'viridis',
+                    'xrange': np.array([0, 15]),
+                    'xaxis': 'Position',
+                    'title': 'rfmap (dB)'}
+                }
+                data_img.update(sub_data)
+
+            return data_img, depths
+
+    def get_passive_events(self):
+        stim_keys = ['valveOn', 'toneOn', 'noiseOn', 'leftGabor', 'rightGabor']
+        data_img = dict()
+        if not self.passive_data_status and not self.gabor_data_status:
+            return data_img
+        elif not self.passive_data_status and self.gabor_data_status:
+            stim_types = ['leftGabor', 'rightGabor']
+            stims = self.vis_stim
+        elif self.passive_data_status and not self.gabor_data_status:
+            stim_types = ['valveOn', 'toneOn', 'noiseOn']
+            stims = {stim_type: self.aud_stim[stim_type] for stim_type in stim_types}
+        else:
+            stim_types = stim_keys
+            stims = {stim_type: self.aud_stim[stim_type] for stim_type in stim_types[0:3]}
+            stims.update(self.vis_stim)
+
+        base_stim = 1
+        pre_stim = 0.4
+        post_stim = 1
+        stim_events = passive.get_stim_aligned_activity(stims, self.spikes['times'][self.spike_idx]
+                                                        [self.kp_idx], self.spikes['depths']
+                                                        [self.spike_idx][self.kp_idx],
+                                                        pre_stim=pre_stim, post_stim=post_stim,
+                                                        base_stim=base_stim)
+
+        for stim_type, z_score in stim_events.items():
+            xscale = (post_stim + pre_stim) / z_score.shape[1]
+            yscale = ((np.max(self.chn_coords[:, 1]) - np.min(
+                self.chn_coords[:, 1])) / z_score.shape[0])
+
+            levels = [-10, 10]
+
+            stim_data = {stim_type: {
+                'img': z_score.T,
+                'scale': np.array([xscale, yscale]),
+                'levels': levels,
+                'offset': np.array([-1 * pre_stim, 0]),
+                'cmap': 'bwr',
+                'xrange': [-1 * pre_stim, post_stim],
+                'xaxis': 'Time from Stim Onset (s)',
+                'title': 'Firing rate (z score)'}
+            }
+            data_img.update(stim_data)
+
+        return data_img
 
     def get_autocorr(self, clust_idx):
         idx = np.where(self.spikes['clusters'] == self.clust_id[clust_idx])[0]

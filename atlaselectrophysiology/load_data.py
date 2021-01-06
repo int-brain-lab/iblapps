@@ -8,6 +8,7 @@ from oneibl.one import ONE
 from pathlib import Path
 import alf.io
 import glob
+import os
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
@@ -48,6 +49,7 @@ class LoadData:
         self.allen_id = None
         self.cluster_chns = None
         self.resolved = None
+        self.alyx_str = None
 
     def get_subjects(self):
         """
@@ -210,7 +212,12 @@ class LoadData:
             '_iblqc_ephysTimeRms.timestamps',
             '_iblqc_ephysSpectralDensity.freqs',
             '_iblqc_ephysSpectralDensity.power',
-            '_iblqc_ephysSpectralDensity.amps'
+            '_iblqc_ephysSpectralDensity.amps',
+            '_ibl_passiveGabor.table',
+            '_ibl_passivePeriods.intervalsTable',
+            '_ibl_passiveRFM.frames',
+            '_ibl_passiveRFM.times',
+            '_ibl_passiveStims.table'
         ]
 
         print(self.subj)
@@ -223,6 +230,11 @@ class LoadData:
 
         alf_path = Path(self.sess_path, 'alf', self.probe_label)
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
+
+        cluster_file_old = alf_path.joinpath('clusters.metrics.csv')
+        if cluster_file_old.exists():
+            os.remove(cluster_file_old)
+
         try:
             self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
             self.chn_depths = self.chn_coords[:, 1]
@@ -364,14 +376,17 @@ class LoadData:
 
         return channel_upload
 
-    def update_alignments(self, feature, track, key_info=None):
+    def update_alignments(self, feature, track, key_info=None, user_eval=None):
         if not key_info:
             user = self.one._par.ALYX_LOGIN
             date = datetime.now().replace(microsecond=0).isoformat()
-            data = {date + '_' + user: [feature.tolist(), track.tolist()]}
+            data = {date + '_' + user: [feature.tolist(), track.tolist(), self.alyx_str]}
         else:
             user = key_info[20:]
-            data = {key_info: [feature.tolist(), track.tolist()]}
+            if user_eval:
+                data = {key_info: [feature.tolist(), track.tolist(), user_eval]}
+            else:
+                data = {key_info: [feature.tolist(), track.tolist()]}
 
         old_user = [key for key in self.alignments.keys() if user in key]
         # Only delete duplicated if trajectory is not resolved
@@ -392,20 +407,27 @@ class LoadData:
     def upload_dj(self, align_qc, ephys_qc, ephys_desc):
         # Upload qc results to datajoint table
         user = self.one._par.ALYX_LOGIN
-        if ephys_desc == 'None':
-            ephys_desc = None
+        if len(ephys_desc) == 0:
+            ephys_desc_str = 'None'
+            ephys_dj_str = None
+        else:
+            ephys_desc_str = ", ".join(ephys_desc)
+            ephys_dj_str = ephys_desc_str
+
         self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
-                        alignment_qc=align_qc, ephys_qc=ephys_qc, ephys_qc_description=ephys_desc),
+                             alignment_qc=align_qc, ephys_qc=ephys_qc,
+                             ephys_qc_description=ephys_dj_str),
                         allow_direct_insert=True, replace=True)
+        self.alyx_str = ephys_qc.upper() + ': ' + ephys_desc_str
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number
-
         align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
         align_qc.load_data(prev_alignments=self.alignments, xyz_picks=self.xyz_picks,
                            depths=self.chn_depths, cluster_chns=self.cluster_chns)
         results = align_qc.run(update=True, upload_alyx=upload_alyx,
                                upload_flatiron=upload_flatiron)
+        align_qc.update_experimenter_evaluation(prev_alignments=self.alignments)
 
         self.resolved = results['alignment_resolved']
 

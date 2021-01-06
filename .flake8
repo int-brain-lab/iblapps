@@ -8,4 +8,4 @@ exclude =
     data_exploration_gui/
     launch_phy/
     histology/
-
+    qt_matplotlib.py
