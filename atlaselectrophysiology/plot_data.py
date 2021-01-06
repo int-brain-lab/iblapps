@@ -7,7 +7,6 @@ from brainbox.population import xcorr
 from brainbox.task import passive
 import scipy
 from PyQt5 import QtGui
-from scipy.linalg import svd
 
 N_BNK = 4
 BNK_SIZE = 10
@@ -59,7 +58,8 @@ class PlotData:
             self.lfp_data_status = False
 
         try:
-            self.rf_map = alf.io.load_object(self.alf_path, object='passiveRFM', namespace='ibl')
+            self.rf_map = alf.io.load_object(self.alf_path.parent, object='passiveRFM',
+                                             namespace='ibl')
             if len(self.rf_map) == 2:
                 self.rfmap_data_status = True
             else:
@@ -70,7 +70,7 @@ class PlotData:
             self.rfmap_data_status = False
 
         try:
-            self.aud_stim = alf.io.load_object(alf_path, object='passiveStims',
+            self.aud_stim = alf.io.load_object(self.alf_path.parent, object='passiveStims',
                                                namespace='ibl')['table']
             if len(self.aud_stim) > 0:
                 self.passive_data_status = True
@@ -79,7 +79,7 @@ class PlotData:
             self.passive_data_status = False
 
         try:
-            gabor = alf.io.load_object(alf_path, object='passiveGabor',
+            gabor = alf.io.load_object(self.alf_path.parent, object='passiveGabor',
                                        namespace='ibl')['table']
             self.vis_stim = dict()
             self.vis_stim['leftGabor'] = gabor['start'][(gabor['position'] == 35) &
@@ -463,7 +463,7 @@ class PlotData:
                 passive.get_rf_map_over_depth(rf_map_times, rf_map_pos, rf_stim_frames,
                                               self.spikes['times'][self.spike_idx][self.kp_idx],
                                               self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                              D_BIN=160)
+                                              d_bin=160)
             rfs_svd = passive.get_svd_map(rf_map)
             img = dict()
             img['on'] = np.vstack(rfs_svd['on'])

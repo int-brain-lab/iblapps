@@ -1188,6 +1188,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.img_corr_data = self.plotdata.get_correlation_data_img()
         self.img_fr_data = self.plotdata.get_fr_img()
         self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
+        self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
+        self.img_stim_data = self.plotdata.get_passive_events()
         self.img_init.setChecked(True)
         self.line_init.setChecked(True)
         self.probe_init.setChecked(True)
@@ -1546,7 +1548,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             if button.isChecked():
                 ephys_desc.append(button.text())
 
-        #ephys_desc = self.ephys_desc.currentText()
         self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
         self.complete_button_pressed()
 
