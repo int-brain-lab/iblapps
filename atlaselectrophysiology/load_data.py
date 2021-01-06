@@ -8,6 +8,7 @@ from oneibl.one import ONE
 from pathlib import Path
 import alf.io
 import glob
+import os
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
@@ -48,6 +49,7 @@ class LoadData:
         self.allen_id = None
         self.cluster_chns = None
         self.resolved = None
+        self.alyx_str = None
 
     def get_subjects(self):
         """
@@ -218,7 +220,6 @@ class LoadData:
             '_ibl_passiveStims.table'
         ]
 
-
         print(self.subj)
         print(self.probe_label)
         print(self.date)
@@ -229,6 +230,11 @@ class LoadData:
 
         alf_path = Path(self.sess_path, 'alf', self.probe_label)
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
+
+        cluster_file_old = alf_path.joinpath('clusters.metrics.csv')
+        if cluster_file_old.exists():
+            os.remove(cluster_file_old)
+
         try:
             self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
             self.chn_depths = self.chn_coords[:, 1]
@@ -413,7 +419,6 @@ class LoadData:
                              ephys_qc_description=ephys_dj_str),
                         allow_direct_insert=True, replace=True)
         self.alyx_str = ephys_qc.upper() + ': ' + ephys_desc_str
-
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number
