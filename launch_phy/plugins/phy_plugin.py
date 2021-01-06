@@ -77,8 +77,8 @@ class IBLMetricsPlugin(IPlugin):
             # of sample waveforms it doesn't contain 100 samples for specific cluster
 
             # N.B. These waveforms are median subtracted and have a high pass applied
-            waveforms = controller._get_waveforms_with_n_spikes(cluster_id,
-                                                                n_spikes_waveforms=100)['data'].data
+            waveforms = controller._get_waveforms_with_n_spikes(
+                cluster_id, 100)['data'].data
 
             # This way finds (max-min) on each channel, and then for each waveform finds the
             # maximum (max-min) on any channel and averages these
