@@ -94,11 +94,15 @@ class PlotData:
     def filter_units(self, type):
         if type == 'all':
             self.spike_idx = np.arange(self.spikes['clusters'].size)
-            self.kp_idx = np.where(~np.isnan(self.spikes['depths'][self.spike_idx]))[0]
+            # Filter for nans in depths and also in amps
+            self.kp_idx = np.where(~np.isnan(self.spikes['depths'][self.spike_idx]) &
+                                   ~np.isnan(self.spikes['amps'][self.spike_idx]))[0]
+
         else:
             clust = np.where(self.clusters.metrics.ks2_label == type)
             self.spike_idx = np.where(np.isin(self.spikes['clusters'], clust))[0]
-            self.kp_idx = np.where(~np.isnan(self.spikes['depths'][self.spike_idx]))[0]
+            self.kp_idx = np.where(~np.isnan(self.spikes['depths'][self.spike_idx]) & ~np.isnan(
+                self.spikes['amps'][self.spike_idx]))[0]
 
 # Plots that require spike and cluster data
     def get_depth_data_scatter(self):
@@ -107,29 +111,33 @@ class PlotData:
             return data_scatter
         else:
             A_BIN = 10
-            amp_range = np.quantile(self.spikes['amps'][self.spike_idx], [0, 0.9])
+            amp_range = np.quantile(self.spikes['amps'][self.spike_idx][self.kp_idx], [0, 0.9])
             amp_bins = np.linspace(amp_range[0], amp_range[1], A_BIN)
             colour_bin = np.linspace(0.0, 1.0, A_BIN)
             colours = (cm.get_cmap('BuPu')(colour_bin)[np.newaxis, :, :3][0]) * 255
-            spikes_colours = np.empty(self.spikes['amps'][self.spike_idx].size, dtype=object)
-            spikes_size = np.empty(self.spikes['amps'][self.spike_idx].size)
+            spikes_colours = np.empty(self.spikes['amps'][self.spike_idx][self.kp_idx].size,
+                                      dtype=object)
+            spikes_size = np.empty(self.spikes['amps'][self.spike_idx][self.kp_idx].size)
             for iA in range(amp_bins.size - 1):
-                idx = np.where((self.spikes['amps'][self.spike_idx] > amp_bins[iA]) &
-                               (self.spikes['amps'][self.spike_idx] <= amp_bins[iA + 1]))[0]
+                idx = np.where((self.spikes['amps'][self.spike_idx][self.kp_idx] > amp_bins[iA]) &
+                               (self.spikes['amps'][self.spike_idx][self.kp_idx] <=
+                                amp_bins[iA + 1]))[0]
 
                 spikes_colours[idx] = QtGui.QColor(*colours[iA])
                 spikes_size[idx] = iA / (A_BIN / 4)
 
             data_scatter = {
-                'x': self.spikes['times'][self.spike_idx][0:-1:100],
-                'y': self.spikes['depths'][self.spike_idx][0:-1:100],
+                'x': self.spikes['times'][self.spike_idx][self.kp_idx][0:-1:100],
+                'y': self.spikes['depths'][self.spike_idx][self.kp_idx][0:-1:100],
                 'levels': amp_range * 1e6,
                 'colours': spikes_colours[0:-1:100],
                 'pen': None,
                 'size': spikes_size[0:-1:100],
                 'symbol': np.array('o'),
-                'xrange': np.array([np.min(self.spikes['times'][self.spike_idx][0:-1:100]),
-                                    np.max(self.spikes['times'][self.spike_idx][0:-1:100])]),
+                'xrange': np.array([np.min(self.spikes['times'][self.spike_idx][self.kp_idx]
+                                           [0:-1:100]),
+                                    np.max(self.spikes['times'][self.spike_idx][self.kp_idx]
+                                           [0:-1:100])]),
                 'xaxis': 'Time (s)',
                 'title': 'Amplitude (uV)',
                 'cmap': 'BuPu',
@@ -148,9 +156,11 @@ class PlotData:
             (clu,
              spike_depths,
              spike_amps,
-             n_spikes) = self.compute_spike_average(self.spikes['clusters'][self.spike_idx],
-                                                    self.spikes['depths'][self.spike_idx],
-                                                    self.spikes['amps'][self.spike_idx])
+             n_spikes) = self.compute_spike_average((self.spikes['clusters'][self.spike_idx]
+                                                    [self.kp_idx]), (self.spikes['depths']
+                                                    [self.spike_idx][self.kp_idx]),
+                                                    (self.spikes['amps'][self.spike_idx]
+                                                    [self.kp_idx]))
             spike_amps = spike_amps * 1e6
             fr = n_spikes / np.max(self.spikes['times'])
             fr_norm, fr_levels = self.normalise_data(fr, lquant=0, uquant=1)
