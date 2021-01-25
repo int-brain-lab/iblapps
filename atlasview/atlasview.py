@@ -339,8 +339,9 @@ class SliceController(PgImageController):
         ba = self.qwidget.topview.ctrl.atlas
         xyz = np.zeros(3)
         xyz[np.array([self.waxis, self.haxis, self.daxis])] = [w, h, self.slice_coord]
+        mapping = self.qwidget.topview.comboBox_mappings.currentText()
         try:
-            region = ba.regions.get(ba.get_labels(xyz))
+            region = ba.regions.get(ba.get_labels(xyz, mapping=mapping))
         except ValueError:
             region = None
         return iw, ih, w, h, v, region
