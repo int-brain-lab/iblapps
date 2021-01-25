@@ -32,7 +32,7 @@
       <property name="frameShadow">
        <enum>QFrame::Raised</enum>
       </property>
-      <widget class="QLabel" name="label">
+      <widget class="QLabel" name="label_slider_annotation">
        <property name="geometry">
         <rect>
          <x>20</x>
@@ -61,7 +61,7 @@
         <enum>Qt::Vertical</enum>
        </property>
       </widget>
-      <widget class="QLabel" name="label_2">
+      <widget class="QLabel" name="label_slider_image">
        <property name="geometry">
         <rect>
          <x>10</x>
@@ -74,6 +74,29 @@
         <string>Image</string>
        </property>
       </widget>
+      <widget class="QComboBox" name="comboBox_mappings">
+       <property name="geometry">
+        <rect>
+         <x>0</x>
+         <y>350</y>
+         <width>93</width>
+         <height>27</height>
+        </rect>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_cb_mappings">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>330</y>
+         <width>67</width>
+         <height>17</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Mapping</string>
+       </property>
+      </widget>
      </widget>
     </item>
    </layout>
@@ -84,7 +107,7 @@
      <x>0</x>
      <y>0</y>
      <width>435</width>
-     <height>22</height>
+     <height>24</height>
     </rect>
    </property>
   </widget>
