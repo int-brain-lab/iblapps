@@ -364,7 +364,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         while plot != start_plot:
             self.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height + 15)
-            exporter = pg.exporters.ImageExporter(self.fig_data_layout)
+            exporter = pg.exporters.ImageExporter(self.fig_data_layout.scene())
             exporter.export(str(image_path.joinpath(sess_info + 'img_' +
                                                     self.img_options_group.checkedAction()
                                                     .text() + '.png')))
@@ -391,7 +391,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         while plot != start_plot:
             self.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height + 15)
-            exporter = pg.exporters.ImageExporter(self.fig_data_layout)
+            exporter = pg.exporters.ImageExporter(self.fig_data_layout.scene())
             exporter.export(str(image_path.joinpath(sess_info + 'probe_' +
                                                     self.probe_options_group.checkedAction().
                                                     text() + '.png')))
@@ -419,7 +419,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         plot = None
         start_plot = self.line_options_group.checkedAction()
         while plot != start_plot:
-            exporter = pg.exporters.ImageExporter(self.fig_data_layout)
+            exporter = pg.exporters.ImageExporter(self.fig_data_layout.scene())
             exporter.export(str(image_path.joinpath(sess_info + 'line_' +
                                                     self.line_options_group.checkedAction().
                                                     text() + '.png')))
@@ -476,8 +476,19 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             plot = self.slice_options_group.checkedAction()
 
         # Save the brain regions image
-        exporter = pg.exporters.ImageExporter(self.fig_hist_layout)
+        self.set_axis(self.fig_hist_extra_yaxis, 'left')
+        # Add labels to show which ones are aligned
+        self.set_axis(self.fig_hist, 'bottom', label='aligned', ticks=False)
+        self.set_font(self.fig_hist, 'bottom', ptsize=12)
+        self.set_axis(self.fig_hist_ref, 'bottom', label='original', ticks=False)
+        self.set_font(self.fig_hist_ref, 'bottom', ptsize=12)
+        exporter = pg.exporters.ImageExporter(self.fig_hist_layout.scene())
         exporter.export(str(image_path.joinpath(sess_info + 'hist.png')))
+        self.set_axis(self.fig_hist_extra_yaxis, 'left', pen=None)
+        self.set_font(self.fig_hist, 'bottom', ptsize=8)
+        self.set_axis(self.fig_hist, 'bottom', pen='w')
+        self.set_font(self.fig_hist_ref, 'bottom', ptsize=8)
+        self.set_axis(self.fig_hist_ref, 'bottom', pen='w')
 
         make_overview_plot(image_path, sess_info)
 
