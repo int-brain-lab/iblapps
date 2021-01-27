@@ -22,6 +22,7 @@ EVENT_MAP = {'goCue_times': ['#2ca02c', 'solid'],  # green
              'errorCueTrigger_times': ['#d62728', 'dotted'],  # red
              'valveOpen_times': ['#17becf', 'solid'],  # cyan
              'stimFreeze_times': ['#0000ff', 'solid'],  # blue
+             'stimFreezeTrigger_times': ['#0000ff', 'dotted'],  # blue
              'stimOff_times': ['#9400d3', 'solid'],  # dark violet
              'stimOffTrigger_times': ['#9400d3', 'dotted'],  # dark violet
              'stimOn_times': ['#e377c2', 'solid'],  # pink
@@ -38,17 +39,17 @@ _logger = logging.getLogger('ibllib')
 
 class QcFrame(TaskQC):
 
-    def __init__(self, session_path, bpod_only=False, local=False):
+    def __init__(self, session, bpod_only=False, local=False):
         """
         Loads and extracts the QC data for a given session path
-        :param session_path: A str or Path to a Bpod session
+        :param session: A str or Path to a session, or a session eid
         :param bpod_only: When True all data is extracted from Bpod instead of FPGA for ephys
         """
-        super().__init__(session_path, one=one, log=_logger)
+        super().__init__(session, one=one, log=_logger)
 
         if local:
-            dsets, out_files = ephys_fpga.extract_all(session_path, save=True)
-            self.extractor = TaskQCExtractor(session_path, lazy=True, one=one)
+            dsets, out_files = ephys_fpga.extract_all(session, save=True)
+            self.extractor = TaskQCExtractor(session, lazy=True, one=one)
             # Extract extra datasets required for QC
             self.extractor.data = dsets
             self.extractor.extract_data()
@@ -158,7 +159,7 @@ def show_session_task_qc(session=None, bpod_only=False, local=False):
     :param session: session_path
     :param bpod_only: (no FPGA)
     :param local: set True for local extraction
-    :return:
+    :return: The QC object
     """
     # Run QC and plot
     qc = QcFrame(session, bpod_only=bpod_only, local=local)
@@ -171,6 +172,7 @@ def show_session_task_qc(session=None, bpod_only=False, local=False):
     # Update table and callbacks
     w.update_df(qc.frame)
     qt.run_app()
+    return qc
 
 
 if __name__ == "__main__":

@@ -16,7 +16,6 @@ class Setup():
         main_widget = QtWidgets.QWidget()
         self.setCentralWidget(main_widget)
 
-        self.init_menubar()
         self.init_interaction_features()
         self.init_figures()
 
@@ -74,33 +73,42 @@ class Setup():
         img_rmsLFP.triggered.connect(lambda: self.plot_image(self.img_rms_LFPdata))
         img_LFP = QtGui.QAction('LFP Spectrum', self, checkable=True, checked=False)
         img_LFP.triggered.connect(lambda: self.plot_image(self.img_lfp_data))
+
         # Initialise with firing rate 2D plot
         self.img_init = img_fr
 
         # Add menu bar for 2D scatter/ image plot options
         img_options = menu_bar.addMenu('Image Plots')
         # Add action group so we can toggle through 2D scatter/ image plot options
-        img_options_group = QtGui.QActionGroup(img_options)
+        self.img_options_group = QtGui.QActionGroup(img_options)
         # Only allow one to plot to be selected at any one time
-        img_options_group.setExclusive(True)
+        self.img_options_group.setExclusive(True)
         img_options.addAction(img_fr)
-        img_options_group.addAction(img_fr)
-        img_options.addAction(img_corr)
-        img_options_group.addAction(img_corr)
+        self.img_options_group.addAction(img_fr)
         img_options.addAction(scatter_drift)
-        img_options_group.addAction(scatter_drift)
+        self.img_options_group.addAction(scatter_drift)
+        img_options.addAction(img_corr)
+        self.img_options_group.addAction(img_corr)
         img_options.addAction(img_rmsAP)
-        img_options_group.addAction(img_rmsAP)
+        self.img_options_group.addAction(img_rmsAP)
         img_options.addAction(img_rmsLFP)
-        img_options_group.addAction(img_rmsLFP)
+        self.img_options_group.addAction(img_rmsLFP)
         img_options.addAction(img_LFP)
-        img_options_group.addAction(img_LFP)
+        self.img_options_group.addAction(img_LFP)
         img_options.addAction(scatter_fr)
-        img_options_group.addAction(scatter_fr)
+        self.img_options_group.addAction(scatter_fr)
         img_options.addAction(scatter_p2t)
-        img_options_group.addAction(scatter_p2t)
+        self.img_options_group.addAction(scatter_p2t)
         img_options.addAction(scatter_amp)
-        img_options_group.addAction(scatter_amp)
+        self.img_options_group.addAction(scatter_amp)
+
+        stim_type = list(self.img_stim_data.keys())
+        for stim in stim_type:
+            img = QtGui.QAction(stim, self, checkable=True, checked=False)
+            img.triggered.connect(lambda checked, item=stim: self.plot_image(
+                                  self.img_stim_data[item]))
+            img_options.addAction(img)
+            self.img_options_group.addAction(img)
 
         # LINE PLOTS MENU BAR
         # Define all 1D line plot options
@@ -113,13 +121,13 @@ class Setup():
         # Add menu bar for 1D line plot options
         line_options = menu_bar.addMenu('Line Plots')
         # Add action group so we can toggle through 2D scatter/ image plot options
-        line_options_group = QtGui.QActionGroup(line_options)
+        self.line_options_group = QtGui.QActionGroup(line_options)
         # Only allow one to plot to be selected at any one time
-        line_options_group.setExclusive(True)
+        self.line_options_group.setExclusive(True)
         line_options.addAction(line_fr)
-        line_options_group.addAction(line_fr)
+        self.line_options_group.addAction(line_fr)
         line_options.addAction(line_amp)
-        line_options_group.addAction(line_amp)
+        self.line_options_group.addAction(line_amp)
 
         # PROBE PLOTS MENU BAR
         # Define all 2D probe plot options
@@ -128,18 +136,19 @@ class Setup():
         probe_rmsAP.triggered.connect(lambda: self.plot_probe(self.probe_rms_APdata))
         probe_rmsLFP = QtGui.QAction('rms LFP', self, checkable=True, checked=False)
         probe_rmsLFP.triggered.connect(lambda: self.plot_probe(self.probe_rms_LFPdata))
+
         # Initialise with rms of AP probe plot
         self.probe_init = probe_rmsAP
 
         # Add menu bar for 2D probe plot options
         probe_options = menu_bar.addMenu("Probe Plots")
         # Add action group so we can toggle through probe plot options
-        probe_options_group = QtGui.QActionGroup(probe_options)
-        probe_options_group.setExclusive(True)
+        self.probe_options_group = QtGui.QActionGroup(probe_options)
+        self.probe_options_group.setExclusive(True)
         probe_options.addAction(probe_rmsAP)
-        probe_options_group.addAction(probe_rmsAP)
+        self.probe_options_group.addAction(probe_rmsAP)
         probe_options.addAction(probe_rmsLFP)
-        probe_options_group.addAction(probe_rmsLFP)
+        self.probe_options_group.addAction(probe_rmsLFP)
 
         # Add the different frequency band options in a loop. These bands must be the same as
         # defined in plot_data
@@ -150,7 +159,15 @@ class Setup():
             probe.triggered.connect(lambda checked, item=band: self.plot_probe(
                                     self.probe_lfp_data[item]))
             probe_options.addAction(probe)
-            probe_options_group.addAction(probe)
+            self.probe_options_group.addAction(probe)
+
+        sub_types = list(self.probe_rfmap.keys())
+        for sub in sub_types:
+            probe = QtGui.QAction(f'RF Map - {sub}', self, checkable=True, checked=False)
+            probe.triggered.connect(lambda checked, item=sub: self.plot_probe(
+                                    self.probe_rfmap[item], bounds=self.rfmap_boundaries))
+            probe_options.addAction(probe)
+            self.probe_options_group.addAction(probe)
 
         # SLICE PLOTS MENU BAR
         # Define all coronal slice plot options
@@ -165,19 +182,20 @@ class Setup():
         # Initialise with raw histology image
         self.slice_init = slice_hist_rd
 
-        # Add menu bar for slice plot options
+        # Add menu bar for slice plot
+
         slice_options = menu_bar.addMenu("Slice Plots")
         # Add action group so we can toggle through slice plot options
-        slice_options_group = QtGui.QActionGroup(slice_options)
-        slice_options_group.setExclusive(True)
+        self.slice_options_group = QtGui.QActionGroup(slice_options)
+        self.slice_options_group.setExclusive(True)
         slice_options.addAction(slice_hist_rd)
-        slice_options_group.addAction(slice_hist_rd)
+        self.slice_options_group.addAction(slice_hist_rd)
         slice_options.addAction(slice_hist_gr)
-        slice_options_group.addAction(slice_hist_gr)
+        self.slice_options_group.addAction(slice_hist_gr)
         slice_options.addAction(slice_ccf)
-        slice_options_group.addAction(slice_ccf)
+        self.slice_options_group.addAction(slice_ccf)
         slice_options.addAction(slice_label)
-        slice_options_group.addAction(slice_label)
+        self.slice_options_group.addAction(slice_label)
 
         # FILTER UNITS MENU BAR
         # Define unit filtering options
@@ -258,16 +276,16 @@ class Setup():
         # Shortcuts to toggle between plots options
         toggle1_option = QtGui.QAction('Toggle Image Plots', self)
         toggle1_option.setShortcut('Alt+1')
-        toggle1_option.triggered.connect(lambda: self.toggle_plots(img_options_group))
+        toggle1_option.triggered.connect(lambda: self.toggle_plots(self.img_options_group))
         toggle2_option = QtGui.QAction('Toggle Line Plots', self)
         toggle2_option.setShortcut('Alt+2')
-        toggle2_option.triggered.connect(lambda: self.toggle_plots(line_options_group))
+        toggle2_option.triggered.connect(lambda: self.toggle_plots(self.line_options_group))
         toggle3_option = QtGui.QAction('Toggle Probe Plots', self)
         toggle3_option.setShortcut('Alt+3')
-        toggle3_option.triggered.connect(lambda: self.toggle_plots(probe_options_group))
+        toggle3_option.triggered.connect(lambda: self.toggle_plots(self.probe_options_group))
         toggle4_option = QtGui.QAction('Toggle Slice Plots', self)
         toggle4_option.setShortcut('Alt+4')
-        toggle4_option.triggered.connect(lambda: self.toggle_plots(slice_options_group))
+        toggle4_option.triggered.connect(lambda: self.toggle_plots(self.slice_options_group))
 
         # Shortcuts to switch order of 3 panels in ephys plot
         view1_option = QtGui.QAction('View 1', self)
@@ -313,6 +331,10 @@ class Setup():
         popup_close.setShortcut('Alt+X')
         popup_close.triggered.connect(self.close_popups)
 
+        # Option to save all plots
+        save_plots = QtGui.QAction('Save Plots', self)
+        save_plots.triggered.connect(self.save_plots)
+
         # Add menu bar with all possible display options
         display_options = menu_bar.addMenu('Display Options')
         display_options.addAction(toggle1_option)
@@ -329,6 +351,7 @@ class Setup():
         display_options.addAction(toggle_histology_option)
         display_options.addAction(popup_minimise)
         display_options.addAction(popup_close)
+        display_options.addAction(save_plots)
 
         # SESSION INFORMATION MENU BAR
         # Define all session information options
@@ -456,10 +479,23 @@ class Setup():
             ephys_qc_label = QtGui.QLabel("QC for ephys recording")
             self.ephys_qc = QtGui.QComboBox()
             self.ephys_qc.addItems(["Pass", "Warning", "Critical"])
-            ephys_desc_label = QtGui.QLabel("Describe problem with recording")
-            self.ephys_desc = QtGui.QComboBox()
-            self.ephys_desc.addItems(["None", "Noise and artifact", "Drift", "Poor neural yield",
-                                      "Brain Damage", "Other"])
+
+            self.desc_buttons = QtWidgets.QButtonGroup()
+            self.desc_group = QtWidgets.QGroupBox("Describe problem with recording")
+            self.desc_layout = QtWidgets.QVBoxLayout()
+            self.desc_layout.setSpacing(5)
+            self.desc_buttons.setExclusive(False)
+            options = ["Noise and artifact", "Drift", "Poor neural yield", "Brain Damage", "Other"]
+            for i, val in enumerate(options):
+
+                button = QtWidgets.QCheckBox(val)
+                button.setCheckState(QtCore.Qt.Unchecked)
+
+                self.desc_buttons.addButton(button, id=i)
+                self.desc_layout.addWidget(button)
+
+            self.desc_group.setLayout(self.desc_layout)
+
             self.qc_dialog = QtGui.QDialog(self)
             self.qc_dialog.setWindowTitle('QC assessment')
             self.qc_dialog.resize(300, 150)
@@ -474,8 +510,7 @@ class Setup():
             dialog_layout.addWidget(self.align_qc)
             dialog_layout.addWidget(ephys_qc_label)
             dialog_layout.addWidget(self.ephys_qc)
-            dialog_layout.addWidget(ephys_desc_label)
-            dialog_layout.addWidget(self.ephys_desc)
+            dialog_layout.addWidget(self.desc_group)
             dialog_layout.addWidget(buttonBox)
             self.qc_dialog.setLayout(dialog_layout)
 
@@ -657,8 +692,6 @@ class Setup():
         # Figure to show coronal slice through the brain
         self.fig_slice_area = pg.GraphicsLayoutWidget()
         self.fig_slice_layout = pg.GraphicsLayout()
-        self.fig_slice_hist = pg.HistogramLUTItem()
-        self.fig_slice_hist.axis.hide()
         self.fig_slice_hist_alt = pg.ViewBox()
         self.fig_slice = pg.ViewBox()
         self.fig_slice_layout.addItem(self.fig_slice, 0, 0)
@@ -723,3 +756,17 @@ class PopupWindow(QtGui.QMainWindow):
 
     def leaveEvent(self, event):
         self.moved.emit()
+
+
+class CheckableComboBox(QtGui.QComboBox):
+    def __init__(self):
+        super(CheckableComboBox, self).__init__()
+        self.view().pressed.connect(self.handleItemPressed)
+        self.setModel(QtGui.QStandardItemModel(self))
+
+    def handleItemPressed(self, index):
+        item = self.model().itemFromIndex(index)
+        if item.checkState() == QtCore.Qt.Checked:
+            item.setCheckState(QtCore.Qt.Unchecked)
+        else:
+            item.setCheckState(QtCore.Qt.Checked)

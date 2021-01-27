@@ -1,12 +1,13 @@
-from ibllib.ephys.spikes import ks2_to_alf
 from ibllib.io import spikeglx
 import numpy as np
 import ibllib.dsp as dsp
 from scipy import signal
 from ibllib.misc import print_progress
 from pathlib import Path
-import alf.io
+import alf.io as aio
 import logging
+import ibllib.ephys.ephysqc as ephysqc
+from phylib.io import alf
 
 _logger = logging.getLogger('ibllib')
 
@@ -87,11 +88,11 @@ def extract_rmsmap(fbin, out_folder=None, spectra=True):
     if not out_folder.exists():
         out_folder.mkdir()
     tdict = {'rms': rms['TRMS'].astype(np.single), 'timestamps': rms['tscale'].astype(np.single)}
-    alf.io.save_object_npy(out_folder, object=alf_object_time, dico=tdict)
+    aio.save_object_npy(out_folder, object=alf_object_time, dico=tdict)
     if spectra:
         fdict = {'power': rms['spectral_density'].astype(np.single),
                  'freqs': rms['fscale'].astype(np.single)}
-        alf.io.save_object_npy(out_folder, object=alf_object_freq, dico=fdict)
+        aio.save_object_npy(out_folder, object=alf_object_freq, dico=fdict)
 
 
 def _sample2v(ap_file):
@@ -103,6 +104,20 @@ def _sample2v(ap_file):
     return s2v['ap'][0]
 
 
+def ks2_to_alf(ks_path, bin_path, out_path, bin_file=None, ampfactor=1, label=None, force=True):
+    """
+    Convert Kilosort 2 output to ALF dataset for single probe data
+    :param ks_path:
+    :param bin_path: path of raw data
+    :param out_path:
+    :return:
+    """
+    m = ephysqc.phy_model_from_ks2_path(ks2_path=ks_path, bin_path=bin_path, bin_file=bin_file)
+    ephysqc.spike_sorting_metrics_ks2(ks_path, m, save=True)
+    ac = alf.EphysAlfCreator(m)
+    ac.convert(out_path, label=label, force=force, ampfactor=ampfactor)
+
+
 def extract_data(ks_path, ephys_path, out_path):
     efiles = spikeglx.glob_ephys_files(ephys_path)
 
@@ -110,14 +125,15 @@ def extract_data(ks_path, ephys_path, out_path):
         if efile.get('ap') and efile.ap.exists():
             ks2_to_alf(ks_path, ephys_path, out_path, bin_file=efile.ap,
                        ampfactor=_sample2v(efile.ap), label=None, force=True)
+
             extract_rmsmap(efile.ap, out_folder=out_path, spectra=False)
         if efile.get('lf') and efile.lf.exists():
             extract_rmsmap(efile.lf, out_folder=out_path)
 
 
-# from pathlib import Path
-# from atlaselectrophysiology.extract_files import extract_data
-# ks_path = Path('C:/Users/Mayo/Downloads/FlatIron/SWC_023_test')
-# ephys_path = ks_path
-# out_path = Path('C:/Users/Mayo/Downloads/FlatIron/SWC_023_test/alf')
-# extract_data(ks_path, ephys_path, out_path)
+# if __name__ == '__main__':
+#
+#    ephys_path = Path('C:/Users/Mayo/Downloads/raw_ephys_data')
+#    ks_path = Path('C:/Users/Mayo/Downloads/KS2')
+#    out_path = Path('C:/Users/Mayo/Downloads/alf')
+#    extract_data(ks_path, ephys_path, out_path)

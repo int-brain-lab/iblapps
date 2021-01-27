@@ -2,12 +2,12 @@ from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
 import pyqtgraph.exporters
 
-import cluster_class as clust
-import scatter_class as scatt
-import filter_class as filt
-import plot_class as plt
-import data_class as dat
-import misc_class as misc
+import data_exploration_gui.cluster_class as clust
+import data_exploration_gui.scatter_class as scatt
+import data_exploration_gui.filter_class as filt
+import data_exploration_gui.plot_class as plt
+import data_exploration_gui.data_class as dat
+import data_exploration_gui.misc_class as misc
 
 from pathlib import Path
 import numpy as np

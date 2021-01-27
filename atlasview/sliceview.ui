@@ -40,7 +40,7 @@
         <enum>QFrame::Raised</enum>
        </property>
        <layout class="QGridLayout" name="gridLayout_2">
-        <item row="7" column="1">
+        <item row="6" column="1">
          <widget class="QLabel" name="label_ix">
           <property name="minimumSize">
            <size>
@@ -59,7 +59,7 @@
           </property>
          </widget>
         </item>
-        <item row="6" column="0">
+        <item row="5" column="0">
          <widget class="QLabel" name="label_txt_y">
           <property name="minimumSize">
            <size>
@@ -78,7 +78,7 @@
           </property>
          </widget>
         </item>
-        <item row="7" column="0">
+        <item row="6" column="0">
          <widget class="QLabel" name="label_txt_ix">
           <property name="minimumSize">
            <size>
@@ -97,7 +97,7 @@
           </property>
          </widget>
         </item>
-        <item row="8" column="0">
+        <item row="7" column="0">
          <widget class="QLabel" name="label_txt_iy">
           <property name="minimumSize">
            <size>
@@ -116,7 +116,7 @@
           </property>
          </widget>
         </item>
-        <item row="5" column="1">
+        <item row="4" column="1">
          <widget class="QLabel" name="label_x">
           <property name="minimumSize">
            <size>
@@ -135,7 +135,7 @@
           </property>
          </widget>
         </item>
-        <item row="5" column="0">
+        <item row="4" column="0">
          <widget class="QLabel" name="label_txt_x">
           <property name="minimumSize">
            <size>
@@ -154,7 +154,7 @@
           </property>
          </widget>
         </item>
-        <item row="8" column="1">
+        <item row="7" column="1">
          <widget class="QLabel" name="label_iy">
           <property name="minimumSize">
            <size>
@@ -173,7 +173,7 @@
           </property>
          </widget>
         </item>
-        <item row="6" column="1">
+        <item row="5" column="1">
          <widget class="QLabel" name="label_y">
           <property name="minimumSize">
            <size>
@@ -192,7 +192,7 @@
           </property>
          </widget>
         </item>
-        <item row="2" column="1">
+        <item row="1" column="1">
          <spacer name="verticalSpacer_2">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
@@ -205,24 +205,21 @@
           </property>
          </spacer>
         </item>
-        <item row="1" column="1">
-         <widget class="QComboBox" name="comboBox"/>
-        </item>
-        <item row="4" column="1">
+        <item row="3" column="1">
          <widget class="QLabel" name="label_v">
           <property name="text">
            <string/>
           </property>
          </widget>
         </item>
-        <item row="4" column="0">
+        <item row="3" column="0">
          <widget class="QLabel" name="label_txt_v">
           <property name="text">
            <string>v</string>
           </property>
          </widget>
         </item>
-        <item row="3" column="0" colspan="2">
+        <item row="2" column="0" colspan="2">
          <widget class="QLabel" name="label_acronym">
           <property name="text">
            <string/>
