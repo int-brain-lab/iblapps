@@ -254,7 +254,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     lineType = 2
 
     # assign a color to each DLC point (now: all points red)
-    cmap = matplotlib.cm.get_cmap('Spectral')
+    cmap = matplotlib.cm.get_cmap('Set1')
     CR = np.arange(len(points)) / len(points)
 
     block = np.ones((2 * dot_s, 2 * dot_s, 3))
