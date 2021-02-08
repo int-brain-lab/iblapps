@@ -30,12 +30,12 @@ def add_mesh(fig, obj_file, color=(1., 1., 1.), opacity=0.4):
     return mapper, actor
 
 
-def figure(grid=False):
+def figure(grid=False, **kwargs):
     """
     Creates a mayavi figure with the brain atlas mesh
     :return: mayavi figure
     """
-    fig = mlab.figure(bgcolor=(1, 1, 1))
+    fig = mlab.figure(bgcolor=(1, 1, 1), **kwargs)
     # engine = mlab.get_engine() # Returns the running mayavi engine.
     obj_file = Path(__file__).parent.joinpath("root.obj")
     mapper, actor = add_mesh(fig, obj_file)
