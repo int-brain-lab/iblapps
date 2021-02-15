@@ -14,6 +14,7 @@ def get_DLC(eid,video_type):
              for each frame id
     '''   
     one = ONE()    
+    D = one.load(eid, dataset_types = ['camera.dlc', 'camera.times'])
     alf_path = one.path_from_eid(eid) / 'alf'
     cam0 = alf.io.load_object(
             alf_path,
