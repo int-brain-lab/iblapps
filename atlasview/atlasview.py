@@ -59,9 +59,13 @@ class TopView(QtWidgets.QMainWindow):
         self.line_sagittal.sigDragged.connect(self._refresh_sagittal)
         self.plotItem_topview.addItem(self.line_coronal)
         self.plotItem_topview.addItem(self.line_sagittal)
-        # connect signals and slots
+        # connect signals and slots: mouse moved
         s = self.plotItem_topview.getViewBox().scene()
         self.proxy = pg.SignalProxy(s.sigMouseMoved, rateLimit=60, slot=self.mouseMoveEvent)
+        # combobox for the atlas remapping choices
+        self.comboBox_mappings.addItems(self.ctrl.atlas.regions.mappings.keys())
+        self.comboBox_mappings.currentIndexChanged.connect(self._refresh)
+        # slider for transparency between image and labels
         self.slider_alpha.sliderMoved.connect(self.slider_alpha_move)
         self.ctrl.set_top()
 
@@ -119,10 +123,12 @@ class TopView(QtWidgets.QMainWindow):
         self._refresh_coronal()
 
     def _refresh_coronal(self):
-        self.ctrl.set_slice(self.ctrl.fig_coronal, self.line_coronal.value())
+        self.ctrl.set_slice(self.ctrl.fig_coronal, self.line_coronal.value(),
+                            mapping=self.comboBox_mappings.currentText())
 
     def _refresh_sagittal(self):
-        self.ctrl.set_slice(self.ctrl.fig_sagittal, self.line_sagittal.value())
+        self.ctrl.set_slice(self.ctrl.fig_sagittal, self.line_sagittal.value(),
+                            mapping=self.comboBox_mappings.currentText())
 
 
 class SliceView(QtWidgets.QWidget):
@@ -255,10 +261,10 @@ class ControllerTopView(PgImageController):
     """
     TopView ControllerTopView
     """
-    def __init__(self, qmain: TopView, res: int = 25, volume='image'):
+    def __init__(self, qmain: TopView, res: int = 25, volume='image', brainmap='Allen'):
         super(ControllerTopView, self).__init__(qmain)
         self.volume = volume
-        self.atlas = AllenAtlas(res)
+        self.atlas = AllenAtlas(res, brainmap=brainmap)
         self.fig_top = self.qwidget = qmain
         # Setup Coronal slice: width: ml, height: dv, depth: ap
         self.fig_coronal = SliceView(qmain, waxis=0, haxis=2, daxis=1)
@@ -271,7 +277,7 @@ class ControllerTopView(PgImageController):
         self.set_slice(self.fig_sagittal)
         self.fig_sagittal.show()
 
-    def set_slice(self, fig, coord=0):
+    def set_slice(self, fig, coord=0, mapping="Allen"):
         waxis, haxis, daxis = (fig.ctrl.waxis, fig.ctrl.haxis, fig.ctrl.daxis)
         # construct the transform matrix image 2 ibl coordinates
         dw = self.atlas.bc.dxyz[waxis]
@@ -281,7 +287,7 @@ class ControllerTopView(PgImageController):
         # the ImageLayer object carries slice kwargs and pyqtgraph ImageSet kwargs
         # reversed order so the self.im is set with the base layer
         for layer in reversed(fig.ctrl.image_layers):
-            _slice = self.atlas.slice(coord, axis=daxis, **layer.slice_kwargs)
+            _slice = self.atlas.slice(coord, axis=daxis, mapping=mapping, **layer.slice_kwargs)
             fig.ctrl.set_image(layer.image_item, _slice, dw, dh, wl[0], hl[0], **layer.pg_kwargs)
         fig.ctrl.slice_coord = coord
 
@@ -333,8 +339,9 @@ class SliceController(PgImageController):
         ba = self.qwidget.topview.ctrl.atlas
         xyz = np.zeros(3)
         xyz[np.array([self.waxis, self.haxis, self.daxis])] = [w, h, self.slice_coord]
+        mapping = self.qwidget.topview.comboBox_mappings.currentText()
         try:
-            region = ba.regions.get(ba.get_labels(xyz))
+            region = ba.regions.get(ba.get_labels(xyz, mapping=mapping))
         except ValueError:
             region = None
         return iw, ih, w, h, v, region
@@ -354,10 +361,10 @@ class ImageLayer:
     slice_kwargs: dict = field(default_factory=lambda: {'volume': 'image', 'mode': 'clip'})
 
 
-def view(res=25, title=None, volume='image', levels=None):
+def view(res=25, title=None, brainmap='Allen'):
     """
     """
     qt.create_app()
-    av = TopView._get_or_create(title=title, res=res)
+    av = TopView._get_or_create(title=title, res=res, brainmap=brainmap)
     av.show()
     return av
