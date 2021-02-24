@@ -215,7 +215,7 @@ class LoadData:
             '_iblqc_ephysSpectralDensity.amps',
             '_ibl_passiveGabor.table',
             '_ibl_passivePeriods.intervalsTable',
-            '_ibl_passiveRFM.frames',
+            '_iblrig_RFMapStim.raw',
             '_ibl_passiveRFM.times',
             '_ibl_passiveStims.table'
         ]

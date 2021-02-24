@@ -58,8 +58,19 @@ class PlotData:
             self.lfp_data_status = False
 
         try:
-            self.rf_map = alf.io.load_object(self.alf_path.parent, object='passiveRFM',
-                                             namespace='ibl')
+            rf_map_times = alf.io.load_object(self.alf_path.parent, object='passiveRFM',
+                                              namespace='ibl')
+            # This needs to go into brainbox!!
+            rf_map_frames_path = (self.alf_path.parent.parent.
+                                  joinpath('raw_passive_data', '_iblrig_RFMapStim.raw.bin'))
+            rf_map_frames = np.fromfile(rf_map_frames_path, dtype="uint8")
+            y_pix, x_pix = 15, 15
+            frames = np.transpose(np.reshape(rf_map_frames, [y_pix, x_pix, -1], order="F"),
+                                  [2, 1, 0])
+
+            self.rf_map = dict()
+            self.rf_map['times'] = rf_map_times['times']
+            self.rf_map['frames'] = frames
             if len(self.rf_map) == 2:
                 self.rfmap_data_status = True
             else:
@@ -94,15 +105,27 @@ class PlotData:
     def filter_units(self, type):
         if type == 'all':
             self.spike_idx = np.arange(self.spikes['clusters'].size)
-            # Filter for nans in depths and also in amps
-            self.kp_idx = np.where(~np.isnan(self.spikes['depths'][self.spike_idx]) &
-                                   ~np.isnan(self.spikes['amps'][self.spike_idx]))[0]
 
-        else:
-            clust = np.where(self.clusters.metrics.ks2_label == type)
+        elif type == 'KS good':
+            clust = np.where(self.clusters.metrics.ks2_label == 'good')
             self.spike_idx = np.where(np.isin(self.spikes['clusters'], clust))[0]
-            self.kp_idx = np.where(~np.isnan(self.spikes['depths'][self.spike_idx]) & ~np.isnan(
-                self.spikes['amps'][self.spike_idx]))[0]
+
+        elif type == 'KS mua':
+            clust = np.where(self.clusters.metrics.ks2_label == 'mua')
+            self.spike_idx = np.where(np.isin(self.spikes['clusters'], clust))[0]
+
+        elif type == 'IBL good':
+            try:
+                clust = np.where(self.clusters.metrics.label == 1)
+                self.spike_idx = np.where(np.isin(self.spikes['clusters'], clust))[0]
+            except Exception:
+                print('IBL metrics not implemented will return ks good units instead')
+                clust = np.where(self.clusters.metrics.ks2_label == 'good')
+                self.spike_idx = np.where(np.isin(self.spikes['clusters'], clust))[0]
+
+        # Filter for nans in depths and also in amps
+        self.kp_idx = np.where(~np.isnan(self.spikes['depths'][self.spike_idx]) &
+                               ~np.isnan(self.spikes['amps'][self.spike_idx]))[0]
 
 # Plots that require spike and cluster data
     def get_depth_data_scatter(self):
