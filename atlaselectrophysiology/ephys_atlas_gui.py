@@ -15,19 +15,26 @@ import os
 
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
-    def __init__(self, offline=False):
+    def __init__(self, offline=False, probe_id=None, one=None):
         super(MainWindow, self).__init__()
 
         self.init_variables()
         self.init_layout(self, offline=offline)
-        if not offline:
+        self.configure = True
+        if not offline and probe_id is None:
             self.loaddata = LoadData()
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
+        elif not offline and probe_id is not None:
+            self.loaddata = LoadData(probe_id=probe_id, one=one)
+            self.loaddata.get_info(0)
+            self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
+            self.data_status=False
+            self.data_button_pressed()
         else:
             self.loaddata = LoadDataLocal()
+
         self.allen = self.loaddata.get_allen_csv()
         self.init_region_lookup(self.allen)
-        self.configure = True
 
     def init_variables(self):
         """
@@ -321,7 +328,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_line.update()
             self.fig_probe.update()
 
-    def save_plots(self):
+    def save_plots(self, save_path=None):
         """
         Saves all plots from the GUI into folder
         """
@@ -335,6 +342,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             sess_info = ''
             image_path_overview = self.alf_path.joinpath('GUI_plots')
             image_path = image_path_overview
+
+        if save_path is not None:
+            image_path_overview = Path(save_path)
+
 
         os.makedirs(image_path_overview, exist_ok=True)
         os.makedirs(image_path, exist_ok=True)
@@ -490,7 +501,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.set_font(self.fig_hist_ref, 'bottom', ptsize=8)
         self.set_axis(self.fig_hist_ref, 'bottom', pen='w')
 
-        make_overview_plot(image_path, sess_info)
+        make_overview_plot(image_path, sess_info, save_folder=image_path_overview)
 
     def toggle_plots(self, options_group):
         """
@@ -1128,8 +1139,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 'LF')
             self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
             self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
-            self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
-            self.img_stim_data = self.plotdata.get_passive_events()
+            #self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
+            #self.img_stim_data = self.plotdata.get_passive_events()
+            self.probe_rfmap = {}
+            self.rfmap_boundaries = {}
+            self.img_stim_data = {}
+
             self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
 
             self.data_status = True
@@ -1868,16 +1883,24 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.tot_idx_string.setText(f"Total Index = {self.total_idx}")
 
 
+def viewer(probe_id=None, one=None):
+    #app = QtWidgets.QApplication([])
+    mainapp = MainWindow(probe_id=probe_id, one=one)
+    mainapp.show()
+    return mainapp
+
+
 if __name__ == '__main__':
 
     import argparse
 
     parser = argparse.ArgumentParser(description='Offline vs online mode')
     parser.add_argument('-o', '--offline', default=False, required=False, help='Offline mode')
+    parser.add_argument('-i', '--insertion', default=None, required=False, help='Insertion mode')
     args = parser.parse_args()
 
     app = QtWidgets.QApplication([])
-    mainapp = MainWindow(offline=args.offline)
+    mainapp = MainWindow(offline=args.offline, probe_id=args.insertion)
     # mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()
