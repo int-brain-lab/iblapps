@@ -1,3 +1,8 @@
+## How to get example frames with DLC labeles painted on top
+Avoiding to download lengthy videos, with DLC_labeled_video.py one can stream 5 example frames randomly picked across a whole video, specified by eid and video type ('body', 'left' or 'right'). 
+
+To use it, start an ipython session, then type `run /path/to/DLC_labeled_video.py` to load the script. 
+
 ## How to make DLC-labeled video
 With the script DLC_labeled_video.py one can make DLC-labeled videos. The script downloads a specific IBL video ('body', 'left' or 'right') for some session (eid). It also downloads the wheel info and will print the wheel angle onto each frame.
 To use it, start an ipython session, then type `run /path/to/DLC_labeled_video.py` to load the script. Next type 
