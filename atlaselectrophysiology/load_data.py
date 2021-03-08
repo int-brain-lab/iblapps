@@ -24,8 +24,8 @@ class LoadData:
             self.chn_coords = SITES_COORDINATES
             self.chn_depths = SITES_COORDINATES[:, 1]
         else:
-            #from atlaselectrophysiology import qc_table
-            #self.qc = qc_table.EphysQC()
+            # from atlaselectrophysiology import qc_table
+            # self.qc = qc_table.EphysQC()
             self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
             self.chn_coords = None
             self.chn_depths = None
@@ -234,7 +234,7 @@ class LoadData:
         dsets_int = [d for d in dsets if d['dataset_type'] in dtypes]
         _ = self.one.download_datasets(dsets_int)
 
-        #_ = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
+        # _ = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
         self.sess_path = self.one.path_from_eid(self.eid)
 
         alf_path = Path(self.sess_path, 'alf', self.probe_label)
@@ -252,14 +252,14 @@ class LoadData:
             print('Could not download alf data for this probe - gui will not work')
             return [None] * 4
 
-        #sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
+        sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
         sess_notes = None
-        #if sess['notes']:
-        #    sess_notes = sess['notes'][0]['text']
-        #if not sess_notes:
-        #    sess_notes = sess['narrative']
-        #if not sess_notes:
-        #    sess_notes = 'No notes for this session'
+        if sess['notes']:
+            sess_notes = sess['notes'][0]['text']
+        if not sess_notes:
+            sess_notes = sess['narrative']
+        if not sess_notes:
+            sess_notes = 'No notes for this session'
 
         return alf_path, ephys_path, self.chn_depths, sess_notes
 
@@ -296,21 +296,19 @@ class LoadData:
         hist_path_rd = None
         hist_path_gr = None
         if hist_dir.exists():
-            #path_to_rd_image = glob.glob(str(hist_dir) + '/*RD.tif')
-            path_to_rd_image = glob.glob(str(hist_dir) + '/*RD.nrrd')
+            path_to_rd_image = glob.glob(str(hist_dir) + '/*RD.tif')
             if path_to_rd_image:
-                #hist_path_rd = tif2nrrd(Path(path_to_rd_image[0]))
-                hist_path_rd = Path(path_to_rd_image[0])
+                hist_path_rd = tif2nrrd(Path(path_to_rd_image[0]))
             else:
                 files = download_histology_data(self.subj, self.lab)
                 if files is not None:
                     hist_path_rd = files[1]
 
-            #path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.tif')
-            path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.nrrd')
+            path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.tif')
+            # path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.nrrd')
             if path_to_gr_image:
-                #hist_path_gr = tif2nrrd(Path(path_to_gr_image[0]))
-                hist_path_gr = Path(path_to_gr_image[0])
+                hist_path_gr = tif2nrrd(Path(path_to_gr_image[0]))
+                # hist_path_gr = Path(path_to_gr_image[0])
             else:
                 files = download_histology_data(self.subj, self.lab)
                 if files is not None:
