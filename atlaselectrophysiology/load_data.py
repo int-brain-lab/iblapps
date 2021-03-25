@@ -51,6 +51,10 @@ class LoadData:
         self.resolved = None
         self.alyx_str = None
 
+        if probe_id is not None:
+            self.sess = self.one.alyx.rest('trajectories', 'list', provenance='Histology track',
+                                           probe_insertion=probe_id)
+
     def get_subjects(self):
         """
         Finds all subjects that have a histology track trajectory registered
@@ -87,8 +91,8 @@ class LoadData:
         :return session: list of sessions associated with subject, displayed as date + probe
         :type: list of strings
         """
-        self.subj = self.subjects[idx]
-        sess_idx = [i for i, e in enumerate(self.subj_with_hist) if e == self.subj]
+        subj = self.subjects[idx]
+        sess_idx = [i for i, e in enumerate(self.subj_with_hist) if e == subj]
         self.sess = [self.sess_with_hist[idx] for idx in sess_idx]
         session = [(sess['session']['start_time'][:10] + ' ' + sess['probe_name']) for sess in
                    self.sess]
@@ -111,6 +115,7 @@ class LoadData:
         self.probe_id = self.sess[idx]['probe_insertion']
         self.lab = self.sess[idx]['session']['lab']
         self.eid = self.sess[idx]['session']['id']
+        self.subj = self.sess[idx]['session']['subject']
 
         return self.get_previous_alignments()
 
@@ -217,13 +222,18 @@ class LoadData:
             '_ibl_passivePeriods.intervalsTable',
             '_iblrig_RFMapStim.raw',
             '_ibl_passiveRFM.times',
-            '_ibl_passiveStims.table'
+            '_ibl_passiveStims.table',
+            '_iblrig_RFMapStim.raw'
         ]
 
         print(self.subj)
         print(self.probe_label)
         print(self.date)
         print(self.eid)
+
+        # dsets = self.one.alyx.rest('datasets', 'list', probe_insertion=self.probe_id)
+        # dsets_int = [d for d in dsets if d['dataset_type'] in dtypes]
+        # _ = self.one.download_datasets(dsets_int)
 
         _ = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
         self.sess_path = self.one.path_from_eid(self.eid)

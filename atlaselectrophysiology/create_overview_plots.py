@@ -3,10 +3,12 @@ from pathlib import Path
 import glob
 
 
-def make_overview_plot(folder, sess_info):
+def make_overview_plot(folder, sess_info, save_folder=None):
 
     image_folder = folder
     image_info = sess_info
+    if not save_folder:
+        save_folder = image_folder
 
     def load_image(image_name, ax):
         with image_name as ifile:
@@ -74,6 +76,6 @@ def make_overview_plot(folder, sess_info):
 
     ax.text(0.5, 0, image_info[:-1], va="center", ha="center", transform=ax.transAxes)
 
-    plt.savefig(image_folder.joinpath(image_info + "overview.png"),
+    plt.savefig(save_folder.joinpath(image_info + "overview.png"),
                 bbox_inches='tight', pad_inches=0)
     plt.show()
