@@ -1139,11 +1139,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 'LF')
             self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
             self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
-            #self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
-            #self.img_stim_data = self.plotdata.get_passive_events()
-            self.probe_rfmap = {}
-            self.rfmap_boundaries = {}
-            self.img_stim_data = {}
+            self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
+            self.img_stim_data = self.plotdata.get_passive_events()
 
             self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
 

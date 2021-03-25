@@ -500,7 +500,7 @@ class PlotData:
             (rf_map_times, rf_map_pos,
              rf_stim_frames) = passive.get_on_off_times_and_positions(self.rf_map)
 
-            rf_map, depths = \
+            rf_map, _ = \
                 passive.get_rf_map_over_depth(rf_map_times, rf_map_pos, rf_stim_frames,
                                               self.spikes['times'][self.spike_idx][self.kp_idx],
                                               self.spikes['depths'][self.spike_idx][self.kp_idx],
@@ -513,6 +513,8 @@ class PlotData:
                 self.chn_coords[:, 1])) / img['on'].shape[0])
             xscale = 1
             levels = np.quantile(np.c_[img['on'], img['off']], [0, 1])
+
+            depths = np.linspace(0, 3840, len(rfs_svd['on']) + 1)
 
             sub_type = ['on', 'off']
             for sub in sub_type:
