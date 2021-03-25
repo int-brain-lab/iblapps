@@ -24,8 +24,8 @@ class LoadData:
             self.chn_coords = SITES_COORDINATES
             self.chn_depths = SITES_COORDINATES[:, 1]
         else:
-            # from atlaselectrophysiology import qc_table
-            # self.qc = qc_table.EphysQC()
+            from atlaselectrophysiology import qc_table
+            self.qc = qc_table.EphysQC()
             self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
             self.chn_coords = None
             self.chn_depths = None
@@ -305,10 +305,8 @@ class LoadData:
                     hist_path_rd = files[1]
 
             path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.tif')
-            # path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.nrrd')
             if path_to_gr_image:
                 hist_path_gr = tif2nrrd(Path(path_to_gr_image[0]))
-                # hist_path_gr = Path(path_to_gr_image[0])
             else:
                 files = download_histology_data(self.subj, self.lab)
                 if files is not None:

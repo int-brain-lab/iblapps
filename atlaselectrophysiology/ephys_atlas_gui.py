@@ -1561,10 +1561,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             QtGui.QMessageBox.information(self, 'Status', "Channels locations saved")
         else:
             pass
-            QtGui.QMessageBox.information(self, 'Status', "Channels not saved")
+            QtGui.QMessageBox.warning(self, 'Status', "Channels not saved")
 
     def display_qc_options(self):
-        self.qc_dialog.exec()
+        self.qc_dialog.open()
 
     def qc_button_clicked(self):
         align_qc = self.align_qc.currentText()
@@ -1573,6 +1573,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         for button in self.desc_buttons.buttons():
             if button.isChecked():
                 ephys_desc.append(button.text())
+                QtGui.QMessageBox.information(self, 'Status', "Channels locations saved")
+
+        if ephys_qc != 'Pass' and len(ephys_desc) == 0:
+            QtGui.QMessageBox.warning(self, 'Status', "You must select a reason for qc choice")
+            self.display_qc_options()
+            return
 
         self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
         self.complete_button_pressed()
@@ -1884,7 +1890,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
 
 def viewer(probe_id=None, one=None):
-    #app = QtWidgets.QApplication([])
+    # To generate the plot from the command line
     mainapp = MainWindow(probe_id=probe_id, one=one)
     mainapp.show()
     return mainapp
