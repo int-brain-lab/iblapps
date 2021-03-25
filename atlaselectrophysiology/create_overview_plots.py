@@ -78,4 +78,4 @@ def make_overview_plot(folder, sess_info, save_folder=None):
 
     plt.savefig(save_folder.joinpath(image_info + "overview.png"),
                 bbox_inches='tight', pad_inches=0)
-    plt.close()
+    plt.show()

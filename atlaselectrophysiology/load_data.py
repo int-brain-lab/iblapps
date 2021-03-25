@@ -231,11 +231,11 @@ class LoadData:
         print(self.date)
         print(self.eid)
 
-        dsets = self.one.alyx.rest('datasets', 'list', probe_insertion=self.probe_id)
-        dsets_int = [d for d in dsets if d['dataset_type'] in dtypes]
-        _ = self.one.download_datasets(dsets_int)
+        # dsets = self.one.alyx.rest('datasets', 'list', probe_insertion=self.probe_id)
+        # dsets_int = [d for d in dsets if d['dataset_type'] in dtypes]
+        # _ = self.one.download_datasets(dsets_int)
 
-        # _ = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
+        _ = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
         self.sess_path = self.one.path_from_eid(self.eid)
 
         alf_path = Path(self.sess_path, 'alf', self.probe_label)

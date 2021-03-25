@@ -343,9 +343,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             image_path_overview = self.alf_path.joinpath('GUI_plots')
             image_path = image_path_overview
 
-        if save_path is not None:
+        if save_path:
             image_path_overview = Path(save_path)
-
 
         os.makedirs(image_path_overview, exist_ok=True)
         os.makedirs(image_path, exist_ok=True)
