@@ -220,6 +220,7 @@ class LoadData:
             '_iblqc_ephysSpectralDensity.amps',
             '_ibl_passiveGabor.table',
             '_ibl_passivePeriods.intervalsTable',
+            '_iblrig_RFMapStim.raw',
             '_ibl_passiveRFM.times',
             '_ibl_passiveStims.table',
             '_iblrig_RFMapStim.raw'

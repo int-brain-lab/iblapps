@@ -201,10 +201,12 @@ class Setup():
         # Define unit filtering options
         all_units = QtGui.QAction('All', self, checkable=True, checked=True)
         all_units.triggered.connect(lambda: self.filter_unit_pressed('all'))
-        good_units = QtGui.QAction('Good', self, checkable=True, checked=False)
-        good_units.triggered.connect(lambda: self.filter_unit_pressed('good'))
-        mua_units = QtGui.QAction('MUA', self, checkable=True, checked=False)
-        mua_units.triggered.connect(lambda: self.filter_unit_pressed('mua'))
+        good_units = QtGui.QAction('KS good', self, checkable=True, checked=False)
+        good_units.triggered.connect(lambda: self.filter_unit_pressed('KS good'))
+        mua_units = QtGui.QAction('KS mua', self, checkable=True, checked=False)
+        mua_units.triggered.connect(lambda: self.filter_unit_pressed('KS mua'))
+        ibl_units = QtGui.QAction('IBL good', self, checkable=True, checked=False)
+        ibl_units.triggered.connect(lambda: self.filter_unit_pressed('IBL good'))
         # Initialise with all units being shown
         self.unit_init = all_units
 
@@ -219,6 +221,8 @@ class Setup():
         unit_filter_options_group.addAction(good_units)
         unit_filter_options.addAction(mua_units)
         unit_filter_options_group.addAction(mua_units)
+        unit_filter_options.addAction(ibl_units)
+        unit_filter_options_group.addAction(ibl_units)
 
         # FIT OPTIONS MENU BAR
         # Define all possible keyboard shortcut interactions for GUI

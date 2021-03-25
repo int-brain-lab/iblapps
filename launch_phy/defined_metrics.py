@@ -292,7 +292,7 @@ def feat_cutoff(feat, spks_per_bin=20, sigma=5, min_num_bins=50):
     assert (len(feat) > (spks_per_bin * min_num_bins)), error_str
 
     # compute the spike feature histogram and pdf:
-    num_bins = np.int(len(feat) / spks_per_bin)
+    num_bins = int(len(feat) / spks_per_bin)
     hist, bins = np.histogram(feat, num_bins, density=True)
     pdf = filters.gaussian_filter1d(hist, sigma)
 
@@ -429,7 +429,7 @@ def firing_rate_coeff_var(ts, hist_win=0.01, fr_win=0.5, n_bins=10):
 
     # Compute overall instantaneous firing rate and firing rate for each bin.
     fr = bb.singlecell.firing_rate(ts, hist_win=hist_win, fr_win=fr_win)
-    bin_sz = np.int(fr.size / n_bins)
+    bin_sz = int(fr.size / n_bins)
     fr_binned = np.array([fr[(b * bin_sz):(b * bin_sz + bin_sz)] for b in range(n_bins)])
 
     # Compute coefficient of variations of firing rate for each bin, and the mean c.v.
