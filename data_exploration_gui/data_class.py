@@ -1,8 +1,11 @@
 from PyQt5 import QtGui, QtWidgets
 import numpy as np
 import os
-import brainbox as bb
-import alf.io as aio
+import alf.io
+from brainbox.processing import get_units_bunch
+from brainbox.population.decode import xcorr
+from brainbox.singlecell import calculate_peths
+from brainbox.io.spikeglx import extract_waveforms
 from pathlib import Path
 
 
@@ -62,9 +65,9 @@ class DataGroup:
 
 
     def load_data(self):
-        self.spikes = aio.load_object(self.probe_path, 'spikes')
-        self.trials = aio.load_object(self.alf_path, 'trials')
-        self.clusters = aio.load_object(self.probe_path, 'clusters')
+        self.spikes = alf.io.load_object(self.probe_path, 'spikes')
+        self.trials = alf.io.load_object(self.alf_path, 'trials')
+        self.clusters = alf.io.load_object(self.probe_path, 'clusters')
         self.ids = np.unique(self.spikes.clusters)
         self.metrics = np.array(self.clusters.metrics.ks2_label[self.ids])
         self.colours = np.array(self.clusters.metrics.ks2_label[self.ids])
@@ -96,7 +99,7 @@ class DataGroup:
         self.n_trials = len(self.trials['contrastLeft'])
 
     def compute_depth_and_amplitudes(self):
-        units_b = bb.processing.get_units_bunch(self.spikes)
+        units_b = get_units_bunch(self.spikes)
         self.depths = []
         self.amps = []
         self.nspikes = []
@@ -138,7 +141,7 @@ class DataGroup:
         self.n_waveform = 0
 
     def compute_peth(self, trial_type, clust, trials_id):
-        peths, bin = bb.singlecell.calculate_peths(self.spikes.times, self.spikes.clusters,
+        peths, bin = calculate_peths(self.spikes.times, self.spikes.clusters,
         [self.clust_ids[clust]], self.trials[trial_type][trials_id], self.t_before, self.t_after)
 
         peth_mean = peths.means[0, :]
@@ -163,7 +166,7 @@ class DataGroup:
 
     def compute_autocorr(self, clust):
         self.clus_idx = np.where(self.spikes.clusters == self.clust_ids[clust])[0]
-        x_corr = bb.population.xcorr(self.spikes.times[self.clus_idx], self.spikes.clusters[self.clus_idx],
+        x_corr = xcorr(self.spikes.times[self.clus_idx], self.spikes.clusters[self.clus_idx],
         self.autocorr_bin, self.autocorr_window)
 
         corr = x_corr[0, 0, :]
@@ -178,7 +181,7 @@ class DataGroup:
         if len(self.ephys_file_path) != 0:
             spk_times = self.spikes.times[self.clus_idx][self.spk_intervals[self.n_waveform]:self.spk_intervals[self.n_waveform + 1]]
             max_ch = self.clusters['channels'][self.clust_ids[clust]]
-            wf = bb.io.extract_waveforms(self.ephys_file_path, spk_times, max_ch, t = self.waveform_window, car = self.CAR)
+            wf = extract_waveforms(self.ephys_file_path, spk_times, max_ch, t = self.waveform_window, car = self.CAR)
             wf_mean = np.mean(wf[:,:,0], axis = 0)
             wf_std = np.std(wf[:,:,0], axis = 0)
 
