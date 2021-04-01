@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtWidgets, QtGui
 import numpy as np
-import brainbox as bb
+from brainbox.core import Bunch
 
 
 class FilterGroup:
@@ -95,7 +95,7 @@ class FilterGroup:
         #Precompute trials for a given contrast set        
         #All
 
-        all_trials = bb.core.Bunch()
+        all_trials = Bunch()
         all_trials['colour'] = QtGui.QColor('#808080')
         all_trials['fill'] = QtGui.QColor('#808080')
         all_trials['linestyle'] = QtGui.QPen(QtCore.Qt.SolidLine)
@@ -105,7 +105,7 @@ class FilterGroup:
                 idx = np.where((self.trials['contrastLeft'] == c) | (self.trials['contrastRight'] == c))[0]
                 trials_id = np.append(trials_id, idx)
         trials_id = np.setdiff1d(trials_id, self.nan_trials)
-        trials_no = bb.core.Bunch()
+        trials_no = Bunch()
         trials_no['trials'] = trials_id
         trials_no['lines'] = []
         trials_no['linecolours'] = []
@@ -113,7 +113,7 @@ class FilterGroup:
         all_trials['trial no.'] = trials_no
 
 
-        trials_ic = bb.core.Bunch()
+        trials_ic = Bunch()
         correct = np.intersect1d(trials_id, self.correct_idx)
         incorrect = np.intersect1d(trials_id, self.incorrect_idx)
         trials_ic['trials'] = np.append(correct, incorrect)
@@ -122,7 +122,7 @@ class FilterGroup:
         trials_ic['text'] = ['correct', 'incorrect']
         all_trials['correct vs incorrect'] = trials_ic
 
-        trials_lf = bb.core.Bunch()
+        trials_lf = Bunch()
         left = np.intersect1d(trials_id, self.left_idx)
         right = np.intersect1d(trials_id, self.right_idx)
         trials_lf['trials'] = np.append(left, right)
@@ -131,7 +131,7 @@ class FilterGroup:
         trials_lf['text'] = ['left', 'right']
         all_trials['left vs right'] = trials_lf
 
-        trials_iclf = bb.core.Bunch()
+        trials_iclf = Bunch()
         correct_right = np.intersect1d(trials_id, self.correct_right_idx)
         correct_left = np.intersect1d(trials_id, self.correct_left_idx)
         incorrect_right = np.intersect1d(trials_id, self.incorrect_right_idx)
@@ -147,7 +147,7 @@ class FilterGroup:
 
 
         #Correct
-        correct_trials = bb.core.Bunch()
+        correct_trials = Bunch()
         correct_trials['colour'] = QtGui.QColor('#1f77b4')
         correct_trials['fill'] = QtGui.QColor('#1f77b4')
         correct_trials['linestyle'] = QtGui.QPen(QtCore.Qt.SolidLine)
@@ -159,7 +159,7 @@ class FilterGroup:
         trials_id = np.setdiff1d(trials_id, self.nan_trials)
     
 
-        trials_no = bb.core.Bunch()
+        trials_no = Bunch()
         trials_no['trials'] = trials_id
         trials_no['lines'] = []
         trials_no['linecolours'] = []
@@ -167,14 +167,14 @@ class FilterGroup:
         correct_trials['trial no.'] = trials_no
 
 
-        trials_ic = bb.core.Bunch()
+        trials_ic = Bunch()
         trials_ic['trials'] = trials_id
         trials_ic['lines'] = [[0, len(trials_ic['trials'])]]
         trials_ic['linecolours'] = [QtGui.QColor('#1f77b4')]
         trials_ic['text'] = ['correct']
         correct_trials['correct vs incorrect'] = trials_ic
 
-        trials_lf = bb.core.Bunch()
+        trials_lf = Bunch()
         left = np.intersect1d(trials_id, self.correct_left_idx)
         right = np.intersect1d(trials_id, self.correct_right_idx)
         trials_lf['trials'] = np.append(left, right)
@@ -185,7 +185,7 @@ class FilterGroup:
         correct_trials['correct vs incorrect and left vs right'] = trials_lf
 
         #Incorrect
-        incorrect_trials = bb.core.Bunch()
+        incorrect_trials = Bunch()
         incorrect_trials['colour'] = QtGui.QColor('#d62728')
         incorrect_trials['fill'] = QtGui.QColor('#d62728')
         incorrect_trials['linestyle'] = QtGui.QPen(QtCore.Qt.SolidLine)
@@ -196,22 +196,22 @@ class FilterGroup:
             trials_id = np.append(trials_id, idx)
         trials_id = np.setdiff1d(trials_id, self.nan_trials)
 
-        trials_no = bb.core.Bunch()
+        trials_no = Bunch()
         trials_no['trials'] = trials_id
         trials_no['lines'] = []
         trials_no['linecolours'] = []
         trials_no['text'] = []
         incorrect_trials['trial no.'] = trials_no
 
-        trials_ic = bb.core.Bunch()
+        trials_ic = Bunch()
         trials_ic['trials'] = trials_id
         trials_ic['lines'] = [[0, len(trials_ic['trials'])]]
         trials_ic['linecolours'] = [QtGui.QColor('#d62728')]
         trials_ic['text'] = ['incorrect']
         incorrect_trials['correct vs incorrect'] = trials_ic
 
-        trials_lf = bb.core.Bunch()
-        trials_iclf = bb.core.Bunch()
+        trials_lf = Bunch()
+        trials_iclf = Bunch()
         left = np.intersect1d(trials_id, self.incorrect_left_idx)
         right = np.intersect1d(trials_id, self.incorrect_right_idx)
         trials_lf['trials'] = np.append(left, right)
@@ -222,7 +222,7 @@ class FilterGroup:
         incorrect_trials['correct vs incorrect and left vs right'] = trials_lf
 
         #Left
-        left_trials = bb.core.Bunch()
+        left_trials = Bunch()
         left_trials['colour'] = QtGui.QColor('#2ca02c')
         left_trials['fill'] = QtGui.QColor('#2ca02c')
         left_trials['linestyle'] = QtGui.QPen(QtCore.Qt.SolidLine)
@@ -233,21 +233,21 @@ class FilterGroup:
             trials_id = np.append(trials_id, idx)
         trials_id = np.setdiff1d(trials_id, self.nan_trials)
     
-        trials_no = bb.core.Bunch()
+        trials_no = Bunch()
         trials_no['trials'] = trials_id
         trials_no['lines'] = []
         trials_no['linecolours'] = []
         trials_no['text'] = []
         left_trials['trial no.'] = trials_no
 
-        trials_lf = bb.core.Bunch()
+        trials_lf = Bunch()
         trials_lf['trials'] = trials_id
         trials_lf['lines'] = [[0, len(trials_lf['trials'])]]
         trials_lf['linecolours'] = [QtGui.QColor('#2ca02c')]
         trials_lf['text'] = ['left']
         left_trials['left vs right'] = trials_lf
 
-        trials_ic = bb.core.Bunch()
+        trials_ic = Bunch()
         correct = np.intersect1d(trials_id, self.correct_left_idx)
         incorrect = np.intersect1d(trials_id, self.incorrect_left_idx)
         trials_ic['trials'] = np.append(correct, incorrect)
@@ -258,7 +258,7 @@ class FilterGroup:
         left_trials['correct vs incorrect and left vs right'] = trials_ic
 
         #Right
-        right_trials = bb.core.Bunch()
+        right_trials = Bunch()
         right_trials['colour'] = QtGui.QColor('#bcbd22')
         right_trials['fill'] = QtGui.QColor('#bcbd22')
         right_trials['linestyle'] = QtGui.QPen(QtCore.Qt.SolidLine)
@@ -269,21 +269,21 @@ class FilterGroup:
             trials_id = np.append(trials_id, idx)
         trials_id = np.setdiff1d(trials_id, self.nan_trials)
 
-        trials_no = bb.core.Bunch()
+        trials_no = Bunch()
         trials_no['trials'] = trials_id
         trials_no['lines'] = []
         trials_no['linecolours'] = []
         trials_no['text'] = []
         right_trials['trial no.'] = trials_no
 
-        trials_lf = bb.core.Bunch()
+        trials_lf = Bunch()
         trials_lf['trials'] = trials_id
         trials_lf['lines'] = [[0, len(trials_lf['trials'])]]
         trials_lf['linecolours'] = [QtGui.QColor('#bcbd22')]
         trials_lf['text'] = ['right']
         right_trials['left vs right'] = trials_lf
 
-        trials_ic = bb.core.Bunch()
+        trials_ic = Bunch()
         correct = np.intersect1d(trials_id, self.correct_right_idx)
         incorrect = np.intersect1d(trials_id, self.incorrect_right_idx)
         trials_ic['trials'] = np.append(correct, incorrect)
@@ -295,7 +295,7 @@ class FilterGroup:
         
 
         #Left Correct
-        left_correct_trials = bb.core.Bunch()
+        left_correct_trials = Bunch()
         left_correct_trials['colour'] = QtGui.QColor('#17becf')
         left_correct_trials['fill'] = QtGui.QColor('#17becf')
         left_correct_trials['linestyle'] = QtGui.QPen(QtCore.Qt.DashLine)
@@ -307,14 +307,14 @@ class FilterGroup:
             trials_id = np.append(trials_id, idx)
         trials_id = np.setdiff1d(trials_id, self.nan_trials)
 
-        trials_no = bb.core.Bunch()
+        trials_no = Bunch()
         trials_no['trials'] = trials_id
         trials_no['lines'] = []
         trials_no['linecolours'] = []
         trials_no['text'] = []
         left_correct_trials['trial no.'] = trials_no
 
-        trials_lf = bb.core.Bunch()
+        trials_lf = Bunch()
         trials_lf['trials'] = trials_id
         trials_lf['lines'] = [[0, len(trials_lf['trials'])]]
         trials_lf['linecolours'] = [QtGui.QColor('#17becf')]
@@ -326,7 +326,7 @@ class FilterGroup:
 
 
         #Left Incorrect
-        left_incorrect_trials = bb.core.Bunch()
+        left_incorrect_trials = Bunch()
         left_incorrect_trials['colour'] = QtGui.QColor('#8c564b')
         left_incorrect_trials['fill'] = QtGui.QColor('#8c564b')
         left_incorrect_trials['linestyle'] = QtGui.QPen(QtCore.Qt.DashLine)
@@ -338,14 +338,14 @@ class FilterGroup:
             trials_id = np.append(trials_id, idx)
         trials_id = np.setdiff1d(trials_id, self.nan_trials)
 
-        trials_no = bb.core.Bunch()
+        trials_no = Bunch()
         trials_no['trials'] = trials_id
         trials_no['lines'] = []
         trials_no['linecolours'] = []
         trials_no['text'] = []
         left_incorrect_trials['trial no.'] = trials_no
 
-        trials_lf = bb.core.Bunch()
+        trials_lf = Bunch()
         trials_lf['trials'] = trials_id
         trials_lf['lines'] = [[0, len(trials_lf['trials'])]]
         trials_lf['linecolours'] = [QtGui.QColor('#8c564b')]
@@ -355,7 +355,7 @@ class FilterGroup:
         left_incorrect_trials['correct vs incorrect and left vs right'] = trials_lf
 
         #Right Correct
-        right_correct_trials = bb.core.Bunch()
+        right_correct_trials = Bunch()
         right_correct_trials['colour'] = QtGui.QColor('#9467bd')
         right_correct_trials['fill'] = QtGui.QColor('#9467bd')
         right_correct_trials['linestyle'] = QtGui.QPen(QtCore.Qt.DashLine)
@@ -367,14 +367,14 @@ class FilterGroup:
             trials_id = np.append(trials_id, idx)
         trials_id = np.setdiff1d(trials_id, self.nan_trials)
 
-        trials_no = bb.core.Bunch()
+        trials_no = Bunch()
         trials_no['trials'] = trials_id
         trials_no['lines'] = []
         trials_no['linecolours'] = []
         trials_no['text'] = []
         right_correct_trials['trial no.'] = trials_no
 
-        trials_lf = bb.core.Bunch()
+        trials_lf = Bunch()
         trials_lf['trials'] = trials_id
         trials_lf['lines'] = [[0, len(trials_lf['trials'])]]
         trials_lf['linecolours'] = [QtGui.QColor('#9467bd')]
@@ -384,7 +384,7 @@ class FilterGroup:
         right_correct_trials['correct vs incorrect and left vs right'] = trials_lf
 
         #Right Incorrect
-        right_incorrect_trials = bb.core.Bunch()
+        right_incorrect_trials = Bunch()
         right_incorrect_trials['colour'] = QtGui.QColor('#ff7f0e')
         right_incorrect_trials['fill'] = QtGui.QColor('#ff7f0e')
         right_incorrect_trials['linestyle'] = QtGui.QPen(QtCore.Qt.DashLine)
@@ -396,14 +396,14 @@ class FilterGroup:
             trials_id = np.append(trials_id, idx)
         trials_id = np.setdiff1d(trials_id, self.nan_trials)
 
-        trials_no = bb.core.Bunch()
+        trials_no = Bunch()
         trials_no['trials'] = trials_id
         trials_no['lines'] = []
         trials_no['linecolours'] = []
         trials_no['text'] = []
         right_incorrect_trials['trial no.'] = trials_no
         
-        trials_lf = bb.core.Bunch()
+        trials_lf = Bunch()
         trials_lf['trials'] = trials_id
         trials_lf['lines'] = [[0, len(trials_lf['trials'])]]
         trials_lf['linecolours'] = [QtGui.QColor('#ff7f0e')]
@@ -413,7 +413,7 @@ class FilterGroup:
         right_incorrect_trials['correct vs incorrect and left vs right'] = trials_lf
 
 
-        trials = bb.core.Bunch()
+        trials = Bunch()
         trials['all'] = all_trials
         trials['correct'] = correct_trials
         trials['incorrect'] = incorrect_trials
