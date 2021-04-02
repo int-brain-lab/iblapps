@@ -1569,7 +1569,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         for button in self.desc_buttons.buttons():
             if button.isChecked():
                 ephys_desc.append(button.text())
-                QtGui.QMessageBox.information(self, 'Status', "Channels locations saved")
 
         if ephys_qc != 'Pass' and len(ephys_desc) == 0:
             QtGui.QMessageBox.warning(self, 'Status', "You must select a reason for qc choice")
