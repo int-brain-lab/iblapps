@@ -10,6 +10,13 @@ import matplotlib
 from ibllib.atlas import AllenAtlas, regions
 import qt
 
+from PyQt5 import Qt
+import vedo
+from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+from oneibl.one import ONE
+#one = ONE()
+from ibllib.pipes.histology import coverage
+from needles2.needles_viewer import NeedlesViewer
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -38,6 +45,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.atlas = AllenAtlas(25)
         main_layout = QtWidgets.QGridLayout()
+        self.frame = Qt.QFrame()
+        self.vl = Qt.QVBoxLayout()
+        self.vtkWidget = QVTKRenderWindowInteractor(self.frame)
+        self.vl.addWidget(self.vtkWidget)
+        self.plt = vedo.Plotter(qtWidget=self.vtkWidget, N=1)
+        self.la = NeedlesViewer()
+        self.la.initialize(self.plt)
+        print(self.la)
+        self.la2 = NeedlesViewer()
+        self.la2.initialize(self.plt)
+        self.frame.setLayout(self.vl)
+
+
         self.coronal = SliceView(self, self.atlas, waxis=0, haxis=2, daxis=1)
         self.sagittal = SliceView(self, self.atlas, waxis=1, haxis=2, daxis=0)
         self.top = TopView(self, self.atlas)
@@ -61,6 +81,12 @@ class MainWindow(QtWidgets.QMainWindow):
         images = ['Image', 'Annotation']
         self.add_menu_bar(self.img_menu, self.img_group, images, callback=self.change_image)
 
+        # Add menu bar for coverage
+        self.coverage_menu = menu_bar.addMenu('Coverage')
+        self.coverage_group = QtGui.QActionGroup(self.coverage_menu)
+        self.coverage_group.setExclusive(True)
+        self.add_menu_bar(self.img_menu, self.img_group, ['Coverage'], callback=self.change_image)
+
         self.region_list = QtGui.QStandardItemModel()
         self.region_combobox = QtWidgets.QComboBox()
         # Add line edit and completer to be able to search for subject
@@ -70,23 +96,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self.region_combobox.setCompleter(region_completer)
         self.region_combobox.setModel(self.region_list)
         self.region_combobox.completer().setModel(self.region_list)
-        data = self.atlas.regions.name[self.atlas._get_mapping(mapping=self.get_mapping())]
-        self.populate_lists(data, self.region_list, self.region_combobox)
-
         self.region_combobox.activated.connect(self.on_region_selected)
+        self.change_mapping()
 
+
+        offset = self.atlas.bc.lim(0)[0]
+        self.la.update_slicer(self.la.nx_slicer, self.top.line_sagittal.value()*1e6 + offset*1e6)
 
         main_layout.addWidget(self.region_combobox)
         main_layout.addWidget(self.top)
         main_layout.addWidget(self.coronal)
         main_layout.addWidget(self.sagittal)
+        main_layout.addWidget(self.frame)
         main_widget.setLayout(main_layout)
 
         # initialise
         self.set_slice(self.coronal)
         self.set_slice(self.sagittal)
-# menu bar for mapping
-# menu bar for image type
+
 
     def populate_lists(self, data, list_name, combobox):
         """
@@ -104,7 +131,7 @@ class MainWindow(QtWidgets.QMainWindow):
             item.setEditable(False)
             list_name.appendRow(item)
 
-        # This makes sure the drop down menu is wide enough to showw full length of string
+        # This makes sure the drop down menu is wide enough to show full length of string
         min_width = combobox.fontMetrics().width(max(data, key=len))
         min_width += combobox.view().autoScrollMargin()
         min_width += combobox.style().pixelMetric(QtGui.QStyle.PM_ScrollBarExtent)
@@ -114,7 +141,8 @@ class MainWindow(QtWidgets.QMainWindow):
         combobox.setCurrentIndex(0)
 
     def change_mapping(self):
-        data = self.atlas.regions.name[self.atlas._get_mapping(mapping=self.get_mapping())]
+        data = np.unique(self.atlas.regions.name[self.atlas._get_mapping(
+            mapping=self.get_mapping())])
         self.populate_lists(data, self.region_list, self.region_combobox)
         self._refresh()
 
@@ -127,6 +155,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sagittal.ctrl.change_base_layer(self.sagittal.fig_slice,
                                           self.img_group.checkedAction().text())
         self._refresh()
+
+    def add_coverage(self):
+        traj = one.alyx.rest('trajectories', 'list', provenance='Ephys aligned histology track')
+        self.coverage = coverage(traj, self.atlas)
+        self.coronal.ctrl.add_volume_layer(self.coronal.fig_slice, self.coverage)
+        self.sagittal.ctrl.add_volume_layer(self.sagittal.fig_slice, self.coverage)
+        self._refresh()
+
 
     def add_menu_bar(self, menu, group, items, callback=None, default=None):
         if not default:
@@ -176,9 +212,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _refresh_coronal(self):
         self.set_slice(self.coronal, self.top.line_coronal.value())
+        offset = self.atlas.bc.lim(1)[1]
+        self.la.update_slicer(self.la.ny_slicer,  (self.top.line_coronal.value()*1e6 + offset*16))
 
     def _refresh_sagittal(self):
         self.set_slice(self.sagittal, self.top.line_sagittal.value())
+        offset = self.atlas.bc.lim(0)[0]
+        self.la.update_slicer(self.la.nx_slicer, self.top.line_sagittal.value()*1e6 + offset*1e6)
 
     def _refresh_locked_region(self, region):
         region_values = np.zeros_like(self.atlas.regions.id)
@@ -197,6 +237,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh()
         self.set_selected_region(region)
         # need to set the drop down to the selected region
+        self.la.reveal_regions(region_idx)
 
     def _reset_region(self, name):
         region_values = np.zeros_like(self.atlas.regions.id)
@@ -282,13 +323,13 @@ class SliceView(QtWidgets.QWidget):
         label_layout.addWidget(self.label_ix)
         label_layout.addWidget(self.label_iy)
         label_layout.addWidget(self.label_v)
-        label_layout.addWidget(self.label_region)
+        #label_layout.addWidget(self.label_region)
         label_layout.addWidget(self.label_acronym)
         label_group.setLayout(label_layout)
 
 
-        main_layout.addWidget(self.fig_slice)
-        main_layout.addWidget(label_group)
+        main_layout.addWidget(self.fig_slice, 0, 0)
+        main_layout.addWidget(label_group, 0, 1)
         self.setLayout(main_layout)
 
         # init the image display
@@ -332,7 +373,7 @@ class SliceView(QtWidgets.QWidget):
             self.label_acronym.setText("")
             self.qmain._reset_region('non_locked')
         else:
-            self.label_region.setText(region['name'][0])
+            #self.label_region.setText(region['name'][0])
             self.label_acronym.setText(region['acronym'][0])
 
             if region['acronym'][0] != 'void':
@@ -413,6 +454,15 @@ class BaseController:
         self.add_image_layer(fig, name=name, pg_kwargs={'lut': lut, 'opacity': 1}, slice_kwargs={
             'volume': 'value', 'region_values': np.zeros_like(self.atlas.regions.id),
             'mode': 'clip'})
+
+    def add_volume_layer(self, fig, volume, name='coverage', cmap='viridis'):
+        colormap = matplotlib.cm.get_cmap(cmap)
+        colormap._init()
+        # The last one is [0, 0, 0, 0] so remove this
+        lut = (colormap._lut * 255).view(np.ndarray)[:-1]
+        lut = np.insert(lut, 0, [0, 0, 0, 0], axis=0)
+        self.add_image_layer(fig, name=name, pg_kwargs={'lut': lut, 'opacity': 0.8}, slice_kwargs={
+            'volume': 'volume', 'region_values': volume, 'mode': 'clip'})
 
     def change_base_layer(self, fig, image='Image'):
         base_layer = self.get_image_layer(name='base')
