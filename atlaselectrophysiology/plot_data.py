@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import alf.io
 from brainbox.processing import bincount2D
-from brainbox.population import xcorr
+from brainbox.population.decode import xcorr
 from brainbox.task import passive
 import scipy
 from PyQt5 import QtGui
