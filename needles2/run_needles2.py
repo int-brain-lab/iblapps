@@ -8,15 +8,17 @@ import pyqtgraph as pg
 import matplotlib
 
 from ibllib.atlas import AllenAtlas, regions
+from ibllib.pipes import histology
 import qt
 
 from PyQt5 import Qt
 import vedo
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from oneibl.one import ONE
-#one = ONE()
+one = ONE()
 from ibllib.pipes.histology import coverage
 from needles2.needles_viewer import NeedlesViewer
+from needles2.probe_model import ProbeModel
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -50,17 +52,29 @@ class MainWindow(QtWidgets.QMainWindow):
         self.vtkWidget = QVTKRenderWindowInteractor(self.frame)
         self.vl.addWidget(self.vtkWidget)
         self.plt = vedo.Plotter(qtWidget=self.vtkWidget, N=1)
-        self.la = NeedlesViewer()
-        self.la.initialize(self.plt)
-        print(self.la)
-        self.la2 = NeedlesViewer()
-        self.la2.initialize(self.plt)
+        #self.la = NeedlesViewer()
+        #self.la.initialize(self.plt)
+        ## Set it invisible
+        #self.la.view.volume.actor.alphaUnit(6)
+
+        # Make shell volume this will also have the probes
+        #self.la1 = NeedlesViewer()
+        #self.la1.initialize(self.plt)
+        #self.la1.update_alpha_unit(value=6)
+        ## Switch the slices off
+        #self.la1.toggle_slices_visibility()
+#
+        #self.la2 = NeedlesViewer()
+        #self.la2.initialize(self.plt)
+        #self.la2.reveal_regions(0)
         self.frame.setLayout(self.vl)
 
 
         self.coronal = SliceView(self, self.atlas, waxis=0, haxis=2, daxis=1)
         self.sagittal = SliceView(self, self.atlas, waxis=1, haxis=2, daxis=0)
         self.top = TopView(self, self.atlas)
+        self.probe = ProbeView()
+        self.probe_model = ProbeModel()
 
         menu_bar = QtWidgets.QMenuBar(self)
         menu_bar.setNativeMenuBar(False)
@@ -85,7 +99,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.coverage_menu = menu_bar.addMenu('Coverage')
         self.coverage_group = QtGui.QActionGroup(self.coverage_menu)
         self.coverage_group.setExclusive(True)
-        self.add_menu_bar(self.img_menu, self.img_group, ['Coverage'], callback=self.change_image)
+        self.add_menu_bar(self.coverage_menu, self.coverage_group, ['Coverage'],
+                          callback=self.add_coverage)
+
+        # Add menubar for insertions
+        self.insertion_menu = menu_bar.addMenu('Insertions')
+        self.insertion_group = QtGui.QActionGroup(self.insertion_menu)
+        self.insertion_group.setExclusive(True)
+        insertions = ['Resolved', 'Ephys aligned histology track', 'Histology track',
+                      'Histology track (best)', 'Micro-manipulator', 'Micro-manipulator (best)',
+                      'Planned', 'Planned (best)']
+        self.add_menu_bar(self.insertion_menu, self.insertion_group, insertions,
+                          callback=self.add_insertions)
 
         self.region_list = QtGui.QStandardItemModel()
         self.region_combobox = QtWidgets.QComboBox()
@@ -101,13 +126,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
         offset = self.atlas.bc.lim(0)[0]
-        self.la.update_slicer(self.la.nx_slicer, self.top.line_sagittal.value()*1e6 + offset*1e6)
+        #self.la.update_slicer(self.la.nx_slicer, self.top.line_sagittal.value()*1e6 + offset*1e6)
 
-        main_layout.addWidget(self.region_combobox)
-        main_layout.addWidget(self.top)
-        main_layout.addWidget(self.coronal)
-        main_layout.addWidget(self.sagittal)
-        main_layout.addWidget(self.frame)
+        main_layout.addWidget(self.region_combobox, 0, 0)
+        main_layout.addWidget(self.top, 1, 0)
+        main_layout.addWidget(self.coronal, 2, 0)
+        main_layout.addWidget(self.sagittal, 3, 0)
+        main_layout.addWidget(self.frame, 4, 0)
+        main_layout.addWidget(self.probe, 0, 1, 4, 1)
         main_widget.setLayout(main_layout)
 
         # initialise
@@ -157,11 +183,42 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh()
 
     def add_coverage(self):
+        provenance = self.insertion_group.checkedAction().text()
+        if '(best)' in provenance:
+            provenance = provenance[:-7]
+            self.probe_model.compute_best_for_provenance(provenance)
+
         traj = one.alyx.rest('trajectories', 'list', provenance='Ephys aligned histology track')
         self.coverage = coverage(traj, self.atlas)
         self.coronal.ctrl.add_volume_layer(self.coronal.fig_slice, self.coverage)
         self.sagittal.ctrl.add_volume_layer(self.sagittal.fig_slice, self.coverage)
         self._refresh()
+
+    def add_insertions(self):
+        provenance = self.insertion_group.checkedAction().text()
+        if '(best)' in provenance:
+            provenance = provenance[:-7]
+            self.probe_model.compute_best_for_provenance(provenance)
+            self.provenance = 'Best'
+            self.top.scatter.setData(x=self.probe_model.traj[self.provenance]['x'] / 1e6,
+                                     y=self.probe_model.traj[self.provenance]['y'] / 1e6,
+                                     pen='r', brush='r')
+        else:
+            if not 'traj' in self.probe_model.traj[provenance].keys():
+                self.probe_model.get_traj_for_provenance(provenance)
+            self.provenance = provenance
+            self.top.scatter.setData(x=self.probe_model.traj[self.provenance]['x']/1e6,
+                                    y=self.probe_model.traj[self.provenance]['y']/1e6,
+                                    pen='r', brush='r')
+
+    def on_insertion_clicked(self, scatter, point):
+        idx = np.argwhere(self.probe_model.traj[self.provenance]['x']/1e6 ==
+                          point[0].pos().x())[0][0]
+        (_, region,
+         region_lab, region_col) = histology.get_channels_from_traj(
+            self.probe_model.traj[self.provenance]['traj'][idx], one=one, ba=self.atlas)
+        self.probe.plot_region_along_probe(region, region_lab, region_col)
+
 
 
     def add_menu_bar(self, menu, group, items, callback=None, default=None):
@@ -213,12 +270,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def _refresh_coronal(self):
         self.set_slice(self.coronal, self.top.line_coronal.value())
         offset = self.atlas.bc.lim(1)[1]
-        self.la.update_slicer(self.la.ny_slicer,  (self.top.line_coronal.value()*1e6 + offset*16))
+        # self.la.update_slicer(self.la.ny_slicer,  (self.top.line_coronal.value()*1e6 + offset*16))
 
     def _refresh_sagittal(self):
         self.set_slice(self.sagittal, self.top.line_sagittal.value())
         offset = self.atlas.bc.lim(0)[0]
-        self.la.update_slicer(self.la.nx_slicer, self.top.line_sagittal.value()*1e6 + offset*1e6)
+        # self.la.update_slicer(self.la.nx_slicer, self.top.line_sagittal.value()*1e6 + offset*1e6)
 
     def _refresh_locked_region(self, region):
         region_values = np.zeros_like(self.atlas.regions.id)
@@ -237,7 +294,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh()
         self.set_selected_region(region)
         # need to set the drop down to the selected region
-        self.la.reveal_regions(region_idx)
+        # self.la2.reveal_regions(region_idx)
 
     def _reset_region(self, name):
         region_values = np.zeros_like(self.atlas.regions.id)
@@ -258,6 +315,39 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh()
 
 
+class ProbeView(QtWidgets.QWidget):
+    def __init__(self):
+        super(ProbeView, self).__init__()
+        main_layout = QtWidgets.QGridLayout()
+        self.fig_probe = pg.GraphicsLayoutWidget()
+
+        self.fig_hist = pg.PlotItem()
+        self.fig_hist.setYRange(min=0, max=4000)
+        #self.fig_hist.setContentsMargins(0, 0, 0, 0)
+        self.fig_probe.addItem(self.fig_hist)
+
+        main_layout.addWidget(self.fig_probe)
+        self.setLayout(main_layout)
+
+    def plot_region_along_probe(self, region, region_label, region_color):
+        self.fig_hist.clear()
+        axis = self.fig_hist.getAxis('left')
+        axis.setTicks([region_label])
+        axis.setZValue(10)
+
+        # Plot each histology region
+        for reg, reg_col in zip(region, region_color):
+            colour = QtGui.QColor(*reg_col)
+            region = pg.LinearRegionItem(values=(reg[0], reg[1]),
+                                         orientation=pg.LinearRegionItem.Horizontal,
+                                         brush=colour, movable=False)
+            # Add a white line at the boundary between regions
+            #bound = pg.InfiniteLine(pos=reg[0], angle=0, pen='w')
+            self.fig_hist.addItem(region)
+
+        self.fig_hist.setYRange(min=0, max=4000)
+        axis = self.fig_hist.getAxis('bottom')
+        axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
 
 class TopView(QtWidgets.QWidget):
     def __init__(self, qmain: MainWindow, atlas: AllenAtlas, **kwargs):
@@ -270,6 +360,12 @@ class TopView(QtWidgets.QWidget):
         self.fig_top = pg.PlotWidget()
         self.fig_top.setAspectLocked(True)
         self.ctrl.add_image_layer(self.fig_top, name='top')
+
+        self.scatter = pg.ScatterPlotItem()
+        self.scatter.sigClicked.connect(self.qmain.on_insertion_clicked)
+        self.fig_top.addItem(self.scatter)
+
+
         # self.fig_top.addItem(self.ctrl.imageItem)
 
         # setup one horizontal and one vertical line that can be moved

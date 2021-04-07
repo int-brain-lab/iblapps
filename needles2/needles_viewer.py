@@ -15,13 +15,13 @@ class NeedlesViewer(AtlasController):
     def __init__(self):
         super(NeedlesViewer, self).__init__()
 
-    def initialize(self, plot, resolution=25, mapping='Allen', num_windows=1, render=False):
+    def initialize(self, plot, resolution=25, mapping='Allen', volume_mode=None, num_windows=1, render=False):
         vedo.settings.allowInteraction = False
         self.plot = plot
         self.plot_window_id = 0
         self.model = AtlasModel()
         self.model.initialize(resolution)
-        self.model.load_allen_volume(mapping)
+        self.model.load_allen_volume(mapping, volume_mode)
         self.model.initialize_slicers()
 
         self.view = AtlasView(self.plot, self.model)
@@ -71,5 +71,17 @@ class NeedlesViewer(AtlasController):
         #                title='+Y', **s_kw)
         #self.add_slider('pz', self.update_pz_slicer, 0, int(d[2]), 0, pos=(0.35, 0.065, 0.12),
         #                title='+Z', **s_kw)
+
+    def update_slicer(self, slicer_view, value):
+        """
+        Update a given slicer with the given value
+        :param slicer_view: SlicerView instance
+        :param value: Value
+        """
+        volume = self.view.volume
+        model = slicer_view.model
+        model.set_value(value)
+        model.clipping_planes = volume.get_clipping_planes(model.axis)
+        slicer_view.update(add_to_scene=self.model.slices_visible)
 
 
