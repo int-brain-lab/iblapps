@@ -51,7 +51,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.vl = Qt.QVBoxLayout()
         self.vtkWidget = QVTKRenderWindowInteractor(self.frame)
         self.vl.addWidget(self.vtkWidget)
-        self.plt = vedo.Plotter(qtWidget=self.vtkWidget, N=1)
+        #self.plt = vedo.Plotter(qtWidget=self.vtkWidget, N=1)
         #self.la = NeedlesViewer()
         #self.la.initialize(self.plt)
         ## Set it invisible
@@ -67,14 +67,14 @@ class MainWindow(QtWidgets.QMainWindow):
         #self.la2 = NeedlesViewer()
         #self.la2.initialize(self.plt)
         #self.la2.reveal_regions(0)
-        self.frame.setLayout(self.vl)
+        #self.frame.setLayout(self.vl)
 
 
         self.coronal = SliceView(self, self.atlas, waxis=0, haxis=2, daxis=1)
         self.sagittal = SliceView(self, self.atlas, waxis=1, haxis=2, daxis=0)
         self.top = TopView(self, self.atlas)
-        self.probe = ProbeView()
-        self.probe_model = ProbeModel()
+        self.probe = ProbeView(self)
+        self.probe_model = ProbeModel(one=one, ba=self.atlas)
 
         menu_bar = QtWidgets.QMenuBar(self)
         menu_bar.setNativeMenuBar(False)
@@ -125,6 +125,50 @@ class MainWindow(QtWidgets.QMainWindow):
         self.change_mapping()
 
 
+        # Add dials to control ma insertion
+        self.phi_dial = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.phi_dial.setMinimum(30)
+        self.phi_dial.setMaximum(-30)
+        self.phi_dial.setValue(0)
+        self.phi_dial.sliderMoved.connect(self.add_extra_coverage)
+        self.theta_dial = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.theta_dial.setMinimum(10)
+        self.theta_dial.setMaximum(30)
+        self.theta_dial.setValue(10)
+        self.theta_dial.sliderMoved.connect(self.add_extra_coverage)
+        dial_group = QtWidgets.QGroupBox()
+        dial_layout = QtWidgets.QHBoxLayout()
+        dial_layout.addWidget(self.phi_dial)
+        dial_layout.addWidget(self.theta_dial)
+        dial_group.setLayout(dial_layout)
+
+        self.target = None
+        self.ins_pos = {'x': {},
+                        'y': {},
+                        'z': {},
+                        't': {},
+                        'p': {}}
+        self.ins_pos['x']['value'] = None
+        self.ins_pos['x']['step'] = 25
+        self.ins_pos['x']['max'] = None
+        self.ins_pos['x']['min'] = None
+        self.ins_pos['y']['value'] = None
+        self.ins_pos['y']['step'] = 25
+        self.ins_pos['y']['max'] = None
+        self.ins_pos['y']['min'] = None
+        self.ins_pos['z']['value'] = 4000
+        self.ins_pos['z']['step'] = 50
+        self.ins_pos['z']['max'] = None
+        self.ins_pos['z']['min'] = None
+        self.ins_pos['t']['value'] = 10
+        self.ins_pos['t']['step'] = 1
+        self.ins_pos['t']['max'] = 30
+        self.ins_pos['t']['min'] = 10
+        self.ins_pos['p']['value'] = 0
+        self.ins_pos['p']['step'] = 1
+        self.ins_pos['p']['max'] = -30
+        self.ins_pos['p']['min'] = 30
+
         offset = self.atlas.bc.lim(0)[0]
         #self.la.update_slicer(self.la.nx_slicer, self.top.line_sagittal.value()*1e6 + offset*1e6)
 
@@ -133,7 +177,8 @@ class MainWindow(QtWidgets.QMainWindow):
         main_layout.addWidget(self.coronal, 2, 0)
         main_layout.addWidget(self.sagittal, 3, 0)
         main_layout.addWidget(self.frame, 4, 0)
-        main_layout.addWidget(self.probe, 0, 1, 4, 1)
+        main_layout.addWidget(dial_group, 0, 1)
+        main_layout.addWidget(self.probe, 1, 1, 3, 1)
         main_widget.setLayout(main_layout)
 
         # initialise
@@ -187,12 +232,49 @@ class MainWindow(QtWidgets.QMainWindow):
         if '(best)' in provenance:
             provenance = provenance[:-7]
             self.probe_model.compute_best_for_provenance(provenance)
+            self.provenance = 'Best'
+            all_channels = self.probe_model.get_all_channels(self.provenance)
+            cov = self.probe_model.compute_coverage(all_channels)
+        else:
+            self.provenance = provenance
+            all_channels = self.probe_model.get_all_channels(self.provenance)
+            cov = self.probe_model.compute_coverage(all_channels)
 
-        traj = one.alyx.rest('trajectories', 'list', provenance='Ephys aligned histology track')
-        self.coverage = coverage(traj, self.atlas)
-        self.coronal.ctrl.add_volume_layer(self.coronal.fig_slice, self.coverage)
-        self.sagittal.ctrl.add_volume_layer(self.sagittal.fig_slice, self.coverage)
+        #traj = one.alyx.rest('trajectories', 'list', provenance='Ephys aligned histology track')
+        #self.coverage = coverage(traj, self.atlas)
+        self.coronal.ctrl.add_volume_layer(self.coronal.fig_slice, cov)
+        self.sagittal.ctrl.add_volume_layer(self.sagittal.fig_slice, cov)
         self._refresh()
+
+    def add_extra_coverage(self):
+        #phi = self.phi_dial.value()
+        #print(phi)
+        #theta = self.theta_dial.value()
+        #print(theta)
+        #x = self.x
+        #y = self.y
+        print(self.ins_pos['x']['value'])
+        print(self.ins_pos['y']['value'])
+        print(self.ins_pos['z']['value'])
+        print(self.ins_pos['t']['value'])
+        print(self.ins_pos['p']['value'])
+        cov, traj = self.probe_model.add_coverage(self.ins_pos['x']['value'], self.ins_pos['y']['value'],
+                                            depth = self.ins_pos['z']['value'], phi=180 + self.ins_pos['p']['value'],
+                                            theta=self.ins_pos['t']['value'])
+        self.coronal.ctrl.add_volume_layer(self.coronal.fig_slice, cov, name='coverage_extra', cmap='inferno')
+        self.sagittal.ctrl.add_volume_layer(self.sagittal.fig_slice, cov, name='coverage_extra', cmap='inferno')
+        self.top.line_coronal.setValue(self.ins_pos['y']['value'] / 1e6)
+        self.top.line_sagittal.setValue(self.ins_pos['x']['value'] / 1e6)
+        self._refresh()
+        (region, region_lab, region_col) = self.probe_model.get_brain_regions(
+            traj)
+        self.probe.plot_region_along_probe(region, region_lab, region_col)
+        self._refresh()
+
+
+    def arrange_as_traj(self):
+        traj = {}
+
 
     def add_insertions(self):
         provenance = self.insertion_group.checkedAction().text()
@@ -214,9 +296,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_insertion_clicked(self, scatter, point):
         idx = np.argwhere(self.probe_model.traj[self.provenance]['x']/1e6 ==
                           point[0].pos().x())[0][0]
-        (_, region,
-         region_lab, region_col) = histology.get_channels_from_traj(
-            self.probe_model.traj[self.provenance]['traj'][idx], one=one, ba=self.atlas)
+        (region, region_lab, region_col) = self.probe_model.get_brain_regions(
+            self.probe_model.traj[self.provenance]['traj'][idx])
         self.probe.plot_region_along_probe(region, region_lab, region_col)
 
 
@@ -270,12 +351,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def _refresh_coronal(self):
         self.set_slice(self.coronal, self.top.line_coronal.value())
         offset = self.atlas.bc.lim(1)[1]
-        # self.la.update_slicer(self.la.ny_slicer,  (self.top.line_coronal.value()*1e6 + offset*16))
+        #self.la.update_slicer(self.la.ny_slicer,  (self.top.line_coronal.value()*1e6 + offset*16))
 
     def _refresh_sagittal(self):
         self.set_slice(self.sagittal, self.top.line_sagittal.value())
         offset = self.atlas.bc.lim(0)[0]
-        # self.la.update_slicer(self.la.nx_slicer, self.top.line_sagittal.value()*1e6 + offset*1e6)
+        #self.la.update_slicer(self.la.nx_slicer, self.top.line_sagittal.value()*1e6 + offset*1e6)
 
     def _refresh_locked_region(self, region):
         region_values = np.zeros_like(self.atlas.regions.id)
@@ -294,7 +375,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh()
         self.set_selected_region(region)
         # need to set the drop down to the selected region
-        # self.la2.reveal_regions(region_idx)
+        #self.la2.reveal_regions(region_idx)
 
     def _reset_region(self, name):
         region_values = np.zeros_like(self.atlas.regions.id)
@@ -315,8 +396,83 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh()
 
 
-class ProbeView(QtWidgets.QWidget):
+class CoverageView(QtWidgets.QWidget):
+    def __init__(self, qmain: MainWindow):
+        self.qmain = qmain
+        main_layout = QtWidgets.QGridLayout()
+
+        self.label_x = QtWidgets.QLabel('x = ')
+        self.label_y = QtWidgets.QLabel('y = ')
+        self.label_d = QtWidgets.QLabel('depth = ')
+        self.label_t = QtWidgets.QLabel('theta = ')
+        self.label_p = QtWidgets.QLabel('ph = ')
+
+        label_group = QtWidgets.QGroupBox()
+        label_layout = QtWidgets.QHBoxLayout()
+        label_layout.addWidget(self.label_x)
+        label_layout.addWidget(self.label_y)
+        label_layout.addWidget(self.label_d)
+        label_layout.addWidget(self.label_t)
+        label_layout.addWidget(self.label_p)
+        label_group.setLayout(label_layout)
+
+        main_layout.addWidget(label_group)
+        self.setLayout(main_layout)
+
+
+
+        # the layout for the boxes
+        # update the values of the boxes
+
+    # controller mouse click event
+
+#class CoverageController:
+
+class CoverageModel:
     def __init__(self):
+        self.ins_pos = {'x': {}, 'y': {}, 'z': {}, 't': {}, 'p': {}}
+        self.xrange = [None, None]
+        self.xsteps = [10, 50]
+        self.yrange = [None, None]
+        self.ysteps = [10, 50]
+        self.drange = [None, None]
+        self.dsteps = [50, 100]
+        self.prange = [-30, 30]
+        self.psteps = [1, 5]
+        self.trange = [10, 30]
+        self.tsteps = [1, 5]
+
+
+
+
+        self.ins_pos['x']['value'] = None
+        self.ins_pos['x']['step'] = 25
+        self.ins_pos['x']['max'] = None
+        self.ins_pos['x']['min'] = None
+        self.ins_pos['y']['value'] = None
+        self.ins_pos['y']['step'] = 25
+        self.ins_pos['y']['max'] = None
+        self.ins_pos['y']['min'] = None
+        self.ins_pos['z']['value'] = 4000
+        self.ins_pos['z']['step'] = 50
+        self.ins_pos['z']['max'] = None
+        self.ins_pos['z']['min'] = None
+        self.ins_pos['t']['value'] = 10
+        self.ins_pos['t']['step'] = 1
+        self.ins_pos['t']['max'] = 30
+        self.ins_pos['t']['min'] = 10
+        self.ins_pos['p']['value'] = 0
+        self.ins_pos['p']['step'] = 1
+        self.ins_pos['p']['max'] = -30
+        self.ins_pos['p']['min'] = 30
+
+
+
+
+
+class ProbeView(QtWidgets.QWidget):
+    def __init__(self, qmain: MainWindow):
+        self.qmain = qmain
         super(ProbeView, self).__init__()
         main_layout = QtWidgets.QGridLayout()
         self.fig_probe = pg.GraphicsLayoutWidget()
@@ -341,13 +497,38 @@ class ProbeView(QtWidgets.QWidget):
             region = pg.LinearRegionItem(values=(reg[0], reg[1]),
                                          orientation=pg.LinearRegionItem.Horizontal,
                                          brush=colour, movable=False)
-            # Add a white line at the boundary between regions
-            #bound = pg.InfiniteLine(pos=reg[0], angle=0, pen='w')
             self.fig_hist.addItem(region)
 
         self.fig_hist.setYRange(min=0, max=4000)
         axis = self.fig_hist.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
+
+    def keyPressEvent(self, event):
+        print(self.qmain.target)
+        if event.key() == QtCore.Qt.Key_X:
+            self.qmain.target = 'x'
+        elif event.key() == QtCore.Qt.Key_Y:
+            self.qmain.target = 'y'
+        elif event.key() == QtCore.Qt.Key_Z:
+            self.qmain.target = 'z'
+        elif event.key() == QtCore.Qt.Key_T:
+            self.qmain.target = 't'
+        elif event.key() == QtCore.Qt.Key_P:
+            self.qmain.target = 'p'
+
+        # if shift pressed iterate by small amount
+
+        if (event.key() == QtCore.Qt.Key_Up) and self.qmain.target:
+            self.qmain.ins_pos[self.qmain.target]['value'] += self.qmain.ins_pos[self.qmain.target]['step']
+            self.qmain.add_extra_coverage()
+        if (event.key() == QtCore.Qt.Key_Down) and self.qmain.target:
+            self.qmain.ins_pos[self.qmain.target]['value'] -= self.qmain.ins_pos[self.qmain.target]['step']
+            self.qmain.add_extra_coverage()
+
+
+
+
+
 
 class TopView(QtWidgets.QWidget):
     def __init__(self, qmain: MainWindow, atlas: AllenAtlas, **kwargs):
@@ -380,7 +561,18 @@ class TopView(QtWidgets.QWidget):
         main_layout.addWidget(self.fig_top)
         self.setLayout(main_layout)
 
+        s = self.fig_top.scene()
+        s.sigMouseClicked.connect(self.mouseClick)
+
         self.ctrl.set_top()
+
+    def mouseClick(self, event):
+        if event.double():
+            qpoint = self.ctrl.image_layers[0].image_item.mapFromScene(event.scenePos())
+            iw, ih, w, h, v = self.ctrl.cursor2xyamp(qpoint)
+            self.qmain.ins_pos['x']['value'] = w * 1e6
+            self.qmain.ins_pos['y']['value'] = h * 1e6
+            self.qmain.add_extra_coverage()
 
 
 class SliceView(QtWidgets.QWidget):
@@ -552,6 +744,8 @@ class BaseController:
             'mode': 'clip'})
 
     def add_volume_layer(self, fig, volume, name='coverage', cmap='viridis'):
+        # If there is a layer with the same name remove it
+        self.remove_image_layer(fig, name)
         colormap = matplotlib.cm.get_cmap(cmap)
         colormap._init()
         # The last one is [0, 0, 0, 0] so remove this

@@ -2,10 +2,12 @@ import numpy as np
 from brainbox.numerical import ismember
 from oneibl.one import ONE
 from ibllib.pipes import histology
-from ibllib.atlas import AllenAtlas
+from ibllib.atlas import AllenAtlas, atlas
 from ibllib.ephys.neuropixel import TIP_SIZE_UM, SITES_COORDINATES
 from ibllib.pipes.ephys_alignment import EphysAlignment
 import time
+from scipy.signal import fftconvolve
+from ibllib.dsp import fcn_cosine
 
 PROV_2_VAL = {
     'Resolved': 90,
@@ -28,7 +30,11 @@ class ProbeModel:
                      'Ephys aligned histology track': {},
                      'Resolved': {},
                      'Best': {}}
+        self.ins = {}
 
+        # for histology get the insertions and compute the trajectory from them. Means only one
+        # long query to alyx and use xyz picks for channels and coverage lower down. More complicated
+        # but will speed things up
         self.get_traj_for_provenance(provenance='Histology track', django=['x__isnull,False'])
         self.get_traj_for_provenance(provenance='Ephys aligned histology track')
         self.get_traj_for_provenance(provenance='Ephys aligned histology track',
@@ -38,13 +44,15 @@ class ProbeModel:
         self.find_traj_is_best(provenance='Ephys aligned histology track')
         self.traj['Resolved']['is_best'] = np.arange(len(self.traj['Resolved']['traj']))
 
+        self.get_insertions_with_xyz()
+
     @staticmethod
     def get_traj_info(traj):
         return traj['probe_insertion'], traj['x'], traj['y']
 
     def get_traj_for_provenance(self, provenance='Histology track', django=None,
                                 prov_dict=None):
-
+        start = time.time()
         if django is None:
             django = []
 
@@ -62,6 +70,19 @@ class ProbeModel:
         self.traj[prov_dict]['ins'] = np.array(ins_ids)
         self.traj[prov_dict]['x'] = np.array(x)
         self.traj[prov_dict]['y'] = np.array(y)
+        end = time.time()
+        print(end-start)
+
+    def get_insertions_with_xyz(self):
+        start = time.time()
+        django_str = 'session__project__name__icontains,ibl_neuropixel_brainwide_01,' \
+                     'json__has_key,xyz_picks'
+        self.ins['insertions'] = self.one.alyx.rest('insertions', 'list', django=django_str)
+        self.ins['ids'] = np.array([ins['id'] for ins in self.ins['insertions']])
+
+        end = time.time()
+        print(end-start)
+
 
     def compute_best_for_provenance(self, provenance='Histology track'):
         val = PROV_2_VAL[provenance]
@@ -114,39 +135,13 @@ class ProbeModel:
             self.traj[provenance]['is_best'] = (self.traj[provenance]['is_best']
                                                 [np.where(np.invert(isin))[0]])
 
-    def get_channels(self, provenance):
-        
+    def get_all_channels(self, provenance):
+
         depths = SITES_COORDINATES[:, 1]
-        start = time.time()
-
-        # Need to account for case when no insertions for planned and micro can skip the insertions
-        insertions = []
-        step = 150
-        for i in range(np.ceil(self.traj[provenance]['ins'].shape[0] / step).astype(np.int)):
-            insertions += self.one.alyx.rest(
-                'insertions', 'list', django=f"id__in,{list(self.traj[provenance]['ins'][i * step:(i + 1) * step])}")
-
-        ins_id = np.ravel([np.where(ins['id'] == self.traj[provenance]['ins'])
-                           for ins in insertions])
-
-        end = time.time()
-        print(end-start)
-
         start1 = time.time()
-        for iT, (traj, ins) in enumerate(zip(self.traj[provenance]['traj'][ins_id], insertions)):
+        for iT, traj in enumerate(self.traj[provenance]['traj']):
             try:
-                xyz_picks = np.array(ins['json']['xyz_picks']) / 1e6
-                if traj['provenance'] == 'Histology track':
-                    xyz_picks = xyz_picks[np.argsort(xyz_picks[:, 2]), :]
-                    xyz_channels = histology.interpolate_along_track(xyz_picks, (depths + TIP_SIZE_UM) / 1e6)
-                else:
-                    align_key = ins['json']['extended_qc']['alignment_stored']
-                    feature = traj['json'][align_key][0]
-                    track = traj['json'][align_key][1]
-                    ephysalign = EphysAlignment(xyz_picks, depths, track_prev=track,
-                                                feature_prev=feature,
-                                                brain_atlas=self.ba, speedy=True)
-                    xyz_channels = ephysalign.get_channel_locations(feature, track)
+                xyz_channels = xyz_channels = self.get_channels(traj, depths)
 
                 if iT == 0:
                     all_channels = xyz_channels
@@ -158,23 +153,80 @@ class ProbeModel:
 
         end = time.time()
         print(end-start1)
+        iii = self.ba.bc.xyz2i(all_channels)
+        keep_idx = np.setdiff1d(np.arange(all_channels.shape[0]), np.unique(np.where(iii < 0)[0]))
+        return all_channels[keep_idx, :]
 
-        return all_channels
+    def compute_coverage(self, all_channels):
 
-from scipy.signal import fftconvolve
-cvol = np.zeros(ba.image.shape, dtype=np.float)
-val, counts = np.unique(ba._lookup(all_channels), return_counts=True)
-cvol[np.unravel_index(val, cvol.shape)] = counts
-#
-from ibllib.dsp import fcn_cosine
-DIST_FCN = np.array([100, 150]) / 1e6
-dx = ba.bc.dx
-template = np.arange(- np.max(DIST_FCN) - dx, np.max(DIST_FCN) + 2 * dx, dx) ** 2
-kernel = sum(np.meshgrid(template, template, template))
-kernel = 1 - fcn_cosine(DIST_FCN)(np.sqrt(kernel))
-#
-cvol = fftconvolve(cvol, kernel)
-#
+        start = time.time()
+        cvol = np.zeros(self.ba.image.shape, dtype=np.float)
+        val, counts = np.unique(self.ba._lookup(all_channels), return_counts=True)
+        cvol[np.unravel_index(val, cvol.shape)] = counts
+
+        DIST_FCN = np.array([100, 150]) / 1e6
+        dx = self.ba.bc.dx
+        template = np.arange(- np.max(DIST_FCN) - dx, np.max(DIST_FCN) + 2 * dx, dx) ** 2
+        kernel = sum(np.meshgrid(template, template, template))
+        kernel = 1 - fcn_cosine(DIST_FCN)(np.sqrt(kernel))
+        #
+        cvol = fftconvolve(cvol, kernel)
+        end = time.time()
+        print(end-start)
+
+        return cvol
+
+    def add_coverage(self, x, y, depth=4000, theta=10, phi=180):
+        traj = {'x': x,
+                'y': y,
+                'z': 0.0,
+                'phi': phi,
+                'theta': theta,
+                'depth': depth,
+                'provenance': 'Planned'}
+
+        cov = histology.coverage([traj], self.ba)
+        return cov, traj
+
+
+    def get_channels(self, traj, depths = None):
+        if depths is None:
+            depths = SITES_COORDINATES[:, 1]
+        if traj['provenance'] == 'Planned' or traj['provenance'] == 'Micro-manipulator':
+            ins = atlas.Insertion.from_dict(traj)
+            # Deepest coordinate first
+            xyz = np.c_[ins.tip, ins.entry].T
+            xyz_channels = histology.interpolate_along_track(xyz, (depths +
+                                                                   TIP_SIZE_UM) / 1e6)
+        else:
+            ins_idx = np.where(traj['probe_insertion'] == self.ins['ids'])[0][0]
+            xyz = np.array(self.ins['insertions'][ins_idx]['json']['xyz_picks']) / 1e6
+            if traj['provenance'] == 'Histology track':
+                xyz = xyz[np.argsort(xyz[:, 2]), :]
+                xyz_channels = histology.interpolate_along_track(xyz, (depths +
+                                                                       TIP_SIZE_UM) / 1e6)
+            else:
+                align_key = (self.ins['insertions'][ins_idx]['json']['extended_qc']
+                ['alignment_stored'])
+                feature = traj['json'][align_key][0]
+                track = traj['json'][align_key][1]
+                ephysalign = EphysAlignment(xyz, depths, track_prev=track,
+                                            feature_prev=feature,
+                                            brain_atlas=self.ba, speedy=True)
+                xyz_channels = ephysalign.get_channel_locations(feature, track)
+
+        return xyz_channels
+
+    def get_brain_regions(self, traj):
+        depths = SITES_COORDINATES[:, 1]
+        xyz_channels = self.get_channels(traj, depths)
+        (region, region_label,
+         region_colour, _) = EphysAlignment.get_histology_regions(xyz_channels, depths,
+                                                                  brain_atlas=self.ba)
+        return region, region_label, region_colour
+
+
+
 #
 # cvol[np.unravel_index(ba._lookup(all_channels), cvol.shape)] = 1
 
@@ -188,4 +240,51 @@ cvol = fftconvolve(cvol, kernel)
 # plt.add(actor)
 # plt.show()
 
-
+#from vedo import *
+#from ibllib.atlas import AllenAtlas
+#ba = AllenAtlas()
+#import numpy as np
+#import vtk
+#la = ba.label
+#la[la != 0] = 1
+#vol2 = Volume(la).alpha([0, 0, 0.5])
+#vol = Volume(ba.image).alpha([0, 0, 0.8]).c('bone').pickable(False)
+##vol = Volume(ba.image).c('bone').pickable(False)
+#
+#plane = vtk.vtkPlane()
+#clipping_planes = vtk.vtkPlaneCollection()
+#clipping_planes.AddItem(plane)
+#vol2.mapper().SetClippingPlanes(clipping_planes)
+##
+#plane.SetOrigin(vol.center() + np.array([0, -100, 0]))
+#plane.SetNormal(0.5, 0.866, 0)
+##
+#sl = vol.slicePlane(origin=vol.center() + np.array([0, 100, 50]), normal=(0.5, 0.866, 0))
+#s2 = vol.slicePlane(origin=vol.center(), normal=(0.5, 0.866, 0))
+#s3 = vol.slicePlane(origin=vol.center() + np.array([0, -100, -50]), normal=(0.5, 0.866, 0)) # this is 30 degree in coronal
+##s3 = vol.slicePlane(origin=vol.center(), normal=(0.5, 0, 0.866)) # this is 30 degree in coronal
+#
+#sl.cmap('Purples_r').lighting('off').addScalarBar(title='Slice', c='w')
+#s2.cmap('Blues_r').lighting('off')
+#s3.cmap('Greens_r').lighting('off')
+#plt = show(vol, vol2, sl, s2, s3, __doc__, axes=9, bg='k', bg2='bb', interactive=False)
+#
+#interactive()
+#
+#from vedo.utils import versor
+#
+#
+#from vedo import *
+#
+#vol = Volume(dataurl+'embryo.slc').alpha([0,0,0.5]).c('k')
+#
+#slices = []
+#for i in range(4):
+#    sl = vol.slicePlane(origin=[150,150,i*50+50], normal=(-1,0,1))
+#    slices.append(sl)
+#
+#amap = [0, 1, 1, 1, 1]  # hide low value points giving them alpha 0
+#mslices = merge(slices) # merge all slices into a single Mesh
+#mslices.cmap('hot_r', alpha=amap).lighting('off').addScalarBar3D()
+#
+#show(vol, mslices, __doc__, axes=1)
