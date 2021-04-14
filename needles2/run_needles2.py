@@ -377,10 +377,16 @@ class CoverageView(QtWidgets.QWidget):
         self.pplus_pushButton.clicked.connect(lambda: self.ctrl.increase_value('p'))
 
         self.xminus_pushButton.clicked.connect(lambda: self.ctrl.decrease_value('x'))
-        self.yminus_pushButton.clicked.connect(lambda: self.ctrl.decrease_value('d'))
-        self.dminus_pushButton.clicked.connect(lambda: self.ctrl.decrease_value('y'))
+        self.yminus_pushButton.clicked.connect(lambda: self.ctrl.decrease_value('y'))
+        self.dminus_pushButton.clicked.connect(lambda: self.ctrl.decrease_value('d'))
         self.tminus_pushButton.clicked.connect(lambda: self.ctrl.decrease_value('t'))
         self.pminus_pushButton.clicked.connect(lambda: self.ctrl.decrease_value('p'))
+
+        self.x_label.returnPressed.connect(self.set_values)
+        self.y_label.returnPressed.connect(self.set_values)
+        self.d_label.returnPressed.connect(self.set_values)
+        self.t_label.returnPressed.connect(self.set_values)
+        self.p_label.returnPressed.connect(self.set_values)
 
         self.update_labels()
 
@@ -403,6 +409,14 @@ class CoverageView(QtWidgets.QWidget):
     def update_view(self):
         self.update_labels()
         self.qmain.add_extra_coverage(self.ctrl.model.get_traj())
+
+    def set_values(self):
+        self.ctrl.set_value(int(self.x_label.text()), 'x')
+        self.ctrl.set_value(int(self.y_label.text()), 'y')
+        self.ctrl.set_value(int(self.d_label.text()), 'd')
+        self.ctrl.set_value(int(self.t_label.text()), 't')
+        self.ctrl.set_value(int(self.p_label.text()), 'p')
+        self.update_view()
 
 
 class CoverageController:
@@ -436,11 +450,11 @@ class CoverageController:
 class CoverageModel:
     def __init__(self):
         self.data = {'x': {}, 'y': {}, 'd': {}, 't': {}, 'p': {}}
-        self.x_steps = [10, 50]
-        self.y_steps = [10, 50]
-        self.d_steps = [50, 100]
-        self.t_steps = [1, 5]
-        self.p_steps = [1, 5]
+        self.x_steps = [100, 500, 50, 10]
+        self.y_steps = [100, 500, 50, 10]
+        self.d_steps = [100, 500, 50, 10]
+        self.t_steps = [5, 1, 10]
+        self.p_steps = [5, 1, 10]
         self.x_minmax = [None, None]
         self.y_minmax = [None, None]
         self.d_minmax = [None, None]
@@ -768,7 +782,6 @@ class SliceController(BaseController):
                                       mapping=self.qmain.get_mapping(),
                                       **layer.slice_kwargs)
             self.set_image(layer.image_item, _slice, dw, dh, wl[0], hl[0], **layer.pg_kwargs)
-
 
 
 @dataclass
