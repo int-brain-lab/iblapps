@@ -141,7 +141,7 @@ class ProbeModel:
         start1 = time.time()
         for iT, traj in enumerate(self.traj[provenance]['traj']):
             try:
-                xyz_channels = xyz_channels = self.get_channels(traj, depths)
+                xyz_channels = self.get_channels(traj, depths)
 
                 if iT == 0:
                     all_channels = xyz_channels
@@ -162,7 +162,8 @@ class ProbeModel:
         start = time.time()
         cvol = np.zeros(self.ba.image.shape, dtype=np.float)
         val, counts = np.unique(self.ba._lookup(all_channels), return_counts=True)
-        cvol[np.unravel_index(val, cvol.shape)] = counts
+        #cvol[np.unravel_index(val, cvol.shape)] = counts
+        cvol[np.unravel_index(val, cvol.shape)] = 1
 
         DIST_FCN = np.array([100, 150]) / 1e6
         dx = self.ba.bc.dx
@@ -176,17 +177,11 @@ class ProbeModel:
 
         return cvol
 
-    def add_coverage(self, x, y, depth=4000, theta=10, phi=180):
-        traj = {'x': x,
-                'y': y,
-                'z': 0.0,
-                'phi': phi,
-                'theta': theta,
-                'depth': depth,
-                'provenance': 'Planned'}
+    def add_coverage(self, traj):
 
-        cov = histology.coverage([traj], self.ba)
-        return cov, traj
+        cov, xyz = histology.coverage([traj], self.ba)
+
+        return cov, xyz
 
 
     def get_channels(self, traj, depths = None):
@@ -260,15 +255,25 @@ class ProbeModel:
 #plane.SetNormal(0.5, 0.866, 0)
 ##
 #sl = vol.slicePlane(origin=vol.center() + np.array([0, 100, 50]), normal=(0.5, 0.866, 0))
-#s2 = vol.slicePlane(origin=vol.center(), normal=(0.5, 0.866, 0))
-#s3 = vol.slicePlane(origin=vol.center() + np.array([0, -100, -50]), normal=(0.5, 0.866, 0)) # this is 30 degree in coronal
+#s2 = vol.slicePlane(origin=vol.center(), normal=(0.5, 0, 0.866))
+#s3 = vol.slicePlane(origin=vol.center() + np.array([0, -100, -50]), normal=(1, 0, 0)) # this is 30 degree in coronal
 ##s3 = vol.slicePlane(origin=vol.center(), normal=(0.5, 0, 0.866)) # this is 30 degree in coronal
 #
 #sl.cmap('Purples_r').lighting('off').addScalarBar(title='Slice', c='w')
 #s2.cmap('Blues_r').lighting('off')
 #s3.cmap('Greens_r').lighting('off')
-#plt = show(vol, vol2, sl, s2, s3, __doc__, axes=9, bg='k', bg2='bb', interactive=False)
+#def func(evt):
+#    if not evt.actor:
+#        return
+#    pid = evt.actor.closestPoint(evt.picked3d, returnPointId=True)
+#    txt = f"Probing:\n{precision(evt.actor.picked3d, 3)}\nvalue = {pid}"
+#    sph = Sphere(evt.actor.points(pid), c='orange7').pickable(False)
+#    vig = sph.vignette(txt, s=7, offset=(-150,15), font=2).followCamera()
+#    plt.remove(plt.actors[-2:]).add([sph, vig]) #remove old 2 & add the new 2
 #
+#plt = show(vol, sl, s2, s3, __doc__, axes=9, bg='k', bg2='bb', interactive=False)
+#plt.actors += [None, None]  # 2 placeholders for [sphere, vignette]
+#plt.addCallback('as my mouse moves please call', func)
 #interactive()
 #
 #from vedo.utils import versor
