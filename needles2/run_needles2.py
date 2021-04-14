@@ -35,37 +35,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         super(MainWindow, self).__init__()
-
-        self.resize(1600, 800)
-        self.setWindowTitle('Needles2')
-        self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
-        main_widget = QtWidgets.QWidget()
-        self.setCentralWidget(main_widget)
+        uic.loadUi(Path(__file__).parent.joinpath('mainUI.ui'), self)
 
         self.atlas = AllenAtlas(25)
-        main_layout = QtWidgets.QGridLayout()
-        self.frame = Qt.QFrame()
-        self.vl = Qt.QVBoxLayout()
-        #self.vtkWidget = QVTKRenderWindowInteractor(self.frame)
-        #self.vl.addWidget(self.vtkWidget)
-        #self.plt = vedo.Plotter(qtWidget=self.vtkWidget, N=1)
-        #self.la = NeedlesViewer()
-        #self.la.initialize(self.plt)
-        ## Set it invisible
-        #self.la.view.volume.actor.alphaUnit(6)
 
-        # Make shell volume this will also have the probes
-        #self.la1 = NeedlesViewer()
-        #self.la1.initialize(self.plt)
-        #self.la1.update_alpha_unit(value=6)
-        ## Switch the slices off
-        #self.la1.toggle_slices_visibility()
-#
-        #self.la2 = NeedlesViewer()
-        #self.la2.initialize(self.plt)
-        #self.la2.reveal_regions(0)
-        #self.frame.setLayout(self.vl)
-
+        # Configure the Menu bar
         menu_bar = QtWidgets.QMenuBar(self)
         menu_bar.setNativeMenuBar(False)
         self.setMenuBar(menu_bar)
@@ -76,14 +50,15 @@ class MainWindow(QtWidgets.QMainWindow):
         # Only allow one to plot to be selected at any one time
         self.map_group.setExclusive(True)
         self.add_menu_bar(self.map_menu, self.map_group, list(self.atlas.regions.mappings.keys()),
-                          callback=self.change_mapping)
-#
+                          callback=self.change_mapping, default='Allen')
+
         # Add menu bar for base image
         self.img_menu = menu_bar.addMenu('Images')
         self.img_group = QtGui.QActionGroup(self.img_menu)
         self.img_group.setExclusive(True)
         images = ['Image', 'Annotation']
-        self.add_menu_bar(self.img_menu, self.img_group, images, callback=self.change_image)
+        self.add_menu_bar(self.img_menu, self.img_group, images, callback=self.change_image,
+                          default='Image')
 
         # Add menu bar for coverage
         self.coverage_menu = menu_bar.addMenu('Coverage')
@@ -102,41 +77,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self.add_menu_bar(self.insertion_menu, self.insertion_group, insertions,
                           callback=self.add_insertions)
 
-        self.coronal = SliceView(self, self.atlas, slice='coronal', waxis=0, haxis=2, daxis=1)
-        self.sagittal = SliceView(self, self.atlas, slice='sagittal', waxis=1, haxis=2, daxis=0)
-        self.horizontal = SliceView(self, self.atlas, slice='horizontal', waxis=1, haxis=0,
-                                    daxis=2)
+
+        self.coronal = SliceView(self, self.fig_coronal, self.atlas, slice='coronal',
+                                 waxis=0, haxis=2, daxis=1)
+        self.sagittal = SliceView(self, self.fig_sagittal, self.atlas, slice='sagittal',
+                                  waxis=1, haxis=2, daxis=0)
+        self.horizontal = SliceView(self, self.fig_horizontal, self.atlas, slice='horizontal',
+                                    waxis=1, haxis=0, daxis=2)
         self.horizontal.fig_slice.getViewBox().invertY(True)
 
-        self.top = TopView(self, self.atlas)
-        self.probe = ProbeView(self)
+        self.top = TopView(self, self.fig_top, self.atlas)
+        self.probe = ProbeView(self, self.fig_probe)
         self.coverage = CoverageView(self)
         self.probe_model = ProbeModel(one=one, ba=self.atlas)
         self.region = RegionView(self, self.atlas)
         self.change_mapping()
 
+        layout = QtWidgets.QGridLayout()
+        layout.addWidget(self.coverage)
+        self.coverage_placeholder.setLayout(layout)
 
+        layout = QtWidgets.QGridLayout()
+        layout.addWidget(self.region)
+        self.region_placeholder.setLayout(layout)
 
         self.target = None
-        offset = self.atlas.bc.lim(0)[0]
-        #self.la.update_slicer(self.la.nx_slicer, self.top.line_sagittal.value()*1e6 + offset*1e6)
-
-
-        main_layout.addWidget(self.region, 0, 0, 3, 1)
-        main_layout.addWidget(self.coverage, 3, 0, 3, 1)
-        main_layout.addWidget(self.coronal, 0, 1, 2, 1)
-        main_layout.addWidget(self.sagittal, 2, 1, 2, 1)
-        main_layout.addWidget(self.horizontal, 4, 1, 2, 1)
-        main_layout.addWidget(self.top, 0, 2, 3, 1)
-        main_layout.addWidget(self.probe, 0, 3, 6, 1)
-        main_widget.setLayout(main_layout)
-
-
-        # initialise
-        self.coronal.ctrl.set_slice()
-        self.sagittal.ctrl.set_slice()
-        #self.set_slice(self.coronal)
-        #self.set_slice(self.sagittal)
 
     def change_mapping(self):
         data = np.unique(self.atlas.regions.name[self.atlas._get_mapping(
@@ -221,8 +186,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def add_menu_bar(self, menu, group, items, callback=None, default=None):
-        if not default:
-            default = items[0]
         for item in items:
             if item == default:
                 _item = QtGui.QAction(item, self, checkable=True, checked=True)
@@ -511,11 +474,10 @@ class CoverageModel:
         return traj
 
 
-class ProbeView(QtWidgets.QWidget):
-    def __init__(self, qmain: MainWindow):
+class ProbeView:
+    def __init__(self, qmain: MainWindow, fig: pg.PlotWidget):
         self.qmain = qmain
-        super(ProbeView, self).__init__()
-        uic.loadUi(Path(__file__).parent.joinpath('probeUI.ui'), self)
+        self.fig_probe = fig
         self.fig_probe.setYRange(min=0, max=4000)
 
     def plot_region_along_probe(self, region, region_label, region_color):
@@ -536,35 +498,11 @@ class ProbeView(QtWidgets.QWidget):
         axis = self.fig_probe.getAxis('bottom')
         axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
 
-    #def keyPressEvent(self, event):
-    #    print(self.qmain.target)
-    #    if event.key() == QtCore.Qt.Key_X:
-    #        self.qmain.target = 'x'
-    #    elif event.key() == QtCore.Qt.Key_Y:
-    #        self.qmain.target = 'y'
-    #    elif event.key() == QtCore.Qt.Key_Z:
-    #        self.qmain.target = 'z'
-    #    elif event.key() == QtCore.Qt.Key_T:
-    #        self.qmain.target = 't'
-    #    elif event.key() == QtCore.Qt.Key_P:
-    #        self.qmain.target = 'p'
-#
-    #    # if shift pressed iterate by small amount
-#
-    #    if (event.key() == QtCore.Qt.Key_Up) and self.qmain.target:
-    #        self.qmain.ins_pos[self.qmain.target]['value'] += self.qmain.ins_pos[self.qmain.target]['step']
-    #        self.qmain.add_extra_coverage()
-    #    if (event.key() == QtCore.Qt.Key_Down) and self.qmain.target:
-    #        self.qmain.ins_pos[self.qmain.target]['value'] -= self.qmain.ins_pos[self.qmain.target]['step']
-    #        self.qmain.add_extra_coverage()
-
-
-class TopView(QtWidgets.QWidget):
-    def __init__(self, qmain: MainWindow, atlas: AllenAtlas, **kwargs):
+class TopView:
+    def __init__(self, qmain: MainWindow, fig: pg.PlotWidget, atlas: AllenAtlas, **kwargs):
         self.qmain = qmain
         self.atlas = atlas
-        super(TopView, self).__init__()
-        uic.loadUi(Path(__file__).parent.joinpath('topUI.ui'), self)
+        self.fig_top = fig
         self.ctrl = TopController(self, qmain, atlas, **kwargs)
 
         self.fig_top.setAspectLocked(True)
@@ -608,17 +546,17 @@ class TopView(QtWidgets.QWidget):
         point.setPen('k')
 
 
-class SliceView(QtWidgets.QWidget):
+class SliceView:
     """
     Window containing a volume slice
     """
-    def __init__(self, qmain: MainWindow, atlas: AllenAtlas, slice, waxis, haxis, daxis):
-        super(SliceView, self).__init__()
-        uic.loadUi(Path(__file__).parent.joinpath('sliceUI.ui'), self)
+    def __init__(self, qmain: MainWindow, fig: pg.PlotWidget, atlas: AllenAtlas,
+                 slice, waxis, haxis, daxis):
         self.qmain = qmain
         self.atlas = atlas
         self.slice = slice
         self.slice_coord = 0
+        self.fig_slice = fig
 
         self.ctrl = SliceController(self, qmain, atlas, waxis, haxis, daxis)
         self.fig_slice.setAspectLocked(True)
@@ -857,3 +795,51 @@ def view(title=None):
     return av
 
 
+
+#### WIPPPP ##############
+    #def keyPressEvent(self, event):
+    #    print(self.qmain.target)
+    #    if event.key() == QtCore.Qt.Key_X:
+    #        self.qmain.target = 'x'
+    #    elif event.key() == QtCore.Qt.Key_Y:
+    #        self.qmain.target = 'y'
+    #    elif event.key() == QtCore.Qt.Key_Z:
+    #        self.qmain.target = 'z'
+    #    elif event.key() == QtCore.Qt.Key_T:
+    #        self.qmain.target = 't'
+    #    elif event.key() == QtCore.Qt.Key_P:
+    #        self.qmain.target = 'p'
+#
+    #    # if shift pressed iterate by small amount
+#
+    #    if (event.key() == QtCore.Qt.Key_Up) and self.qmain.target:
+    #        self.qmain.ins_pos[self.qmain.target]['value'] += self.qmain.ins_pos[self.qmain.target]['step']
+    #        self.qmain.add_extra_coverage()
+    #    if (event.key() == QtCore.Qt.Key_Down) and self.qmain.target:
+    #        self.qmain.ins_pos[self.qmain.target]['value'] -= self.qmain.ins_pos[self.qmain.target]['step']
+    #        self.qmain.add_extra_coverage()
+
+
+# self.frame = Qt.QFrame()
+# self.vl = Qt.QVBoxLayout()
+
+
+# self.vtkWidget = QVTKRenderWindowInteractor(self.frame)
+# self.vl.addWidget(self.vtkWidget)
+# self.plt = vedo.Plotter(qtWidget=self.vtkWidget, N=1)
+# self.la = NeedlesViewer()
+# self.la.initialize(self.plt)
+## Set it invisible
+# self.la.view.volume.actor.alphaUnit(6)
+
+# Make shell volume this will also have the probes
+# self.la1 = NeedlesViewer()
+# self.la1.initialize(self.plt)
+# self.la1.update_alpha_unit(value=6)
+## Switch the slices off
+# self.la1.toggle_slices_visibility()
+#
+# self.la2 = NeedlesViewer()
+# self.la2.initialize(self.plt)
+# self.la2.reveal_regions(0)
+# self.frame.setLayout(self.vl)
