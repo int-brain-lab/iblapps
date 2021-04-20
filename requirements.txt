@@ -1,3 +1,4 @@
+easyqc
 ibllib
 pyqtgraph
 simpleITK
