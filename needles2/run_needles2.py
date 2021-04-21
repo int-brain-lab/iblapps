@@ -17,6 +17,9 @@ one = ONE()
 # from needles2.needles_viewer import NeedlesViewer
 from needles2.probe_model import ProbeModel
 
+pg.setConfigOption('background', 'w')
+pg.setConfigOption('foreground', 'k')
+
 class MainWindow(QtWidgets.QMainWindow):
 
     @staticmethod
@@ -33,7 +36,7 @@ class MainWindow(QtWidgets.QMainWindow):
             av.setWindowTitle(title)
         return av
 
-    def __init__(self):
+    def __init__(self, lazy=False):
         super(MainWindow, self).__init__()
         uic.loadUi(Path(__file__).parent.joinpath('mainUI.ui'), self)
 
@@ -64,7 +67,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.coverage_menu = menu_bar.addMenu('Coverage')
         self.coverage_group = QtGui.QActionGroup(self.coverage_menu)
         self.coverage_group.setExclusive(True)
-        self.add_menu_bar(self.coverage_menu, self.coverage_group, ['Coverage'],
+        coverages = ['Coverage cosine', 'Coverage grid 500', 'Coverage grid 250',
+                     'Coverage grid 100']
+        self.add_menu_bar(self.coverage_menu, self.coverage_group, coverages,
                           callback=self.add_coverage)
 
         # Add menubar for insertions
@@ -89,7 +94,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top = TopView(self, self.fig_top, self.atlas)
         self.probe = ProbeView(self, self.fig_probe)
         self.coverage = CoverageView(self)
-        self.probe_model = ProbeModel(one=one, ba=self.atlas)
+        self.probe_model = ProbeModel(one=one, ba=self.atlas, lazy=lazy)
         self.region = RegionView(self, self.atlas)
         self.change_mapping()
 
@@ -120,25 +125,35 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def add_coverage(self):
         provenance = self.insertion_group.checkedAction().text()
+        coverage_choice = self.coverage_group.checkedAction().text()
+        if not self.probe_model.initialised:
+            self.probe_model.initialise()
+
         if '(best)' in provenance:
             provenance = provenance[:-7]
             self.probe_model.compute_best_for_provenance(provenance)
             self.provenance = 'Best'
             all_channels = self.probe_model.get_all_channels(self.provenance)
-            cov = self.probe_model.compute_coverage(all_channels)
         else:
             self.provenance = provenance
             all_channels = self.probe_model.get_all_channels(self.provenance)
-            cov = self.probe_model.compute_coverage(all_channels)
 
-        self.coronal.ctrl.add_volume_layer(cov)
-        self.sagittal.ctrl.add_volume_layer(cov)
-        self.horizontal.ctrl.add_volume_layer(cov)
+        if 'cosine' in coverage_choice:
+            cov = self.probe_model.compute_coverage(all_channels)
+            bc = None
+        else:
+            bin_size = int(coverage_choice[-3:])
+            cov, bc = self.probe_model.grid_coverage(all_channels, bin_size)
+
+        self.coronal.ctrl.add_volume_layer(cov, bc=bc)
+        self.sagittal.ctrl.add_volume_layer(cov, bc=bc)
+        self.horizontal.ctrl.add_volume_layer(cov, bc=bc)
+
         self._refresh()
 
-    def add_extra_coverage(self, traj):
+    def add_extra_coverage(self, traj, ins=None):
 
-        cov, xyz_cnt = self.probe_model.add_coverage(traj)
+        cov, xyz_cnt, per = self.probe_model.add_coverage(traj)
         self.coronal.ctrl.add_volume_layer(cov, name='coverage_extra',
                                            cmap='inferno')
         self.sagittal.ctrl.add_volume_layer(cov, name='coverage_extra',
@@ -151,8 +166,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.cov_scatter.setData(x=[traj['x'] / 1e6], y=[traj['y'] / 1e6], pen='b', brush='b')
 
         (region, region_lab, region_col) = self.probe_model.get_brain_regions(
-            traj)
+            traj, ins=ins, mapping=self.get_mapping())
         self.probe.plot_region_along_probe(region, region_lab, region_col)
+        self.per_label.setText(f"{per} %")
         self._refresh()
 
     def add_trajectory(self, x, y):
@@ -161,8 +177,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.coverage.ctrl.set_value(y, 'y')
         self.coverage.update_view()
 
+    def add_insertion_by_id(self, ins_id):
+        traj, ins = self.probe_model.insertion_by_id(ins_id)
+        self.add_extra_coverage(traj, ins)
+
     def add_insertions(self):
         provenance = self.insertion_group.checkedAction().text()
+        if not self.probe_model.initialised:
+            self.probe_model.initialise()
+
         if '(best)' in provenance:
             provenance = provenance[:-7]
             self.probe_model.compute_best_for_provenance(provenance)
@@ -181,7 +204,7 @@ class MainWindow(QtWidgets.QMainWindow):
                           point[0].pos().x())[0][0]
         self.top.highlight_selected_point(point[0])
         (region, region_lab, region_col) = self.probe_model.get_brain_regions(
-            self.probe_model.traj[self.provenance]['traj'][idx])
+            self.probe_model.traj[self.provenance]['traj'][idx], mapping=self.get_mapping())
         self.probe.plot_region_along_probe(region, region_lab, region_col)
 
 
@@ -266,7 +289,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.horizontal.line_y.setValue(value)
             self.coronal.line_x.setValue(value)
             if move_top:
-                self.top.line_y.setValue(value)
+                self.top.line_x.setValue(value)
             self._refresh_sagittal()
 
         if slice == 'coronal' and orientation == 'y':
@@ -280,7 +303,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.horizontal.line_x.setValue(value)
             self.sagittal.line_x.setValue(value)
             if move_top:
-                self.top.line_x.setValue(value)
+                self.top.line_y.setValue(value)
             self._refresh_coronal()
 
         if slice == 'sagittal' and orientation == 'y':
@@ -520,6 +543,7 @@ class TopView:
         self.ctrl = TopController(self, qmain, atlas, **kwargs)
 
         self.fig_top.setAspectLocked(True)
+        #self.fig_top.getViewBox().invertY(True)
         self.ctrl.add_image_layer(name='top')
 
         line_kwargs = {'movable': True, 'pen': pg.mkPen((0, 255, 0), width=1)}
@@ -681,9 +705,9 @@ class BaseController:
         lut = np.insert(lut, 0, [0, 0, 0, 0], axis=0)
         self.add_image_layer(name=name, pg_kwargs={'lut': lut, 'opacity': 1}, slice_kwargs={
             'volume': 'value', 'region_values': np.zeros_like(self.atlas.regions.id),
-            'mode': 'clip'})
+            'mode': 'clip', 'bc': None})
 
-    def add_volume_layer(self, volume, name='coverage', cmap='viridis'):
+    def add_volume_layer(self, volume, name='coverage', cmap='viridis', bc=None):
         # If there is a layer with the same name remove it
         self.remove_image_layer(name)
         colormap = matplotlib.cm.get_cmap(cmap)
@@ -694,14 +718,14 @@ class BaseController:
         levels = (0, np.nanmax(volume))
         self.add_image_layer(name=name, pg_kwargs={'lut': lut, 'opacity': 0.8, 'levels': levels},
                              slice_kwargs={'volume': 'volume', 'region_values': volume,
-                                           'mode': 'clip'})
+                                           'mode': 'clip', 'bc': bc})
 
     def change_base_layer(self, image='Image'):
         base_layer = self.get_image_layer(name='base')
         if image == 'Image':
-            base_layer.slice_kwargs = {'volume': 'image', 'mode': 'clip'}
+            base_layer.slice_kwargs = {'volume': 'image', 'mode': 'clip', 'bc': None}
         elif image == 'Annotation':
-            base_layer.slice_kwargs = {'volume': 'annotation', 'mode': 'clip'}
+            base_layer.slice_kwargs = {'volume': 'annotation', 'mode': 'clip', 'bc': None}
 
     def remove_image_layer(self, name):
         im_idx = np.where([im.name == name for im in self.image_layers])[0]
@@ -732,6 +756,12 @@ class TopController(BaseController):
         dw, dh = (self.atlas.bc.dxyz[0], self.atlas.bc.dxyz[1])
         wl, hl = (self.atlas.bc.xlim, self.atlas.bc.ylim)
         self.set_image(self.image_layers[0].image_item, img, dw, dh, wl[0], hl[0])
+
+        #img = self.atlas.top
+        #img[np.isnan(img)] = np.nanmin(img)  # img has dims ml, ap
+        #dw, dh = (self.atlas.bc.dxyz[1], self.atlas.bc.dxyz[0])
+        #wl, hl = (self.atlas.bc.ylim, self.atlas.bc.xlim)
+        #self.set_image(self.image_layers[0].image_item, img, dw, dh, wl[0], hl[0])
 
 
 class SliceController(BaseController):
@@ -770,18 +800,26 @@ class SliceController(BaseController):
 
     def set_slice(self):
         # construct the transform matrix image 2 ibl coordinates
-        dw = self.atlas.bc.dxyz[self.waxis]
-        dh = self.atlas.bc.dxyz[self.haxis]
-        wl = self.atlas.bc.lim(self.waxis) - dw / 2
-        hl = self.atlas.bc.lim(self.haxis) - dh / 2
+        #dw = self.atlas.bc.dxyz[self.waxis]
+        #dh = self.atlas.bc.dxyz[self.haxis]
+        #wl = self.atlas.bc.lim(self.waxis) - dw / 2
+        #hl = self.atlas.bc.lim(self.haxis) - dh / 2
         # the ImageLayer object carries slice kwargs and pyqtgraph ImageSet kwargs
         # reversed order so the self.im is set with the base layer
         #
         for layer in reversed(self.image_layers):
+            bc = layer.slice_kwargs.get('bc', None) or self.atlas.bc
+            dw = bc.dxyz[self.waxis]
+            dh = bc.dxyz[self.haxis]
+            wl = bc.lim(self.waxis) - dw / 2
+            hl = bc.lim(self.haxis) - dh / 2
+
             _slice = self.atlas.slice(self.view.slice_coord, axis=self.daxis,
                                       mapping=self.qmain.get_mapping(),
                                       **layer.slice_kwargs)
             self.set_image(layer.image_item, _slice, dw, dh, wl[0], hl[0], **layer.pg_kwargs)
+            # needs to have it's own bc
+            # bc is on the image levell
 
 
 @dataclass
@@ -796,14 +834,15 @@ class ImageLayer:
     name: str = field(default='base')
     image_item: pg.ImageItem = field(default_factory=pg.ImageItem)
     pg_kwargs: dict = field(default_factory=lambda: {})
-    slice_kwargs: dict = field(default_factory=lambda: {'volume': 'image', 'mode': 'clip'})
+    slice_kwargs: dict = field(default_factory=lambda: {'volume': 'image', 'mode': 'clip',
+                                                        'bc': None})
 
 
-def view(title=None):
+def view(title=None, lazy=False):
     """
     """
     qt.create_app()
-    av = MainWindow._get_or_create(title=title)
+    av = MainWindow._get_or_create(title=title, lazy=lazy)
     av.show()
     return av
 

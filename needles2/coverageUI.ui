@@ -45,12 +45,12 @@
      <rect>
       <x>10</x>
       <y>10</y>
-      <width>10</width>
+      <width>40</width>
       <height>30</height>
      </rect>
     </property>
     <property name="text">
-     <string>x:</string>
+     <string>ml:</string>
     </property>
    </widget>
    <widget class="QLabel" name="ytitle_label">
@@ -58,12 +58,12 @@
      <rect>
       <x>10</x>
       <y>40</y>
-      <width>10</width>
+      <width>40</width>
       <height>30</height>
      </rect>
     </property>
     <property name="text">
-     <string>y:</string>
+     <string>ap:</string>
     </property>
    </widget>
    <widget class="QLabel" name="dtitle_label">
@@ -318,9 +318,9 @@
    <widget class="QLineEdit" name="x_label">
     <property name="geometry">
      <rect>
-      <x>30</x>
+      <x>50</x>
       <y>15</y>
-      <width>80</width>
+      <width>61</width>
       <height>20</height>
      </rect>
     </property>
@@ -328,9 +328,9 @@
    <widget class="QLineEdit" name="y_label">
     <property name="geometry">
      <rect>
-      <x>30</x>
+      <x>50</x>
       <y>45</y>
-      <width>80</width>
+      <width>61</width>
       <height>20</height>
      </rect>
     </property>

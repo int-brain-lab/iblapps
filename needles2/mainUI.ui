@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1426</width>
+    <width>1521</width>
     <height>908</height>
    </rect>
   </property>
@@ -19,8 +19,8 @@
      <rect>
       <x>350</x>
       <y>10</y>
-      <width>491</width>
-      <height>271</height>
+      <width>500</width>
+      <height>400</height>
      </rect>
     </property>
    </widget>
@@ -48,40 +48,66 @@
     <property name="geometry">
      <rect>
       <x>350</x>
-      <y>300</y>
-      <width>491</width>
-      <height>271</height>
+      <y>450</y>
+      <width>500</width>
+      <height>400</height>
      </rect>
     </property>
    </widget>
    <widget class="PlotWidget" name="fig_horizontal">
     <property name="geometry">
      <rect>
-      <x>350</x>
-      <y>590</y>
-      <width>491</width>
-      <height>271</height>
+      <x>880</x>
+      <y>450</y>
+      <width>500</width>
+      <height>400</height>
      </rect>
     </property>
    </widget>
    <widget class="PlotWidget" name="fig_top">
     <property name="geometry">
      <rect>
-      <x>860</x>
+      <x>880</x>
       <y>10</y>
-      <width>351</width>
-      <height>411</height>
+      <width>500</width>
+      <height>400</height>
      </rect>
     </property>
    </widget>
    <widget class="PlotWidget" name="fig_probe">
     <property name="geometry">
      <rect>
-      <x>1240</x>
+      <x>1400</x>
       <y>10</y>
-      <width>171</width>
+      <width>101</width>
       <height>841</height>
      </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="per_title_label">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>530</y>
+      <width>101</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Coverage increase</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="per_label">
+    <property name="geometry">
+     <rect>
+      <x>130</x>
+      <y>530</y>
+      <width>47</width>
+      <height>13</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
     </property>
    </widget>
   </widget>
@@ -90,7 +116,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1426</width>
+     <width>1521</width>
      <height>21</height>
     </rect>
    </property>

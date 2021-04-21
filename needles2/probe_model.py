@@ -20,7 +20,7 @@ VAL_2_PROV = {v: k for k, v in PROV_2_VAL.items()}
 
 
 class ProbeModel:
-    def __init__(self, one=None, ba=None):
+    def __init__(self, one=None, ba=None, lazy=False):
 
         self.one = one or ONE()
         self.ba = ba or AllenAtlas(25)
@@ -31,10 +31,14 @@ class ProbeModel:
                      'Resolved': {},
                      'Best': {}}
         self.ins = {}
+        self.cvol = None
+        self.cvol_flat = None
+        self.initialised = False
 
-        # for histology get the insertions and compute the trajectory from them. Means only one
-        # long query to alyx and use xyz picks for channels and coverage lower down. More complicated
-        # but will speed things up
+        if not lazy:
+            self.initialise()
+
+    def initialise(self):
         self.get_traj_for_provenance(provenance='Histology track', django=['x__isnull,False'])
         self.get_traj_for_provenance(provenance='Ephys aligned histology track')
         self.get_traj_for_provenance(provenance='Ephys aligned histology track',
@@ -45,6 +49,7 @@ class ProbeModel:
         self.traj['Resolved']['is_best'] = np.arange(len(self.traj['Resolved']['traj']))
 
         self.get_insertions_with_xyz()
+        self.initialised = True
 
     @staticmethod
     def get_traj_info(traj):
@@ -171,20 +176,40 @@ class ProbeModel:
         kernel = sum(np.meshgrid(template, template, template))
         kernel = 1 - fcn_cosine(DIST_FCN)(np.sqrt(kernel))
         #
-        cvol = fftconvolve(cvol, kernel)
+        cvol = fftconvolve(cvol, kernel, mode='same')
         end = time.time()
         print(end-start)
+        self.cvol = cvol
+        self.cvol_flat = cvol.flatten()
 
         return cvol
 
+    def grid_coverage(self, all_channels, spacing):
+        cov, bc = histology.coverage_grid(all_channels, spacing, self.ba)
+
+        return cov, bc
+
     def add_coverage(self, traj):
 
-        cov, xyz = histology.coverage([traj], self.ba)
+        cov, xyz, flatixyz = histology.coverage([traj], self.ba)
+        if self.cvol_flat is not None:
+            idx = np.where(cov.flatten()[flatixyz] > 0.1)[0]
+            idx_sig = np.where(self.cvol_flat[flatixyz][idx] > 0.1)[0].shape[0]
+            per_new_coverage = (1 - idx_sig / idx.shape[0]) * 100
+        else:
+            per_new_coverage = np.nan
 
-        return cov, xyz
+        return cov, xyz, per_new_coverage
 
+    def insertion_by_id(self, ins_id):
+        traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=ins_id)
+        ins = self.one.alyx.rest('insertions', 'list', id=ins_id)[0]
+        val = [PROV_2_VAL[tr['provenance']] for tr in traj]
+        best_traj = traj[np.argmax(val)]
 
-    def get_channels(self, traj, depths = None):
+        return best_traj, ins
+
+    def get_channels(self, traj, ins=None, depths=None):
         if depths is None:
             depths = SITES_COORDINATES[:, 1]
         if traj['provenance'] == 'Planned' or traj['provenance'] == 'Micro-manipulator':
@@ -194,15 +219,21 @@ class ProbeModel:
             xyz_channels = histology.interpolate_along_track(xyz, (depths +
                                                                    TIP_SIZE_UM) / 1e6)
         else:
-            ins_idx = np.where(traj['probe_insertion'] == self.ins['ids'])[0][0]
-            xyz = np.array(self.ins['insertions'][ins_idx]['json']['xyz_picks']) / 1e6
+            if ins is None:
+                ins_idx = np.where(traj['probe_insertion'] == self.ins['ids'])[0][0]
+                xyz = np.array(self.ins['insertions'][ins_idx]['json']['xyz_picks']) / 1e6
+            else:
+                xyz = np.array(ins['json']['xyz_picks']) / 1e6
             if traj['provenance'] == 'Histology track':
                 xyz = xyz[np.argsort(xyz[:, 2]), :]
                 xyz_channels = histology.interpolate_along_track(xyz, (depths +
                                                                        TIP_SIZE_UM) / 1e6)
             else:
-                align_key = (self.ins['insertions'][ins_idx]['json']['extended_qc']
-                ['alignment_stored'])
+                if ins is None:
+                    align_key = (self.ins['insertions'][ins_idx]['json']['extended_qc']
+                                 ['alignment_stored'])
+                else:
+                    align_key = ins['json']['extended_qc']['alignment_stored']
                 feature = traj['json'][align_key][0]
                 track = traj['json'][align_key][1]
                 ephysalign = EphysAlignment(xyz, depths, track_prev=track,
@@ -212,12 +243,13 @@ class ProbeModel:
 
         return xyz_channels
 
-    def get_brain_regions(self, traj):
+    def get_brain_regions(self, traj, ins=None, mapping='Allen'):
         depths = SITES_COORDINATES[:, 1]
-        xyz_channels = self.get_channels(traj, depths)
+        xyz_channels = self.get_channels(traj, ins=ins, depths=depths)
         (region, region_label,
          region_colour, _) = EphysAlignment.get_histology_regions(xyz_channels, depths,
-                                                                  brain_atlas=self.ba)
+                                                                  brain_atlas=self.ba,
+                                                                  mapping=mapping)
         return region, region_label, region_colour
 
 
