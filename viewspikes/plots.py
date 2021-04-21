@@ -26,6 +26,7 @@ def show_psd(data, fs):
     plt.gca()
     plt.gca().set_ylim(-150, -110)
     plt.gca().set_xlim(0, fs / 2)
+    plt.show()
 
 
 def plot_insertion(pid, one=None):
