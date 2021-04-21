@@ -81,6 +81,7 @@ def stream(pid, t0, one=None, cache=True, dsets=None):
         last_chunk=last_chunk)
 
     if cache:
+        samples_folder.mkdir(exist_ok=True, parents=True)
         out_meta = samples_folder.joinpath(sample_file_name)
         shutil.copy(sr.file_meta_data, out_meta)
         with open(out_meta.with_suffix('.bin'), 'wb') as fp:

@@ -18,7 +18,7 @@ sr, dsets = stream(pid, t0=t0, one=one, cache=True)
 ## Example 2: Plot Insertion for a given PID (todo: use Needles 2 for interactive)
 plot_insertion(pid, one=one)
 
-## Example 3: High-pass the data and show the PSD
+## Example 3: Show the PSD
 raw = sr[:, :-1].T
 show_psd(raw, sr.fs)
 
