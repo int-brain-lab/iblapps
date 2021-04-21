@@ -6,6 +6,7 @@ from oneibl.one import ONE
 from ibllib.ephys import neuropixel
 from ibllib.dsp import voltage
 
+from iblapps.needles2 import run_needles2
 from iblapps.viewspikes.data import stream, get_ks2, get_spikes
 from iblapps.viewspikes.plots import plot_insertion, show_psd, overlay_spikes
 
@@ -16,13 +17,14 @@ pid, t0 = ('8413c5c6-b42b-4ec6-b751-881a54413628', 610)
 sr, dsets = stream(pid, t0=t0, one=one, cache=True)
 
 ## Example 2: Plot Insertion for a given PID (todo: use Needles 2 for interactive)
-plot_insertion(pid, one=one)
+av = run_needles2.view(lazy=True)
+av.add_insertion_by_id(pid)
 
 ## Example 3: Show the PSD
 raw = sr[:, :-1].T
 show_psd(raw, sr.fs)
 
-## Example 4: Display the raw / pre-proc and KS2 parts
+## Example 4: Display the raw / pre-proc and KS2 parts -
 h = neuropixel.trace_header()
 sos = scipy.signal.butter(3, 300 / sr.fs / 2, btype='highpass', output='sos')
 butt = scipy.signal.sosfiltfilt(sos, raw)
