@@ -10,9 +10,9 @@ from ibllib.dsp import voltage
 from ibllib.plots import color_cycle
 from brainbox.plot import driftmap
 
-from iblapps.needles2 import run_needles2
-from iblapps.viewspikes.data import stream, get_ks2, get_spikes
-from iblapps.viewspikes.plots import plot_insertion, show_psd, overlay_spikes
+from needles2 import run_needles2
+from viewspikes.data import stream, get_ks2, get_spikes
+from viewspikes.plots import plot_insertion, show_psd, overlay_spikes
 
 one = ONE()
 
