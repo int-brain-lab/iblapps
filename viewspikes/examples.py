@@ -1,10 +1,14 @@
 import numpy as np
 import scipy
+import matplotlib.pyplot as plt
 from easyqc.gui import viewseis
+
 
 from oneibl.one import ONE
 from ibllib.ephys import neuropixel
 from ibllib.dsp import voltage
+from ibllib.plots import color_cycle
+from brainbox.plot import driftmap
 
 from iblapps.needles2 import run_needles2
 from iblapps.viewspikes.data import stream, get_ks2, get_spikes
@@ -22,7 +26,9 @@ av.add_insertion_by_id(pid)
 
 ## Example 3: Show the PSD
 raw = sr[:, :-1].T
-show_psd(raw, sr.fs)
+fig, axes = plt.subplots(1, 2)
+fig.set_size_inches(18, 7)
+show_psd(raw, sr.fs, ax=axes[0])
 
 ## Example 4: Display the raw / pre-proc and KS2 parts -
 h = neuropixel.trace_header()
@@ -41,6 +47,16 @@ overlay_spikes(eqc_butt, spikes, clusters, channels)
 overlay_spikes(eqc_dest, spikes, clusters, channels)
 overlay_spikes(eqc_ks2, spikes, clusters, channels)
 
-# hhh = {k: np.tile(h[k], 3) for k in h}
+# Do the driftmap
+driftmap(spikes['times'], spikes['depths'], t_bin=0.1, d_bin=5, ax=axes[1])
+
+
 # eqc_concat = viewseis(np.r_[butt, destripe, ks2], si=1 / sr.fs, h=hhh, t0=t0, title='concat')
 # overlay_spikes(eqc_concat, spikes, clusters, channels)
+from easyqc import qt
+import datetime
+qtapp = qt.create_app()
+screenshot = qtapp.primaryScreen().grabWindow(eqc_butt.winId())
+
+fn = datetime.datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
+screenshot.save(f'/home/olivier/Pictures/{fn}.png', 'png')
