@@ -130,6 +130,10 @@ be lost once the line is deleted. The reference lines can be hidden/ redisplayed
 Once the alignment is complete, the new locations of the electrode locations can be uploaded to Alyx by pressing the **Upload**
 button or Shift + U. 
 
+Upon upload, a window will pop-up asking to determine 1) the confidence in alignment, 2) the QC (which will label the insertion), 3) the reason for that QC (e.g. Drift and Noise seen in the recording).
+<img width="294" alt="Capture d’écran 2021-03-19 à 11 04 04" src="https://user-images.githubusercontent.com/43007596/112831143-cdaa1480-9093-11eb-8fc2-12fd586e604b.png">
+
+
 ### Additional Features
 #### Session Notes
 If any notes associated with a session have been uploaded to Alyx, these can be displayed as a popup by clicking on

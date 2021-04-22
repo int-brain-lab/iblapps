@@ -208,7 +208,7 @@ class SliceView(QtWidgets.QWidget):
 
 class PgImageController:
     """
-    Abstract class that implements mapping from axes to voxels for any window.
+    Abstract class that implements mapping fr`om axes to voxels for any window.
     Not instantiated directly.
     """
     def __init__(self, win, res=25):

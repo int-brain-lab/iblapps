@@ -1,8 +1,11 @@
 from PyQt5 import QtGui, QtWidgets
 import numpy as np
 import os
-import brainbox as bb
-import alf.io as aio
+import alf.io
+from brainbox.processing import get_units_bunch
+from brainbox.population.decode import xcorr
+from brainbox.singlecell import calculate_peths
+from brainbox.io.spikeglx import extract_waveforms
 from pathlib import Path
 
 
@@ -32,9 +35,9 @@ class DataGroup:
         self.autocorr_bin = 0.001
 
         #For waveform (N.B in ms)
-        self.waveform_window = 2 
+        self.waveform_window = 2
         self.CAR = False
-    
+
     def load(self, folder_path):
         self.folder_path = folder_path
         self.find_files()
@@ -60,17 +63,17 @@ class DataGroup:
         except:
             self.ephys_file_path = []
 
-    
+
     def load_data(self):
-        self.spikes = aio.load_object(self.probe_path, 'spikes')
-        self.trials = aio.load_object(self.alf_path, 'trials')
-        self.clusters = aio.load_object(self.probe_path, 'clusters')
+        self.spikes = alf.io.load_object(self.probe_path, 'spikes')
+        self.trials = alf.io.load_object(self.alf_path, 'trials')
+        self.clusters = alf.io.load_object(self.probe_path, 'clusters')
         self.ids = np.unique(self.spikes.clusters)
         self.metrics = np.array(self.clusters.metrics.ks2_label[self.ids])
         self.colours = np.array(self.clusters.metrics.ks2_label[self.ids])
         self.colours[np.where(self.colours == 'mua')[0]] = QtGui.QColor('#fdc086')
         self.colours[np.where(self.colours == 'good')[0]] = QtGui.QColor('#7fc97f')
-          
+
         file_count = 0
         if os.path.isdir(self.gui_path):
             for i in os.listdir(self.gui_path):
@@ -85,10 +88,10 @@ class DataGroup:
                     file_count += 1
             if file_count != 3:
                 self.compute_depth_and_amplitudes()
-        else: 
+        else:
             os.mkdir(self.gui_path)
             self.compute_depth_and_amplitudes()
-        
+
         self.sort_by_id = np.arange(len(self.ids))
         self.sort_by_nspikes = np.argsort(self.nspikes)
         self.sort_by_nspikes = self.sort_by_nspikes[::-1]
@@ -96,19 +99,19 @@ class DataGroup:
         self.n_trials = len(self.trials['contrastLeft'])
 
     def compute_depth_and_amplitudes(self):
-        units_b = bb.processing.get_units_bunch(self.spikes)
+        units_b = get_units_bunch(self.spikes)
         self.depths = []
         self.amps = []
         self.nspikes = []
         for clu in self.ids:
-            self.depths = np.append(self.depths, np.mean(units_b.depths[str(clu)])) 
+            self.depths = np.append(self.depths, np.mean(units_b.depths[str(clu)]))
             self.amps = np.append(self.amps, np.mean(units_b.amps[str(clu)]) * 1e6)
             self.nspikes = np.append(self.nspikes, len(units_b.amps[str(clu)]))
-            
+
         np.save((self.gui_path + '/cluster_depths'), self.depths)
         np.save((self.gui_path + '/cluster_amps'), self.amps)
         np.save((self.gui_path + '/cluster_nspikes'), self.nspikes)
-    
+
     def sort_data(self, order):
         self.clust_ids = self.ids[order]
         self.clust_amps = self.amps[order]
@@ -116,7 +119,7 @@ class DataGroup:
         self.clust_colours = self.colours[order]
 
         return self.clust_ids, self.clust_amps, self.clust_depths, self.clust_colours
-    
+
     def reset(self):
         self.waveform_list.clear()
 
@@ -129,24 +132,24 @@ class DataGroup:
         else:
             self.spk_intervals = np.arange(0, len(self.clus_idx), 500)
             self.spk_intervals = np.append(self.spk_intervals, len(self.clus_idx))
-            
+
         for idx in range(0, len(self.spk_intervals) - 1):
             item = QtWidgets.QListWidgetItem(str(self.spk_intervals[idx]) + ':' + str(self.spk_intervals[idx+1]))
             self.waveform_list.addItem(item)
-        
+
         self.waveform_list.setCurrentRow(0)
         self.n_waveform = 0
-        
+
     def compute_peth(self, trial_type, clust, trials_id):
-        peths, bin = bb.singlecell.calculate_peths(self.spikes.times, self.spikes.clusters, 
+        peths, bin = calculate_peths(self.spikes.times, self.spikes.clusters,
         [self.clust_ids[clust]], self.trials[trial_type][trials_id], self.t_before, self.t_after)
 
         peth_mean = peths.means[0, :]
         peth_std = peths.stds[0, :] / np.sqrt(len(trials_id))
         t_peth = peths.tscale
-        
+
         return t_peth, peth_mean, peth_std
-    
+
     def compute_rasters(self, trial_type, clust, trials_id):
         x = np.empty(0)
         y = np.empty(0)
@@ -158,30 +161,30 @@ class DataGroup:
             trial_no = (np.ones(len(trial_spk_times_aligned))) * idx * 10
             x = np.append(x, trial_spk_times_aligned)
             y = np.append(y, trial_no)
-        
+
         return x, y, self.n_trials
-    
+
     def compute_autocorr(self, clust):
         self.clus_idx = np.where(self.spikes.clusters == self.clust_ids[clust])[0]
-        x_corr = bb.population.xcorr(self.spikes.times[self.clus_idx], self.spikes.clusters[self.clus_idx], 
-        self.autocorr_bin, self.autocorr_window) 
+        x_corr = xcorr(self.spikes.times[self.clus_idx], self.spikes.clusters[self.clus_idx],
+        self.autocorr_bin, self.autocorr_window)
 
         corr = x_corr[0, 0, :]
 
         return self.t_autocorr, corr
-    
+
     def compute_template(self, clust):
         template = (self.clusters.waveforms[self.clust_ids[clust], :, 0]) * 1e6
         return self.t_template, template
-    
+
     def compute_waveform(self, clust):
         if len(self.ephys_file_path) != 0:
             spk_times = self.spikes.times[self.clus_idx][self.spk_intervals[self.n_waveform]:self.spk_intervals[self.n_waveform + 1]]
             max_ch = self.clusters['channels'][self.clust_ids[clust]]
-            wf = bb.io.extract_waveforms(self.ephys_file_path, spk_times, max_ch, t = self.waveform_window, car = self.CAR)
+            wf = extract_waveforms(self.ephys_file_path, spk_times, max_ch, t = self.waveform_window, car = self.CAR)
             wf_mean = np.mean(wf[:,:,0], axis = 0)
             wf_std = np.std(wf[:,:,0], axis = 0)
-             
+
             return self.t_waveform, wf_mean, wf_std
 
     def compute_timescales(self):
@@ -189,8 +192,8 @@ class DataGroup:
         sr = 30000
         n_template = len(self.clusters.waveforms[self.ids[0], :, 0])
         self.t_template = 1e3 * (np.arange(n_template)) / sr
-        
-        n_waveform = np.int(sr / 1000 * (self.waveform_window))
+
+        n_waveform = int(sr / 1000 * (self.waveform_window))
         self.t_waveform = 1e3 * (np.arange(n_waveform)) / sr
         #self.t_waveform = 1e3 * (np.arange(n_waveform/2 - n_waveform, n_waveform/2, 1))/sr
 
