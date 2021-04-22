@@ -13,4 +13,5 @@ Pre-requisites:
 ```
 conda activate iblenv
 pip install easyqc
+pip install -U pyqtgraph
 ```
