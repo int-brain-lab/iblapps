@@ -12,7 +12,7 @@ import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
 import os
-
+import time
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def __init__(self, offline=False, probe_id=None, one=None):
@@ -867,9 +867,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
             self.img_plots = []
             self.img_cbars = []
+            start = time.time()
             connect = np.zeros(data['x'].size, dtype=int)
             size = data['size'].tolist()
             symbol = data['symbol'].tolist()
+            end = time.time()
+            print(end-start)
 
             color_bar = cb.ColorBar(data['cmap'])
             cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=np.min(data['levels'][0]),
@@ -878,13 +881,22 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.img_cbars.append(cbar)
 
             if type(np.any(data['colours'])) == QtGui.QColor:
+                start = time.time()
                 brush = data['colours'].tolist()
+                end = time.time()
+                print(end-start)
             else:
                 brush = color_bar.map.mapToQColor(data['colours'])
 
-            plot = pg.PlotDataItem()
-            plot.setData(x=data['x'], y=data['y'], connect=connect,
-                         symbol=symbol, symbolSize=size, symbolBrush=brush, symbolPen=data['pen'])
+            #plot = pg.PlotDataItem()
+            #plot.setData(x=data['x'], y=data['y'], connect=connect,
+            #             symbol=symbol, symbolSize=size, symbolBrush=brush, symbolPen=data['pen'])
+            plot = pg.ScatterPlotItem()
+            start = time.time()
+            plot.setData(x=data['x'], y=data['y'],
+                         symbol=symbol, size=size, brush=brush, pen=data['pen'])
+            end = time.time()
+            print(end - start)
             self.fig_img.addItem(plot)
             self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1],
                                    padding=0)
@@ -898,7 +910,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             if data['cluster']:
                 self.data = data['x']
-                self.data_plot.sigPointsClicked.connect(self.cluster_clicked)
+                #self.data_plot.sigPointsClicked.connect(self.cluster_clicked)
+                self.data_plot.sigClicked.connect(self.cluster_clicked)
 
     def plot_line(self, data):
         """
