@@ -177,6 +177,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.coverage.ctrl.set_value(y, 'y')
         self.coverage.update_view()
 
+    def add_volume_layer(self, volume, name, cmap='viridis', opacity=0.8, levels=None,
+                         bc=None):
+        self.coronal.ctrl.add_volume_layer(volume, name=name, cmap=cmap, opacity=opacity,
+                                           levels=levels, bc=bc)
+        self.sagittal.ctrl.add_volume_layer(volume, name=name, cmap=cmap, opacity=opacity,
+                                            levels=levels, bc=bc)
+        self.horizontal.ctrl.add_volume_layer(volume, name=name, cmap=cmap, opacity=opacity,
+                                              levels=levels, bc=bc)
+
+    def remove_volume_layer(self, name):
+        self.coronal.ctrl.remove_image_layer(name)
+        self.sagittal.ctrl.remove_image_layer(name)
+        self.horizontal.ctrl.remove_image_layer(name)
+
     def add_insertion_by_id(self, ins_id):
         traj, ins = self.probe_model.insertion_by_id(ins_id)
         self.add_extra_coverage(traj, ins)
@@ -707,7 +721,8 @@ class BaseController:
             'volume': 'value', 'region_values': np.zeros_like(self.atlas.regions.id),
             'mode': 'clip', 'bc': None})
 
-    def add_volume_layer(self, volume, name='coverage', cmap='viridis', bc=None):
+    def add_volume_layer(self, volume, name='coverage', cmap='viridis', opacity=0.8, levels=None,
+                         bc=None):
         # If there is a layer with the same name remove it
         self.remove_image_layer(name)
         colormap = matplotlib.cm.get_cmap(cmap)
@@ -715,8 +730,10 @@ class BaseController:
         # The last one is [0, 0, 0, 0] so remove this
         lut = (colormap._lut * 255).view(np.ndarray)[:-1]
         lut = np.insert(lut, 0, [0, 0, 0, 0], axis=0)
-        levels = (0, np.nanmax(volume))
-        self.add_image_layer(name=name, pg_kwargs={'lut': lut, 'opacity': 0.8, 'levels': levels},
+        if levels is None:
+            levels = (0, np.nanmax(volume))
+        self.add_image_layer(name=name, pg_kwargs={'lut': lut, 'opacity': opacity,
+                                                   'levels': levels},
                              slice_kwargs={'volume': 'volume', 'region_values': volume,
                                            'mode': 'clip', 'bc': bc})
 
@@ -895,3 +912,5 @@ def view(title=None, lazy=False):
 # self.la2.initialize(self.plt)
 # self.la2.reveal_regions(0)
 # self.frame.setLayout(self.vl)
+
+

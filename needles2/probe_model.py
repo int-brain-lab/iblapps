@@ -146,7 +146,7 @@ class ProbeModel:
         start1 = time.time()
         for iT, traj in enumerate(self.traj[provenance]['traj']):
             try:
-                xyz_channels = self.get_channels(traj, depths)
+                xyz_channels = self.get_channels(traj, depths=depths)
 
                 if iT == 0:
                     all_channels = xyz_channels
