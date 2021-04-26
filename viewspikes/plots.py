@@ -7,25 +7,25 @@ import pyqtgraph as pg
 import ibllib.atlas as atlas
 from ibllib.ephys.neuropixel import SITES_COORDINATES
 from ibllib.pipes.ephys_alignment import EphysAlignment
-from ibllib.plots import wiggle
+from ibllib.plots import wiggle, color_cycle
 
 brain_atlas = atlas.AllenAtlas()
 # Instantiate brain atlas and one
 
 
-def show_psd(data, fs):
+def show_psd(data, fs, ax=None):
     psd = np.zeros((data.shape[0], 129))
     for tr in np.arange(data.shape[0]):
         f, psd[tr, :] = scipy.signal.welch(data[tr, :], fs=fs)
 
-    plt.figure()
-    plt.plot(f, 10 * np.log10(psd.T), color='gray', alpha=0.1)
-    plt.plot(f, 10 * np.log10(np.mean(psd, axis=0).T), color='red')
-    plt.xlabel('Frequency (Hz)')
-    plt.ylabel('PSD (dB rel V/Hz)')
-    plt.gca()
-    plt.gca().set_ylim(-150, -110)
-    plt.gca().set_xlim(0, fs / 2)
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.plot(f, 10 * np.log10(psd.T), color='gray', alpha=0.1)
+    ax.plot(f, 10 * np.log10(np.mean(psd, axis=0).T), color='red')
+    ax.set_xlabel('Frequency (Hz)')
+    ax.set_ylabel('PSD (dB rel V/Hz)')
+    ax.set_ylim(-150, -110)
+    ax.set_xlim(0, fs / 2)
     plt.show()
 
 
@@ -146,7 +146,11 @@ def overlay_spikes(self, spikes, clusters, channels):
     sc = self.layers['default']['layer']
     sc.setSize(8)
     sc.setSymbol('x')
-    sc.setPen(pg.mkPen((0, 255, 0, 155), width=1))
+    # sc.setPen(pg.mkPen((0, 255, 0, 155), width=1))
+    rgbs = [list((rgb * 255).astype(np.uint8)) for rgb in color_cycle(spikes['clusters'][ifirst:ilast])]
+    sc.setBrush([pg.mkBrush(rgb) for rgb in rgbs])
+    sc.setPen([pg.mkPen(rgb) for rgb in rgbs])
+    return sc
 
     # sc.setData(x=xspi, y=tspi, brush=pg.mkBrush((255, 0, 0)))
     def callback(sc, points, evt):
