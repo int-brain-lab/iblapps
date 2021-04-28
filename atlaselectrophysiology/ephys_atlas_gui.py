@@ -537,6 +537,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         axis = fig.getAxis(ax)
         axis.setTicks([self.hist_data['axis_label'][self.idx]])
         axis.setZValue(10)
+        self.set_axis(self.fig_hist, 'bottom', pen='w', label='blank')
 
         # Plot each histology region
         for ir, reg in enumerate(self.hist_data['region'][self.idx]):
@@ -597,7 +598,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         axis = fig.getAxis(ax)
         axis.setTicks([self.hist_data_ref['axis_label']])
         axis.setZValue(10)
-        self.set_axis(self.fig_hist_ref, 'bottom', pen='w')
+        self.set_axis(self.fig_hist_ref, 'bottom', pen='w', label='blank')
 
         # Plot each histology region
         for ir, reg in enumerate(self.hist_data_ref['region']):
@@ -753,6 +754,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         self.fig_scale.setYRange(min=self.probe_tip - self.probe_extra,
                                  max=self.probe_top + self.probe_extra, padding=self.pad)
+        self.set_axis(self.fig_scale, 'bottom', pen='w', label='blank')
         self.fig_scale_cb.addItem(cbar)
 
     def plot_fit(self):
@@ -778,19 +780,19 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.slice_lines = []
         img = pg.ImageItem()
         img.setImage(data[img_type])
+        transform = [data['scale'][0], 0., 0., 0., data['scale'][1], 0., data['offset'][0],
+                     data['offset'][1], 1.]
+        img.setTransform(QtGui.QTransform(*transform))
 
         if img_type == 'label':
-            img.translate(data['offset'][0], data['offset'][1])
-            img.scale(data['scale'][0], data['scale'][1])
             self.fig_slice_layout.removeItem(self.slice_item)
             self.fig_slice_layout.addItem(self.fig_slice_hist_alt, 0, 1)
             self.slice_item = self.fig_slice_hist_alt
         else:
-            img.translate(data['offset'][0], data['offset'][1])
-            img.scale(data['scale'][0], data['scale'][1])
             color_bar = cb.ColorBar('cividis')
             lut = color_bar.getColourMap()
             img.setLookupTable(lut)
+
             self.fig_slice_layout.removeItem(self.slice_item)
             self.fig_slice_hist = pg.HistogramLUTItem()
             self.fig_slice_hist.axis.hide()
@@ -868,7 +870,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.img_plots = []
             self.img_cbars = []
             start = time.time()
-            connect = np.zeros(data['x'].size, dtype=int)
             size = data['size'].tolist()
             symbol = data['symbol'].tolist()
             end = time.time()
@@ -883,20 +884,20 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             if type(np.any(data['colours'])) == QtGui.QColor:
                 start = time.time()
                 brush = data['colours'].tolist()
+                plot = pg.ScatterPlotItem()
+                plot.setData(x=data['x'], y=data['y'],
+                             symbol=symbol, size=size, brush=brush, pen=data['pen'])
                 end = time.time()
                 print(end-start)
             else:
                 brush = color_bar.map.mapToQColor(data['colours'])
+                plot = pg.ScatterPlotItem()
+                start = time.time()
+                plot.setData(x=data['x'], y=data['y'],
+                             symbol=symbol, size=size, brush=brush, pen=data['pen'])
+                end = time.time()
+                print(end - start)
 
-            #plot = pg.PlotDataItem()
-            #plot.setData(x=data['x'], y=data['y'], connect=connect,
-            #             symbol=symbol, symbolSize=size, symbolBrush=brush, symbolPen=data['pen'])
-            plot = pg.ScatterPlotItem()
-            start = time.time()
-            plot.setData(x=data['x'], y=data['y'],
-                         symbol=symbol, size=size, brush=brush, pen=data['pen'])
-            end = time.time()
-            print(end - start)
             self.fig_img.addItem(plot)
             self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1],
                                    padding=0)
@@ -970,8 +971,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             for img, scale, offset in zip(data['img'], data['scale'], data['offset']):
                 image = pg.ImageItem()
                 image.setImage(img)
-                image.translate(offset[0], offset[1])
-                image.scale(scale[0], scale[1])
+                transform = [scale[0], 0., 0., 0., scale[1], 0., offset[0],
+                             offset[1], 1.]
+                image.setTransform(QtGui.QTransform(*transform))
                 image.setLookupTable(lut)
                 image.setLevels((data['levels'][0], data['levels'][1]))
                 self.fig_probe.addItem(image)
@@ -985,6 +987,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_probe.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
             self.fig_probe.setYRange(min=self.probe_tip - self.probe_extra,
                                      max=self.probe_top + self.probe_extra, padding=self.pad)
+            # so stupid!!!!!
+            self.set_axis(self.fig_probe, 'bottom', pen='w', label='blank')
             if bounds is not None:
                 # add some infinite line stuff
                 for bound in bounds:
@@ -1018,8 +1022,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             image = pg.ImageItem()
             image.setImage(data['img'])
-            image.translate(data['offset'][0], data['offset'][1])
-            image.scale(data['scale'][0], data['scale'][1])
+            transform = [data['scale'][0], 0., 0., 0., data['scale'][1], 0., data['offset'][0],
+                         data['offset'][1], 1.]
+            image.setTransform(QtGui.QTransform(*transform))
             cmap = data.get('cmap', [])
             if cmap:
                 color_bar = cb.ColorBar(data['cmap'])

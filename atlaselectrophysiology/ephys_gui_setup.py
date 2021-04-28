@@ -643,7 +643,7 @@ class Setup():
         self.fig_hist.setMouseEnabled(x=False)
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_hist, 'bottom', pen='w', ticks=False)
+        self.set_axis(self.fig_hist, 'bottom', pen='w')
         self.ax_hist = self.set_axis(self.fig_hist, 'left', pen=None)
         self.ax_hist.setWidth(0)
         self.ax_hist.setStyle(tickTextOffset=-70)
@@ -652,7 +652,7 @@ class Setup():
         self.fig_scale.setMaximumWidth(50)
         self.fig_scale.setMouseEnabled(x=False)
         self.scale_label = pg.LabelItem(color='k')
-        self.set_axis(self.fig_scale, 'bottom', pen='w', ticks=False)
+        self.set_axis(self.fig_scale, 'bottom', pen='w')
         self.set_axis(self.fig_scale, 'left', show=False)
         (self.fig_scale).setYLink(self.fig_hist)
 
