@@ -1,20 +1,22 @@
-import alf.io
-from brainbox import ephys_plots
-import numpy as np
-from PyQt5 import QtWidgets, QtGui, QtCore,  uic
-from PyQt5.QtGui import QTransform
+from PyQt5 import QtWidgets, QtGui
 import pyqtgraph as pg
+import qt
+import atlaselectrophysiology.ColorBar as cb
+
 from dataclasses import dataclass, field
 from pathlib import Path
-import atlaselectrophysiology.ColorBar as cb
-import qt
+import numpy as np
+
+import alf.io
+from brainbox import ephys_plots
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
 DATAPATH = r'C:\Users\Mayo\Downloads\FlatIron\SpikeSorting'
 spikeSorters = ['ks2', 'pyks2.5']
-EID = '8ca1a850-26ef-42be-8b28-c2e2d12f06d6'
+EID = '8413c5c6-b42b-4ec6-b751-881a54413628'
+
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -24,17 +26,18 @@ class MainWindow(QtWidgets.QMainWindow):
         return [w for w in app.topLevelWidgets() if isinstance(w, MainWindow)]
 
     @staticmethod
-    def _get_or_create(title=None, **kwargs):
+    def _get_or_create(eid, title=None, **kwargs):
         av = next(filter(lambda e: e.isVisible() and e.windowTitle() == title,
                          MainWindow._instances()), None)
         if av is None:
-            av = MainWindow(**kwargs)
+            av = MainWindow(eid, **kwargs)
             av.setWindowTitle(title)
         return av
 
-    def __init__(self):
+    def __init__(self, eid):
         super(MainWindow, self).__init__()
-        self.view = SpikeSortView(self)
+        self.eid = eid
+        self.view = SpikeSortView(self, eid)
         mainWidget = QtWidgets.QWidget()
         self.setCentralWidget(mainWidget)
         mainLayout = QtWidgets.QGridLayout()
@@ -50,6 +53,11 @@ class MainWindow(QtWidgets.QMainWindow):
         plotFrRaster.triggered.connect(self.view.ctrl.plotFrRaster)
         plotOptions.addAction(plotFrRaster)
         plotOptionsGroup.addAction(plotFrRaster)
+
+        plotClustRaster = QtGui.QAction('Cluster Raster Plot', self, checkable=True, checked=False)
+        plotClustRaster.triggered.connect(self.view.ctrl.plotClusterRaster)
+        plotOptions.addAction(plotClustRaster)
+        plotOptionsGroup.addAction(plotClustRaster)
 
         plotAmpRaster = QtGui.QAction('Amplitude Raster Plot', self, checkable=True, checked=False)
         plotAmpRaster.triggered.connect(self.view.ctrl.plotAmpRaster)
@@ -70,7 +78,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 # View is going to have the main figures
 class SpikeSortView:
-    def __init__(self, qmain: MainWindow):
+    def __init__(self, qmain: MainWindow, eid: str):
         self.qmain = qmain
         self.spikeSortWindows = []
 
@@ -79,7 +87,7 @@ class SpikeSortView:
             widget, fig, fig_cb = self.makePlotWindow()
             self.spikeSortWindows.append(SpikeSortFigures(name=spikeSort, widget=widget,
                                                           fig=fig, cb=fig_cb))
-        self.ctrl = SpikeSortController(self)
+        self.ctrl = SpikeSortController(self, eid)
 
     def makePlotWindow(self):
         widget = pg.GraphicsLayoutWidget()
@@ -186,11 +194,11 @@ class SpikeSortView:
 
 # Controller is going to change the plots etc
 class SpikeSortController:
-    def __init__(self, view: SpikeSortView):
+    def __init__(self, view: SpikeSortView, eid: str):
 
         self.view = view
-        self.model = SpikeSortModel(self, DATAPATH, EID)
-        self.plotAmpDepthFr()
+        self.model = SpikeSortModel(self, DATAPATH, eid)
+        self.plotFrRaster()
 
     def plotFrRaster(self):
         for spikeSort in spikeSorters:
@@ -207,6 +215,12 @@ class SpikeSortController:
     def plotAmpDepthFr(self):
         for spikeSort in spikeSorters:
             data = self.model.getAmpDepthFr(spikeSort)
+            window = self.get_spikeSorterWindow(spikeSort)
+            self.view.plotScatter(window.fig, window.cb, data)
+
+    def plotClusterRaster(self):
+        for spikeSort in spikeSorters:
+            data = self.model.getClusterRaster(spikeSort)
             window = self.get_spikeSorterWindow(spikeSort)
             self.view.plotScatter(window.fig, window.cb, data)
 
@@ -246,6 +260,7 @@ class SpikeSortModel:
         for spikeSort in spikeSorters:
             spikeSortPath = Path(dataPath).joinpath(spikeSort, eid, 'alf')
             spikes = alf.io.load_object(spikeSortPath, object='spikes')
+            spikes = self.removeNans(spikes)
             clusters = alf.io.load_object(spikeSortPath, object='clusters')
             channels = alf.io.load_object(spikeSortPath, object='channels')
             self.spikeSortRawData.append(SpikeSortRawData(name=spikeSort, spikes=spikes,
@@ -286,16 +301,22 @@ class SpikeSortModel:
 
         return plotData.ampDepthFr
 
-    def 
+    def getClusterRaster(self, spikeSort):
+        plotData = self.ctrl.get_spikeSorterPlotData(name=spikeSort)
+        if plotData.clustRaster is None:
+            rawData = self.ctrl.get_spikeSorterRawData(name=spikeSort)
+            data = ephys_plots.scatter_cluster_plot(rawData.spikes.clusters, rawData.spikes.depths,
+                                                    rawData.spikes.times)
+            plotData.clustRaster = data
 
+        return plotData.clustRaster
 
+    def removeNans(self, spikes):
+        kp_idx = np.bitwise_and(~np.isnan(spikes['depths']), ~np.isnan(spikes['amps']))
+        for key in spikes.keys():
+            spikes[key] = spikes[key][kp_idx]
 
-
-
-# Model is going to store the alf data
-
-
-
+        return spikes
 
 @dataclass
 class SpikeSortFigures:
@@ -340,14 +361,15 @@ class SpikeSortPlotData:
     frRaster: dict = field(default=None)
     ampRaster: dict = field(default=None)
     ampDepthFr: dict = field(default=None)
+    clustRaster: dict = field(default=None)
 
 
 
 
-def view(title=None):
+def view(eid, title=None):
     """
     """
     qt.create_app()
-    av = MainWindow._get_or_create(title=title)
+    av = MainWindow._get_or_create(eid, title=title)
     av.show()
     return av
