@@ -7,12 +7,11 @@ from easyqc.gui import viewseis
 from oneibl.one import ONE
 from ibllib.ephys import neuropixel
 from ibllib.dsp import voltage
-from ibllib.plots import color_cycle
 from brainbox.plot import driftmap
 
-from iblapps.needles2 import run_needles2
-from iblapps.viewspikes.data import stream, get_ks2, get_spikes
-from iblapps.viewspikes.plots import plot_insertion, show_psd, overlay_spikes
+from needles2 import run_needles2
+from viewspikes.data import stream, get_ks2, get_spikes
+from viewspikes.plots import plot_insertion, show_psd, overlay_spikes
 
 one = ONE()
 
@@ -49,14 +48,3 @@ overlay_spikes(eqc_ks2, spikes, clusters, channels)
 
 # Do the driftmap
 driftmap(spikes['times'], spikes['depths'], t_bin=0.1, d_bin=5, ax=axes[1])
-
-
-# eqc_concat = viewseis(np.r_[butt, destripe, ks2], si=1 / sr.fs, h=hhh, t0=t0, title='concat')
-# overlay_spikes(eqc_concat, spikes, clusters, channels)
-from easyqc import qt
-import datetime
-qtapp = qt.create_app()
-screenshot = qtapp.primaryScreen().grabWindow(eqc_butt.winId())
-
-fn = datetime.datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
-screenshot.save(f'/home/olivier/Pictures/{fn}.png', 'png')
