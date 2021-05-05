@@ -652,7 +652,7 @@ if __name__ == "__main__":
     import argparse
 
     docstring = """
-    Viewer to see the wheel data along side the video and DLC.
+    Viewer to see the wheel data along label the video and DLC.
 
     Below is list of key bindings:\n
         n         plot movements of next trial
