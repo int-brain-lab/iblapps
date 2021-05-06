@@ -125,7 +125,7 @@ def plot_alignment(insertion, traj, ind=None):
     plt.show()
 
 
-def overlay_spikes(self, spikes, clusters, channels):
+def overlay_spikes(self, spikes, clusters, channels, rgb=None, label='default', symbol='x'):
     first_sample = self.ctrl.model.t0 / self.ctrl.model.si
     last_sample = first_sample + self.ctrl.model.ns
 
@@ -140,17 +140,21 @@ def overlay_spikes(self, spikes, clusters, channels):
         xspi = np.tile(xspi, n_side_by_side) + addx
         yspi = np.tile(tspi, n_side_by_side)
     if self.ctrl.model.taxis == 1:
-        self.ctrl.add_scatter(xspi, tspi)
+        self.ctrl.add_scatter(xspi, tspi, label=label)
     else:
-        self.ctrl.add_scatter(tspi, xspi)
-    sc = self.layers['default']['layer']
+        self.ctrl.add_scatter(tspi, xspi, label=label)
+    sc = self.layers[label]['layer']
     sc.setSize(8)
-    sc.setSymbol('x')
+    sc.setSymbol(symbol)
     # sc.setPen(pg.mkPen((0, 255, 0, 155), width=1))
-    rgbs = [list((rgb * 255).astype(np.uint8)) for rgb in color_cycle(spikes['clusters'][ifirst:ilast])]
-    sc.setBrush([pg.mkBrush(rgb) for rgb in rgbs])
-    sc.setPen([pg.mkPen(rgb) for rgb in rgbs])
-    return sc
+    if rgb is None:
+        rgbs = [list((rgb * 255).astype(np.uint8)) for rgb in color_cycle(spikes['clusters'][ifirst:ilast])]
+        sc.setBrush([pg.mkBrush(rgb) for rgb in rgbs])
+        sc.setPen([pg.mkPen(rgb) for rgb in rgbs])
+    else:
+        sc.setBrush(pg.mkBrush(rgb))
+        sc.setPen(pg.mkPen(rgb))
+    return sc, tspi, xspi
 
     # sc.setData(x=xspi, y=tspi, brush=pg.mkBrush((255, 0, 0)))
     def callback(sc, points, evt):
