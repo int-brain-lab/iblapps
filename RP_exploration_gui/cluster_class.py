@@ -1,10 +1,14 @@
-from PyQt5 import QtCore, QtGui, QtWidgets
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Nov 20 09:31:32 2020
 
+@author: Noam Roth
+"""
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 class ClusterGroup:
 
     def __init__(self):
-        
         self.cluster_buttons = QtWidgets.QButtonGroup()
         self.cluster_group = QtWidgets.QGroupBox('Sort Clusters By:')
         self.cluster_layout = QtWidgets.QHBoxLayout()
@@ -17,26 +21,21 @@ class ClusterGroup:
                 button.setChecked(False)
             self.cluster_buttons.addButton(button, id=i)
             self.cluster_layout.addWidget(button)
-        
-        self.cluster_group.setLayout(self.cluster_layout)
 
+        self.cluster_group.setLayout(self.cluster_layout)
         self.cluster_list = QtWidgets.QListWidget()
         self.cluster_list.SingleSelection
-
         self.cluster_next_button = QtWidgets.QPushButton('Next')
         self.cluster_next_button.setFixedSize(90, 30)
         self.cluster_previous_button = QtWidgets.QPushButton('Previous')
         self.cluster_previous_button.setFixedSize(90, 30)
-
         self.cluster_list_group = QtWidgets.QGroupBox()
         self.cluster_list_group.setFixedSize(400, 200)
         self.group_widget()
-
         self.clust_colour = []
         self.clust_ids = []
         self.clust = []
         self.clust_prev = []
-
 
     def group_widget(self):
         group_layout = QtWidgets.QGridLayout()
@@ -48,7 +47,6 @@ class ClusterGroup:
 
     def reset(self):
         self.cluster_list.clear()
-        #self.cluster_option1.setChecked(True)
         self.clust_colour = []
         self.clust_ids = []
         self.clust = []
@@ -63,6 +61,7 @@ class ClusterGroup:
             icon.fill(self.clust_colour[idx])
             item.setIcon(QtGui.QIcon(icon))
             self.cluster_list.addItem(item)
+
         self.cluster_list.setCurrentRow(0)
 
     def update_list_icon(self):
@@ -93,9 +92,9 @@ class ClusterGroup:
     def update_cluster_index(self):
         self.clust_prev = self.clust
         return self.clust_prev
-    
+
     def initialise_cluster_index(self):
         self.clust = 0
         self.clust_prev = 0
-        
-        return self.clust, self.clust_prev
+        return (
+         self.clust, self.clust_prev)

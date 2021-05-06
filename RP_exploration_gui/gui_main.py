@@ -2,12 +2,12 @@ from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
 import pyqtgraph.exporters
 
-import data_exploration_gui.cluster_class as clust
-import data_exploration_gui.scatter_class as scatt
-import data_exploration_gui.filter_class as filt
-import data_exploration_gui.plot_class as plt
-import data_exploration_gui.data_class as dat
-import data_exploration_gui.misc_class as misc
+import fano_exploration.cluster_class as clust
+import fano_exploration.scatter_class as scatt
+import fano_exploration.filter_class as filt
+import fano_exploration.plot_class as plt
+import fano_exploration.data_class as dat
+import fano_exploration.misc_class as misc
 
 from pathlib import Path
 import numpy as np
@@ -40,22 +40,32 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filter.hold_button.stateChanged.connect(self.hold_button_clicked)
         self.filter.filter_buttons.buttonToggled.connect(self.on_button)
         self.filter.trial_buttons.buttonClicked.connect(self.on_trial_sort_change)
+        self.filter.time_buttons.buttonClicked.connect(self.on_time_bin_change)
 
         # Initialise figure group
         self.plots = plt.PlotGroup()
         self.plots.fig1_button.clicked.connect(self.on_fig1_button_clicked)
         self.plots.fig2_button.clicked.connect(self.on_fig2_button_clicked)
-        self.plots.fig3_button.clicked.connect(lambda: self.on_raster_button_clicked(self.plots.fig3_raster))
-        self.plots.fig4_button.clicked.connect(lambda: self.on_raster_button_clicked(self.plots.fig4_raster))
+        # self.plots.fig1b_button.clicked.connect(self.on_fig1b_button_clicked)
+        # self.plots.fig2b_button.clicked.connect(self.on_fig2b_button_clicked)
+
+        # self.plots.fig3_button.clicked.connect(lambda: self.on_raster_button_clicked(self.plots.fig3_raster))
+        # self.plots.fig4_button.clicked.connect(lambda: self.on_raster_button_clicked(self.plots.fig4_raster))
         
         self.fig1_exporter = pg.exporters.ImageExporter(self.plots.fig1_peth.fig.plotItem)
         self.plots.fig1_peth.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig1_exporter, self.plots.fig1_button))
         self.fig2_exporter = pg.exporters.ImageExporter(self.plots.fig2_peth.fig.plotItem)
         self.plots.fig2_peth.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig2_exporter, self.plots.fig2_button))
-        self.fig3_exporter = pg.exporters.ImageExporter(self.plots.fig3_raster.fig.plotItem)
-        self.plots.fig3_raster.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig3_exporter, self.plots.fig3_button))
-        self.fig4_exporter = pg.exporters.ImageExporter(self.plots.fig4_raster.fig.plotItem)
-        self.plots.fig4_raster.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig4_exporter, self.plots.fig4_button))
+        
+        # self.fig1b_exporter = pg.exporters.ImageExporter(self.plots.fig1b_peth.fig.plotItem)
+        # self.plots.fig1b_peth.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig1b_exporter, self.plots.fig1b_button))
+        # self.fig2b_exporter = pg.exporters.ImageExporter(self.plots.fig2b_peth.fig.plotItem)
+        # self.plots.fig2b_peth.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig2b_exporter, self.plots.fig2b_button))
+        
+        # self.fig3_exporter = pg.exporters.ImageExporter(self.plots.fig3_raster.fig.plotItem)
+        # self.plots.fig3_raster.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig3_exporter, self.plots.fig3_button))
+        # self.fig4_exporter = pg.exporters.ImageExporter(self.plots.fig4_raster.fig.plotItem)
+        # self.plots.fig4_raster.fig.sigDeviceRangeChanged.connect(lambda: self.on_fig_size_changed(self.fig4_exporter, self.plots.fig4_button))
         
         # Intitialise data group
         self.data = dat.DataGroup()
@@ -84,12 +94,14 @@ class MainWindow(QtWidgets.QMainWindow):
         main_widget_layout.addWidget(self.misc.folder_group, 0, 0, 1, 2)
         main_widget_layout.addWidget(self.cluster.cluster_list_group, 1, 0, 2, 1)
         main_widget_layout.addWidget(self.scatter.fig_scatter, 3, 0, 4, 1)
-        main_widget_layout.addWidget(self.misc.terminal, 7, 0, 1, 2)
-        main_widget_layout.addWidget(self.filter.filter_options_group, 1, 1, 3, 1)
-        main_widget_layout.addWidget(self.misc.clust_interest, 4, 1, 3, 1)
+        # main_widget_layout.addWidget(self.misc.terminal, 7, 0, 1, 2)
+        # main_widget_layout.addWidget(self.filter.filter_options_group, 1, 1, 3, 1)
+        # main_widget_layout.addWidget(self.filter.time_group,7,4)
+
+        # main_widget_layout.addWidget(self.misc.clust_interest, 4, 1, 3, 1)
         main_widget_layout.addWidget(self.plots.fig_area, 0, 2, 7, 8)
-        main_widget_layout.addWidget(self.filter.trial_group, 7, 6)
-        main_widget_layout.addWidget(self.data.waveform_group, 7, 9)
+        # main_widget_layout.addWidget(self.filter.trial_group, 7, 6)
+        # main_widget_layout.addWidget(self.data.waveform_group, 7, 9)
         main_widget.setLayout(main_widget_layout)
     
 
@@ -110,11 +122,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cluster.populate(self.clust_ids, self.clust_colours)
         [self.clust, self.clust_prev] = self.cluster.initialise_cluster_index()
         self.scatter.populate(self.clust_amps, self.clust_depths, self.clust_ids,
-                              self.clust_colours)
+                              self.clust_areas, self.clust_colours)
         self.scatter.initialise_scatter_index()
         self.data.populate(self.clust)
         self.plot_status = np.zeros(9, dtype=bool)
         self.hold = True
+        self.time_bin = 0.025
 
     def on_folder_button_clicked(self):
     
@@ -133,7 +146,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.misc.terminal.append('>> Ephys file not found... WARNING Figure 7 will not work')
 
             order = self.data.sort_by_id
-            [self.clust_ids, self.clust_amps, self.clust_depths, self.clust_colours] = \
+            [self.clust_ids, self.clust_amps, self.clust_depths, self.clust_areas, self.clust_colours] = \
                 self.data.sort_data(order)
 
             self.initialise_gui()
@@ -143,7 +156,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.trials = self.filter.compute_and_sort_trials(self.stim_contrast)
             self.trials_id = self.trials[self.case][self.sort_method]['trials']
 
-            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold,self.time_bin)
 
             self.update_display_string()
 
@@ -162,7 +175,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Repopulate spike list for current cluster
         self.data.populate(self.clust)
         # Change plots
-        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold,self.time_bin)
 
         self.update_display_string()
     
@@ -181,7 +194,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.filter.filter_buttons.blockSignals(False)
 
 
-            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold,self.time_bin)
 
             
     def on_button(self, button, signal):
@@ -211,7 +224,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.scatter.update_prev_point()
             self.clust_prev = self.cluster.update_cluster_index()
             self.data.populate(self.clust)
-            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold,self.time_bin)
             self.update_display_string()
         else:
             self.misc.terminal.append('>> Already on last cluster ... cannot move to next cluster')
@@ -226,7 +239,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.scatter.update_prev_point()
             self.clust_prev = self.cluster.update_cluster_index()
             self.data.populate(self.clust)
-            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold,self.time_bin)
             self.update_display_string()
         else:
             self.misc.terminal.append('>> Already on first cluster ... cannot move to previous cluster')
@@ -241,7 +254,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             order = self.data.sort_by_good
         
-        [self.clust_ids, self.clust_amps, self.clust_depths, self.clust_colours] = \
+        [self.clust_ids, self.clust_amps, self.clust_depths, self.clust_areas, self.clust_colours] = \
             self.data.sort_data(order)
         
         self.reset_gui()
@@ -250,7 +263,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.trials = self.filter.compute_and_sort_trials(self.stim_contrast)
         self.trials_id = self.trials[self.case][self.sort_method]['trials']
 
-        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold,self.time_bin)
 
         self.update_display_string()
         self.misc.terminal.append('>> Clusters sorted by ' + str(option))
@@ -268,7 +281,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scatter.update_prev_point()
         self.clust_prev = self.cluster.update_cluster_index()
         self.data.populate(self.clust)
-        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold,self.time_bin)
         self.update_display_string()
     
     def on_scatter_reset_button_clicked(self):
@@ -278,7 +291,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.stim_contrast = self.filter.get_checked_contrasts()
         self.trials = self.filter.compute_and_sort_trials(self.stim_contrast)
-        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold,self.time_bin)
         self.check_n_trials()
         self.update_display_string()
 
@@ -290,13 +303,21 @@ class MainWindow(QtWidgets.QMainWindow):
             self.plots.change_rasters(self.data, self.clust, self.trials, self.case, self.sort_method)
         else:
             self.plots.change_rasters(self.data, self.clust, self.trials, 'all', self.sort_method)
-        
+            
+    def on_time_bin_change(self, button):
+
+        self.time_bin = int(button.text())*0.001 #change time bin to int and convert from ms to seconds
+        if self.hold == False:
+            self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method,self.hold, self.time_bin)
+        else:
+            self.plots.change_all_plots_final(self.data, self.clust, self.trials, 'all', self.sort_method,self.hold,self.time_bin)
+            
 
     def on_reset_filter_button_clicked(self):
 
         [self.stim_contrast, self.case, self.sort_method] = self.filter.reset_filters()
         self.trials = self.filter.compute_and_sort_trials(self.stim_contrast)
-        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold,self.time_bin)
         self.update_display_string()
         self.misc.terminal.append('>> All filters reset')
 
@@ -305,6 +326,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.misc.clust_list1.addItem(item)
 
     def on_fig2_button_clicked(self):
+        item = QtWidgets.QListWidgetItem('Cluster ' + str(self.clust_ids[self.clust]))
+        self.misc.clust_list2.addItem(item)
+        
+    def on_fig1b_button_clicked(self):
+        item = QtWidgets.QListWidgetItem('Cluster ' + str(self.clust_ids[self.clust]))
+        self.misc.clust_list1.addItem(item)
+
+    def on_fig2b_button_clicked(self):
         item = QtWidgets.QListWidgetItem('Cluster ' + str(self.clust_ids[self.clust]))
         self.misc.clust_list2.addItem(item)
     
