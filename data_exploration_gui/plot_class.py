@@ -97,7 +97,7 @@ class PlotGroup:
             if len(x) != 0:
                 self.fig3_raster.plot(x, y, n_trials, self.raster_x)
                 self.fig3_raster.add_lines(option[sort_method]['lines'], option[sort_method]['linecolours'], option[sort_method]['text'])
-                self.fig3_raster.fig.plotItem.addLine(x = 0, pen = 'm')
+                self.fig3_raster.fig.plotItem.addLine(x = 0, pen = 'k')
             else:
                 self.fig3_raster.reset()
             self.fig4_raster.remove_lines()
@@ -105,7 +105,7 @@ class PlotGroup:
             if len(x) != 0:
                 self.fig4_raster.plot(x, y, n_trials, self.raster_x)
                 self.fig4_raster.add_lines(option[sort_method]['lines'], option[sort_method]['linecolours'], option[sort_method]['text'])
-                self.fig4_raster.fig.plotItem.addLine(x = 0, pen = 'm')
+                self.fig4_raster.fig.plotItem.addLine(x = 0, pen = 'k')
             else:
                 self.fig4_raster.reset()
         else:
