@@ -3,6 +3,7 @@ import pyqtgraph as pg
 import pyqtgraph.exporters
 import numpy as np
 from random import randrange
+from atlaselectrophysiology.AdaptedAxisItem import replace_axis
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
@@ -644,6 +645,7 @@ class Setup():
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
         self.set_axis(self.fig_hist, 'bottom', pen='w')
+        replace_axis(self.fig_hist)
         self.ax_hist = self.set_axis(self.fig_hist, 'left', pen=None)
         self.ax_hist.setWidth(0)
         self.ax_hist.setStyle(tickTextOffset=-70)
@@ -672,6 +674,7 @@ class Setup():
                                     self.probe_extra, padding=self.pad)
         self.set_axis(self.fig_hist_ref, 'bottom', pen='w')
         self.set_axis(self.fig_hist_ref, 'left', show=False)
+        replace_axis(self.fig_hist_ref, orientation='right', pos=(2, 2))
         self.ax_hist_ref = self.set_axis(self.fig_hist_ref, 'right', pen=None)
         self.ax_hist_ref.setWidth(0)
         self.ax_hist_ref.setStyle(tickTextOffset=-70)
