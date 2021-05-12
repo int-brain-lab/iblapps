@@ -63,12 +63,16 @@ def stream(pid, t0, one=None, cache=True, dsets=None):
         dsets = one.alyx.rest('datasets', 'list', probe_insertion=pid)
     if cache and samples_folder.joinpath(sample_file_name).exists():
         print(f'loading {sample_file_name} from cache')
-        sr = spikeglx.Reader(samples_folder.joinpath(sample_file_name).with_suffix('.bin'))
+        sr = spikeglx.Reader(samples_folder.joinpath(sample_file_name).with_suffix('.bin'),
+                             open=True)
         return sr, dsets
 
-    dset_ch = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ch" and '.ap.' in dset['name'])
-    dset_meta = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.meta" and '.ap.' in dset['name'])
-    dset_cbin = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ap" and '.ap.' in dset['name'])
+    dset_ch = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ch" and
+                   '.ap.' in dset['name'])
+    dset_meta = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.meta" and
+                     '.ap.' in dset['name'])
+    dset_cbin = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ap" and
+                     '.ap.' in dset['name'])
 
     file_ch, file_meta = one.download_datasets([dset_ch, dset_meta])
 

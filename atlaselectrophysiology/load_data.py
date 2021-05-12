@@ -9,7 +9,14 @@ from pathlib import Path
 import alf.io
 import glob
 import os
+import scipy
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
+
+from easyqc.gui import viewseis
+from ibllib.dsp import voltage
+from ibllib.ephys import neuropixel
+from viewspikes.data import stream, get_ks2, get_spikes
+
 
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
@@ -50,6 +57,7 @@ class LoadData:
         self.cluster_chns = None
         self.resolved = None
         self.alyx_str = None
+        self.sr = None
 
         if probe_id is not None:
             self.sess = self.one.alyx.rest('trajectories', 'list', provenance='Histology track',
@@ -442,3 +450,20 @@ class LoadData:
         self.resolved = results['alignment_resolved']
 
         return self.resolved
+
+    def stream_raw_data(self, t):
+        if self.sr is not None:
+            self.sr.close()
+        self.sr, dsets = stream(self.probe_id, t0=t, one=self.one, cache=True)
+        raw = self.sr[:, :-1].T
+        h = neuropixel.trace_header()
+        sos = scipy.signal.butter(3, 300 / self.sr.fs / 2, btype='highpass', output='sos')
+        butt = scipy.signal.sosfiltfilt(sos, raw)
+        fk_kwargs = {'dx': 1, 'vbounds': [0, 1e6], 'ntr_pad': 160, 'ntr_tap': 0, 'lagc': .01,
+                     'btype': 'lowpass'}
+        destripe = voltage.destripe(raw, fs=self.sr.fs, fk_kwargs=fk_kwargs,
+                                    tr_sel=np.arange(raw.shape[0]))
+        ks2 = get_ks2(raw, dsets, self.one)
+        eqc_butt = viewseis(butt.T, si=1 / self.sr.fs, h=h, t0=t, title='butt', taxis=0)
+        eqc_dest = viewseis(destripe.T, si=1 / self.sr.fs, h=h, t0=t, title='destr', taxis=0)
+        eqc_ks2 = viewseis(ks2.T, si=1 / self.sr.fs, h=h, t0=t, title='ks2', taxis=0)

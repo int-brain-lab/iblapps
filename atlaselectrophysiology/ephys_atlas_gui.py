@@ -24,14 +24,17 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if not offline and probe_id is None:
             self.loaddata = LoadData()
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
+            self.offline = False
         elif not offline and probe_id is not None:
             self.loaddata = LoadData(probe_id=probe_id, one=one)
             self.loaddata.get_info(0)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
             self.data_status=False
             self.data_button_pressed()
+            self.offline = False
         else:
             self.loaddata = LoadDataLocal()
+            self.offline = True
 
         self.allen = self.loaddata.get_allen_csv()
         self.init_region_lookup(self.allen)
@@ -77,7 +80,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.lines_features = np.empty((0, 3))
         self.lines_tracks = np.empty((0, 1))
         self.points = np.empty((0, 1))
-        self.scale = 1
+        self.y_scale = 1
+        self.x_scale = 1
 
         # Variables to keep track of plots and colorbars
         self.img_plots = []
@@ -869,11 +873,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
             self.img_plots = []
             self.img_cbars = []
-            start = time.time()
+
             size = data['size'].tolist()
             symbol = data['symbol'].tolist()
-            end = time.time()
-            print(end-start)
 
             color_bar = cb.ColorBar(data['cmap'])
             cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=np.min(data['levels'][0]),
@@ -882,21 +884,16 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.img_cbars.append(cbar)
 
             if type(np.any(data['colours'])) == QtGui.QColor:
-                start = time.time()
                 brush = data['colours'].tolist()
                 plot = pg.ScatterPlotItem()
                 plot.setData(x=data['x'], y=data['y'],
                              symbol=symbol, size=size, brush=brush, pen=data['pen'])
-                end = time.time()
-                print(end-start)
+
             else:
                 brush = color_bar.map.mapToQColor(data['colours'])
                 plot = pg.ScatterPlotItem()
-                start = time.time()
                 plot.setData(x=data['x'], y=data['y'],
                              symbol=symbol, size=size, brush=brush, pen=data['pen'])
-                end = time.time()
-                print(end - start)
 
             self.fig_img.addItem(plot)
             self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1],
@@ -904,14 +901,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_img.setYRange(min=self.probe_tip - self.probe_extra,
                                    max=self.probe_top + self.probe_extra, padding=self.pad)
             self.set_axis(self.fig_img, 'bottom', label=data['xaxis'])
-            self.scale = 1
+            self.y_scale = 1
             self.img_plots.append(plot)
             self.data_plot = plot
             self.xrange = data['xrange']
 
             if data['cluster']:
                 self.data = data['x']
-                #self.data_plot.sigPointsClicked.connect(self.cluster_clicked)
                 self.data_plot.sigClicked.connect(self.cluster_clicked)
 
     def plot_line(self, data):
@@ -1044,7 +1040,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_img.setYRange(min=self.probe_tip - self.probe_extra,
                                    max=self.probe_top + self.probe_extra, padding=self.pad)
             self.set_axis(self.fig_img, 'bottom', label=data['xaxis'])
-            self.scale = data['scale'][1]
+            self.y_scale = data['scale'][1]
+            self.x_scale = data['scale'][0]
             self.data_plot = image
             self.xrange = data['xrange']
 
@@ -1716,21 +1713,28 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :param event: double click event signals
         :type event: pyqtgraph mouseEvents
         """
+        if not self.offline:
+            if event.double() and event.modifiers() and QtCore.Qt.ShiftModifier:
+                pos = self.data_plot.mapFromScene(event.scenePos())
+                self.loaddata.stream_raw_data(pos.x() * self.x_scale)
+                print(pos.x() * self.x_scale)
+                return
+
         if event.double():
             pos = self.data_plot.mapFromScene(event.scenePos())
             pen, brush = self.create_line_style()
-            line_track = pg.InfiniteLine(pos=pos.y() * self.scale, angle=0, pen=pen, movable=True)
+            line_track = pg.InfiniteLine(pos=pos.y() * self.y_scale, angle=0, pen=pen, movable=True)
             line_track.sigPositionChanged.connect(self.update_lines_track)
             line_track.setZValue(100)
-            line_feature1 = pg.InfiniteLine(pos=pos.y() * self.scale, angle=0, pen=pen,
+            line_feature1 = pg.InfiniteLine(pos=pos.y() * self.y_scale, angle=0, pen=pen,
                                             movable=True)
             line_feature1.setZValue(100)
             line_feature1.sigPositionChanged.connect(self.update_lines_features)
-            line_feature2 = pg.InfiniteLine(pos=pos.y() * self.scale, angle=0, pen=pen,
+            line_feature2 = pg.InfiniteLine(pos=pos.y() * self.y_scale, angle=0, pen=pen,
                                             movable=True)
             line_feature2.setZValue(100)
             line_feature2.sigPositionChanged.connect(self.update_lines_features)
-            line_feature3 = pg.InfiniteLine(pos=pos.y() * self.scale, angle=0, pen=pen,
+            line_feature3 = pg.InfiniteLine(pos=pos.y() * self.y_scale, angle=0, pen=pen,
                                             movable=True)
             line_feature3.setZValue(100)
             line_feature3.sigPositionChanged.connect(self.update_lines_features)
@@ -1748,6 +1752,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                           symbolBrush=brush, symbol='o', symbolSize=10)
             self.fig_fit.addItem(point)
             self.points = np.vstack([self.points, point])
+
 
     def on_mouse_hover(self, items):
         """
@@ -1920,6 +1925,6 @@ if __name__ == '__main__':
 
     app = QtWidgets.QApplication([])
     mainapp = MainWindow(offline=args.offline, probe_id=args.insertion)
-    # mainapp = MainWindow(offline=True)
+    #mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()
