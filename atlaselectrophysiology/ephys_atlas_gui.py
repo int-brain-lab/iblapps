@@ -1716,8 +1716,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if not self.offline:
             if event.double() and event.modifiers() and QtCore.Qt.ShiftModifier:
                 pos = self.data_plot.mapFromScene(event.scenePos())
+                line_x = pg.InfiniteLine(pos=pos.x() * self.x_scale, angle=90, pen=self.kpen_dot,
+                                             movable=True)
                 self.loaddata.stream_raw_data(pos.x() * self.x_scale)
-                print(pos.x() * self.x_scale)
+                self.fig_img.addItem(line_x)
                 return
 
         if event.double():
