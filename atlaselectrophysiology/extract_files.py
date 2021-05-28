@@ -29,6 +29,7 @@ def rmsmap(fbin, spectra=True):
     """
     if not isinstance(fbin, spikeglx.Reader):
         sglx = spikeglx.Reader(fbin)
+        sglx.open()
     rms_win_length_samples = 2 ** np.ceil(np.log2(sglx.fs * RMS_WIN_LENGTH_SECS))
     # the window generator will generates window indices
     wingen = dsp.WindowGenerator(ns=sglx.ns, nswin=rms_win_length_samples, overlap=0)
@@ -58,6 +59,8 @@ def rmsmap(fbin, spectra=True):
         # print at least every 20 windows
         if (iw % min(20, max(int(np.floor(wingen.nwin / 75)), 1))) == 0:
             print_progress(iw, wingen.nwin)
+
+    sglx.close()
     return win
 
 
@@ -113,7 +116,7 @@ def ks2_to_alf(ks_path, bin_path, out_path, bin_file=None, ampfactor=1, label=No
     :return:
     """
     m = ephysqc.phy_model_from_ks2_path(ks2_path=ks_path, bin_path=bin_path, bin_file=bin_file)
-    ephysqc.spike_sorting_metrics_ks2(ks_path, m, save=True)
+    ephysqc.spike_sorting_metrics_ks2(ks_path, m, save=True, save_path=out_path)
     ac = alf.EphysAlfCreator(m)
     ac.convert(out_path, label=label, force=force, ampfactor=ampfactor)
 

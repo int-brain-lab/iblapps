@@ -12,7 +12,7 @@ import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
 import os
-import time
+
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def __init__(self, offline=False, probe_id=None, one=None):
@@ -28,7 +28,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.loaddata = LoadData(probe_id=probe_id, one=one)
             self.loaddata.get_info(0)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
-            self.data_status=False
+            self.data_status = False
             self.data_button_pressed()
         else:
             self.loaddata = LoadDataLocal()
@@ -175,6 +175,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             axis.setWidth(width)
         if height:
             axis.setHeight(height)
+
+    def set_lims(self, min, max):
+        self.probe_tip = min
+        self.probe_top = max
+
+        [top_line.setY(self.probe_top) for top_line in self.probe_top_lines]
+        [tip_line.setY(self.probe_tip) for tip_line in self.probe_tip_lines]
 
     def populate_lists(self, data, list_name, combobox):
         """
@@ -869,11 +876,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
             self.img_plots = []
             self.img_cbars = []
-            start = time.time()
+
             size = data['size'].tolist()
             symbol = data['symbol'].tolist()
-            end = time.time()
-            print(end-start)
 
             color_bar = cb.ColorBar(data['cmap'])
             cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=np.min(data['levels'][0]),
@@ -882,21 +887,16 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.img_cbars.append(cbar)
 
             if type(np.any(data['colours'])) == QtGui.QColor:
-                start = time.time()
                 brush = data['colours'].tolist()
                 plot = pg.ScatterPlotItem()
                 plot.setData(x=data['x'], y=data['y'],
                              symbol=symbol, size=size, brush=brush, pen=data['pen'])
-                end = time.time()
-                print(end-start)
+
             else:
                 brush = color_bar.map.mapToQColor(data['colours'])
                 plot = pg.ScatterPlotItem()
-                start = time.time()
                 plot.setData(x=data['x'], y=data['y'],
                              symbol=symbol, size=size, brush=brush, pen=data['pen'])
-                end = time.time()
-                print(end - start)
 
             self.fig_img.addItem(plot)
             self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1],
@@ -911,7 +911,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             if data['cluster']:
                 self.data = data['x']
-                #self.data_plot.sigPointsClicked.connect(self.cluster_clicked)
                 self.data_plot.sigClicked.connect(self.cluster_clicked)
 
     def plot_line(self, data):
@@ -1066,6 +1065,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
+        # For IBL case at the moment we only using single shank
+        self.current_shank_idx = 0
 
     def on_session_selected(self, idx):
         """
@@ -1086,7 +1087,19 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.data_status = False
         folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
         self.folder_line.setText(str(folder_path))
-        self.prev_alignments = self.loaddata.get_info(folder_path)
+        self.prev_alignments, shank_options = self.loaddata.get_info(folder_path)
+        self.populate_lists(shank_options, self.shank_list, self.shank_combobox)
+        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        self.on_shank_selected(0)
+
+    def on_shank_selected(self, idx):
+        """
+        Triggered in offline mode for selecting shank when using NP2.0
+        """
+        self.data_status = False
+        self.current_shank_idx = idx
+        # Update prev_alignments
+        self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
@@ -1145,7 +1158,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.hist_data_ref['colour'] = self.ephysalign.region_colour
 
         if not self.data_status:
-            self.plotdata = pd.PlotData(self.alf_path, ephys_path)
+            self.plotdata = pd.PlotData(self.alf_path, ephys_path, self.current_shank_idx)
+            self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
             self.scat_drift_data = self.plotdata.get_depth_data_scatter()
             (self.scat_fr_data, self.scat_p2t_data,
              self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
@@ -1162,8 +1176,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
 
             self.data_status = True
-
             self.init_menubar()
+        else:
+            self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
 
         # Initialise checked plots
         self.img_init.setChecked(True)

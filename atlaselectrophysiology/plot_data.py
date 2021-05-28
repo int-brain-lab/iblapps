@@ -8,7 +8,6 @@ from brainbox.task import passive
 import scipy
 from PyQt5 import QtGui
 
-N_BNK = 4
 BNK_SIZE = 10
 AUTOCORR_BIN_SIZE = 0.25 / 1000
 AUTOCORR_WIN_SIZE = 10 / 1000
@@ -17,13 +16,40 @@ np.seterr(divide='ignore', invalid='ignore')
 
 
 class PlotData:
-    def __init__(self, alf_path, ephys_path):
+    def __init__(self, alf_path, ephys_path, shank_idx):
 
         self.alf_path = alf_path
         self.ephys_path = ephys_path
 
-        self.chn_coords = np.load(Path(self.alf_path, 'channels.localCoordinates.npy'))
-        self.chn_ind = np.load(Path(self.alf_path, 'channels.rawInd.npy'))
+        self.chn_coords_all = np.load(Path(self.alf_path, 'channels.localCoordinates.npy'))
+        self.chn_ind_all = np.load(Path(self.alf_path, 'channels.rawInd.npy'))
+
+        self.chn_min = np.min(self.chn_coords_all[:, 1])
+        self.chn_max = np.max(self.chn_coords_all[:, 1])
+        self.chn_diff = np.min(np.abs(np.diff(np.unique(self.chn_coords_all[:, 1]))))
+
+        self.chn_full = np.arange(self.chn_min, self.chn_max + self.chn_diff, self.chn_diff)
+
+        chn_x = np.unique(self.chn_coords_all[:, 0])
+        chn_x_diff = np.diff(chn_x)
+        n_shanks = np.sum(chn_x_diff > 100) + 1
+
+        if n_shanks > 1:
+            shanks = {}
+            for iShank in range(n_shanks):
+                shanks[iShank] = [chn_x[iShank * 2], chn_x[(iShank * 2) + 1]]
+
+            shank_chns = np.bitwise_and(self.chn_coords_all[:, 0] >= shanks[shank_idx][0],
+                                        self.chn_coords_all[:, 0] <= shanks[shank_idx][1])
+            self.chn_coords = self.chn_coords_all[shank_chns, :]
+            self.chn_ind = self.chn_ind_all[shank_chns]
+        else:
+            self.chn_coords = self.chn_coords_all
+            self.chn_ind = self.chn_ind_all
+
+        self.N_BNK = len(np.unique(self.chn_coords[:, 0]))
+        self.idx_full = np.where(np.isin(self.chn_full, self.chn_coords[:, 1]))[0]
+
         # See if spike data is available
         try:
             self.spikes = alf.io.load_object(self.alf_path, 'spikes')
@@ -34,9 +60,15 @@ class PlotData:
 
         try:
             self.clusters = alf.io.load_object(self.alf_path, 'clusters')
+            shank_spikes = np.isin(self.chn_ind_all[self.clusters.channels[self.spikes.clusters]],
+                                   self.chn_ind)
+            for key in self.spikes.keys():
+                self.spikes[key] = self.spikes[key][shank_spikes]
+
             self.filter_units('all')
             self.cluster_data_status = True
             self.compute_timescales()
+
         except Exception:
             print('cluster data was not found, some plots will not display')
             self.cluster_data_status = False
@@ -265,7 +297,7 @@ class PlotData:
             D_BIN = 5
             n, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
                                           self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                          T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
+                                          T_BIN, D_BIN, ylim=[self.chn_min, self.chn_max])
             img = n.T / T_BIN
             xscale = (times[-1] - times[0]) / img.shape[0]
             yscale = (depths[-1] - depths[0]) / img.shape[1]
@@ -294,11 +326,11 @@ class PlotData:
             nspikes, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
                                                 self.spikes['depths'][self.spike_idx][self.kp_idx],
                                                 T_BIN, D_BIN,
-                                                ylim=[0, np.max(self.chn_coords[:, 1])])
+                                                ylim=[self.chn_min, self.chn_max])
 
             amp, times, depths = bincount2D(self.spikes['amps'][self.spike_idx][self.kp_idx],
                                             self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                            T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])],
+                                            T_BIN, D_BIN, ylim=[self.chn_min, self.chn_max],
                                             weights=self.spikes['amps'][self.spike_idx]
                                             [self.kp_idx])
             mean_fr = nspikes[:, 0] / T_BIN
@@ -318,6 +350,7 @@ class PlotData:
                 'x': mean_amp,
                 'y': depths,
                 'xrange': np.array([0, np.max(mean_amp)]),
+
                 'xaxis': 'Amplitude (uV)'
             }
 
@@ -332,7 +365,7 @@ class PlotData:
             D_BIN = 40
             R, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
                                           self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                          T_BIN, D_BIN, ylim=[0, np.max(self.chn_coords[:, 1])])
+                                          T_BIN, D_BIN, ylim=[self.chn_min, self.chn_max])
             corr = np.corrcoef(R)
             corr[np.isnan(corr)] = 0
             scale = (np.max(depths) - np.min(depths)) / corr.shape[0]
@@ -341,7 +374,7 @@ class PlotData:
                 'scale': np.array([scale, scale]),
                 'levels': np.array([np.min(corr), np.max(corr)]),
                 'offset': np.array([0, 0]),
-                'xrange': np.array([np.min(self.chn_coords[:, 1]), np.max(self.chn_coords[:, 1])]),
+                'xrange': np.array([self.chn_min, self.chn_max]),
                 'cmap': 'viridis',
                 'title': 'Correlation',
                 'xaxis': 'Distance from probe tip (um)'
@@ -372,7 +405,6 @@ class PlotData:
             rms_times = np.array([0, rms_amps.shape[0]])
             xaxis = 'Time samples'
 
-        # Img data
         _rms = np.take(rms_amps, self.chn_ind, axis=1)
         _, self.chn_depth, chn_count = np.unique(self.chn_coords[:, 1], return_index=True,
                                                  return_counts=True)
@@ -391,9 +423,13 @@ class PlotData:
         median = np.mean(np.apply_along_axis(get_median, 1, img))
         # Medium subtract to remove bands, but add back average median so values make sense
         img = np.apply_along_axis(median_subtract, 1, img) + median
+
+        img_full = np.full((img.shape[0], self.chn_full.shape[0]), np.nan)
+        img_full[:, self.idx_full] = img
+
         levels = np.quantile(img, [0.1, 0.9])
-        xscale = (rms_times[-1] - rms_times[0]) / img.shape[0]
-        yscale = (np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1])) / img.shape[1]
+        xscale = (rms_times[-1] - rms_times[0]) / img_full.shape[0]
+        yscale = (self.chn_max - self.chn_min) / img_full.shape[1]
 
         if format == 'AP':
             cmap = 'plasma'
@@ -401,7 +437,7 @@ class PlotData:
             cmap = 'inferno'
 
         data_img = {
-            'img': img,
+            'img': img_full,
             'scale': np.array([xscale, yscale]),
             'levels': levels,
             'offset': np.array([0, 0]),
@@ -422,7 +458,7 @@ class PlotData:
             'offset': probe_offset,
             'levels': probe_levels,
             'cmap': cmap,
-            'xrange': np.array([0 * BNK_SIZE, (N_BNK) * BNK_SIZE]),
+            'xrange': np.array([0 * BNK_SIZE, (self.N_BNK) * BNK_SIZE]),
             'title': format + ' RMS (uV)'
         }
 
@@ -454,12 +490,15 @@ class PlotData:
                 return(np.mean([a[self.chn_depth], a[self.chn_depth_eq]], axis=0))
 
             img = np.apply_along_axis(avg_chn_depth, 1, _lfp_dB)
+            img_full = np.full((img.shape[0], self.chn_full.shape[0]), np.nan)
+            img_full[:, self.idx_full] = img
+
             levels = np.quantile(img, [0.1, 0.9])
-            xscale = (freq_range[-1] - freq_range[0]) / img.shape[0]
-            yscale = (np.max(self.chn_coords[:, 1]) - np.min(self.chn_coords[:, 1])) / img.shape[1]
+            xscale = (freq_range[-1] - freq_range[0]) / img_full.shape[0]
+            yscale = (self.chn_max - self.chn_min) / img_full.shape[1]
 
             data_img = {
-                'img': img,
+                'img': img_full,
                 'scale': np.array([xscale, yscale]),
                 'levels': levels,
                 'offset': np.array([0, 0]),
@@ -484,7 +523,7 @@ class PlotData:
                     'levels': probe_levels,
                     'cmap': 'viridis',
                     'xaxis': 'Time (s)',
-                    'xrange': np.array([0 * BNK_SIZE, (N_BNK) * BNK_SIZE]),
+                    'xrange': np.array([0 * BNK_SIZE, (self.N_BNK) * BNK_SIZE]),
                     'title': f"{freq[0]} - {freq[1]} Hz (dB)"}
                 }
                 data_probe.update(lfp_band_data)
@@ -590,19 +629,44 @@ class PlotData:
         return template_wf * 1e6
 
     def arrange_channels2banks(self, data):
-        Y_OFFSET = 20
         bnk_data = []
-        bnk_scale = np.empty((N_BNK, 2))
-        bnk_offset = np.empty((N_BNK, 2))
+        bnk_scale = np.empty((self.N_BNK, 2))
+        bnk_offset = np.empty((self.N_BNK, 2))
         for iX, x in enumerate(np.unique(self.chn_coords[:, 0])):
             bnk_idx = np.where(self.chn_coords[:, 0] == x)[0]
-            bnk_vals = data[bnk_idx]
-            _bnk_data = np.reshape(bnk_vals, (bnk_vals.size, 1)).T
-            _bnk_yscale = ((np.max(self.chn_coords[bnk_idx, 1]) -
-                            np.min(self.chn_coords[bnk_idx, 1])) / _bnk_data.shape[1])
-            _bnk_xscale = BNK_SIZE / _bnk_data.shape[0]
-            _bnk_yoffset = np.min(self.chn_coords[bnk_idx, 1]) - Y_OFFSET
-            _bnk_xoffset = BNK_SIZE * iX
+
+            bnk_ycoords = self.chn_coords[bnk_idx, 1]
+            bnk_diff = np.min(np.diff(bnk_ycoords))
+
+            # NP1.0 checkerboard
+            if bnk_diff != self.chn_diff:
+                bnk_full = np.arange(np.min(bnk_ycoords), np.max(bnk_ycoords) + bnk_diff, bnk_diff)
+                _bnk_vals = np.full((bnk_full.shape[0]), np.nan)
+                idx_full = np.where(np.isin(bnk_full, bnk_ycoords))
+                _bnk_vals[idx_full] = data[bnk_idx]
+
+                # Detect where the nans are, whether it is odd or even
+                _bnk_data = _bnk_vals[np.newaxis, :]
+
+                _bnk_yscale = ((self.chn_max -
+                                self.chn_min) / _bnk_data.shape[1])
+                _bnk_xscale = BNK_SIZE / _bnk_data.shape[0]
+
+                _bnk_yoffset = np.min(bnk_ycoords)
+                _bnk_xoffset = BNK_SIZE * iX
+
+            else:  # NP2.0
+                _bnk_vals = np.full((self.chn_full.shape[0]), np.nan)
+                idx_full = np.where(np.isin(self.chn_full, bnk_ycoords))
+                _bnk_vals[idx_full] = data[bnk_idx]
+
+                _bnk_data = _bnk_vals[np.newaxis, :]
+
+                _bnk_yscale = ((self.chn_max -
+                                self.chn_min) / _bnk_data.shape[1])
+                _bnk_xscale = BNK_SIZE / _bnk_data.shape[0]
+                _bnk_yoffset = 0
+                _bnk_xoffset = BNK_SIZE * iX
 
             bnk_data.append(_bnk_data)
             bnk_scale[iX, :] = np.array([_bnk_xscale, _bnk_yscale])

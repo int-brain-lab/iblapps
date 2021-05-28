@@ -12,24 +12,31 @@ import json
 class LoadDataLocal:
     def __init__(self):
         self.brain_atlas = atlas.AllenAtlas(25)
-        self.folder_path = []
-        self.chn_coords = []
-        self.sess_path = []
-        self.brain_atlas = atlas.AllenAtlas(25)
+        self.folder_path = None
+        self.chn_coords = None
+        self.chn_coords_all = None
+        self.sess_path = None
+        self.shank_idx = 0
+        self.n_shanks = 1
 
     def get_info(self, folder_path):
         """
         Read in the local json file to see if any previous alignments exist
         """
-        self.folder_path = folder_path
+        self.folder_path = Path(folder_path)
+        shank_list = self.get_nshanks()
+        prev_aligns = self.get_previous_alignments()
+        return prev_aligns, shank_list
 
-        return self.get_previous_alignments()
+    def get_previous_alignments(self, shank_idx=0):
 
-    def get_previous_alignments(self):
-
+        self.shank_idx = shank_idx
         # If previous alignment json file exists, read in previous alignments
-        if Path(self.folder_path, 'prev_alignments.json').exists():
-            with open(Path(self.folder_path, 'prev_alignments.json'), "r") as f:
+        prev_align_filename = 'prev_alignments.json' if self.n_shanks == 1 else \
+            f'prev_alignments_shank{self.shank_idx + 1}.json'
+
+        if self.folder_path.joinpath(prev_align_filename).exists():
+            with open(self.folder_path.joinpath(prev_align_filename), "r") as f:
                 self.alignments = json.load(f)
                 self.prev_align = []
                 if self.alignments:
@@ -57,16 +64,44 @@ class LoadDataLocal:
 
         return feature, track
 
+    def get_nshanks(self):
+        """
+        Find out the number of shanks on the probe, either 1 or 4
+        """
+        self.chn_coords_all = np.load(self.folder_path.joinpath('channels.localCoordinates.npy'))
+        chn_x = np.unique(self.chn_coords_all[:, 0])
+        chn_x_diff = np.diff(chn_x)
+        self.n_shanks = np.sum(chn_x_diff > 100) + 1
+
+        if self.n_shanks == 1:
+            shank_list = ['1/1']
+        else:
+            shank_list = [f'{iShank + 1}/{self.n_shanks}' for iShank in range(self.n_shanks)]
+
+        return shank_list
+
     def get_data(self):
         # Define alf_path and ephys_path (a bit redundant but so it is compatible with plot data)
         alf_path = self.folder_path
         ephys_path = self.folder_path
-        self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
+
+        chn_x = np.unique(self.chn_coords_all[:, 0])
+        if self.n_shanks > 1:
+            shanks = {}
+            for iShank in range(self.n_shanks):
+                shanks[iShank] = [chn_x[iShank * 2], chn_x[(iShank * 2) + 1]]
+
+            shank_chns = np.bitwise_and(self.chn_coords_all[:, 0] >= shanks[self.shank_idx][0],
+                                        self.chn_coords_all[:, 0] <= shanks[self.shank_idx][1])
+            self.chn_coords = self.chn_coords_all[shank_chns, :]
+        else:
+            self.chn_coords = self.chn_coords_all
+
         chn_depths = self.chn_coords[:, 1]
 
         # Read in notes for this experiment see if file exists in directory
-        if Path(self.folder_path, 'session_notes.txt').exists():
-            with open(Path(self.folder_path, 'session_notes.txt'), "r") as f:
+        if self.folder_path.joinpath('session_notes.txt').exists():
+            with open(self.folder_path.joinpath('session_notes.txt'), "r") as f:
                 sess_notes = f.read()
         else:
             sess_notes = 'No notes for this session'
@@ -82,8 +117,12 @@ class LoadDataLocal:
     def get_xyzpicks(self):
         # Read in local xyz_picks file
         # This file must exist, otherwise we don't know where probe was
-        assert(Path(self.folder_path, 'xyz_picks.json').exists())
-        with open(Path(self.folder_path, 'xyz_picks.json'), "r") as f:
+        xyz_file_name = '*xyz_picks.json' if self.n_shanks == 1 else \
+            f'*xyz_picks_shank{self.shank_idx + 1}.json'
+        xyz_file = sorted(self.folder_path.glob(xyz_file_name))
+
+        assert (len(xyz_file) == 1)
+        with open(xyz_file[0], "r") as f:
             user_picks = json.load(f)
 
         xyz_picks = np.array(user_picks['xyz_picks']) / 1e6
@@ -175,7 +214,10 @@ class LoadDataLocal:
         origin = {'origin': {'bregma': bregma}}
         channel_dict.update(origin)
         # Save the channel locations
-        with open(Path(self.folder_path, 'channel_locations.json'), "w") as f:
+        chan_loc_filename = 'channel_locations.json' if self.n_shanks == 1 else \
+            f'channel_locations_shank{self.shank_idx + 1}.json'
+
+        with open(self.folder_path.joinpath(chan_loc_filename), "w") as f:
             json.dump(channel_dict, f, indent=2, separators=(',', ': '))
         original_json = self.alignments
         date = datetime.now().replace(microsecond=0).isoformat()
@@ -185,7 +227,9 @@ class LoadDataLocal:
         else:
             original_json = data
         # Save the new alignment
-        with open(Path(self.folder_path, 'prev_alignments.json'), "w") as f:
+        prev_align_filename = 'prev_alignments.json' if self.n_shanks == 1 else \
+            f'prev_alignments_shank{self.shank_idx + 1}.json'
+        with open(self.folder_path.joinpath(prev_align_filename), "w") as f:
             json.dump(original_json, f, indent=2, separators=(',', ': '))
 
     @staticmethod
