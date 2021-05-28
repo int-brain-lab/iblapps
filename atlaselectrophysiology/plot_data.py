@@ -226,12 +226,12 @@ class PlotData:
                                                     [self.kp_idx]))
             spike_amps = spike_amps * 1e6
             fr = n_spikes / np.max(self.spikes['times'])
-            fr_norm, fr_levels = self.normalise_data(fr, lquant=0, uquant=1)
+            fr_levels = np.quantile(fr, [0, 1])
 
             data_fr_scatter = {
                 'x': spike_amps,
                 'y': spike_depths,
-                'colours': fr_norm,
+                'colours': fr,
                 'pen': 'k',
                 'size': np.array(8),
                 'symbol': np.array('o'),
@@ -245,7 +245,6 @@ class PlotData:
             }
 
             p2t = self.clusters['peakToTrough'][clu]
-            p2t_norm, p2t_levels = self.normalise_data(p2t, lquant=0, uquant=1)
 
             # Define the p2t levels so always same colourbar across sessions
             p2t_levels = [-1.5, 1.5]
@@ -253,7 +252,7 @@ class PlotData:
                 'x': spike_amps,
                 'y': spike_depths,
 
-                'colours': p2t_norm,
+                'colours': p2t,
                 'pen': 'k',
                 'size': np.array(8),
                 'symbol': np.array('o'),
@@ -266,14 +265,13 @@ class PlotData:
                 'cluster': True
             }
 
-            spike_amps_norm, spike_amps_levels = self.normalise_data(spike_amps, lquant=0,
-                                                                     uquant=1)
+            spike_amps_levels = np.quantile(spike_amps, [0, 1])
 
             data_amp_scatter = {
                 'x': fr,
                 'y': spike_depths,
 
-                'colours': spike_amps_norm,
+                'colours': spike_amps,
                 'pen': 'k',
                 'size': np.array(8),
                 'symbol': np.array('o'),

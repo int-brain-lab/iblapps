@@ -893,7 +893,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                              symbol=symbol, size=size, brush=brush, pen=data['pen'])
 
             else:
-                brush = color_bar.map.mapToQColor(data['colours'])
+                brush = color_bar.getBrush(data['colours'],
+                                           levels=[data['levels'][0], data['levels'][1]])
                 plot = pg.ScatterPlotItem()
                 plot.setData(x=data['x'], y=data['y'],
                              symbol=symbol, size=size, brush=brush, pen=data['pen'])
