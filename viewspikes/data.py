@@ -43,7 +43,8 @@ def get_ks2(raw, dsets, one):
 
 
 def get_spikes(dsets, one):
-    dtypes_spikes = ['spikes.clusters', 'spikes.amps', 'spikes.times', 'clusters.channels', 'spikes.samples']
+    dtypes_spikes = ['spikes.clusters', 'spikes.amps', 'spikes.times', 'clusters.channels',
+                     'spikes.samples', 'spikes.depths']
     dsets_spikes = [dset for dset in dsets if dset['dataset_type'] in dtypes_spikes]
     malf_path = next(iter(one.download_datasets(dsets_spikes))).parent
     channels = alf.io.load_object(malf_path, 'channels')

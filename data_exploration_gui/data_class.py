@@ -104,8 +104,8 @@ class DataGroup:
         self.amps = []
         self.nspikes = []
         for clu in self.ids:
-            self.depths = np.append(self.depths, np.mean(units_b.depths[str(clu)]))
-            self.amps = np.append(self.amps, np.mean(units_b.amps[str(clu)]) * 1e6)
+            self.depths = np.append(self.depths, np.nanmean(units_b.depths[str(clu)]))
+            self.amps = np.append(self.amps, np.nanmean(units_b.amps[str(clu)]) * 1e6)
             self.nspikes = np.append(self.nspikes, len(units_b.amps[str(clu)]))
 
         np.save((self.gui_path + '/cluster_depths'), self.depths)
