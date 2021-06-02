@@ -53,6 +53,15 @@ def get_spikes(dsets, one):
 
 
 def stream(pid, t0, one=None, cache=True, dsets=None):
+    """
+    NB: returned Reader object must be closed after use
+    :param pid: Probe UUID
+    :param t0:
+    :param one: An instance of ONE
+    :param cache:
+    :param dsets:
+    :return:
+    """
     tlen = 1
     assert one
     if cache:
@@ -62,7 +71,8 @@ def stream(pid, t0, one=None, cache=True, dsets=None):
         dsets = one.alyx.rest('datasets', 'list', probe_insertion=pid)
     if cache and samples_folder.joinpath(sample_file_name).exists():
         print(f'loading {sample_file_name} from cache')
-        sr = spikeglx.Reader(samples_folder.joinpath(sample_file_name).with_suffix('.bin'))
+        sr = spikeglx.Reader(samples_folder.joinpath(sample_file_name).with_suffix('.bin'),
+                             open=True)
         return sr, dsets
 
     dset_ch = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ch" and '.ap.' in dset['name'])
@@ -85,6 +95,7 @@ def stream(pid, t0, one=None, cache=True, dsets=None):
         out_meta = samples_folder.joinpath(sample_file_name)
         shutil.copy(sr.file_meta_data, out_meta)
         with open(out_meta.with_suffix('.bin'), 'wb') as fp:
+            sr.open()
             sr._raw[:].tofile(fp)
 
     return sr, dsets
