@@ -664,6 +664,10 @@ class Setup():
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
         self.set_axis(self.fig_hist, 'bottom', pen='w')
+
+        # This is the solution from pyqtgraph people, but doesn't show ticks
+        # self.fig_hist.showGrid(False, True, 0)
+
         replace_axis(self.fig_hist)
         self.ax_hist = self.set_axis(self.fig_hist, 'left', pen=None)
         self.ax_hist.setWidth(0)
