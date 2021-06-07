@@ -44,12 +44,15 @@ eids = ['56b57c38-2699-4091-90a8-aba35103155e',
        'd23a44ef-1402-4ed7-97f5-47e9a7a504d9']
 
 insertions = one.alyx.rest('insertions', 'list', django=f'session__in,{eids}')
-
+##
+INSERTION_INDEX = 10
+insertion = insertions[INSERTION_INDEX]
 ## Example 1: Stream one second of ephys data
 # pid, t0 = ("e864fca7-40e3-4a80-b736-51d4662405e4", 2155)
 # pid, t0 = ('ce24bbe9-ae70-4659-9e9c-564d1a865de8', 610)
+print(f"phy_launcher.py -e {insertion['session']} -p {insertion['name']}")
 
-pid, t0 = (insertions[10]['id'], 2500)
+pid, t0 = (insertion['id'], 2500)
 
 
 sr, dsets = stream(pid, t0=t0, one=one, cache=True)
