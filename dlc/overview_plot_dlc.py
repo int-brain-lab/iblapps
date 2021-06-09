@@ -18,7 +18,7 @@ from scipy.interpolate import interp1d
 from scipy.stats import zscore
 #Generate scatterplots, variances, 2-state AR-HMMs to summarize differences in behavior in different sessions. Develop a 1-page figure per session that provides a behavioral overview.  Would be great to generate these figs for the RS sessions noted in repro-ephys slides above
 #lickogram
-
+import matplotlib
 # https://github.com/lindermanlab/ssm
 
 
@@ -122,9 +122,9 @@ def get_dlc_XYs(eid, video_type):
     dataset_types = ['camera.dlc', 'camera.times']                     
     a = one.list(eid,'dataset-types')
     # for newer iblib version do [x['dataset_type'] for x in a]
-    if not all([(u in [x['dataset_type'] for x in a]) for u in dataset_types]):
-        print('not all data available')    
-        return
+#    if not all([(u in [x['dataset_type'] for x in a]) for u in dataset_types]):
+#        print('not all data available')    
+#        return
     
                  
     one.load(eid, dataset_types = dataset_types)
@@ -158,41 +158,71 @@ def get_dlc_XYs(eid, video_type):
     return Times, XYs      
 
 
+def get_ME(eid, video_type):
+
+    #video_type = 'left'    
+    one = ONE() 
+    dataset_types = ['camera.ROIMotionEnergy', 'camera.times']                     
+    a = one.list(eid,'dataset-types')
+    # for newer iblib version do [x['dataset_type'] for x in a]
+#    if not all([(u in [x['dataset_type'] for x in a]) for u in dataset_types]):
+#        print('not all data available')    
+#        return
+    
+                 
+    one.load(eid, dataset_types = dataset_types)
+    local_path = one.path_from_eid(eid)  
+    alf_path = local_path / 'alf'   
+    
+    cam0 = alf.io.load_object(
+        alf_path,
+        '%sCamera' %
+        video_type,
+        namespace='ibl')
+
+    ME = np.load(alf_path / f'{video_type}Camera.ROIMotionEnergy.npy')
+
+    Times = cam0['times']  
+
+    return Times, ME    
 
 
-def get_example_images():
+
+def get_example_images(eid):
 
 
     eids = get_repeated_sites()
 #    eid = eids[23]
 #    video_type = 'body'
 
+    #eids = ['15f742e1-1043-45c9-9504-f1e8a53c1744']
+    eids = ['4a45c8ba-db6f-4f11-9403-56e06a33dfa4']
     frts = {'body':30, 'left':60,'right':150}    
 
     one=ONE()   
     
     
-    for eid in eids:
-        for video_type in frts:
+    #for eid in eids:
+    for video_type in frts:
+        
+        frame_idx = [20 * 60 * frts[video_type]]    
+        try:
+        
+            r = one.list(eid, 'dataset_types')
+            recs = [x for x in r if f'{video_type}Camera.raw.mp4' 
+                    in x['name']][0]['file_records']
+            video_path = [x['data_url'] for x in recs 
+                          if x['data_url'] is not None][0]
             
-            frame_idx = [20 * 60 * frts[video_type]]    
-            try:
-            
-                r = one.list(eid, 'dataset_types')
-                recs = [x for x in r if f'{video_type}Camera.raw.mp4' 
-                        in x['name']][0]['file_records']
-                video_path = [x['data_url'] for x in recs 
-                              if x['data_url'] is not None][0]
-                
-                frames = get_video_frames_preload(video_path,
-                                                  frame_idx,
-                                                  mask=np.s_[:, :, 0])
-                np.save('/home/mic/reproducible_dlc/example_images/'
-                        f'{eid}_{video_type}.npy', frames)
-                print(eid, video_type, 'done')
-            except:
-                print(eid, video_type,'error')  
-                continue
+            frames = get_video_frames_preload(video_path,
+                                              frame_idx,
+                                              mask=np.s_[:, :, 0])
+            np.save('/home/mic/reproducible_dlc/example_images/'
+                    f'{eid}_{video_type}.npy', frames)
+            print(eid, video_type, 'done')
+        except:
+            print(eid, video_type,'error')  
+            continue
 
 
     #'/home/mic/reproducible_dlc/example_images'
@@ -212,8 +242,15 @@ def plot_paw_on_image(eid, video_type, XYs = None):
     Cs_l = {'paw_l':'r','paw_r':'cyan'}
     Cs_r = {'paw_l':'cyan','paw_r':'r'}
     #for video_type in ['left','right']:#,'body']: 
-    r = np.load(f'/home/mic/reproducible_dlc/example_images/'
-              f'{eid}_{video_type}.npy')[0]  
+    try:
+        r = np.load(f'/home/mic/reproducible_dlc/example_images/'
+                  f'{eid}_{video_type}.npy')[0]  
+    except:
+        get_example_images(eid)
+        r = np.load(f'/home/mic/reproducible_dlc/example_images/'
+                  f'{eid}_{video_type}.npy')[0]         
+        
+        
     if XYs == None:          
         _, XYs =  get_dlc_XYs(eid, video_type)  
     #ax = plt.subplot(1,2,k)   
@@ -262,15 +299,10 @@ def plot_paw_on_image(eid, video_type, XYs = None):
     k+=1
     plt.tight_layout()
     #plt.show()
-    #plt.legend()    
+    #plt.legend(loc='lower right')    
 
 
 def paw_speed_PSTH(eid):
-
-    '''
-    lick PSTH
-    eid = 'd0ea3148-948d-4817-94f8-dcaf2342bbbe' is good
-    '''
 
     rt = 2
     st = -0.5 
@@ -331,11 +363,10 @@ def paw_speed_PSTH(eid):
             
     ax = plt.gca()
     ax.axvline(x=0, label='stimOn', linestyle = '--', c='g')
-    plt.title('paw speed PSTH \n'
-              'right = paw closer to right cam')
+    plt.title('paw speed PSTH')
     plt.xlabel('time [sec]')
     plt.ylabel('speed [px/sec]') 
-    plt.legend(fontsize=10)#bbox_to_anchor=(1.05, 1), loc='upper left')    
+    plt.legend()#bbox_to_anchor=(1.05, 1), loc='upper left')    
         
         
 def nose_speed_PSTH(eid,vtype='right'):
@@ -413,7 +444,7 @@ def nose_speed_PSTH(eid,vtype='right'):
               f'{vtype} vid')
     plt.xlabel('time [sec]')
     plt.ylabel('speed [px/sec]') 
-    plt.legend()     
+    plt.legend(loc='lower right')     
     
        
 def get_licks(XYs):
@@ -492,7 +523,7 @@ def plot_licks(eid, combine=False):
     plt.title('lick PSTH')
     plt.xlabel('time [sec]')
     plt.ylabel('lick events \n [a.u.]') 
-    plt.legend()
+    plt.legend(loc='lower right')
     return licks_pos
 
 
@@ -580,7 +611,7 @@ def plot_wheel_position(eid):
     axes.set_ylim([-0.27,0.27])
     plt.xlabel('time [sec]')
     plt.ylabel('wheel position [rad]')
-    plt.legend()
+    plt.legend(loc='lower right')
     plt.title('wheel positions colored by choice')
     plt.tight_layout()          
 
@@ -661,7 +692,7 @@ def plot_sniffPSTH(eid,combine=False):
     plt.title('sniff PSTH')
     plt.xlabel('time [sec]')
     plt.ylabel('sniff events \n [a.u.]') 
-    plt.legend()
+    plt.legend(loc='lower right')
 
 
 def get_pupil_diameter(XYs, smooth=True):
@@ -830,7 +861,7 @@ def align_left_right_pupil(eid):
     plt.plot(timesL,zscore(dRa),label='right')
     plt.title('smoothed, aligned, z-scored right/left pupil diameter \n'
              f'{eid}')  
-    plt.legend()
+    plt.legend(loc='lower right')
     plt.ylabel('pupil diameter')
     plt.xlabel('time [sec]')
 
@@ -875,7 +906,7 @@ def pupil_diameter_PSTH(eid, s=None, times=None):
 
     
         MEAN = np.mean(D[stype],axis=0)
-        STD = np.std(D[stype],axis=0) 
+        STD = np.std(D[stype],axis=0)/np.sqrt(len(d))  
 
         plt.plot(xs, MEAN, label=stype, color = cols[stype])
         plt.fill_between(xs, MEAN + STD, MEAN - STD, color = cols[stype],
@@ -886,7 +917,95 @@ def pupil_diameter_PSTH(eid, s=None, times=None):
     plt.title('left cam pupil diameter PSTH')
     plt.xlabel('time [sec]')
     plt.ylabel('pupil diameter [px]') 
-    plt.legend()     
+    plt.legend(loc='lower right')
+
+
+
+
+def motion_energy_PSTH(eid):
+
+    '''
+    ME PSTH
+    canonical session
+    eid = '15f742e1-1043-45c9-9504-f1e8a53c1744'
+    '''
+
+    rt = 4  # duration of window
+    st = -0.5  # lag of window wrt to stype 
+    stype = 'stimOn_times'
+
+    ME = {}
+    one = ONE()
+    trials = one.load_object(eid,'trials')
+    ts = trials.intervals[0][0]
+    te = trials.intervals[-1][1]
+
+    for video_type in ['left','right','body']:
+        t,m = get_ME(eid, video_type)       
+        m = zscore(m,nan_policy='omit') 
+
+        sta, end = find_nearest(t,ts), find_nearest(t,te) 
+        t = t[sta:end]
+        m = m[sta:end]
+
+        ME[video_type] = [t,m]
+
+    # align to body cam
+    for video_type in ['left','right']:
+
+        # align time series camera/neural
+        interpolater = interp1d(
+            ME[video_type ][0],
+            np.arange(len(ME[video_type ][0])),
+            kind="cubic",
+            fill_value="extrapolate")
+
+        idx_aligned = np.round(interpolater(ME['body'][0])).astype(int)
+        ME[video_type] = [ME['body'][0], ME[video_type][1][idx_aligned]]
+
+  
+    D = {}
+ 
+    fs = 30
+    xs = np.arange(rt*fs)  # number of frames 
+    xs = np.concatenate([-1*np.array(list(reversed(xs[:int(abs(st)*fs)]))),
+                          np.arange(rt*fs)[1:1+len(xs[int(abs(st)*fs):])]])
+    xs = xs /float(fs)
+    
+    cols = {'left':'r','right':'b','body':'g'}
+        
+    for video_type in ME:
+        # that's centered at feedback time
+        
+        
+        D[video_type] = []
+        
+        times,s = ME[video_type]
+
+        trs = trials[stype][20:-20]    
+        for i in trs:
+
+            start_idx = int(find_nearest(times,i) + st*30)
+            end_idx = int(start_idx  + rt*30)  
+
+            D[video_type].append(s[start_idx:end_idx])
+
+    
+        MEAN = np.mean(D[video_type],axis=0)
+        STD = np.std(D[video_type],axis=0)/np.sqrt(len(trs)) 
+       
+
+        plt.plot(xs, MEAN, label=video_type, 
+                 color = cols[video_type], linewidth = 2)
+        plt.fill_between(xs, MEAN + STD, MEAN - STD, color = cols[video_type],
+                         alpha=0.2)
+        
+    ax = plt.gca()
+    ax.axvline(x=0, label='stimOn', linestyle = '--', c='k')
+    plt.title('Motion Energy PSTH')
+    plt.xlabel('time [sec]')
+    plt.ylabel('z-scored motion energy [a.u.]') 
+    plt.legend(loc='lower right')
 
 
 def interp_nans(y):
@@ -897,7 +1016,6 @@ def interp_nans(y):
     y2 = copy.deepcopy(y)
     y2[nans] = np.interp(yy(nans), yy(~nans), y[~nans])
     return y2
-
 
 
 def add_panel_letter(k):
@@ -912,11 +1030,11 @@ def add_panel_letter(k):
 
 
 def plot_all(eid):
-
+    matplotlib.rcParams.update({'font.size': 15})
     # report eid =  '4a45c8ba-db6f-4f11-9403-56e06a33dfa4'
  
-    nrows = 3
-    ncols = 2
+    nrows = 2
+    ncols = 4
 
     plt.ion()
     one = ONE()
@@ -924,9 +1042,9 @@ def plot_all(eid):
     plt.subplot(nrows,ncols,1)  
     add_panel_letter(1)  
     plot_paw_on_image(eid, 'left')
-    p = one.path_from_eid(eid)
-    plt.title(' '.join([str(p).split('/')[i] for i in [5,7,8,9]]),
-                 backgroundcolor= 'white')    
+#    p = one.path_from_eid(eid)
+#    plt.title(' '.join([str(p).split('/')[i] for i in [5,7,8,9]]),
+#                 backgroundcolor= 'white')    
     
     plt.subplot(nrows,ncols,2)
     add_panel_letter(2) 
@@ -944,6 +1062,14 @@ def plot_all(eid):
     plt.subplot(nrows,ncols,6) 
     add_panel_letter(6) 
     nose_speed_PSTH(eid)
+    plt.subplot(nrows,ncols,7) 
+    add_panel_letter(7)     
+    pupil_diameter_PSTH(eid)
+    plt.subplot(nrows,ncols,8) 
+    add_panel_letter(8)     
+    motion_energy_PSTH(eid)
+
+
 #    plt.subplot(3,3,7)                
 #    plot_wheel_position(eid)
 #    plt.subplot(3,3,8)  
@@ -952,9 +1078,9 @@ def plot_all(eid):
     #plot_sniffPSTH(eid) 
 
     plt.tight_layout()
-#    p = one.path_from_eid(eid)
-#    plt.suptitle(' '.join([str(p).split('/')[i] for i in [5,7,8,9]]),
-#                 backgroundcolor= 'white')
+    p = one.path_from_eid(eid)
+    plt.suptitle(' '.join([str(p).split('/')[i] for i in [4,6,7,8]]),
+                 backgroundcolor= 'white')
 #    plt.savefig(f'/home/mic/reproducible_dlc/{eid}.png')
 #    plt.close()
     
