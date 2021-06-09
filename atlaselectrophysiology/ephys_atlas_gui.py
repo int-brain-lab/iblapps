@@ -12,9 +12,26 @@ import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
 import os
-import time
+import qt
+import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
+
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
+
+    @staticmethod
+    def _instances():
+        app = QtWidgets.QApplication.instance()
+        return [w for w in app.topLevelWidgets() if isinstance(w, MainWindow)]
+
+    @staticmethod
+    def _get_or_create(title='Electrophysiology Atlas', **kwargs):
+        av = next(filter(lambda e: e.isVisible() and e.windowTitle() == title,
+                         MainWindow._instances()), None)
+        if av is None:
+            av = MainWindow(**kwargs)
+            av.setWindowTitle(title)
+        return av
+
     def __init__(self, offline=False, probe_id=None, one=None):
         super(MainWindow, self).__init__()
 
@@ -1705,6 +1722,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.cluster_popups.append(self.clust_win)
         self.activateWindow()
 
+        return clust_idx
+
     def on_mouse_double_clicked(self, event):
         """
         Triggered when a double click event is detected on ephys of histology plots. Adds reference
@@ -1909,11 +1928,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.tot_idx_string.setText(f"Total Index = {self.total_idx}")
 
 
-def viewer(probe_id=None, one=None):
-    # To generate the plot from the command line
-    mainapp = MainWindow(probe_id=probe_id, one=one)
-    mainapp.show()
-    return mainapp
+def viewer(probe_id, one=None):
+    """
+    """
+    qt.create_app()
+    av = MainWindow._get_or_create(probe_id=probe_id, one=one)
+    av.show()
+    return av
 
 
 if __name__ == '__main__':
@@ -1927,6 +1948,6 @@ if __name__ == '__main__':
 
     app = QtWidgets.QApplication([])
     mainapp = MainWindow(offline=args.offline, probe_id=args.insertion)
-    #mainapp = MainWindow(offline=True)
+    # mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()

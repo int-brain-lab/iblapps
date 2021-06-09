@@ -76,11 +76,28 @@ class ScatterGroup:
 
     def update_scatter_icon(self, clust_prev):
         point = self.scatter_plot.pointsAt(self.point_pos)
-        point[0].setBrush('b')
-        point[0].setPen('b')
+        if len(point) > 1:
+            p_diff = []
+            for p in point:
+                p_diff.append(np.abs(p.pos().x() - self.point_pos.x()))
+            idx = np.argmin(p_diff)
+            point[idx].setBrush('b')
+            point[idx].setPen('b')
+        else:
+            point[0].setBrush('b')
+            point[0].setPen('b')
+
         point_prev = self.scatter_plot.pointsAt(self.point_pos_prev)
-        point_prev[0].setPen('w')
-        point_prev[0].setBrush(self.clust_color[clust_prev])
+        if len(point_prev) > 1:
+            p_diff = []
+            for p in point_prev:
+                p_diff.append(np.abs(p.pos().x() - self.point_pos_prev.x()))
+            idx = np.argmin(p_diff)
+            point_prev[idx].setPen('w')
+            point_prev[idx].setBrush(self.clust_color[clust_prev])
+        else:
+            point_prev[0].setPen('w')
+            point_prev[0].setBrush(self.clust_color[clust_prev])
 
     def set_current_point(self, clust):
         self.point_pos.setX(self.clust_amps[clust])

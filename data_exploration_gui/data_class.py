@@ -2,7 +2,7 @@ from PyQt5 import QtGui, QtWidgets
 import numpy as np
 import os
 import alf.io
-from brainbox.processing import get_units_bunch
+from brainbox.processing import compute_cluster_average, get_units_bunch
 from brainbox.population.decode import xcorr
 from brainbox.singlecell import calculate_peths
 from brainbox.io.spikeglx import extract_waveforms
@@ -68,35 +68,56 @@ class DataGroup:
         self.spikes = alf.io.load_object(self.probe_path, 'spikes')
         self.trials = alf.io.load_object(self.alf_path, 'trials')
         self.clusters = alf.io.load_object(self.probe_path, 'clusters')
-        self.ids = np.unique(self.spikes.clusters)
-        self.metrics = np.array(self.clusters.metrics.ks2_label[self.ids])
-        self.colours = np.array(self.clusters.metrics.ks2_label[self.ids])
+
+        self.prepare_data(self.spikes, self.clusters, self.trials)
+        #self.ids = np.unique(self.spikes.clusters)
+        #self.metrics = np.array(self.clusters.metrics.ks2_label[self.ids])
+        #self.colours = np.array(self.clusters.metrics.ks2_label[self.ids])
+        #self.colours[np.where(self.colours == 'mua')[0]] = QtGui.QColor('#fdc086')
+        #self.colours[np.where(self.colours == 'good')[0]] = QtGui.QColor('#7fc97f')
+#
+        #file_count = 0
+        #if os.path.isdir(self.gui_path):
+        #    for i in os.listdir(self.gui_path):
+        #        if 'depth' in i:
+        #            self.depths = np.load(Path(self.gui_path + '/cluster_depths.npy'))
+        #            file_count += 1
+        #        elif 'amp' in i:
+        #            self.amps = np.load(Path(self.gui_path + '/cluster_amps.npy'))
+        #            file_count += 1
+        #        elif 'nspikes' in i:
+        #            self.nspikes = np.load(Path(self.gui_path + '/cluster_nspikes.npy'))
+        #            file_count += 1
+        #    if file_count != 3:
+        #        self.compute_depth_and_amplitudes()
+        #else:
+        #    os.mkdir(self.gui_path)
+        #    self.compute_depth_and_amplitudes()
+#
+        #self.sort_by_id = np.arange(len(self.ids))
+        #self.sort_by_nspikes = np.argsort(self.nspikes)
+        #self.sort_by_nspikes = self.sort_by_nspikes[::-1]
+        #self.sort_by_good = np.append(np.where(self.metrics == 'good')[0], np.where(self.metrics == 'mua')[0])
+        #self.n_trials = len(self.trials['contrastLeft'])
+
+    def prepare_data(self, spikes, clusters, trials):
+        self.ids = np.unique(spikes.clusters)
+        self.metrics = np.array(clusters.metrics.ks2_label[self.ids])
+        self.colours = np.array(clusters.metrics.ks2_label[self.ids])
         self.colours[np.where(self.colours == 'mua')[0]] = QtGui.QColor('#fdc086')
         self.colours[np.where(self.colours == 'good')[0]] = QtGui.QColor('#7fc97f')
 
-        file_count = 0
-        if os.path.isdir(self.gui_path):
-            for i in os.listdir(self.gui_path):
-                if 'depth' in i:
-                    self.depths = np.load(Path(self.gui_path + '/cluster_depths.npy'))
-                    file_count += 1
-                elif 'amp' in i:
-                    self.amps = np.load(Path(self.gui_path + '/cluster_amps.npy'))
-                    file_count += 1
-                elif 'nspikes' in i:
-                    self.nspikes = np.load(Path(self.gui_path + '/cluster_nspikes.npy'))
-                    file_count += 1
-            if file_count != 3:
-                self.compute_depth_and_amplitudes()
-        else:
-            os.mkdir(self.gui_path)
-            self.compute_depth_and_amplitudes()
+        _, self.depths, self.nspikes = compute_cluster_average(spikes.clusters, spikes.depths)
+        _, self.amps, _ = compute_cluster_average(spikes.clusters, spikes.amps)
+        self.amps = self.amps * 1e6
 
         self.sort_by_id = np.arange(len(self.ids))
         self.sort_by_nspikes = np.argsort(self.nspikes)
         self.sort_by_nspikes = self.sort_by_nspikes[::-1]
-        self.sort_by_good = np.append(np.where(self.metrics == 'good')[0], np.where(self.metrics == 'mua')[0])
-        self.n_trials = len(self.trials['contrastLeft'])
+        self.sort_by_good = np.append(np.where(self.metrics == 'good')[0],
+                                      np.where(self.metrics == 'mua')[0])
+        self.n_trials = len(trials['contrastLeft'])
+
 
     def compute_depth_and_amplitudes(self):
         units_b = get_units_bunch(self.spikes)
