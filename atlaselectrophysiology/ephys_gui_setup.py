@@ -4,6 +4,8 @@ import pyqtgraph.exporters
 import numpy as np
 from random import randrange
 from atlaselectrophysiology.AdaptedAxisItem import replace_axis
+from ibllib.qc.critical_reasons import REASONS_INS_CRIT_GUI
+
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
 
@@ -490,7 +492,7 @@ class Setup():
             self.desc_layout = QtWidgets.QVBoxLayout()
             self.desc_layout.setSpacing(5)
             self.desc_buttons.setExclusive(False)
-            options = ["Noise and artifact", "Drift", "Poor neural yield", "Brain Damage", "Other"]
+            options = REASONS_INS_CRIT_GUI
             for i, val in enumerate(options):
 
                 button = QtWidgets.QCheckBox(val)

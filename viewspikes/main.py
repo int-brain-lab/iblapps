@@ -56,7 +56,7 @@ if isinstance(pid, Path):
     file_sample = pid
     pid, t0 = file_sample.stem.split('_')
     t0 = float(t0)
-    sr = spikeglx.Reader(file_sample)
+    sr = spikeglx.Reader(file_sample, open=True)
     dsets = one.alyx.rest('datasets', 'list', probe_insertion=pid)
 else:
     sr, dsets = stream(pid, t0, one=one, samples_folder=folder_samples)
@@ -90,3 +90,4 @@ else:
     overlay_spikes(eqc_butt, spikes, clusters, channels)
     overlay_spikes(eqc_dest, spikes, clusters, channels)
     overlay_spikes(eqc_ks2, spikes, clusters, channels)
+sr.close()
