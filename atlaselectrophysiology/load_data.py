@@ -10,6 +10,7 @@ import alf.io
 import glob
 import os
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
+import ibllib.qc.critical_reasons as usrpmt
 
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
@@ -429,6 +430,9 @@ class LoadData:
                              ephys_qc_description=ephys_dj_str),
                         allow_direct_insert=True, replace=True)
         self.alyx_str = ephys_qc.upper() + ': ' + ephys_desc_str
+
+        if ephys_qc.upper() == 'CRITICAL':
+            usrpmt.main_gui(eid=self.probe_id, reasons_selected=ephys_desc, one=self.one)
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number
