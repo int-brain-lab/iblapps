@@ -28,9 +28,9 @@ def get_ks2_batch(ks2memmap, ibatch):
 # ks2 proc
 def get_ks2(raw, dsets, one):
     kwm = next(dset for dset in dsets if dset['dataset_type'] == 'kilosort.whitening_matrix')
-    kwm = np.load(one.download_dataset(kwm))
+    kwm = np.load(one._download_dataset(kwm))
     channels = [dset for dset in dsets if dset['dataset_type'].startswith('channels')]
-    malf_path = next(iter(one.download_datasets(channels))).parent
+    malf_path = next(iter(one._download_datasets(channels))).parent
     channels = alf.io.load_object(malf_path, 'channels')
     _car = raw[channels['rawInd'], :] - np.mean(raw[channels.rawInd, :], axis=0)
     sos = scipy.signal.butter(3, 300 / 30000 / 2, btype='highpass', output='sos')
@@ -46,7 +46,7 @@ def get_spikes(dsets, one):
     dtypes_spikes = ['spikes.clusters', 'spikes.amps', 'spikes.times', 'clusters.channels',
                      'spikes.samples', 'spikes.depths']
     dsets_spikes = [dset for dset in dsets if dset['dataset_type'] in dtypes_spikes]
-    malf_path = next(iter(one.download_datasets(dsets_spikes))).parent
+    malf_path = next(iter(one._download_datasets(dsets_spikes))).parent
     channels = alf.io.load_object(malf_path, 'channels')
     clusters = alf.io.load_object(malf_path, 'clusters')
     spikes = alf.io.load_object(malf_path, 'spikes')
@@ -80,7 +80,7 @@ def stream(pid, t0, one=None, cache=True, dsets=None):
     dset_meta = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.meta" and '.ap.' in dset['name'])
     dset_cbin = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ap" and '.ap.' in dset['name'])
 
-    file_ch, file_meta = one.download_datasets([dset_ch, dset_meta])
+    file_ch, file_meta = one._download_datasets([dset_ch, dset_meta])
 
     first_chunk = int(t0 / CHUNK_DURATION_SECS)
     last_chunk = int((t0 + tlen) / CHUNK_DURATION_SECS) - 1

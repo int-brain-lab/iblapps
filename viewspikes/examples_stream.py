@@ -58,7 +58,7 @@ driftmap(spikes['times'], spikes['depths'], t_bin=0.1, d_bin=5, ax=axes[1])
 import alf.io
 eid = dsets[0]['session'][-36:]
 tdsets = one.alyx.rest('datasets', 'list', session=eid, django='name__icontains,trials.')
-one.download_datasets(tdsets)
+one._download_datasets(tdsets)
 trials = alf.io.load_object(one.path_from_eid(eid).joinpath('alf'), 'trials')
 
 rewards = trials['feedback_times'][trials['feedbackType'] == 1]
