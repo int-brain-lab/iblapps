@@ -166,6 +166,29 @@ class MainWindow(QtWidgets.QMainWindow):
 
             self.update_display_string()
 
+    def on_data_given(self, data):
+        self.reset_gui()
+        self.data.prepare_data(data.spikes, data.clusters, data.trials)
+        self.data.compute_timescales()
+
+        order = self.data.sort_by_id
+        [self.clust_ids, self.clust_amps, self.clust_depths, self.clust_colours] = \
+            self.data.sort_data(order)
+
+        self.initialise_gui()
+        nan_trials = self.filter.compute_trial_options(self.data.trials)
+        self.misc.terminal.append('>> Found ' + str(
+            len(nan_trials)) + ' nan trials in data ...... these will be removed')
+
+        self.trials = self.filter.compute_and_sort_trials(self.stim_contrast)
+        self.trials_id = self.trials[self.case][self.sort_method]['trials']
+
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case,
+                                          self.sort_method, self.hold)
+
+        self.update_display_string()
+
+
 
     # All commands associated with cluster list
     def on_cluster_list_clicked(self):
@@ -394,7 +417,7 @@ def viewer(data=None):
     av = MainWindow._get_or_create()
     av.show()
     if data is not None:
-        av.data.prepare_data(data.spikes, data.clusters, data.trials)
+        av.on_data_given(data)
     return av
 
 

@@ -34,6 +34,7 @@ class DataGroup:
         self.autocorr_window = 0.1
         self.autocorr_bin = 0.001
 
+
         #For waveform (N.B in ms)
         self.waveform_window = 2
         self.CAR = False
@@ -101,6 +102,9 @@ class DataGroup:
         #self.n_trials = len(self.trials['contrastLeft'])
 
     def prepare_data(self, spikes, clusters, trials):
+        self.spikes = spikes
+        self.clusters = clusters
+        self.trials = trials
         self.ids = np.unique(spikes.clusters)
         self.metrics = np.array(clusters.metrics.ks2_label[self.ids])
         self.colours = np.array(clusters.metrics.ks2_label[self.ids])
@@ -172,21 +176,22 @@ class DataGroup:
         return t_peth, peth_mean, peth_std
 
     def compute_rasters(self, trial_type, clust, trials_id):
-        x = np.empty(0)
-        y = np.empty(0)
+        self.x = np.empty(0)
+        self.y = np.empty(0)
         spk_times = self.spikes.times[self.spikes.clusters == self.clust_ids[clust]]
         for idx, val in enumerate(self.trials[trial_type][trials_id]):
             spks_to_include = np.bitwise_and(spk_times >= val - self.t_before, spk_times <= val + self.t_after)
             trial_spk_times = spk_times[spks_to_include]
             trial_spk_times_aligned = trial_spk_times - val
             trial_no = (np.ones(len(trial_spk_times_aligned))) * idx * 10
-            x = np.append(x, trial_spk_times_aligned)
-            y = np.append(y, trial_no)
+            self.x = np.append(self.x, trial_spk_times_aligned)
+            self.y = np.append(self.y, trial_no)
 
-        return x, y, self.n_trials
+        return self.x, self.y, self.n_trials
 
     def compute_autocorr(self, clust):
         self.clus_idx = np.where(self.spikes.clusters == self.clust_ids[clust])[0]
+
         x_corr = xcorr(self.spikes.times[self.clus_idx], self.spikes.clusters[self.clus_idx],
         self.autocorr_bin, self.autocorr_window)
 

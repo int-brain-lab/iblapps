@@ -1688,7 +1688,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         point_pos = point[0].pos()
         clust_idx = np.argwhere(self.data == point_pos.x())[0][0]
 
-        autocorr = self.plotdata.get_autocorr(clust_idx)
+        autocorr, clust_no = self.plotdata.get_autocorr(clust_idx)
         autocorr_plot = pg.PlotItem()
         autocorr_plot.setXRange(min=np.min(self.plotdata.t_autocorr),
                                 max=np.max(self.plotdata.t_autocorr))
@@ -1714,7 +1714,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         clust_layout.addItem(autocorr_plot, 0, 0)
         clust_layout.addItem(template_plot, 1, 0)
 
-        self.clust_win = ephys_gui.PopupWindow(title=f'Cluster {clust_idx}')
+        self.clust_win = ephys_gui.PopupWindow(title=f'Cluster {clust_no}')
         self.clust_win.closed.connect(self.popup_closed)
         self.clust_win.moved.connect(self.popup_moved)
         self.clust_win.popup_widget.addItem(autocorr_plot, 0, 0)
@@ -1722,7 +1722,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.cluster_popups.append(self.clust_win)
         self.activateWindow()
 
-        return clust_idx
+        return clust_no
 
     def on_mouse_double_clicked(self, event):
         """

@@ -12,6 +12,7 @@ N_BNK = 4
 BNK_SIZE = 10
 AUTOCORR_BIN_SIZE = 0.25 / 1000
 AUTOCORR_WIN_SIZE = 10 / 1000
+
 FS = 30000
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -583,7 +584,7 @@ class PlotData:
         autocorr = xcorr(self.spikes['times'][idx], self.spikes['clusters'][idx],
                          AUTOCORR_BIN_SIZE, AUTOCORR_WIN_SIZE)
 
-        return autocorr[0, 0, :]
+        return autocorr[0, 0, :], self.clust_id[clust_idx]
 
     def get_template_wf(self, clust_idx):
         template_wf = (self.clusters['waveforms'][self.clust_id[clust_idx], :, 0])
