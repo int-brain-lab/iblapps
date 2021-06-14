@@ -32,7 +32,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             av.setWindowTitle(title)
         return av
 
-    def __init__(self, offline=False, probe_id=None, one=None):
+    def __init__(self, offline=False, probe_id=None, one=None, histology=True):
         super(MainWindow, self).__init__()
 
         self.init_variables()
@@ -43,7 +43,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
         elif not offline and probe_id is not None:
-            self.loaddata = LoadData(probe_id=probe_id, one=one)
+            self.loaddata = LoadData(probe_id=probe_id, one=one, histology=histology)
             self.loaddata.get_info(0)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
             self.data_status=False
@@ -142,6 +142,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         self.track = [0] * (self.max_idx + 1)
         self.features = [0] * (self.max_idx + 1)
+
 
     def set_axis(self, fig, ax, show=True, label=None, pen='k', ticks=True):
         """
@@ -374,6 +375,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.set_view(view=1, configure=False)
         self.remove_lines_points()
 
+        xlabel_img = self.fig_img.getAxis('bottom').label.toPlainText()
+        xlabel_line = self.fig_line.getAxis('bottom').label.toPlainText()
+
         # First go through all the image plots
         self.fig_data_layout.removeItem(self.fig_probe)
         self.fig_data_layout.removeItem(self.fig_probe_cb)
@@ -400,11 +404,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                                     self.img_options_group.checkedAction()
                                                     .text() + '.png')))
             self.toggle_plots(self.img_options_group)
+            self.remove_lines_points()
             plot = self.img_options_group.checkedAction()
 
         self.set_font(self.fig_img, 'left', ptsize=8, width=ax_width)
         self.set_font(self.fig_img, 'bottom', ptsize=8)
         self.set_font(self.fig_img_cb, 'top', ptsize=8, height=ax_height)
+        self.set_axis(self.fig_img, 'bottom', label=xlabel_img)
         self.fig_data_layout.removeItem(self.fig_img)
         self.fig_data_layout.removeItem(self.fig_img_cb)
 
@@ -432,6 +438,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.fig_probe.setFixedWidth(self.fig_probe_width + self.fig_ax_width)
         self.set_font(self.fig_probe, 'left', ptsize=8, width=ax_width)
         self.set_font(self.fig_probe_cb, 'top', ptsize=8, height=ax_height)
+        self.set_axis(self.fig_probe, 'bottom', pen='w', label='blank')
         self.fig_data_layout.removeItem(self.fig_probe)
         self.fig_data_layout.removeItem(self.fig_probe_cb)
 
@@ -461,6 +468,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.set_axis(self.fig_probe_cb, 'top', pen='k', label=text)
         self.set_font(self.fig_line, 'left', ptsize=8, width=ax_width)
         self.set_font(self.fig_line, 'bottom', ptsize=8)
+        self.set_axis(self.fig_line, 'bottom', label=xlabel_line)
         self.fig_data_layout.removeItem(self.fig_line)
         self.fig_data_layout.removeItem(self.fig_probe_cb)
         self.fig_data_area.resize(width1, height1)
@@ -469,6 +477,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.fig_data_layout.addItem(self.fig_probe, 1, 0)
         self.fig_data_layout.addItem(self.fig_line, 1, 1)
         self.fig_data_layout.addItem(self.fig_img, 1, 2)
+
         self.set_view(view=1, configure=False)
 
         # Save slice images
@@ -509,19 +518,21 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Save the brain regions image
         self.set_axis(self.fig_hist_extra_yaxis, 'left')
         # Add labels to show which ones are aligned
-        self.set_axis(self.fig_hist, 'bottom', label='aligned', ticks=False)
+        self.set_axis(self.fig_hist, 'bottom', label='aligned') #, ticks=False)
         self.set_font(self.fig_hist, 'bottom', ptsize=12)
-        self.set_axis(self.fig_hist_ref, 'bottom', label='original', ticks=False)
+        self.set_axis(self.fig_hist_ref, 'bottom', label='original') #, ticks=False)
         self.set_font(self.fig_hist_ref, 'bottom', ptsize=12)
         exporter = pg.exporters.ImageExporter(self.fig_hist_layout.scene())
         exporter.export(str(image_path.joinpath(sess_info + 'hist.png')))
         self.set_axis(self.fig_hist_extra_yaxis, 'left', pen=None)
         self.set_font(self.fig_hist, 'bottom', ptsize=8)
-        self.set_axis(self.fig_hist, 'bottom', pen='w')
+        self.set_axis(self.fig_hist, 'bottom', pen='w', label='blank')
         self.set_font(self.fig_hist_ref, 'bottom', ptsize=8)
-        self.set_axis(self.fig_hist_ref, 'bottom', pen='w')
+        self.set_axis(self.fig_hist_ref, 'bottom', pen='w', label='blank')
 
         make_overview_plot(image_path, sess_info, save_folder=image_path_overview)
+
+        self.add_lines_points()
 
     def toggle_plots(self, options_group):
         """
@@ -888,6 +899,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         else:
             [self.fig_img.removeItem(plot) for plot in self.img_plots]
             [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
+
             self.img_plots = []
             self.img_cbars = []
 
@@ -1732,14 +1744,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :param event: double click event signals
         :type event: pyqtgraph mouseEvents
         """
-        if not self.offline:
-            if event.double() and event.modifiers() and QtCore.Qt.ShiftModifier:
-                pos = self.data_plot.mapFromScene(event.scenePos())
-                line_x = pg.InfiniteLine(pos=pos.x() * self.x_scale, angle=90, pen=self.kpen_dot,
-                                             movable=True)
-                self.loaddata.stream_raw_data(pos.x() * self.x_scale)
-                self.fig_img.addItem(line_x)
-                return
 
         if event.double():
             pos = self.data_plot.mapFromScene(event.scenePos())
@@ -1928,11 +1932,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.tot_idx_string.setText(f"Total Index = {self.total_idx}")
 
 
-def viewer(probe_id, one=None):
+def viewer(probe_id, one=None, histology=False):
     """
     """
     qt.create_app()
-    av = MainWindow._get_or_create(probe_id=probe_id, one=one)
+    av = MainWindow._get_or_create(probe_id=probe_id, one=one, histology=histology)
     av.show()
     return av
 

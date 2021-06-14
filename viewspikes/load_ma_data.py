@@ -71,15 +71,41 @@ class AlignmentWindow(alignment_window.MainWindow):
 
 
 
-
-
-
-
-
 class TrialWindow(trial_window.MainWindow):
     def __init__(self):
         super(TrialWindow, self).__init__()
         self.alignment_gui = None
+        self.scat = None
+
+    def on_scatter_plot_clicked(self, scatter, point):
+        super().on_scatter_plot_clicked(scatter, point)
+        self.add_clust_scatter()
+
+    def on_cluster_list_clicked(self):
+        super().on_cluster_list_clicked()
+        self.add_clust_scatter()
+
+    def on_next_cluster_clicked(self):
+        super().on_next_cluster_clicked()
+        self.add_clust_scatter()
+
+    def on_previous_cluster_clicked(self):
+        super().on_previous_cluster_clicked()
+        self.add_clust_scatter()
+
+    def add_clust_scatter(self):
+        if not self.scat:
+            self.scat = pg.ScatterPlotItem()
+            self.alignment_gui.fig_img.addItem(self.scat)
+
+        self.scat.setData(self.data.spikes.times[self.data.clus_idx],
+                          self.data.spikes.depths[self.data.clus_idx], brush='r')
+
+        # need to get out spikes.times and spikes.depths
+
+
+
+
 
 
 def load_data(eid, probe, one=None):
@@ -103,6 +129,7 @@ def viewer(probe_id=None, one=None):
     bv = TrialWindow()
     bv.on_data_given(data)
     av.trial_gui = bv
+    bv.alignment_gui = av
 
     av.show()
     bv.show()

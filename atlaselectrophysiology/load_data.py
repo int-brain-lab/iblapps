@@ -9,30 +9,22 @@ from pathlib import Path
 import alf.io
 import glob
 import os
-import scipy
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
-
-from easyqc.gui import viewseis
-from ibllib.dsp import voltage
-from ibllib.ephys import neuropixel
-from viewspikes.data import stream, get_ks2, get_spikes
-
 
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 
 class LoadData:
-    def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None):
+    def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None, histology=True):
         self.one = one or ONE(base_url=ONE_BASE_URL)
         self.brain_atlas = brain_atlas or atlas.AllenAtlas(25)
+        self.download_hist = histology # whether or not to look for the histology files
 
         if testing:
             self.probe_id = probe_id
             self.chn_coords = SITES_COORDINATES
             self.chn_depths = SITES_COORDINATES[:, 1]
         else:
-            from atlaselectrophysiology import qc_table
-            self.qc = qc_table.EphysQC()
             self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
             self.chn_coords = None
             self.chn_depths = None
@@ -210,7 +202,7 @@ class LoadData:
         :return sess_notes: user notes associated with session
         :type: str
         """
-        dtypes = [
+        dtypes_probe = [
             'spikes.depths',
             'spikes.amps',
             'spikes.times',
@@ -226,6 +218,9 @@ class LoadData:
             '_iblqc_ephysSpectralDensity.freqs',
             '_iblqc_ephysSpectralDensity.power',
             '_iblqc_ephysSpectralDensity.amps',
+        ]
+
+        dtypes_sess = [
             '_ibl_passiveGabor.table',
             '_ibl_passivePeriods.intervalsTable',
             '_iblrig_RFMapStim.raw',
@@ -239,11 +234,13 @@ class LoadData:
         print(self.date)
         print(self.eid)
 
-        # dsets = self.one.alyx.rest('datasets', 'list', probe_insertion=self.probe_id)
-        # dsets_int = [d for d in dsets if d['dataset_type'] in dtypes]
-        # _ = self.one.download_datasets(dsets_int)
+        # Only download the datasets for the chosen probe
+        dsets = self.one.alyx.rest('datasets', 'list', probe_insertion=self.probe_id)
+        dsets_int = [d for d in dsets if d['dataset_type'] in dtypes_probe]
+        _ = self.one.download_datasets(dsets_int)
 
-        _ = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
+        # Download the datasets associated with the session
+        _ = self.one.load(self.eid, dataset_types=dtypes_sess, download_only=True)
         self.sess_path = self.one.path_from_eid(self.eid)
 
         alf_path = Path(self.sess_path, 'alf', self.probe_label)
@@ -299,33 +296,6 @@ class LoadData:
         return self.xyz_picks
 
     def get_slice_images(self, xyz_channels):
-        # First see if the histology file exists before attempting to connect with FlatIron and
-        # download
-        hist_dir = Path(self.sess_path.parent.parent, 'histology')
-        hist_path_rd = None
-        hist_path_gr = None
-        if hist_dir.exists():
-            path_to_rd_image = glob.glob(str(hist_dir) + '/*RD.tif')
-            if path_to_rd_image:
-                hist_path_rd = tif2nrrd(Path(path_to_rd_image[0]))
-            else:
-                files = download_histology_data(self.subj, self.lab)
-                if files is not None:
-                    hist_path_rd = files[1]
-
-            path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.tif')
-            if path_to_gr_image:
-                hist_path_gr = tif2nrrd(Path(path_to_gr_image[0]))
-            else:
-                files = download_histology_data(self.subj, self.lab)
-                if files is not None:
-                    hist_path_gr = files[0]
-
-        else:
-            files = download_histology_data(self.subj, self.lab)
-            if files is not None:
-                hist_path_gr = files[0]
-                hist_path_rd = files[1]
 
         index = self.brain_atlas.bc.xyz2i(xyz_channels)[:, self.brain_atlas.xyz2dims]
         ccf_slice = self.brain_atlas.image[index[:, 0], :, index[:, 2]]
@@ -337,6 +307,35 @@ class LoadData:
 
         width = [self.brain_atlas.bc.i2x(0), self.brain_atlas.bc.i2x(456)]
         height = [self.brain_atlas.bc.i2z(index[0, 2]), self.brain_atlas.bc.i2z(index[-1, 2])]
+
+        hist_path_rd = None
+        hist_path_gr = None
+        # First see if the histology file exists before attempting to connect with FlatIron and
+        # download
+        if self.download_hist:
+            hist_dir = Path(self.sess_path.parent.parent, 'histology')
+            if hist_dir.exists():
+                path_to_rd_image = glob.glob(str(hist_dir) + '/*RD.tif')
+                if path_to_rd_image:
+                    hist_path_rd = tif2nrrd(Path(path_to_rd_image[0]))
+                else:
+                    files = download_histology_data(self.subj, self.lab)
+                    if files is not None:
+                        hist_path_rd = files[1]
+
+                path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.tif')
+                if path_to_gr_image:
+                    hist_path_gr = tif2nrrd(Path(path_to_gr_image[0]))
+                else:
+                    files = download_histology_data(self.subj, self.lab)
+                    if files is not None:
+                        hist_path_gr = files[0]
+
+            else:
+                files = download_histology_data(self.subj, self.lab)
+                if files is not None:
+                    hist_path_gr = files[0]
+                    hist_path_rd = files[1]
 
         if hist_path_rd:
             hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd)
@@ -432,10 +431,6 @@ class LoadData:
             ephys_desc_str = ", ".join(ephys_desc)
             ephys_dj_str = ephys_desc_str
 
-        self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
-                             alignment_qc=align_qc, ephys_qc=ephys_qc,
-                             ephys_qc_description=ephys_dj_str),
-                        allow_direct_insert=True, replace=True)
         self.alyx_str = ephys_qc.upper() + ': ' + ephys_desc_str
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
@@ -450,20 +445,3 @@ class LoadData:
         self.resolved = results['alignment_resolved']
 
         return self.resolved
-
-    def stream_raw_data(self, t):
-        if self.sr is not None:
-            self.sr.close()
-        self.sr, dsets = stream(self.probe_id, t0=t, one=self.one, cache=True)
-        raw = self.sr[:, :-1].T
-        h = neuropixel.trace_header()
-        sos = scipy.signal.butter(3, 300 / self.sr.fs / 2, btype='highpass', output='sos')
-        butt = scipy.signal.sosfiltfilt(sos, raw)
-        fk_kwargs = {'dx': 1, 'vbounds': [0, 1e6], 'ntr_pad': 160, 'ntr_tap': 0, 'lagc': .01,
-                     'btype': 'lowpass'}
-        destripe = voltage.destripe(raw, fs=self.sr.fs, fk_kwargs=fk_kwargs,
-                                    tr_sel=np.arange(raw.shape[0]))
-        ks2 = get_ks2(raw, dsets, self.one)
-        eqc_butt = viewseis(butt.T, si=1 / self.sr.fs, h=h, t0=t, title='butt', taxis=0)
-        eqc_dest = viewseis(destripe.T, si=1 / self.sr.fs, h=h, t0=t, title='destr', taxis=0)
-        eqc_ks2 = viewseis(ks2.T, si=1 / self.sr.fs, h=h, t0=t, title='ks2', taxis=0)
