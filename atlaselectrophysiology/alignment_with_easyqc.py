@@ -9,8 +9,10 @@ import numpy as np
 import pyqtgraph as pg
 import qt
 from oneibl.one import ONE
+from brainbox.core import Bunch
 
 import atlaselectrophysiology.ephys_atlas_gui as alignment_window
+import data_exploration_gui.gui_main as trial_window
 
 
 class AlignmentWindow(alignment_window.MainWindow):
@@ -20,6 +22,7 @@ class AlignmentWindow(alignment_window.MainWindow):
         self.line_x = None
         self.trial_curve = None
         self.time_plot = None
+        self.trial_gui = None
 
         super(AlignmentWindow, self).__init__(probe_id=probe_id, one=one, histology=histology)
 
@@ -66,6 +69,8 @@ class AlignmentWindow(alignment_window.MainWindow):
         self.trial_curve.setData(x=x, y=y, pen=self.rpen_dot, connect='finite')
         self.trial_curve.setClickable(True)
         self.fig_img.addItem(self.trial_curve)
+        self.fig_img.scene().sigMouseClicked.connect(self.on_mouse_clicked)
+        self.trial_curve.sigClicked.connect(self.trial_line_clicked)
 
     def remove_trials(self):
         self.fig_img.removeItem(self.trial_curve)
@@ -80,6 +85,25 @@ class AlignmentWindow(alignment_window.MainWindow):
         y[2, :] = np.nan
 
         return x.T.flatten(), y.T.flatten()
+
+    def trial_line_clicked(self, ev):
+        self.clicked = ev
+
+    def on_mouse_clicked(self, event):
+        if self.trial_gui is not None:
+            if not event.double() and type(self.clicked) == pg.PlotCurveItem:
+                self.pos = self.data_plot.mapFromScene(event.scenePos())
+                x = self.pos.x() * self.x_scale
+                trial_id = np.argmin(np.abs(self.selected_trials - x))
+
+
+                idx = np.where(self.trial_gui.data.y == 10*trial_id)
+                self.trial_scat = pg.ScatterPlotItem()
+                self.trial_gui.plots.fig4_raster.fig.addItem(self.trial_scat)
+                self.trial_scat.setData(self.trial_gui.data.x[idx], self.trial_gui.data.y[idx],
+                                        brush='r', size=1)
+
+                self.clicked = None
 
 
     def stream_raw_data(self, t):
@@ -137,6 +161,37 @@ class AlignmentWindow(alignment_window.MainWindow):
 
 
 
+class TrialWindow(trial_window.MainWindow):
+    def __init__(self):
+        super(TrialWindow, self).__init__()
+        self.alignment_gui = None
+        self.scat = None
+
+    def on_scatter_plot_clicked(self, scatter, point):
+        super().on_scatter_plot_clicked(scatter, point)
+        self.add_clust_scatter()
+
+    def on_cluster_list_clicked(self):
+        super().on_cluster_list_clicked()
+        self.add_clust_scatter()
+
+    def on_next_cluster_clicked(self):
+        super().on_next_cluster_clicked()
+        self.add_clust_scatter()
+
+    def on_previous_cluster_clicked(self):
+        super().on_previous_cluster_clicked()
+        self.add_clust_scatter()
+
+    def add_clust_scatter(self):
+        if not self.scat:
+            self.scat = pg.ScatterPlotItem()
+            self.alignment_gui.fig_img.addItem(self.scat)
+
+        self.scat.setData(self.data.spikes.times[self.data.clus_idx],
+                          self.data.spikes.depths[self.data.clus_idx], brush='r')
+
+
 
 def load_extra_data(probe_id, one=None):
     one = one or ONE()
@@ -151,7 +206,7 @@ def load_extra_data(probe_id, one=None):
     return trials
 
 
-def viewer(probe_id=None, one=None):
+def viewer(probe_id=None, one=None, data_explore=False):
     """
     """
     qt.create_app()
@@ -159,4 +214,16 @@ def viewer(probe_id=None, one=None):
     av = AlignmentWindow(probe_id=probe_id, one=one)
     av.plotdata.trials = trials
     av.show()
+
+    if data_explore:
+        data = Bunch()
+        data['spikes'] = av.plotdata.spikes
+        data['clusters'] = av.plotdata.clusters
+        data['trials'] = av.plotdata.trials
+        bv = TrialWindow()
+        bv.on_data_given(data)
+        av.trial_gui = bv
+        bv.alignment_gui = av
+        bv.show()
+
     return av
