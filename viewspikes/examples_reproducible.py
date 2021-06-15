@@ -1,95 +1,41 @@
-import numpy as np
-import scipy
-import matplotlib.pyplot as plt
-from easyqc.gui import viewseis
-
-
 from oneibl.one import ONE
-from ibllib.ephys import neuropixel
-from ibllib.dsp import voltage
-from brainbox.plot import driftmap
-import alf.io
-
-from needles2 import run_needles2
-from viewspikes.data import stream, get_ks2, get_spikes
-from viewspikes.plots import plot_insertion, show_psd, overlay_spikes
+from atlaselectrophysiology.alignment_with_easyqc import viewer
 
 one = ONE()
 
-eids = ['56b57c38-2699-4091-90a8-aba35103155e',
-       '746d1902-fa59-4cab-b0aa-013be36060d5',
-       '7b26ce84-07f9-43d1-957f-bc72aeb730a3',
-       'dac3a4c1-b666-4de0-87e8-8c514483cacf',
-       '6f09ba7e-e3ce-44b0-932b-c003fb44fb89',
-       '73918ae1-e4fd-4c18-b132-00cb555b1ad2',
-       'f312aaec-3b6f-44b3-86b4-3a0c119c0438',
-       'dda5fc59-f09a-4256-9fb5-66c67667a466',
-       'ee40aece-cffd-4edb-a4b6-155f158c666a',
-       'ecb5520d-1358-434c-95ec-93687ecd1396',
-       '54238fd6-d2d0-4408-b1a9-d19d24fd29ce',
-       'e535fb62-e245-4a48-b119-88ce62a6fe67',
-       'b03fbc44-3d8e-4a6c-8a50-5ea3498568e0',
-       'db4df448-e449-4a6f-a0e7-288711e7a75a',
-       '064a7252-8e10-4ad6-b3fd-7a88a2db5463',
-       '41872d7f-75cb-4445-bb1a-132b354c44f0',
-       'dfd8e7df-dc51-4589-b6ca-7baccfeb94b4',
-       '4a45c8ba-db6f-4f11-9403-56e06a33dfa4',
-       '4b00df29-3769-43be-bb40-128b1cba6d35',
-       '862ade13-53cd-4221-a3fa-dda8643641f2',
-       '3638d102-e8b6-4230-8742-e548cd87a949',
-       'c7248e09-8c0d-40f2-9eb4-700a8973d8c8',
-       'aad23144-0e52-4eac-80c5-c4ee2decb198',
-       'd0ea3148-948d-4817-94f8-dcaf2342bbbe',
-       '7f6b86f9-879a-4ea2-8531-294a221af5d0',
-       'd23a44ef-1402-4ed7-97f5-47e9a7a504d9']
 
-insertions = one.alyx.rest('insertions', 'list', django=f'session__in,{eids}')
-##
-INSERTION_INDEX = 10
-insertion = insertions[INSERTION_INDEX]
-## Example 1: Stream one second of ephys data
-# pid, t0 = ("e864fca7-40e3-4a80-b736-51d4662405e4", 2155)
-# pid, t0 = ('ce24bbe9-ae70-4659-9e9c-564d1a865de8', 610)
-print(f"phy_launcher.py -e {insertion['session']} -p {insertion['name']}")
-
-pid, t0 = (insertion['id'], 2500)
+pids = ['ce397420-3cd2-4a55-8fd1-5e28321981f4',
+       'e31b4e39-e350-47a9-aca4-72496d99ff2a',
+       'f8d0ecdc-b7bd-44cc-b887-3d544e24e561',
+       '6fc4d73c-2071-43ec-a756-c6c6d8322c8b',
+       'c17772a9-21b5-49df-ab31-3017addea12e',
+       '0851db85-2889-4070-ac18-a40e8ebd96ba',
+       'eeb27b45-5b85-4e5c-b6ff-f639ca5687de',
+       '69f42a9c-095d-4a25-bca8-61a9869871d3',
+       'f03b61b4-6b13-479d-940f-d1608eb275cc',
+       'f2ee886d-5b9c-4d06-a9be-ee7ae8381114',
+       'f26a6ab1-7e37-4f8d-bb50-295c056e1062',
+       'c4f6665f-8be5-476b-a6e8-d81eeae9279d',
+       '9117969a-3f0d-478b-ad75-98263e3bfacf',
+       'febb430e-2d50-4f83-87a0-b5ffbb9a4943',
+       '8413c5c6-b42b-4ec6-b751-881a54413628',
+       '8b7c808f-763b-44c8-b273-63c6afbc6aae',
+       'f936a701-5f8a-4aa1-b7a9-9f8b5b69bc7c',
+       '63517fd4-ece1-49eb-9259-371dc30b1dd6',
+       '8d59da25-3a9c-44be-8b1a-e27cdd39ca34',
+       '19baa84c-22a5-4589-9cbd-c23f111c054c',
+       '143dd7cf-6a47-47a1-906d-927ad7fe9117',
+       '84bb830f-b9ff-4e6b-9296-f458fb41d160',
+       'b749446c-18e3-4987-820a-50649ab0f826',
+       '36362f75-96d8-4ed4-a728-5e72284d0995',
+       '9657af01-50bd-4120-8303-416ad9e24a51',
+       'dab512bd-a02d-4c1f-8dbc-9155a163efc0']
 
 
-sr, dsets = stream(pid, t0=t0, one=one, cache=True)
-raw = sr[:, :-1].T
 
-## Example: Plot Insertion for a given PID (todo: use Needles 2 for interactive)
-av = run_needles2.view(lazy=True)
-av.add_insertion_by_id(pid)
-
-## Example: Display the raw / pre-proc and KS2 parts -
-h = neuropixel.trace_header()
-sos = scipy.signal.butter(3, 300 / sr.fs / 2, btype='highpass', output='sos')
-butt = scipy.signal.sosfiltfilt(sos, raw)
-fk_kwargs ={'dx': 1, 'vbounds': [0, 1e6], 'ntr_pad': 160, 'ntr_tap': 0, 'lagc': .01, 'btype': 'lowpass'}
-destripe = voltage.destripe(raw, fs=sr.fs, fk_kwargs=fk_kwargs, tr_sel=np.arange(raw.shape[0]))
-ks2 = get_ks2(raw, dsets, one)
-eqc_butt = viewseis(butt.T, si=1 / sr.fs, h=h, t0=t0, title='butt', taxis=0)
-eqc_dest = viewseis(destripe.T, si=1 / sr.fs, h=h, t0=t0, title='destr', taxis=0)
-eqc_ks2 = viewseis(ks2.T, si=1 / sr.fs, h=h, t0=t0, title='ks2', taxis=0)
+INDEX = 22
+pid = pids[INDEX]
+av = viewer(pid, one=one)
 
 
-## Example: overlay the spikes on the existing easyqc instances
-spikes, clusters, channels = get_spikes(dsets, one)
-_, tspi, xspi = overlay_spikes(eqc_butt, spikes, clusters, channels)
-overlay_spikes(eqc_dest, spikes, clusters, channels)
-overlay_spikes(eqc_ks2, spikes, clusters, channels)
-
-## Get the behaviour information
-eid = dsets[0]['session'][-36:]
-tdsets = one.alyx.rest('datasets', 'list', session=eid, django='name__icontains,trials.')
-one.download_datasets(tdsets)
-trials = alf.io.load_object(one.path_from_eid(eid).joinpath('alf'), 'trials')
-rewards = trials['feedback_times'][trials['feedbackType'] == 1]
-
-## Do the drift map with some task information overlaid
-fig, ax = plt.subplots()
-driftmap(spikes['times'], spikes['depths'], t_bin=0.1, d_bin=5, ax=ax)
-from ibllib.plots import vertical_lines
-vertical_lines(rewards, ymin=0, ymax=3800, ax=ax)
 

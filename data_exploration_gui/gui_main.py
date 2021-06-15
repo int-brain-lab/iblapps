@@ -12,8 +12,27 @@ import data_exploration_gui.misc_class as misc
 from pathlib import Path
 import numpy as np
 
+import qt
+import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
+
 
 class MainWindow(QtWidgets.QMainWindow):
+
+    @staticmethod
+    def _instances():
+        app = QtWidgets.QApplication.instance()
+        return [w for w in app.topLevelWidgets() if isinstance(w, MainWindow)]
+
+    @staticmethod
+    def _get_or_create(title='Data Exploration GUI', **kwargs):
+        av = next(filter(lambda e: e.isVisible() and e.windowTitle() == title,
+                         MainWindow._instances()), None)
+        if av is None:
+            av = MainWindow(**kwargs)
+            av.setWindowTitle(title)
+
+            return av
+
     def __init__(self):
         super(MainWindow, self).__init__()
 
@@ -147,10 +166,35 @@ class MainWindow(QtWidgets.QMainWindow):
 
             self.update_display_string()
 
+    def on_data_given(self, data):
+        self.reset_gui()
+        self.data.prepare_data(data.spikes, data.clusters, data.trials)
+        self.data.compute_timescales()
+
+        order = self.data.sort_by_id
+        [self.clust_ids, self.clust_amps, self.clust_depths, self.clust_colours] = \
+            self.data.sort_data(order)
+
+        self.initialise_gui()
+        nan_trials = self.filter.compute_trial_options(self.data.trials)
+        self.misc.terminal.append('>> Found ' + str(
+            len(nan_trials)) + ' nan trials in data ...... these will be removed')
+
+        self.trials = self.filter.compute_and_sort_trials(self.stim_contrast)
+        self.trials_id = self.trials[self.case][self.sort_method]['trials']
+
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case,
+                                          self.sort_method, self.hold)
+
+        self.update_display_string()
+
+
+
     # All commands associated with cluster list
     def on_cluster_list_clicked(self):
         # Get new cluster index
         self.clust = self.cluster.on_cluster_list_clicked()
+        print(self.clust)
         
         # Update cluster list and scatter plot 
         self.cluster.update_list_icon()
@@ -282,6 +326,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.check_n_trials()
         self.update_display_string()
 
+    def on_cluster_chosen(self, cluster):
+        self.clust = np.where(self.data.ids == cluster)[0][0]
+        print(self.clust)
+        print(self.clust_prev)
+        self.cluster.update_current_row(self.clust)
+        self.cluster.update_list_icon()
+        self.scatter.set_current_point(self.clust)
+        self.scatter.update_scatter_icon(self.clust_prev)
+        self.scatter.update_prev_point()
+        self.clust_prev = self.cluster.update_cluster_index()
+        self.data.populate(self.clust)
+        self.plots.change_all_plots_final(self.data, self.clust, self.trials, self.case, self.sort_method, self.hold)
+        self.update_display_string()
+
 
     def on_trial_sort_change(self, button):
 
@@ -338,7 +396,7 @@ class MainWindow(QtWidgets.QMainWindow):
         fig_width = exporter.getTargetRect().width() 
         button_width = 0.2 * fig_width
         button.setFixedWidth(button_width)
-        #button_width = button.width()
+        # button_width = button.width()
         button.move(fig_width - button_width, 0)
 
     def check_n_trials(self):
@@ -350,6 +408,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.trials_id = self.trials[self.case][self.sort_method]['trials']
         self.filter.ntrials_text.setText('No. of trials = ' + str(len(self.trials_id)))
         self.data.waveform_text.setText('No. of spikes = ' + str(len(self.data.clus_idx)))
+
+
+def viewer(data=None):
+    """
+    """
+    qt.create_app()
+    av = MainWindow._get_or_create()
+    av.show()
+    if data is not None:
+        av.on_data_given(data)
+    return av
 
 
 if __name__ == '__main__':

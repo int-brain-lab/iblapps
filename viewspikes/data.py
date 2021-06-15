@@ -76,9 +76,12 @@ def stream(pid, t0, one=None, cache=True, dsets=None):
                              open=True)
         return sr, dsets
 
-    dset_ch = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ch" and '.ap.' in dset['name'])
-    dset_meta = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.meta" and '.ap.' in dset['name'])
-    dset_cbin = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ap" and '.ap.' in dset['name'])
+    dset_ch = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ch" and
+                   '.ap.' in dset['name'])
+    dset_meta = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.meta" and
+                     '.ap.' in dset['name'])
+    dset_cbin = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ap" and
+                     '.ap.' in dset['name'])
 
     file_ch, file_meta = one.download_datasets([dset_ch, dset_meta])
 
