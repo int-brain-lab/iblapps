@@ -4,7 +4,7 @@ from ibllib.ephys import neuropixel
 from viewspikes.data import stream, get_ks2, get_spikes
 from viewspikes.plots import overlay_spikes
 import scipy
-from PyQt5 import QtCore
+from PyQt5 import QtCore, QtGui
 import numpy as np
 import pyqtgraph as pg
 import qt
@@ -23,8 +23,15 @@ class AlignmentWindow(alignment_window.MainWindow):
         self.trial_curve = None
         self.time_plot = None
         self.trial_gui = None
+        self.clicked = None
 
         super(AlignmentWindow, self).__init__(probe_id=probe_id, one=one, histology=histology)
+
+        # remove the lines from the plots
+        self.remove_lines_points()
+        self.lines_features = []
+        self.lines_tracks = []
+        self.points = []
 
 
     def on_mouse_double_clicked(self, event):
@@ -95,13 +102,13 @@ class AlignmentWindow(alignment_window.MainWindow):
                 self.pos = self.data_plot.mapFromScene(event.scenePos())
                 x = self.pos.x() * self.x_scale
                 trial_id = np.argmin(np.abs(self.selected_trials - x))
-
+                print(trial_id)
 
                 idx = np.where(self.trial_gui.data.y == 10*trial_id)
                 self.trial_scat = pg.ScatterPlotItem()
                 self.trial_gui.plots.fig4_raster.fig.addItem(self.trial_scat)
                 self.trial_scat.setData(self.trial_gui.data.x[idx], self.trial_gui.data.y[idx],
-                                        brush='r', size=1)
+                                        brush='r', size=5)
 
                 self.clicked = None
 
@@ -114,10 +121,8 @@ class AlignmentWindow(alignment_window.MainWindow):
         h = neuropixel.trace_header()
         sos = scipy.signal.butter(3, 300 / self.sr.fs / 2, btype='highpass', output='sos')
         butt = scipy.signal.sosfiltfilt(sos, raw)
-        fk_kwargs = {'dx': 1, 'vbounds': [0, 1e6], 'ntr_pad': 160, 'ntr_tap': 0, 'lagc': .01,
-                     'btype': 'lowpass'}
-        destripe = voltage.destripe(raw, fs=self.sr.fs, fk_kwargs=fk_kwargs,
-                                    tr_sel=np.arange(raw.shape[0]))
+
+        destripe = voltage.destripe(raw, fs=self.sr.fs)
         ks2 = get_ks2(raw, dsets, self.loaddata.one)
         eqc_butt = viewseis(butt.T, si=1 / self.sr.fs, h=h, t0=t, title='butt', taxis=0)
         eqc_dest = viewseis(destripe.T, si=1 / self.sr.fs, h=h, t0=t, title='destr', taxis=0)
@@ -159,6 +164,19 @@ class AlignmentWindow(alignment_window.MainWindow):
             self.remove_line_x('Time')
             self.remove_trial_curve('Time')
 
+    def closeEvent(self, event):
+        """
+        Close the spikeglx file when window is closed
+        """
+        super().closeEvent(event)
+        if self.sr is not None:
+            self.sr.close()
+
+    def complete_button_pressed(self):
+        QtGui.QMessageBox.information(self, 'Status', ("Not going to upload any results, to do"
+                                                       " an alignment, launch normally"))
+
+
 
 
 class TrialWindow(trial_window.MainWindow):
@@ -189,7 +207,7 @@ class TrialWindow(trial_window.MainWindow):
             self.alignment_gui.fig_img.addItem(self.scat)
 
         self.scat.setData(self.data.spikes.times[self.data.clus_idx],
-                          self.data.spikes.depths[self.data.clus_idx], brush='r')
+                          self.data.spikes.depths[self.data.clus_idx], brush='g', size=5)
 
 
 
