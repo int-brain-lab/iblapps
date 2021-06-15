@@ -54,6 +54,15 @@ def get_spikes(dsets, one):
 
 
 def stream(pid, t0, one=None, cache=True, dsets=None):
+    """
+    NB: returned Reader object must be closed after use
+    :param pid: Probe UUID
+    :param t0:
+    :param one: An instance of ONE
+    :param cache:
+    :param dsets:
+    :return:
+    """
     tlen = 1
     assert one
     if cache:
@@ -90,6 +99,7 @@ def stream(pid, t0, one=None, cache=True, dsets=None):
         out_meta = samples_folder.joinpath(sample_file_name)
         shutil.copy(sr.file_meta_data, out_meta)
         with open(out_meta.with_suffix('.bin'), 'wb') as fp:
+            sr.open()
             sr._raw[:].tofile(fp)
 
     return sr, dsets
