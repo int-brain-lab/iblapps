@@ -1068,9 +1068,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
             self.fig_img.setYRange(min=self.probe_tip - self.probe_extra,
                                    max=self.probe_top + self.probe_extra, padding=self.pad)
-            self.fig_img.setLimits(xMin=data['xrange'][0], xMax=data['xrange'][1],
-                                   yMin=self.probe_tip - self.probe_extra,
-                                   yMax=self.probe_top + self.probe_extra)
+            self.fig_img.setLimits(xMin=data['xrange'][0], xMax=data['xrange'][1])
+                                   # yMin=self.probe_tip - self.probe_extra - self.pad,
+                                   # yMax=self.probe_top + self.probe_extra + self.pad)
             self.set_axis(self.fig_img, 'bottom', label=data['xaxis'])
             self.y_scale = data['scale'][1]
             self.x_scale = data['scale'][0]
