@@ -50,8 +50,6 @@ class AlignmentWindow(alignment_window.MainWindow):
 
                 return
 
-        super().on_mouse_double_clicked(event)
-
     def plot_image(self, data):
         super().plot_image(data)
         self.remove_trial_curve(data['xaxis'])
@@ -117,17 +115,21 @@ class AlignmentWindow(alignment_window.MainWindow):
     def stream_raw_data(self, t):
         if self.sr is not None:
             self.sr.close()
-        self.sr, dsets = stream(self.loaddata.probe_id, t0=t, one=self.loaddata.one, cache=True)
+
+        t0 = np.round(t)
+        self.sr, dsets = stream(self.loaddata.probe_id, t0=t0,
+                                one=self.loaddata.one, cache=True)
         raw = self.sr[:, :-1].T
         h = neuropixel.trace_header()
         sos = scipy.signal.butter(3, 300 / self.sr.fs / 2, btype='highpass', output='sos')
         butt = scipy.signal.sosfiltfilt(sos, raw)
-
         destripe = voltage.destripe(raw, fs=self.sr.fs)
         ks2 = get_ks2(raw, dsets, self.loaddata.one)
-        self.eqc['butterworth'] = viewseis(butt.T, si=1 / self.sr.fs, h=h, t0=t, title='butt', taxis=0)
-        self.eqc['destripe'] = viewseis(destripe.T, si=1 / self.sr.fs, h=h, t0=t, title='destr', taxis=0)
-        self.eqc['ks2'] = viewseis(ks2.T, si=1 / self.sr.fs, h=h, t0=t, title='ks2', taxis=0)
+        self.eqc['butterworth'] = viewseis(butt.T, si=1 / self.sr.fs, h=h, t0=t0, title='butt',
+                                           taxis=0)
+        self.eqc['destripe'] = viewseis(destripe.T, si=1 / self.sr.fs, h=h, t0=t0, title='destr',
+                                        taxis=0)
+        self.eqc['ks2'] = viewseis(ks2.T, si=1 / self.sr.fs, h=h, t0=t0, title='ks2', taxis=0)
 
         overlay_spikes(self.eqc['butterworth'], self.plotdata.spikes, self.plotdata.clusters,
                        self.plotdata.channels)
