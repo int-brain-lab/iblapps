@@ -24,6 +24,7 @@ class AlignmentWindow(alignment_window.MainWindow):
         self.time_plot = None
         self.trial_gui = None
         self.clicked = None
+        self.eqc = {}  # handles for viewdata windows
 
         super(AlignmentWindow, self).__init__(probe_id=probe_id, one=one, histology=histology)
 
@@ -124,15 +125,15 @@ class AlignmentWindow(alignment_window.MainWindow):
 
         destripe = voltage.destripe(raw, fs=self.sr.fs)
         ks2 = get_ks2(raw, dsets, self.loaddata.one)
-        eqc_butt = viewseis(butt.T, si=1 / self.sr.fs, h=h, t0=t, title='butt', taxis=0)
-        eqc_dest = viewseis(destripe.T, si=1 / self.sr.fs, h=h, t0=t, title='destr', taxis=0)
-        eqc_ks2 = viewseis(ks2.T, si=1 / self.sr.fs, h=h, t0=t, title='ks2', taxis=0)
+        self.eqc['butterworth'] = viewseis(butt.T, si=1 / self.sr.fs, h=h, t0=t, title='butt', taxis=0)
+        self.eqc['destripe'] = viewseis(destripe.T, si=1 / self.sr.fs, h=h, t0=t, title='destr', taxis=0)
+        self.eqc['ks2'] = viewseis(ks2.T, si=1 / self.sr.fs, h=h, t0=t, title='ks2', taxis=0)
 
-        overlay_spikes(eqc_butt, self.plotdata.spikes, self.plotdata.clusters,
+        overlay_spikes(self.eqc['butterworth'], self.plotdata.spikes, self.plotdata.clusters,
                        self.plotdata.channels)
-        overlay_spikes(eqc_dest, self.plotdata.spikes, self.plotdata.clusters,
+        overlay_spikes(self.eqc['destripe'], self.plotdata.spikes, self.plotdata.clusters,
                        self.plotdata.channels)
-        overlay_spikes(eqc_ks2, self.plotdata.spikes, self.plotdata.clusters,
+        overlay_spikes(self.eqc['ks2'], self.plotdata.spikes, self.plotdata.clusters,
                        self.plotdata.channels)
 
     def remove_line_x(self, xaxis):

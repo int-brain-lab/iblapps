@@ -9,8 +9,5 @@ one = ONE()
 "f86e9571-63ff-4116-9c40-aa44d57d2da9",  # CSHL049_2020-01-08_probe00 a bit stripy but fine
 "675952a4-e8b3-4e82-a179-cc970d5a8b01",  # CSH_ZAD_029_2020-09-19_probe01 a bit stripy as well
 
-
-
-pid = "491540f7-7878-410f-894e-7ac4766b5105"
-
+pid = "af2a0072-e17e-4368-b80b-1359bf6d4647"
 av = viewer(pid, one=one)
