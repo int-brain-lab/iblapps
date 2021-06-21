@@ -1,7 +1,7 @@
 from easyqc.gui import viewseis
 from ibllib.dsp import voltage
 from ibllib.ephys import neuropixel
-from viewspikes.data import stream, get_ks2, get_spikes
+from viewspikes.data import stream, get_ks2
 from viewspikes.plots import overlay_spikes
 import scipy
 from PyQt5 import QtCore, QtGui
@@ -18,7 +18,8 @@ import data_exploration_gui.gui_main as trial_window
 class AlignmentWindow(alignment_window.MainWindow):
     def __init__(self, probe_id=None, one=None, histology=False):
 
-        self.sr = None
+        self.ap = None  # spikeglx.Reader for ap band
+        self.lf = None  # spikeglx.Reader for lf band
         self.line_x = None
         self.trial_curve = None
         self.time_plot = None
@@ -46,7 +47,8 @@ class AlignmentWindow(alignment_window.MainWindow):
                                               pen=self.kpen_dot, movable=False)
                 self.line_x.setZValue(100)
                 self.fig_img.addItem(self.line_x)
-                self.stream_raw_data(pos.x() * self.x_scale)
+                self.stream_ap(pos.x() * self.x_scale)
+                self.stream_lf(pos.x() * self.x_scale)
 
                 return
 
@@ -112,24 +114,35 @@ class AlignmentWindow(alignment_window.MainWindow):
                 self.clicked = None
 
 
-    def stream_raw_data(self, t):
-        if self.sr is not None:
-            self.sr.close()
+    def stream_lf(self, t):
+        if self.lf is not None:
+            self.lf.close()
 
-        t0 = np.round(t)
-        self.sr, dsets = stream(self.loaddata.probe_id, t0=t0,
-                                one=self.loaddata.one, cache=True)
-        raw = self.sr[:, :-1].T
+        self.lf, dsets, t0 = stream(
+            self.loaddata.probe_id, t=t, one=self.loaddata.one, cache=True, typ='lf')
+        sos = scipy.signal.butter(3, 5 / self.lf.fs / 2, btype='highpass', output='sos')
+        butt = scipy.signal.sosfiltfilt(sos, self.lf[:, :-1].T)
         h = neuropixel.trace_header()
-        sos = scipy.signal.butter(3, 300 / self.sr.fs / 2, btype='highpass', output='sos')
+        self.eqc['raw_lf'] = viewseis(
+            butt.T, si=1 / self.lf.fs, h=h, t0=t0, title='raw_lf', taxis=0)
+
+    def stream_ap(self, t):
+        if self.ap is not None:
+            self.ap.close()
+
+        self.ap, dsets, t0 = stream(
+            self.loaddata.probe_id, t=t, one=self.loaddata.one, cache=True)
+        raw = self.ap[:, :-1].T
+        h = neuropixel.trace_header()
+        sos = scipy.signal.butter(3, 300 / self.ap.fs / 2, btype='highpass', output='sos')
         butt = scipy.signal.sosfiltfilt(sos, raw)
-        destripe = voltage.destripe(raw, fs=self.sr.fs)
+        destripe = voltage.destripe(raw, fs=self.ap.fs)
         ks2 = get_ks2(raw, dsets, self.loaddata.one)
-        self.eqc['butterworth'] = viewseis(butt.T, si=1 / self.sr.fs, h=h, t0=t0, title='butt',
+        self.eqc['butterworth'] = viewseis(butt.T, si=1 / self.ap.fs, h=h, t0=t0, title='butt',
                                            taxis=0)
-        self.eqc['destripe'] = viewseis(destripe.T, si=1 / self.sr.fs, h=h, t0=t0, title='destr',
+        self.eqc['destripe'] = viewseis(destripe.T, si=1 / self.ap.fs, h=h, t0=t0, title='destr',
                                         taxis=0)
-        self.eqc['ks2'] = viewseis(ks2.T, si=1 / self.sr.fs, h=h, t0=t0, title='ks2', taxis=0)
+        self.eqc['ks2'] = viewseis(ks2.T, si=1 / self.ap.fs, h=h, t0=t0, title='ks2', taxis=0)
 
         overlay_spikes(self.eqc['butterworth'], self.plotdata.spikes, self.plotdata.clusters,
                        self.plotdata.channels)
@@ -172,8 +185,8 @@ class AlignmentWindow(alignment_window.MainWindow):
         Close the spikeglx file when window is closed
         """
         super().closeEvent(event)
-        if self.sr is not None:
-            self.sr.close()
+        if self.ap is not None:
+            self.ap.close()
 
     def complete_button_pressed(self):
         QtGui.QMessageBox.information(self, 'Status', ("Not going to upload any results, to do"

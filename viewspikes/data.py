@@ -53,20 +53,23 @@ def get_spikes(dsets, one):
     return spikes, clusters, channels
 
 
-def stream(pid, t0, one=None, cache=True, dsets=None):
+def stream(pid, t, one=None, cache=True, dsets=None, typ='ap'):
     """
     NB: returned Reader object must be closed after use
     :param pid: Probe UUID
-    :param t0:
+    :param t:
     :param one: An instance of ONE
     :param cache:
     :param dsets:
+    :param typ: 'ap' or 'lf'
     :return:
     """
     tlen = 1
     assert one
+    assert typ in ['lf', 'ap']
+    t0 = np.floor(t / CHUNK_DURATION_SECS) * CHUNK_DURATION_SECS
     if cache:
-        samples_folder = Path(one._par.CACHE_DIR).joinpath('cache', 'ap')
+        samples_folder = Path(one._par.CACHE_DIR).joinpath('cache', typ)
     sample_file_name = Path(f"{pid}_{str(int(t0)).zfill(5)}.meta")
     if dsets is None:
         dsets = one.alyx.rest('datasets', 'list', probe_insertion=pid)
@@ -74,14 +77,14 @@ def stream(pid, t0, one=None, cache=True, dsets=None):
         print(f'loading {sample_file_name} from cache')
         sr = spikeglx.Reader(samples_folder.joinpath(sample_file_name).with_suffix('.bin'),
                              open=True)
-        return sr, dsets
+        return sr, dsets, t0
 
     dset_ch = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ch" and
-                   '.ap.' in dset['name'])
+                   f'.{typ}.' in dset['name'])
     dset_meta = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.meta" and
-                     '.ap.' in dset['name'])
-    dset_cbin = next(dset for dset in dsets if dset['dataset_type'] == "ephysData.raw.ap" and
-                     '.ap.' in dset['name'])
+                     f'.{typ}.' in dset['name'])
+    dset_cbin = next(dset for dset in dsets if dset['dataset_type'] == f"ephysData.raw.{typ}" and
+                     f'.{typ}.' in dset['name'])
 
     file_ch, file_meta = one._download_datasets([dset_ch, dset_meta])
 
@@ -102,4 +105,4 @@ def stream(pid, t0, one=None, cache=True, dsets=None):
             sr.open()
             sr._raw[:].tofile(fp)
 
-    return sr, dsets
+    return sr, dsets, t0

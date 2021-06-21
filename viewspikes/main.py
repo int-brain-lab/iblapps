@@ -59,7 +59,7 @@ if isinstance(pid, Path):
     sr = spikeglx.Reader(file_sample, open=True)
     dsets = one.alyx.rest('datasets', 'list', probe_insertion=pid)
 else:
-    sr, dsets = stream(pid, t0, one=one, samples_folder=folder_samples)
+    sr, dsets, t0 = stream(pid, t0, one=one, samples_folder=folder_samples)
 
 #
 plot_insertion(pid, one)
