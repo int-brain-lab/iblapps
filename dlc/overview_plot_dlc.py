@@ -22,6 +22,21 @@ import matplotlib
 # https://github.com/lindermanlab/ssm
 
 
+    
+def get_all_sess_with_ME():
+    one = ONE()
+    # get all bwm sessions with dlc
+    all_sess = one.alyx.rest('sessions', 'list', 
+                              project='ibl_neuropixel_brainwide_01',
+                              task_protocol="ephys", 
+                              dataset_types='camera.ROIMotionEnergy')
+
+    eids = [s['url'].split('/')[-1] for s in all_sess]
+    
+    return eids     
+    
+
+
 def get_repeated_sites():    
     one = ONE()
     STR_QUERY = 'probe_insertion__session__project__name__icontains,ibl_neuropixel_brainwide_01,' \
@@ -34,6 +49,27 @@ def get_repeated_sites():
     eids = [s['session']['id'] for s in all_sess]
     
     return eids
+    
+    
+def check_progress():
+    
+    one = ONE()
+    eids = get_repeated_sites()
+    
+    s = {}
+    comp = []
+    for eid in eids:
+        
+        task = one.alyx.rest('tasks', 'list', session=eid, name='EphysDLC')[0]
+        try:
+            s[eid] = task['version']
+            print(task['version'])
+            if task['version'][:3] != '1.1':
+                comp.append(eid)    
+        except:
+            print(eid, 'has no task version')        
+    
+    return s    
     
     
 def download_all_dlc():
@@ -127,7 +163,7 @@ def get_dlc_XYs(eid, video_type):
 #        return
     
                  
-    one.load(eid, dataset_types = dataset_types)
+    one.load(eid, dataset_types = dataset_types)  #clobber=True # force download
     local_path = one.path_from_eid(eid)  
     alf_path = local_path / 'alf'   
     
@@ -529,16 +565,20 @@ def plot_licks(eid, combine=False):
 
 def lick_raster(licks_pos):
 
-    plt.imshow(licks_pos,extent=[-0.5,1.5,-0.5,1.5], cmap='gray_r')
+    #plt.figure(figsize=(4,4))
+    
+    y_dims, x_dims = len(licks_pos), len(licks_pos[0])
+    plt.imshow(licks_pos,aspect='auto', extent=[-0.5,1.5,y_dims,0],
+               cmap='gray_r')
     
     ax = plt.gca()
-    ax.set_yticklabels([])
     ax.set_xticks([-0.5,0,0.5,1,1.5])
     ax.set_xticklabels([-0.5,0,0.5,1,1.5])
     plt.ylabel('trials')
     plt.xlabel('time [sec]')
     ax.axvline(x=0, label='feedback time', linestyle = '--', c='r')
     plt.title('lick events per correct trial')
+    plt.tight_layout()
 
 
 
@@ -840,30 +880,30 @@ def non_uniform_savgol(x, y, window, polynom):
     return y_smoothed
 
 
-def align_left_right_pupil(eid):
+#def align_left_right_pupil(eid):
 
-    timesL, XYsL = get_dlc_XYs(eid, 'left')    
-    dL=get_pupil_diameter(XYsL)
-    timesR, XYsR = get_dlc_XYs(eid, 'right') 
-    dR=get_pupil_diameter(XYsR)
+#    timesL, XYsL = get_dlc_XYs(eid, 'left')    
+#    dL=get_pupil_diameter(XYsL)
+#    timesR, XYsR = get_dlc_XYs(eid, 'right') 
+#    dR=get_pupil_diameter(XYsR)
 
-    # align time series left/right
-    interpolater = interp1d(
-        timesR,
-        np.arange(len(timesR)),
-        kind="cubic",
-        fill_value="extrapolate",)
+#    # align time series left/right
+#    interpolater = interp1d(
+#        timesR,
+#        np.arange(len(timesR)),
+#        kind="cubic",
+#        fill_value="extrapolate",)
 
-    idx_aligned = np.round(interpolater(timesL)).astype(np.int)
-    dRa = dR[idx_aligned]
-    
-    plt.plot(timesL,zscore(dL),label='left')
-    plt.plot(timesL,zscore(dRa),label='right')
-    plt.title('smoothed, aligned, z-scored right/left pupil diameter \n'
-             f'{eid}')  
-    plt.legend(loc='lower right')
-    plt.ylabel('pupil diameter')
-    plt.xlabel('time [sec]')
+#    idx_aligned = np.round(interpolater(timesL)).astype(np.int)
+#    dRa = dR[idx_aligned]
+#    
+#    plt.plot(timesL,zscore(dL),label='left')
+#    plt.plot(timesL,zscore(dRa),label='right')
+#    plt.title('smoothed, aligned, z-scored right/left pupil diameter \n'
+#             f'{eid}')  
+#    plt.legend(loc='lower right')
+#    plt.ylabel('pupil diameter')
+#    plt.xlabel('time [sec]')
 
 
 
@@ -874,7 +914,7 @@ def pupil_diameter_PSTH(eid, s=None, times=None):
     eid = 'd0ea3148-948d-4817-94f8-dcaf2342bbbe' is good
     '''
 
-    rt = 4  # duration of window
+    rt = 2  # duration of window
     st = -0.5  # lag of window wrt to stype 
   
     if (s is None) or (times is None):
@@ -930,7 +970,7 @@ def motion_energy_PSTH(eid):
     eid = '15f742e1-1043-45c9-9504-f1e8a53c1744'
     '''
 
-    rt = 4  # duration of window
+    rt = 2  # duration of window
     st = -0.5  # lag of window wrt to stype 
     stype = 'stimOn_times'
 
@@ -940,73 +980,78 @@ def motion_energy_PSTH(eid):
     ts = trials.intervals[0][0]
     te = trials.intervals[-1][1]
 
-    for video_type in ['left','right','body']:
-        t,m = get_ME(eid, video_type)       
-        m = zscore(m,nan_policy='omit') 
+    try:
+        for video_type in ['left','right','body']:
+            t,m = get_ME(eid, video_type)       
+            m = zscore(m,nan_policy='omit') 
 
-        sta, end = find_nearest(t,ts), find_nearest(t,te) 
-        t = t[sta:end]
-        m = m[sta:end]
+            sta, end = find_nearest(t,ts), find_nearest(t,te) 
+            t = t[sta:end]
+            m = m[sta:end]
 
-        ME[video_type] = [t,m]
+            ME[video_type] = [t,m]
 
-    # align to body cam
-    for video_type in ['left','right']:
+        # align to body cam
+        for video_type in ['left','right']:
 
-        # align time series camera/neural
-        interpolater = interp1d(
-            ME[video_type ][0],
-            np.arange(len(ME[video_type ][0])),
-            kind="cubic",
-            fill_value="extrapolate")
+            # align time series camera/neural
+            interpolater = interp1d(
+                ME[video_type ][0],
+                np.arange(len(ME[video_type ][0])),
+                kind="cubic",
+                fill_value="extrapolate")
 
-        idx_aligned = np.round(interpolater(ME['body'][0])).astype(int)
-        ME[video_type] = [ME['body'][0], ME[video_type][1][idx_aligned]]
+            idx_aligned = np.round(interpolater(ME['body'][0])).astype(int)
+            ME[video_type] = [ME['body'][0], ME[video_type][1][idx_aligned]]
 
-  
-    D = {}
- 
-    fs = 30
-    xs = np.arange(rt*fs)  # number of frames 
-    xs = np.concatenate([-1*np.array(list(reversed(xs[:int(abs(st)*fs)]))),
-                          np.arange(rt*fs)[1:1+len(xs[int(abs(st)*fs):])]])
-    xs = xs /float(fs)
+      
+        D = {}
+     
+        fs = 30
+        xs = np.arange(rt*fs)  # number of frames 
+        xs = np.concatenate([-1*np.array(list(reversed(xs[:int(abs(st)*fs)]))),
+                              np.arange(rt*fs)[1:1+len(xs[int(abs(st)*fs):])]])
+        xs = xs /float(fs)
+        
+        cols = {'left':'r','right':'b','body':'g'}
+            
+        for video_type in ME:
+            # that's centered at feedback time
+            
+            
+            D[video_type] = []
+            
+            times,s = ME[video_type]
+
+            trs = trials[stype][20:-20]    
+            for i in trs:
+
+                start_idx = int(find_nearest(times,i) + st*30)
+                end_idx = int(start_idx  + rt*30)  
+
+                D[video_type].append(s[start_idx:end_idx])
+
+        
+            MEAN = np.mean(D[video_type],axis=0)
+            STD = np.std(D[video_type],axis=0)/np.sqrt(len(trs)) 
+           
+
+            plt.plot(xs, MEAN, label=video_type, 
+                     color = cols[video_type], linewidth = 2)
+            plt.fill_between(xs, MEAN + STD, MEAN - STD, color = cols[video_type],
+                             alpha=0.2)
+            
+        ax = plt.gca()
+        ax.axvline(x=0, label='stimOn', linestyle = '--', c='k')
+        plt.title('Motion Energy PSTH')
+        plt.xlabel('time [sec]')
+        plt.ylabel('z-scored motion energy [a.u.]') 
+        plt.legend(loc='lower right')        
+        
+    except:
+        plt.title('No motion energy available!')
+
     
-    cols = {'left':'r','right':'b','body':'g'}
-        
-    for video_type in ME:
-        # that's centered at feedback time
-        
-        
-        D[video_type] = []
-        
-        times,s = ME[video_type]
-
-        trs = trials[stype][20:-20]    
-        for i in trs:
-
-            start_idx = int(find_nearest(times,i) + st*30)
-            end_idx = int(start_idx  + rt*30)  
-
-            D[video_type].append(s[start_idx:end_idx])
-
-    
-        MEAN = np.mean(D[video_type],axis=0)
-        STD = np.std(D[video_type],axis=0)/np.sqrt(len(trs)) 
-       
-
-        plt.plot(xs, MEAN, label=video_type, 
-                 color = cols[video_type], linewidth = 2)
-        plt.fill_between(xs, MEAN + STD, MEAN - STD, color = cols[video_type],
-                         alpha=0.2)
-        
-    ax = plt.gca()
-    ax.axvline(x=0, label='stimOn', linestyle = '--', c='k')
-    plt.title('Motion Energy PSTH')
-    plt.xlabel('time [sec]')
-    plt.ylabel('z-scored motion energy [a.u.]') 
-    plt.legend(loc='lower right')
-
 
 def interp_nans(y):
 
@@ -1030,15 +1075,15 @@ def add_panel_letter(k):
 
 
 def plot_all(eid):
-    matplotlib.rcParams.update({'font.size': 15})
+    matplotlib.rcParams.update({'font.size': 10})
     # report eid =  '4a45c8ba-db6f-4f11-9403-56e06a33dfa4'
  
     nrows = 2
     ncols = 4
 
-    plt.ion()
+    plt.ioff()
     one = ONE()
-    plt.figure(figsize=(10,10))
+    plt.figure(figsize=(15,10))
     plt.subplot(nrows,ncols,1)  
     add_panel_letter(1)  
     plot_paw_on_image(eid, 'left')
@@ -1069,11 +1114,6 @@ def plot_all(eid):
     add_panel_letter(8)     
     motion_energy_PSTH(eid)
 
-
-#    plt.subplot(3,3,7)                
-#    plot_wheel_position(eid)
-#    plt.subplot(3,3,8)  
-    #paw_speed_PSTH(eid)
     #plt.subplot(3,3,9) 
     #plot_sniffPSTH(eid) 
 
@@ -1081,8 +1121,25 @@ def plot_all(eid):
     p = one.path_from_eid(eid)
     plt.suptitle(' '.join([str(p).split('/')[i] for i in [4,6,7,8]]),
                  backgroundcolor= 'white')
-#    plt.savefig(f'/home/mic/reproducible_dlc/{eid}.png')
-#    plt.close()
+    plt.tight_layout()
+    plt.tight_layout()                
+    plt.savefig(f'/home/mic/reproducible_dlc/overviewJune/{eid}.png')
+    plt.close()
+    
+    
+#BWM sessions that errored out when plotting
+#['7b26ce84-07f9-43d1-957f-bc72aeb730a3',
+# '4b7fbad4-f6de-43b4-9b15-c7c7ef44db4b',
+# 'ecb5520d-1358-434c-95ec-93687ecd1396',
+# 'a52f5a1b-7f45-4f2c-89a9-fb199d2a0d63',
+# '17602713-0ac6-49c1-b134-ee580de84729',
+# 'b03fbc44-3d8e-4a6c-8a50-5ea3498568e0',
+# '064a7252-8e10-4ad6-b3fd-7a88a2db5463',
+# '71e55bfe-5a3a-4cba-bdc7-f085140d798e',
+# '15763234-d21e-491f-a01b-1238eb96d389',
+# 'd9f0c293-df4c-410a-846d-842e47c6b502',
+# 'ebe090af-5922-4fcd-8fc6-17b8ba7bad6d',
+# '7f6b86f9-879a-4ea2-8531-294a221af5d0']
     
     
     
