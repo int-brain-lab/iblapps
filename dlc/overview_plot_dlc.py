@@ -105,7 +105,9 @@ def constant_reaction_time(eid, rt, st,stype='stim'):
         wheelMoves = one.load_object(eid, 'wheelMoves')
     trials = one.load_object(eid, 'trials')
     d = {} # dictionary, trial number and still interval    
-    
+    evts = ['goCue_times', 'feedback_times', 'probabilityLeft',
+            'choice', 'feedbackType']
+            
     for tr in range(len(trials['intervals'])):
         if stype == 'motion':
             a = wheelMoves['intervals'][:,0]
@@ -115,9 +117,10 @@ def constant_reaction_time(eid, rt, st,stype='stim'):
         pl = trials['probabilityLeft'][tr]
         ft = trials['feedbackType'][tr]
         
-        if np.isnan(c):
-            #print(f'feedback time is nan for trial {tr} and eid {eid}')
-            continue        
+        
+        if any(np.isnan([trials[k][tr] for k in evts])):
+            continue
+               
               
         if c-b>10: # discard too long trials
             continue 
@@ -270,10 +273,10 @@ def get_mean_positions(XYs):
     return mloc
                
     
-def plot_paw_on_image(eid, video_type, XYs = None):
+def plot_paw_on_image(eid, video_type='left', XYs = None):
 
     #fig = plt.figure(figsize=(8,4)) 
-    k = 1 
+ 
     
     Cs_l = {'paw_l':'r','paw_r':'cyan'}
     Cs_r = {'paw_l':'cyan','paw_r':'r'}
@@ -286,54 +289,64 @@ def plot_paw_on_image(eid, video_type, XYs = None):
         r = np.load(f'/home/mic/reproducible_dlc/example_images/'
                   f'{eid}_{video_type}.npy')[0]         
         
+    
+    try:        
+        if XYs == None:          
+            _, XYs =  get_dlc_XYs(eid, video_type)  
+       
+
         
-    if XYs == None:          
-        _, XYs =  get_dlc_XYs(eid, video_type)  
-    #ax = plt.subplot(1,2,k)   
+        ds = {'body':3,'left':6,'right':15}
+        
+        if video_type == 'left':
+            Cs = Cs_l
+        else:
+            Cs = Cs_r    
+        
+        for point in XYs:# ['paw_l','paw_r']:
+            if point in ['tube_bottom', 'tube_top']:
+                continue
+         
+            # downsample; normalise number of points to be the same
+            # across all sessions
+            xs = XYs[point][0][0::ds[video_type]]
+            ys = XYs[point][1][0::ds[video_type]]
+        
+            plt.scatter(xs,ys, alpha = 0.05, s = 2, 
+                       label = point)#, color = Cs[point])    
+                       
+        # plot whisker pad rectangle               
+        mloc = get_mean_positions(XYs)
+        p_nose = np.array(mloc['nose_tip'])
+        p_pupil = np.array(mloc['pupil_top_r'])    
 
-    
-    ds = {'body':3,'left':6,'right':15}
-    
-    if video_type == 'left':
-        Cs = Cs_l
-    else:
-        Cs = Cs_r    
-    
-    for point in XYs:# ['paw_l','paw_r']:
-        if point in ['tube_bottom', 'tube_top']:
-            continue
-     
-        # downsample; normalise number of points to be the same
-        # across all sessions
-        xs = XYs[point][0][0::ds[video_type]]
-        ys = XYs[point][1][0::ds[video_type]]
-    
-        plt.scatter(xs,ys, alpha = 0.05, s = 2, 
-                   label = point)#, color = Cs[point])    
-                   
-    # plot whisker pad rectangle               
-    mloc = get_mean_positions(XYs)
-    p_nose = np.array(mloc['nose_tip'])
-    p_pupil = np.array(mloc['pupil_top_r'])    
+        # heuristic to find whisker area in side videos:
+        # square with side length half the distance 
+        # between nose and pupil and anchored on midpoint
 
-    # heuristic to find whisker area in side videos:
-    # square with side length half the distance 
-    # between nose and pupil and anchored on midpoint
+        p_anchor = np.mean([p_nose,p_pupil],axis=0)
+        squared_dist = np.sum((p_nose-p_pupil)**2, axis=0)
+        dist = np.sqrt(squared_dist)
+        whxy = [int(dist/2), int(dist/3), 
+                int(p_anchor[0] - dist/4), int(p_anchor[1])]     
+        
+        rect = patches.Rectangle((whxy[2], whxy[3]), whxy[0], whxy[1], linewidth=1, 
+                                 edgecolor='lime', facecolor='none')               
+        ax = plt.gca()                                  
+        ax.add_patch(rect)                                       
 
-    p_anchor = np.mean([p_nose,p_pupil],axis=0)
-    squared_dist = np.sum((p_nose-p_pupil)**2, axis=0)
-    dist = np.sqrt(squared_dist)
-    whxy = [int(dist/2), int(dist/3), 
-            int(p_anchor[0] - dist/4), int(p_anchor[1])]     
-    
-    rect = patches.Rectangle((whxy[2], whxy[3]), whxy[0], whxy[1], linewidth=1, 
-                             edgecolor='lime', facecolor='none')               
-    ax = plt.gca()                                  
-    ax.add_patch(rect)                                       
-    plt.imshow(r,cmap='gray')
-    plt.axis('off')
-    k+=1
-    plt.tight_layout()
+        plt.axis('off')
+        plt.tight_layout()
+        plt.imshow(r,cmap='gray')
+        plt.tight_layout()
+    except:
+   
+        plt.imshow(r,cmap='gray')    
+        ax = plt.gca() 
+        plt.text(.5, .5,'DLC is nan',color='r',fontweight='bold',
+                 bbox=dict(facecolor='white', alpha=0.5),
+                 fontsize=10,transform=ax.transAxes)                 
+        plt.tight_layout()
     #plt.show()
     #plt.legend(loc='lower right')    
 
@@ -560,12 +573,38 @@ def plot_licks(eid, combine=False):
     plt.xlabel('time [sec]')
     plt.ylabel('lick events \n [a.u.]') 
     plt.legend(loc='lower right')
-    return licks_pos
+    
 
 
-def lick_raster(licks_pos):
+def lick_raster(eid):
 
     #plt.figure(figsize=(4,4))
+    
+    T_BIN = 0.02
+    rt = 2
+    st = -0.5     
+    times, XYs = get_dlc_XYs(eid, 'left')    
+    lick_times = times[get_licks(XYs)]    
+    
+    R, t, _ = bincount2D(lick_times, np.ones(len(lick_times)), T_BIN)
+    D = R[0]
+    
+    # that's centered at feedback time
+    d = constant_reaction_time(eid, rt, st,stype='feedback') 
+    
+    licks_pos = []
+    licks_neg = []
+    
+    for i in d:
+      
+        start_idx = find_nearest(t,d[i][0])
+        end_idx = start_idx + int(d[i][1]/T_BIN)   
+
+        # split by feedback type)        
+        if d[i][5] == 1:                                             
+            licks_pos.append(D[start_idx:end_idx])    
+    
+    licks_pos_ = np.array(licks_pos).mean(axis=0)
     
     y_dims, x_dims = len(licks_pos), len(licks_pos[0])
     plt.imshow(licks_pos,aspect='auto', extent=[-0.5,1.5,y_dims,0],
@@ -615,6 +654,9 @@ def plot_wheel_position(eid):
         end_idx = start_idx + int(d[i][1]/T_BIN)   
      
         wheel_pos = pos[start_idx:end_idx]
+        if len(wheel_pos) == 1:
+            print(i, [start_idx,end_idx])
+        
         wheel_pos = wheel_pos - wheel_pos[0]
     
         if d[i][4] == -1:                                             
@@ -622,16 +664,11 @@ def plot_wheel_position(eid):
         if d[i][4] == 1:
             whe_right.append(wheel_pos)    
 
-
-#    times = np.arange(len(whe_left[0]))*T_BIN
-#    
-#    return times
     xs = np.arange(len(whe_left[0]))*T_BIN
     times = np.concatenate([
                        -1*np.array(list(reversed(xs[:int(len(xs)*abs(st/rt))]))),
                        np.array(xs[:int(len(xs)*(1 - abs(st/rt)))])])
-    
-    
+
    
     for i in range(len(whe_left)):
         plt.plot(times, whe_left[i],c='#1f77b4', alpha =0.5, linewidth = 0.05)
@@ -960,8 +997,6 @@ def pupil_diameter_PSTH(eid, s=None, times=None):
     plt.legend(loc='lower right')
 
 
-
-
 def motion_energy_PSTH(eid):
 
     '''
@@ -1051,7 +1086,6 @@ def motion_energy_PSTH(eid):
     except:
         plt.title('No motion energy available!')
 
-    
 
 def interp_nans(y):
 
@@ -1078,48 +1112,60 @@ def plot_all(eid):
     matplotlib.rcParams.update({'font.size': 10})
     # report eid =  '4a45c8ba-db6f-4f11-9403-56e06a33dfa4'
  
+    panels = {'plot_paw_on_image':plot_paw_on_image,
+            'plot_wheel_position':plot_wheel_position,
+            'paw_speed_PSTH':paw_speed_PSTH,
+            'plot_licks':plot_licks, 
+            'lick_raster':lick_raster,
+            'nose_speed_PSTH':nose_speed_PSTH,
+            'pupil_diameter_PSTH':pupil_diameter_PSTH,
+            'motion_energy_PSTH':motion_energy_PSTH}
+ 
     nrows = 2
     ncols = 4
 
     plt.ioff()
-    one = ONE()
-    plt.figure(figsize=(15,10))
-    plt.subplot(nrows,ncols,1)  
-    add_panel_letter(1)  
-    plot_paw_on_image(eid, 'left')
-#    p = one.path_from_eid(eid)
-#    plt.title(' '.join([str(p).split('/')[i] for i in [5,7,8,9]]),
-#                 backgroundcolor= 'white')    
+  
+    plt.figure(figsize=(15,10)) 
     
-    plt.subplot(nrows,ncols,2)
-    add_panel_letter(2) 
-    #plot_paw_on_image(eid, 'right')  
-    plot_wheel_position(eid)
-    plt.subplot(nrows,ncols,3)
-    add_panel_letter(3)
-    paw_speed_PSTH(eid)
-    plt.subplot(nrows,ncols,4)
-    add_panel_letter(4)        
-    licks_pos = plot_licks(eid)  
-    plt.subplot(nrows,ncols,5)
-    add_panel_letter(5) 
-    lick_raster(licks_pos) 
-    plt.subplot(nrows,ncols,6) 
-    add_panel_letter(6) 
-    nose_speed_PSTH(eid)
-    plt.subplot(nrows,ncols,7) 
-    add_panel_letter(7)     
-    pupil_diameter_PSTH(eid)
-    plt.subplot(nrows,ncols,8) 
-    add_panel_letter(8)     
-    motion_energy_PSTH(eid)
-
-    #plt.subplot(3,3,9) 
-    #plot_sniffPSTH(eid) 
+    k = 1
+    for panel in panels:
+        plt.subplot(nrows,ncols,k)  
+        add_panel_letter(k)  
+        try:
+            panels[panel](eid)
+        except:
+            ax = plt.gca() 
+            plt.text(.5, .5,f'error in \n {panel}',color='r',fontweight='bold',
+                     bbox=dict(facecolor='white', alpha=0.5),
+                     fontsize=10, transform=ax.transAxes)
+        k += 1
+    
 
     plt.tight_layout()
+    
+    
+    # print QC outcome in title and DLC task version
+    one = ONE()
+    task = one.alyx.rest('tasks', 'list', session=eid, name='EphysDLC')[0]   
+    det = one.get_details(eid, True)['extended_qc']
     p = one.path_from_eid(eid)
-    plt.suptitle(' '.join([str(p).split('/')[i] for i in [4,6,7,8]]),
+    s1 = ' '.join([str(p).split('/')[i] for i in [4,6,7,8]])
+    
+    qcs = ['task','videoLeft','videoRight','videoBody',
+           'dlcLeft','dlcRight','dlcBody','behavior']
+      
+    l = []       
+    for q in qcs:    
+        try:
+            l.append(q+':'+str(det[q]))
+        except:
+            continue
+    
+    s2 = ' '.join(l)
+    
+    
+    plt.suptitle(s1+' QC '+s2+' '+'DLC version: '+str(task['version']),
                  backgroundcolor= 'white')
     plt.tight_layout()
     plt.tight_layout()                
@@ -1140,9 +1186,4 @@ def plot_all(eid):
 # 'd9f0c293-df4c-410a-846d-842e47c6b502',
 # 'ebe090af-5922-4fcd-8fc6-17b8ba7bad6d',
 # '7f6b86f9-879a-4ea2-8531-294a221af5d0']
-    
-    
-    
-    
-    
     
