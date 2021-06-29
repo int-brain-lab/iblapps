@@ -8,7 +8,7 @@ import pandas as pd
 import qt as qt
 from matplotlib.colors import TABLEAU_COLORS
 
-from oneibl.one import ONE
+from one.api import ONE
 import ibllib.plots as plots
 from ibllib.io.extractors import ephys_fpga
 from ibllib.qc.task_metrics import TaskQC
@@ -31,33 +31,54 @@ EVENT_MAP = {'goCue_times': ['#2ca02c', 'solid'],  # green
              }
 cm = [EVENT_MAP[k][0] for k in EVENT_MAP]
 ls = [EVENT_MAP[k][1] for k in EVENT_MAP]
+CRITICAL_CHECKS = (
+    'check_audio_pre_trial',
+    'check_correct_trial_event_sequence',
+    'check_error_trial_event_sequence',
+    'check_n_trial_events',
+    'check_response_feedback_delays',
+    'check_response_stimFreeze_delays',
+    'check_reward_volume_set',
+    'check_reward_volumes',
+    'check_stimOn_goCue_delays',
+    'check_stimulus_move_before_goCue',
+    'check_wheel_move_before_feedback',
+    'check_wheel_freeze_during_quiescence'
+)
 
-one = ONE()
 
 _logger = logging.getLogger('ibllib')
 
 
 class QcFrame(TaskQC):
 
-    def __init__(self, session, bpod_only=False, local=False):
+    def __init__(self, session, bpod_only=False, local=False, one=None):
         """
         Loads and extracts the QC data for a given session path
         :param session: A str or Path to a session, or a session eid
         :param bpod_only: When True all data is extracted from Bpod instead of FPGA for ephys
         """
-        super().__init__(session, one=one, log=_logger)
+        if not isinstance(session, TaskQC):
+            one = one or ONE()
+            super().__init__(session, one=one, log=_logger)
 
-        if local:
-            dsets, out_files = ephys_fpga.extract_all(session, save=True)
-            self.extractor = TaskQCExtractor(session, lazy=True, one=one)
-            # Extract extra datasets required for QC
-            self.extractor.data = dsets
-            self.extractor.extract_data()
-            # Aggregate and update Alyx QC fields
-            self.run(update=False)
+            if local:
+                dsets, out_files = ephys_fpga.extract_all(session, save=True)
+                self.extractor = TaskQCExtractor(session, lazy=True, one=one)
+                # Extract extra datasets required for QC
+                self.extractor.data = dsets
+                self.extractor.extract_data()
+                # Aggregate and update Alyx QC fields
+                self.run(update=False)
+            else:
+                self.load_data(bpod_only=bpod_only)
+                self.compute()
         else:
-            self.load_data(bpod_only=bpod_only)
-            self.compute()
+            assert session.extractor and session.metrics, 'Please run QC before passing to QcFrame'
+            super().__init__(session.eid or session.session_path, one=session.one, log=session.log)
+            for attr in ('criteria', 'criteria', '_outcome',
+                         'extractor', 'metrics', 'passed', 'fcns_value2status'):
+                setattr(self, attr, getattr(session, attr))
         self.n_trials = self.extractor.data['intervals'].shape[0]
         self.wheel_data = {'re_pos': self.extractor.data.pop('wheel_position'),
                            're_ts': self.extractor.data.pop('wheel_timestamps')}
@@ -72,6 +93,12 @@ class QcFrame(TaskQC):
                 continue
             print(f'The following checks were labelled {k}:')
             print('\n'.join(v), '\n')
+
+        print('The following *critical* checks did not pass:')
+        critical_checks = [f'_{x.replace("check", "task")}' for x in CRITICAL_CHECKS]
+        for k, v in outcomes.items():
+            if v != 'PASS' and k in critical_checks:
+                print(k[6:])
 
         # Make DataFrame from the trail level metrics
         def get_trial_level_failed(d):
@@ -153,16 +180,21 @@ class QcFrame(TaskQC):
                                      label=event, color=c, linestyle=ln, **plot_args)
 
 
-def show_session_task_qc(session=None, bpod_only=False, local=False):
+def show_session_task_qc(qc_or_session=None, bpod_only=False, local=False):
     """
     Displays the task QC for a given session
-    :param session: session_path
+    :param qc_or_session: session_path or TaskQC object
     :param bpod_only: (no FPGA)
     :param local: set True for local extraction
     :return: The QC object
     """
+    if isinstance(qc_or_session, QcFrame):
+        qc = qc_or_session
+    elif isinstance(qc_or_session, TaskQC):
+        qc = QcFrame(qc_or_session)
+    else:
+        qc = QcFrame(qc_or_session, bpod_only=bpod_only, local=local)
     # Run QC and plot
-    qc = QcFrame(session, bpod_only=bpod_only, local=local)
     w = ViewEphysQC.viewqc(wheel=qc.wheel_data)
     qc.create_plots(w.wplot.canvas.ax,
                     wheel_axes=w.wplot.canvas.ax2,
