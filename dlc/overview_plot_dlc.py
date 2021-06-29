@@ -36,7 +36,6 @@ def get_all_sess_with_ME():
     return eids     
     
 
-
 def get_repeated_sites():    
     one = ONE()
     STR_QUERY = 'probe_insertion__session__project__name__icontains,ibl_neuropixel_brainwide_01,' \
@@ -512,7 +511,7 @@ def get_licks(XYs):
     return sorted(list(set.union(*licks)))
 
 
-def plot_licks(eid, combine=False):
+def plot_licks(eid, combine=True):
 
     '''
     lick PSTH
@@ -550,6 +549,9 @@ def plot_licks(eid, combine=False):
         start_idx = find_nearest(t,d[i][0])
         end_idx = start_idx + int(d[i][1]/T_BIN)   
 
+        if end_idx > len(D):
+            break
+
         # split by feedback type)        
         if d[i][5] == 1:                                             
             licks_pos.append(D[start_idx:end_idx])
@@ -576,19 +578,30 @@ def plot_licks(eid, combine=False):
     
 
 
-def lick_raster(eid):
+def lick_raster(eid, combine=True):
 
     #plt.figure(figsize=(4,4))
     
     T_BIN = 0.02
     rt = 2
     st = -0.5     
-    times, XYs = get_dlc_XYs(eid, 'left')    
-    lick_times = times[get_licks(XYs)]    
     
+    if combine:    
+        # combine licking events from left and right cam
+        lick_times = []
+        for video_type in ['right','left']:
+            times, XYs = get_dlc_XYs(eid, video_type)
+            lick_times.append(times[get_licks(XYs)])
+        
+        lick_times = sorted(np.concatenate(lick_times))
+        
+    else:
+        times, XYs = get_dlc_XYs(eid, 'left')    
+        lick_times = times[get_licks(XYs)]
+        
     R, t, _ = bincount2D(lick_times, np.ones(len(lick_times)), T_BIN)
-    D = R[0]
-    
+    D = R[0]  
+      
     # that's centered at feedback time
     d = constant_reaction_time(eid, rt, st,stype='feedback') 
     
@@ -599,7 +612,10 @@ def lick_raster(eid):
       
         start_idx = find_nearest(t,d[i][0])
         end_idx = start_idx + int(d[i][1]/T_BIN)   
-
+        
+        if end_idx > len(D):
+            break
+            
         # split by feedback type)        
         if d[i][5] == 1:                                             
             licks_pos.append(D[start_idx:end_idx])    
@@ -707,7 +723,7 @@ def get_sniffs(XYs):
     return sniffs
 
 
-def plot_sniffPSTH(eid,combine=False):
+def plot_sniffPSTH(eid, combine=False):
 
     '''
     sniff PSTH
@@ -1124,7 +1140,7 @@ def plot_all(eid):
     nrows = 2
     ncols = 4
 
-    plt.ioff()
+    #plt.ioff()
   
     plt.figure(figsize=(15,10)) 
     
@@ -1134,6 +1150,7 @@ def plot_all(eid):
         add_panel_letter(k)  
         try:
             panels[panel](eid)
+            #continue
         except:
             ax = plt.gca() 
             plt.text(.5, .5,f'error in \n {panel}',color='r',fontweight='bold',
@@ -1152,38 +1169,43 @@ def plot_all(eid):
     p = one.path_from_eid(eid)
     s1 = ' '.join([str(p).split('/')[i] for i in [4,6,7,8]])
     
-    qcs = ['task','videoLeft','videoRight','videoBody',
-           'dlcLeft','dlcRight','dlcBody','behavior']
+    dlc_qcs = [ 'time_trace_length_match',
+                'trace_all_nan',
+                'mean_in_bbox',
+                'pupil_blocked',
+                'lick_detection']
+    
+
+    qcs = ['task','behavior','videoLeft','videoRight','videoBody',
+           'dlcLeft','dlcRight','dlcBody']           
       
     l = []       
     for q in qcs:    
         try:
-            l.append(q+':'+str(det[q]))
+            if det[q] == 'FAIL':
+
+                if 'dlc' in q:
+                    l.append('\n')
+                    l.append(q+':'+str(det[q])+'-->') 
+                    video_type = q[3:]
+                    for dlc_qc in dlc_qcs:
+                        w = f'_dlc{video_type}_{dlc_qc}'
+                        if not det[w]:
+                            l.append(w+':'+str(det[w])+',')  
+                else:            
+                    l.append(q+':'+str(det[q])+',')               
         except:
             continue
     
     s2 = ' '.join(l)
     
     
-    plt.suptitle(s1+' QC '+s2+' '+'DLC version: '+str(task['version']),
-                 backgroundcolor= 'white')
-    plt.tight_layout()
-    plt.tight_layout()                
+    plt.suptitle(s1+', DLC version: '+str(task['version'])+' \n '+s2,
+                 backgroundcolor= 'white', fontsize=6)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    #plt.tight_layout()                
     plt.savefig(f'/home/mic/reproducible_dlc/overviewJune/{eid}.png')
     plt.close()
     
-    
-#BWM sessions that errored out when plotting
-#['7b26ce84-07f9-43d1-957f-bc72aeb730a3',
-# '4b7fbad4-f6de-43b4-9b15-c7c7ef44db4b',
-# 'ecb5520d-1358-434c-95ec-93687ecd1396',
-# 'a52f5a1b-7f45-4f2c-89a9-fb199d2a0d63',
-# '17602713-0ac6-49c1-b134-ee580de84729',
-# 'b03fbc44-3d8e-4a6c-8a50-5ea3498568e0',
-# '064a7252-8e10-4ad6-b3fd-7a88a2db5463',
-# '71e55bfe-5a3a-4cba-bdc7-f085140d798e',
-# '15763234-d21e-491f-a01b-1238eb96d389',
-# 'd9f0c293-df4c-410a-846d-842e47c6b502',
-# 'ebe090af-5922-4fcd-8fc6-17b8ba7bad6d',
-# '7f6b86f9-879a-4ea2-8531-294a221af5d0']
+
     
