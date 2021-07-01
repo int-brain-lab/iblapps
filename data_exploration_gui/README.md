@@ -4,25 +4,7 @@ GUI to allow user to explore ephys data from IBL task
 
 ## Setup
 
-GUI must be run from an environment where brainbox is installed.
-
-To create a conda environment with brainbox follow the install instructions here:
-http://brainbox.internationalbrainlab.org/usage/installation.html
-
-You will also need to install PyQt5 and pyqtgraph.
-These can be installed using the following commands (from within the brainbox environment)
-
-```
-pip install pyqt5
-pip install pyqtgraph
-```
-
-Clone the iblapps repository onto your computer where you have IBL packages installed and checkout the develop branch
-
-```
-git clone https://github.com/int-brain-lab/iblapps.git
-git checkout develop
-```
+Install ibl environment following [these instructions](https://github.com/int-brain-lab/iblenv#iblenv-installation-guide) 
 
 Go to the ```data_exploration_gui``` folder
 
@@ -32,17 +14,14 @@ cd iblapps/data_exploration_gui
 
 ## Usage
 ### Getting Data
-To download the data run (change the subject (s), date (d) and session number (n) according to the data you want to download)
+To download the data provide eid (or subject, date, number) and probe name, for example
 
 ```
-python load_data.py -s SWC_014 -d 2019-12-10 -n 1 
+python load_data.py -s SWC_014 -d 2019-12-10 -n 1 -p probe00
+or
+python load_data.py -e 614e1937-4b24-4ad3-9055-c8253d089919 -p probe00
+
 ```
-
-The GUI can run with or without the ephys.bin data. 
-
-If you want to dowload the ephys data parse an extra argument ``` -e True ```  to load_data.py **N.B. Downloading ephys.bin data can take a long time!**
-
-
 
 ### Using GUI
 Main window can be launched by running

@@ -1,7 +1,7 @@
 from PyQt5 import QtGui, QtWidgets
 import numpy as np
 import os
-import alf.io
+import one.alf.io as alfio
 from brainbox.processing import get_units_bunch
 from brainbox.population.decode import xcorr
 from brainbox.singlecell import calculate_peths
@@ -65,9 +65,9 @@ class DataGroup:
 
 
     def load_data(self):
-        self.spikes = alf.io.load_object(self.probe_path, 'spikes')
-        self.trials = alf.io.load_object(self.alf_path, 'trials')
-        self.clusters = alf.io.load_object(self.probe_path, 'clusters')
+        self.spikes = alfio.load_object(self.probe_path, 'spikes')
+        self.trials = alfio.load_object(self.alf_path, 'trials')
+        self.clusters = alfio.load_object(self.probe_path, 'clusters')
         self.ids = np.unique(self.spikes.clusters)
         self.metrics = np.array(self.clusters.metrics.ks2_label[self.ids])
         self.colours = np.array(self.clusters.metrics.ks2_label[self.ids])
@@ -95,7 +95,8 @@ class DataGroup:
         self.sort_by_id = np.arange(len(self.ids))
         self.sort_by_nspikes = np.argsort(self.nspikes)
         self.sort_by_nspikes = self.sort_by_nspikes[::-1]
-        self.sort_by_good = np.append(np.where(self.metrics == 'good')[0], np.where(self.metrics == 'mua')[0])
+        self.sort_by_good = np.append(np.where(self.metrics == 'good')[0],
+                                      np.where(self.metrics == 'mua')[0])
         self.n_trials = len(self.trials['contrastLeft'])
 
     def compute_depth_and_amplitudes(self):
