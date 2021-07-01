@@ -12,6 +12,7 @@ N_BNK = 4
 BNK_SIZE = 10
 AUTOCORR_BIN_SIZE = 0.25 / 1000
 AUTOCORR_WIN_SIZE = 10 / 1000
+
 FS = 30000
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -22,8 +23,10 @@ class PlotData:
         self.alf_path = alf_path
         self.ephys_path = ephys_path
 
-        self.chn_coords = np.load(Path(self.alf_path, 'channels.localCoordinates.npy'))
-        self.chn_ind = np.load(Path(self.alf_path, 'channels.rawInd.npy'))
+        self.channels = alf.io.load_object(self.alf_path, 'channels')
+        self.chn_coords = self.channels['localCoordinates']
+        self.chn_ind = self.channels['rawInd']
+
         # See if spike data is available
         try:
             self.spikes = alfio.load_object(self.alf_path, 'spikes')
@@ -583,7 +586,7 @@ class PlotData:
         autocorr = xcorr(self.spikes['times'][idx], self.spikes['clusters'][idx],
                          AUTOCORR_BIN_SIZE, AUTOCORR_WIN_SIZE)
 
-        return autocorr[0, 0, :]
+        return autocorr[0, 0, :], self.clust_id[clust_idx]
 
     def get_template_wf(self, clust_idx):
         template_wf = (self.clusters['waveforms'][self.clust_id[clust_idx], :, 0])

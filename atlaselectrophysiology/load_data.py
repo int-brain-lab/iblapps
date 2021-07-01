@@ -11,22 +11,22 @@ from one import params
 import glob
 import os
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
+import ibllib.qc.critical_reasons as usrpmt
 
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 
 class LoadData:
-    def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None):
+    def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None, histology=True):
         self.one = one or ONE(base_url=ONE_BASE_URL)
         self.brain_atlas = brain_atlas or atlas.AllenAtlas(25)
+        self.download_hist = histology # whether or not to look for the histology files
 
         if testing:
             self.probe_id = probe_id
             self.chn_coords = SITES_COORDINATES
             self.chn_depths = SITES_COORDINATES[:, 1]
         else:
-            from atlaselectrophysiology import qc_table
-            self.qc = qc_table.EphysQC()
             self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
             self.chn_coords = None
             self.chn_depths = None
@@ -51,6 +51,7 @@ class LoadData:
         self.cluster_chns = None
         self.resolved = None
         self.alyx_str = None
+        self.sr = None
 
         if probe_id is not None:
             self.sess = self.one.alyx.rest('trajectories', 'list', provenance='Histology track',
@@ -311,33 +312,6 @@ class LoadData:
         return self.xyz_picks
 
     def get_slice_images(self, xyz_channels):
-        # First see if the histology file exists before attempting to connect with FlatIron and
-        # download
-        hist_dir = Path(self.sess_path.parent.parent, 'histology')
-        hist_path_rd = None
-        hist_path_gr = None
-        if hist_dir.exists():
-            path_to_rd_image = glob.glob(str(hist_dir) + '/*RD.tif')
-            if path_to_rd_image:
-                hist_path_rd = tif2nrrd(Path(path_to_rd_image[0]))
-            else:
-                files = download_histology_data(self.subj, self.lab)
-                if files is not None:
-                    hist_path_rd = files[1]
-
-            path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.tif')
-            if path_to_gr_image:
-                hist_path_gr = tif2nrrd(Path(path_to_gr_image[0]))
-            else:
-                files = download_histology_data(self.subj, self.lab)
-                if files is not None:
-                    hist_path_gr = files[0]
-
-        else:
-            files = download_histology_data(self.subj, self.lab)
-            if files is not None:
-                hist_path_gr = files[0]
-                hist_path_rd = files[1]
 
         index = self.brain_atlas.bc.xyz2i(xyz_channels)[:, self.brain_atlas.xyz2dims]
         ccf_slice = self.brain_atlas.image[index[:, 0], :, index[:, 2]]
@@ -349,6 +323,35 @@ class LoadData:
 
         width = [self.brain_atlas.bc.i2x(0), self.brain_atlas.bc.i2x(456)]
         height = [self.brain_atlas.bc.i2z(index[0, 2]), self.brain_atlas.bc.i2z(index[-1, 2])]
+
+        hist_path_rd = None
+        hist_path_gr = None
+        # First see if the histology file exists before attempting to connect with FlatIron and
+        # download
+        if self.download_hist:
+            hist_dir = Path(self.sess_path.parent.parent, 'histology')
+            if hist_dir.exists():
+                path_to_rd_image = glob.glob(str(hist_dir) + '/*RD.tif')
+                if path_to_rd_image:
+                    hist_path_rd = tif2nrrd(Path(path_to_rd_image[0]))
+                else:
+                    files = download_histology_data(self.subj, self.lab)
+                    if files is not None:
+                        hist_path_rd = files[1]
+
+                path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.tif')
+                if path_to_gr_image:
+                    hist_path_gr = tif2nrrd(Path(path_to_gr_image[0]))
+                else:
+                    files = download_histology_data(self.subj, self.lab)
+                    if files is not None:
+                        hist_path_gr = files[0]
+
+            else:
+                files = download_histology_data(self.subj, self.lab)
+                if files is not None:
+                    hist_path_gr = files[0]
+                    hist_path_rd = files[1]
 
         if hist_path_rd:
             hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd)
@@ -444,11 +447,10 @@ class LoadData:
             ephys_desc_str = ", ".join(ephys_desc)
             ephys_dj_str = ephys_desc_str
 
-        self.qc.insert1(dict(probe_insertion_uuid=self.probe_id, user_name=user,
-                             alignment_qc=align_qc, ephys_qc=ephys_qc,
-                             ephys_qc_description=ephys_dj_str),
-                        allow_direct_insert=True, replace=True)
         self.alyx_str = ephys_qc.upper() + ': ' + ephys_desc_str
+
+        if ephys_qc.upper() == 'CRITICAL':
+            usrpmt.main_gui(eid=self.probe_id, reasons_selected=ephys_desc, one=self.one)
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number

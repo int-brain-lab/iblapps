@@ -34,6 +34,7 @@ class DataGroup:
         self.autocorr_window = 0.1
         self.autocorr_bin = 0.001
 
+
         #For waveform (N.B in ms)
         self.waveform_window = 2
         self.CAR = False
@@ -74,23 +75,9 @@ class DataGroup:
         self.colours[np.where(self.colours == 'mua')[0]] = QtGui.QColor('#fdc086')
         self.colours[np.where(self.colours == 'good')[0]] = QtGui.QColor('#7fc97f')
 
-        file_count = 0
-        if os.path.isdir(self.gui_path):
-            for i in os.listdir(self.gui_path):
-                if 'depth' in i:
-                    self.depths = np.load(Path(self.gui_path + '/cluster_depths.npy'))
-                    file_count += 1
-                elif 'amp' in i:
-                    self.amps = np.load(Path(self.gui_path + '/cluster_amps.npy'))
-                    file_count += 1
-                elif 'nspikes' in i:
-                    self.nspikes = np.load(Path(self.gui_path + '/cluster_nspikes.npy'))
-                    file_count += 1
-            if file_count != 3:
-                self.compute_depth_and_amplitudes()
-        else:
-            os.mkdir(self.gui_path)
-            self.compute_depth_and_amplitudes()
+        _, self.depths, self.nspikes = compute_cluster_average(spikes.clusters, spikes.depths)
+        _, self.amps, _ = compute_cluster_average(spikes.clusters, spikes.amps)
+        self.amps = self.amps * 1e6
 
         self.sort_by_id = np.arange(len(self.ids))
         self.sort_by_nspikes = np.argsort(self.nspikes)
@@ -98,6 +85,7 @@ class DataGroup:
         self.sort_by_good = np.append(np.where(self.metrics == 'good')[0],
                                       np.where(self.metrics == 'mua')[0])
         self.n_trials = len(self.trials['contrastLeft'])
+
 
     def compute_depth_and_amplitudes(self):
         units_b = get_units_bunch(self.spikes)
@@ -152,21 +140,22 @@ class DataGroup:
         return t_peth, peth_mean, peth_std
 
     def compute_rasters(self, trial_type, clust, trials_id):
-        x = np.empty(0)
-        y = np.empty(0)
+        self.x = np.empty(0)
+        self.y = np.empty(0)
         spk_times = self.spikes.times[self.spikes.clusters == self.clust_ids[clust]]
         for idx, val in enumerate(self.trials[trial_type][trials_id]):
             spks_to_include = np.bitwise_and(spk_times >= val - self.t_before, spk_times <= val + self.t_after)
             trial_spk_times = spk_times[spks_to_include]
             trial_spk_times_aligned = trial_spk_times - val
             trial_no = (np.ones(len(trial_spk_times_aligned))) * idx * 10
-            x = np.append(x, trial_spk_times_aligned)
-            y = np.append(y, trial_no)
+            self.x = np.append(self.x, trial_spk_times_aligned)
+            self.y = np.append(self.y, trial_no)
 
-        return x, y, self.n_trials
+        return self.x, self.y, self.n_trials
 
     def compute_autocorr(self, clust):
         self.clus_idx = np.where(self.spikes.clusters == self.clust_ids[clust])[0]
+
         x_corr = xcorr(self.spikes.times[self.clus_idx], self.spikes.clusters[self.clus_idx],
         self.autocorr_bin, self.autocorr_window)
 

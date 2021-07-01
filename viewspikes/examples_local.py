@@ -25,7 +25,7 @@ SORTERS = ['ks2','ks3', 'pyks2.5']
 "ce397420-3cd2-4a55-8fd1-5e28321981f4",
 
 # Example 1
-pid, t0 = ("8413c5c6-b42b-4ec6-b751-881a54413628", 810)
+pid, t0 = ("ce24bbe9-ae70-4659-9e9c-564d1a865de8", 810)
 bin_file = next(RAW_PATH.joinpath(pid).rglob("*.ap.bin"))
 sr = spikeglx.Reader(bin_file)
 sel = slice(int(t0 * sr.fs), int((t0 + 4) * sr.fs))
