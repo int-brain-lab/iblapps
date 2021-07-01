@@ -69,7 +69,7 @@ def stream(pid, t, one=None, cache=True, dsets=None, typ='ap'):
     assert typ in ['lf', 'ap']
     t0 = np.floor(t / CHUNK_DURATION_SECS) * CHUNK_DURATION_SECS
     if cache:
-        samples_folder = Path(one._par.CACHE_DIR).joinpath('cache', typ)
+        samples_folder = Path(one.alyx._par.CACHE_DIR).joinpath('cache', typ)
     sample_file_name = Path(f"{pid}_{str(int(t0)).zfill(5)}.meta")
     if dsets is None:
         dsets = one.alyx.rest('datasets', 'list', probe_insertion=pid)
@@ -91,7 +91,8 @@ def stream(pid, t, one=None, cache=True, dsets=None, typ='ap'):
     first_chunk = int(t0 / CHUNK_DURATION_SECS)
     last_chunk = int((t0 + tlen) / CHUNK_DURATION_SECS) - 1
 
-    sr = one.download_raw_partial(
+    sr = spikeglx.download_raw_partial(
+        one=one,
         url_cbin=dataset_record_to_url(dset_cbin)[0],
         url_ch=file_ch,
         first_chunk=first_chunk,
