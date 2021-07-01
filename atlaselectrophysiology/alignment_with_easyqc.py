@@ -233,7 +233,7 @@ def load_extra_data(probe_id, one=None):
 
     dsets = one.alyx.rest('datasets', 'list', probe_insertion=probe_id,
                           dataset_type='spikes.samples')
-    _ = one.download_datasets(dsets)
+    _ = one._download_datasets(dsets)
 
     trials = one.load_object(id=dsets[0]['session'][-36:], obj='trials')
 

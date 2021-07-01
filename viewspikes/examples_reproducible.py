@@ -1,4 +1,4 @@
-from oneibl.one import ONE
+from one.api import ONE, alfio
 from atlaselectrophysiology.alignment_with_easyqc import viewer
 
 one = ONE()
@@ -33,9 +33,28 @@ pids = ['ce397420-3cd2-4a55-8fd1-5e28321981f4',
 
 
 
-INDEX = 22
+INDEX = 2
 pid = pids[INDEX]
 av = viewer(pid, one=one)
+##
+eid, pname = one.pid2eid(pid)
+session_path = one.eid2path(eid)
+probe_path = session_path.joinpath('alf', pname)
+
+from pathlib import Path
+
+local_path = Path("/datadisk/Data/spike_sorting/mic").joinpath(pid, pname)
+spikes = alfio.load_object(probe_path, 'spikes')
+spikes_ = alfio.load_object(local_path, 'spikes')
+
+
+# from ibllib.plots import vertical_lines
+# vertical_lines(rewards, ymin=0, ymax=3800, ax=ax)
+from brainbox.plot import driftmap
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots(nrows=2, ncols=1, sharex=True, sharey=True)
+driftmap(spikes['times'], spikes['depths'], t_bin=0.1, d_bin=5, ax=ax[0])
+driftmap(spikes_['times'], spikes_['depths'], t_bin=0.1, d_bin=5, ax=ax[1])
 
 
 

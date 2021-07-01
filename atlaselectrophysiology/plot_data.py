@@ -23,7 +23,7 @@ class PlotData:
         self.alf_path = alf_path
         self.ephys_path = ephys_path
 
-        self.channels = alf.io.load_object(self.alf_path, 'channels')
+        self.channels = alfio.load_object(self.alf_path, 'channels')
         self.chn_coords = self.channels['localCoordinates']
         self.chn_ind = self.channels['rawInd']
 
