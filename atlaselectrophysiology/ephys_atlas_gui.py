@@ -14,6 +14,7 @@ from pathlib import Path
 import os
 import time
 
+
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def __init__(self, offline=False, probe_id=None, one=None):
         super(MainWindow, self).__init__()
@@ -28,7 +29,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.loaddata = LoadData(probe_id=probe_id, one=one)
             self.loaddata.get_info(0)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
-            self.data_status=False
+            self.data_status = False
             self.data_button_pressed()
         else:
             self.loaddata = LoadDataLocal()
@@ -869,11 +870,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
             self.img_plots = []
             self.img_cbars = []
-            start = time.time()
             size = data['size'].tolist()
             symbol = data['symbol'].tolist()
             end = time.time()
-            print(end-start)
 
             color_bar = cb.ColorBar(data['cmap'])
             cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=np.min(data['levels'][0]),
@@ -882,13 +881,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.img_cbars.append(cbar)
 
             if type(np.any(data['colours'])) == QtGui.QColor:
-                start = time.time()
                 brush = data['colours'].tolist()
                 plot = pg.ScatterPlotItem()
                 plot.setData(x=data['x'], y=data['y'],
                              symbol=symbol, size=size, brush=brush, pen=data['pen'])
-                end = time.time()
-                print(end-start)
             else:
                 brush = color_bar.map.mapToQColor(data['colours'])
                 plot = pg.ScatterPlotItem()
@@ -911,7 +907,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             if data['cluster']:
                 self.data = data['x']
-                #self.data_plot.sigPointsClicked.connect(self.cluster_clicked)
                 self.data_plot.sigClicked.connect(self.cluster_clicked)
 
     def plot_line(self, data):

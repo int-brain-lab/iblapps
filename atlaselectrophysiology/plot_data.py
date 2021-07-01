@@ -1,7 +1,7 @@
 from matplotlib import cm
 from pathlib import Path
 import numpy as np
-import alf.io
+import one.alf.io as alfio
 from brainbox.processing import bincount2D
 from brainbox.population.decode import xcorr
 from brainbox.task import passive
@@ -26,14 +26,14 @@ class PlotData:
         self.chn_ind = np.load(Path(self.alf_path, 'channels.rawInd.npy'))
         # See if spike data is available
         try:
-            self.spikes = alf.io.load_object(self.alf_path, 'spikes')
+            self.spikes = alfio.load_object(self.alf_path, 'spikes')
             self.spike_data_status = True
         except Exception:
             print('spike data was not found, some plots will not display')
             self.spike_data_status = False
 
         try:
-            self.clusters = alf.io.load_object(self.alf_path, 'clusters')
+            self.clusters = alfio.load_object(self.alf_path, 'clusters')
             self.filter_units('all')
             self.cluster_data_status = True
             self.compute_timescales()
@@ -42,8 +42,8 @@ class PlotData:
             self.cluster_data_status = False
 
         try:
-            lfp_spectrum = alf.io.load_object(self.ephys_path, 'ephysSpectralDensityLF',
-                                              namespace='iblqc')
+            lfp_spectrum = alfio.load_object(self.ephys_path, 'ephysSpectralDensityLF',
+                                             namespace='iblqc')
             if len(lfp_spectrum) == 2:
                 self.lfp_freq = lfp_spectrum.get('freqs')
                 self.lfp_power = lfp_spectrum.get('power', [])
@@ -58,8 +58,8 @@ class PlotData:
             self.lfp_data_status = False
 
         try:
-            rf_map_times = alf.io.load_object(self.alf_path.parent, object='passiveRFM',
-                                              namespace='ibl')
+            rf_map_times = alfio.load_object(self.alf_path.parent, object='passiveRFM',
+                                             namespace='ibl')
             # This needs to go into brainbox!!
             rf_map_frames_path = (self.alf_path.parent.parent.
                                   joinpath('raw_passive_data', '_iblrig_RFMapStim.raw.bin'))
@@ -81,8 +81,8 @@ class PlotData:
             self.rfmap_data_status = False
 
         try:
-            self.aud_stim = alf.io.load_object(self.alf_path.parent, object='passiveStims',
-                                               namespace='ibl')['table']
+            self.aud_stim = alfio.load_object(self.alf_path.parent, object='passiveStims',
+                                              namespace='ibl')['table']
             if len(self.aud_stim) > 0:
                 self.passive_data_status = True
         except Exception:
@@ -90,8 +90,8 @@ class PlotData:
             self.passive_data_status = False
 
         try:
-            gabor = alf.io.load_object(self.alf_path.parent, object='passiveGabor',
-                                       namespace='ibl')['table']
+            gabor = alfio.load_object(self.alf_path.parent, object='passiveGabor',
+                                      namespace='ibl')['table']
             self.vis_stim = dict()
             self.vis_stim['leftGabor'] = gabor['start'][(gabor['position'] == 35) &
                                                         (gabor['contrast'] > 0.1)]
@@ -352,12 +352,12 @@ class PlotData:
         # Finds channels that are at equivalent depth on probe and averages rms values for each
         # time point at same depth togehter
         try:
-            rms_amps = alf.io.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
-                                                     format + '.rms.npy'))
+            rms_amps = alfio.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
+                                                    format + '.rms.npy'))
         except Exception:
             try:
-                rms_amps = alf.io.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
-                                                         format + '.amps.npy'))
+                rms_amps = alfio.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
+                                                        format + '.amps.npy'))
             except Exception:
                 print('rms data was not found, some plots will not display')
                 data_img = None
@@ -365,8 +365,8 @@ class PlotData:
                 return data_img, data_probe
 
         try:
-            rms_times = alf.io.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
-                                                      format + '.timestamps.npy'))
+            rms_times = alfio.load_file_content(Path(self.ephys_path, '_iblqc_ephysTimeRms' +
+                                                     format + '.timestamps.npy'))
             xaxis = 'Time (s)'
         except Exception:
             rms_times = np.array([0, rms_amps.shape[0]])

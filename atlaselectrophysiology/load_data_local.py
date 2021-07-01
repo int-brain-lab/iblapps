@@ -2,20 +2,19 @@ import numpy as np
 from datetime import datetime
 import ibllib.atlas as atlas
 from pathlib import Path
-import alf.io
+import one.alf.io as alfio
 import glob
 import json
-
-# brain_atlas = atlas.AllenAtlas(25)
+from one.api import ONE
 
 
 class LoadDataLocal:
     def __init__(self):
+        ONE(silent=True)
         self.brain_atlas = atlas.AllenAtlas(25)
         self.folder_path = []
         self.chn_coords = []
         self.sess_path = []
-        self.brain_atlas = atlas.AllenAtlas(25)
 
     def get_info(self, folder_path):
         """
@@ -75,7 +74,7 @@ class LoadDataLocal:
 
     def get_allen_csv(self):
         allen_path = Path(Path(atlas.__file__).parent, 'allen_structure_tree.csv')
-        self.allen = alf.io.load_file_content(allen_path)
+        self.allen = alfio.load_file_content(allen_path)
 
         return self.allen
 

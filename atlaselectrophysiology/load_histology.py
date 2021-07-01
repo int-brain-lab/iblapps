@@ -2,7 +2,7 @@
 from pathlib import Path
 import requests
 import re
-from ibllib.io import params
+from one import params
 from oneibl.webclient import http_download_file
 import SimpleITK as sitk
 
@@ -14,7 +14,7 @@ def download_histology_data(subject, lab):
     else:
         lab_temp = lab
 
-    par = params.read('one_params')
+    par = params.get()
 
     try:
         FLAT_IRON_HIST_REL_PATH = Path('histology', lab_temp, subject,
@@ -42,7 +42,7 @@ def download_histology_data(subject, lab):
         if result:
             tif_files.append(result[0] + '.tif')
 
-    CACHE_DIR = Path(Path.home(), 'Downloads', 'FlatIron', lab, 'Subjects', subject, 'histology')
+    CACHE_DIR = params.get_cache_dir().joinpath(lab, 'Subjects', subject, 'histology')
     CACHE_DIR.mkdir(exist_ok=True, parents=True)
     path_to_files = []
     for file in tif_files:

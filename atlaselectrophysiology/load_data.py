@@ -4,9 +4,10 @@ import ibllib.pipes.histology as histology
 from ibllib.ephys.neuropixel import SITES_COORDINATES
 import ibllib.atlas as atlas
 from ibllib.qc.alignment_qc import AlignmentQC
-from oneibl.one import ONE
+from one.api import ONE
 from pathlib import Path
-import alf.io
+import one.alf.io as alfio
+from one import params
 import glob
 import os
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
@@ -202,41 +203,60 @@ class LoadData:
         :return sess_notes: user notes associated with session
         :type: str
         """
-        dtypes = [
-            'spikes.depths',
-            'spikes.amps',
-            'spikes.times',
-            'spikes.clusters',
-            'channels.localCoordinates',
-            'channels.rawInd',
-            'clusters.metrics',
-            'clusters.peakToTrough',
-            'clusters.waveforms',
-            'clusters.channels',
-            '_iblqc_ephysTimeRms.rms',
-            '_iblqc_ephysTimeRms.timestamps',
-            '_iblqc_ephysSpectralDensity.freqs',
-            '_iblqc_ephysSpectralDensity.power',
-            '_iblqc_ephysSpectralDensity.amps',
-            '_ibl_passiveGabor.table',
-            '_ibl_passivePeriods.intervalsTable',
-            '_iblrig_RFMapStim.raw',
-            '_ibl_passiveRFM.times',
-            '_ibl_passiveStims.table',
-            '_iblrig_RFMapStim.raw'
+
+        dtypes_ks = [
+            'spikes.depths.npy',
+            'spikes.amps.npy',
+            'spikes.times.npy',
+            'spikes.clusters.npy',
+            'channels.localCoordinates.npy',
+            'channels.rawInd.npy',
+            'clusters.metrics.pqt',
+            'clusters.peakToTrough.npy',
+            'clusters.waveforms.npy',
+            'clusters.channels.npy',
         ]
+
+        collection_ks = [f'alf/{self.probe_label}'] * len(dtypes_ks)
+
+        dtypes_raw = [
+            '_iblqc_ephysTimeRmsAP.rms.npy',
+            '_iblqc_ephysTimeRmsAP.timestamps.npy',
+            '_iblqc_ephysSpectralDensityAP.freqs.npy',
+            '_iblqc_ephysSpectralDensityAP.power.npy',
+            '_iblqc_ephysTimeRmsLF.rms.npy',
+            '_iblqc_ephysTimeRmsLF.timestamps.npy',
+            '_iblqc_ephysSpectralDensityLF.freqs.npy',
+            '_iblqc_ephysSpectralDensityLF.power.npy',
+        ]
+
+        collection_raw = [f'raw_ephys_data/{self.probe_label}'] * len(dtypes_raw)
+
+        dtypes_alf = [
+            '_ibl_passiveGabor.table.csv',
+            '_ibl_passivePeriods.intervalsTable.csv',
+            '_ibl_passiveRFM.times.npy',
+            '_ibl_passiveStims.table.csv']
+
+        collection_alf = ['alf'] * len(dtypes_alf)
+
+        dtypes_passive = [
+            '_iblrig_RFMapStim.raw.bin']
+
+        collection_passive = ['raw_passive_data'] * len(dtypes_passive)
+
+        dtypes = dtypes_ks + dtypes_raw + dtypes_alf + dtypes_passive
+        collections = collection_ks + collection_raw + collection_alf + collection_passive
 
         print(self.subj)
         print(self.probe_label)
         print(self.date)
         print(self.eid)
 
-        # dsets = self.one.alyx.rest('datasets', 'list', probe_insertion=self.probe_id)
-        # dsets_int = [d for d in dsets if d['dataset_type'] in dtypes]
-        # _ = self.one.download_datasets(dsets_int)
+        _ = self.one.load_datasets(self.eid, datasets=dtypes, collections=collections,
+                                   download_only=True, assert_present=False)
 
-        _ = self.one.load(self.eid, dataset_types=dtypes, download_only=True)
-        self.sess_path = self.one.path_from_eid(self.eid)
+        self.sess_path = self.one.eid2path(self.eid)
 
         alf_path = Path(self.sess_path, 'alf', self.probe_label)
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
@@ -271,7 +291,7 @@ class LoadData:
         :type: pd.Dataframe
         """
         allen_path = Path(Path(atlas.__file__).parent, 'allen_structure_tree.csv')
-        allen = alf.io.load_file_content(allen_path)
+        allen = alfio.load_file_content(allen_path)
 
         self.allen_id = allen['id']
 
@@ -388,7 +408,7 @@ class LoadData:
 
     def update_alignments(self, feature, track, key_info=None, user_eval=None):
         if not key_info:
-            user = self.one._par.ALYX_LOGIN
+            user = params.get().ALYX_LOGIN
             date = datetime.now().replace(microsecond=0).isoformat()
             data = {date + '_' + user: [feature.tolist(), track.tolist(), self.alyx_str]}
         else:
@@ -416,7 +436,7 @@ class LoadData:
 
     def upload_dj(self, align_qc, ephys_qc, ephys_desc):
         # Upload qc results to datajoint table
-        user = self.one._par.ALYX_LOGIN
+        user = params.get().ALYX_LOGIN
         if len(ephys_desc) == 0:
             ephys_desc_str = 'None'
             ephys_dj_str = None

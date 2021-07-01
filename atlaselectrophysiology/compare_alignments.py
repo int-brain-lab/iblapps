@@ -1,5 +1,5 @@
 # import modules
-from oneibl.one import ONE
+from one.api import ONE
 from ibllib.pipes.ephys_alignment import EphysAlignment
 import numpy as np
 import matplotlib.pyplot as plt
