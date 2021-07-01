@@ -125,7 +125,8 @@ class LoadData:
 
         # Looks for any previous alignments
         ephys_traj_prev = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
-                                             provenance='Ephys aligned histology track')
+                                             provenance='Ephys aligned histology track',
+                                             no_cache=True)
 
         if ephys_traj_prev:
             self.alignments = ephys_traj_prev[0]['json'] or {}
@@ -304,7 +305,7 @@ class LoadData:
         :return xyz_picks: 3D coordinates of points relative to bregma
         :type: np.array(n_picks, 3)
         """
-        insertion = self.one.alyx.rest('insertions', 'read', id=self.probe_id)
+        insertion = self.one.alyx.rest('insertions', 'read', id=self.probe_id, no_cache=True)
         self.xyz_picks = np.array(insertion['json']['xyz_picks']) / 1e6
         self.resolved = (insertion.get('json', {'temp': 0}).get('extended_qc', {'temp': 0}).
                          get('alignment_resolved', False))
@@ -432,7 +433,7 @@ class LoadData:
     def update_json(self, json_data):
         # Get the new trajectory
         ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
-                                        provenance='Ephys aligned histology track')
+                                        provenance='Ephys aligned histology track', no_cache=True)
         patch_dict = {'json': json_data}
         self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
                            data=patch_dict)
