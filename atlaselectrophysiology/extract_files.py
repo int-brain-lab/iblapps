@@ -4,7 +4,7 @@ import ibllib.dsp as dsp
 from scipy import signal
 from ibllib.misc import print_progress
 from pathlib import Path
-import alf.io as aio
+import one.alf.io as alfio
 import logging
 import ibllib.ephys.ephysqc as ephysqc
 from phylib.io import alf
@@ -88,11 +88,11 @@ def extract_rmsmap(fbin, out_folder=None, spectra=True):
     if not out_folder.exists():
         out_folder.mkdir()
     tdict = {'rms': rms['TRMS'].astype(np.single), 'timestamps': rms['tscale'].astype(np.single)}
-    aio.save_object_npy(out_folder, object=alf_object_time, dico=tdict)
+    alfio.save_object_npy(out_folder, object=alf_object_time, dico=tdict)
     if spectra:
         fdict = {'power': rms['spectral_density'].astype(np.single),
                  'freqs': rms['fscale'].astype(np.single)}
-        aio.save_object_npy(out_folder, object=alf_object_freq, dico=fdict)
+        alfio.save_object_npy(out_folder, object=alf_object_freq, dico=fdict)
 
 
 def _sample2v(ap_file):

@@ -904,7 +904,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.img_cbars = []
             size = data['size'].tolist()
             symbol = data['symbol'].tolist()
-            end = time.time()
 
             color_bar = cb.ColorBar(data['cmap'])
             cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=np.min(data['levels'][0]),

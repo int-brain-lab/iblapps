@@ -24,9 +24,13 @@ if not args.eid:
         print('Must give Subject, Date and Session number')
     else:
         eid = one.search(subject=str(args.subject), date=str(args.date), number=args.session_no)[0]
+        print(eid)
+else:
+    eid = str(args.eid)
 
-_ = one.load_object(str(args.eid), object='trials', collection='alf',
+_ = one.load_object(eid, obj='trials', collection='alf',
                     download_only=True)
-_ = one.load_object(str(args.eid), obj='spikes', attributes='times|clusters|amps|depths',
+_ = one.load_object(eid, obj='spikes', attribute='times|clusters|amps|depths',
                     collection=f'alf/{str(args.probe_label)}', download_only=True)
-_ = one.load_object(str(args.eid), obj='clusters', collection=f'alf/{str(args.probe_label)}', download_only=True)
+_ = one.load_object(eid, obj='clusters', collection=f'alf/{str(args.probe_label)}',
+                    download_only=True)

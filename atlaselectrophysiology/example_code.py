@@ -1,4 +1,4 @@
-from oneibl.one import ONE
+from one.api import ONE
 from atlaselectrophysiology.alignment_with_easyqc import viewer
 
 one = ONE()

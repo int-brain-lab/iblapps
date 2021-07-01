@@ -1,7 +1,7 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import pyqtgraph.dockarea
-import time
+import copy
 
 
 class PlotGroup:
@@ -150,7 +150,7 @@ class PlotGroup:
 
     
     def change_all_plots_final(self, data, clust, trials, case, sort_method, hold):
-        bla = self.plot_status.keys()
+        bla = copy.copy(list(self.plot_status.keys()))
         if len(bla) == 0:
             self.plot_psth(data, clust, trials, case, sort_method)
         else:

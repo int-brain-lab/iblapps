@@ -8,8 +8,8 @@ from PyQt5 import QtCore, QtGui
 import numpy as np
 import pyqtgraph as pg
 import qt
-from oneibl.one import ONE
-from brainbox.core import Bunch
+from one.api import ONE
+from iblutil.util import Bunch
 
 import atlaselectrophysiology.ephys_atlas_gui as alignment_window
 import data_exploration_gui.gui_main as trial_window
@@ -235,7 +235,7 @@ def load_extra_data(probe_id, one=None):
                           dataset_type='spikes.samples')
     _ = one._download_datasets(dsets)
 
-    trials = one.load_object(id=dsets[0]['session'][-36:], obj='trials')
+    trials = one.load_object(dsets[0]['session'][-36:], obj='trials')
 
     return trials
 
