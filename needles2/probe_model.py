@@ -1,6 +1,6 @@
 import numpy as np
 from brainbox.numerical import ismember
-from oneibl.one import ONE
+from one.api import ONE
 from ibllib.pipes import histology
 from ibllib.atlas import AllenAtlas, atlas
 from ibllib.ephys.neuropixel import TIP_SIZE_UM, SITES_COORDINATES

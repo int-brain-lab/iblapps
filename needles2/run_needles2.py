@@ -12,8 +12,7 @@ import qt
 
 from PyQt5 import Qt
 #from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
-from oneibl.one import ONE
-one = ONE()
+from one.api import ONE
 # from needles2.needles_viewer import NeedlesViewer
 from needles2.probe_model import ProbeModel
 
@@ -41,6 +40,7 @@ class MainWindow(QtWidgets.QMainWindow):
         uic.loadUi(Path(__file__).parent.joinpath('mainUI.ui'), self)
 
         self.atlas = AllenAtlas(25)
+        one = ONE()
 
         # Configure the Menu bar
         menu_bar = QtWidgets.QMenuBar(self)

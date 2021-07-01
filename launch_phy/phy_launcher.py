@@ -5,7 +5,7 @@ import os
 from phy.apps.template import TemplateController, template_gui
 from phy.gui.qt import create_app, run_app
 from phylib import add_default_handler
-from oneibl.one import ONE
+from one.api import ONE
 from metrics import gen_metrics_labels
 from defined_metrics import *
 
@@ -26,35 +26,37 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
         one = ONE()
 
     dtypes = [
-        'spikes.times',
-        'spikes.clusters',
-        'spikes.amps',
-        'spikes.templates',
-        'spikes.samples',
-        'spikes.depths',
-        'templates.waveforms',
-        'templates.waveformsChannels',
-        'clusters.uuids',
-        'clusters.metrics',
-        'clusters.waveforms',
-        'clusters.waveformsChannels',
-        'clusters.depths',
-        'clusters.amps',
-        'clusters.channels',
-        'channels.probes',
-        'channels.rawInd',
-        'channels.localCoordinates',
+        'spikes.times.npy',
+        'spikes.clusters.npy',
+        'spikes.amps.npy',
+        'spikes.templates.npy',
+        'spikes.samples.npy',
+        'spikes.depths.npy',
+        'templates.waveforms.npy',
+        'templates.waveformsChannels.npy',
+        'clusters.uuids.csv',
+        'clusters.metrics.pqt',
+        'clusters.waveforms.npy',
+        'clusters.waveformsChannels.npy',
+        'clusters.depths.npy',
+        'clusters.amps.npy',
+        'clusters.channels.npy',
+        'channels.rawInd.npy',
+        'channels.localCoordinates.npy',
         # 'ephysData.raw.ap'
-        '_phy_spikes_subset.waveforms',
-        '_phy_spikes_subset.spikes',
-        '_phy_spikes_subset.channels'
+        '_phy_spikes_subset.waveforms.npy',
+        '_phy_spikes_subset.spikes.npy',
+        '_phy_spikes_subset.channels.npy'
     ]
+
+    collection = [f'alf/{probe_name}'] * len(dtypes)
 
     if eid is None:
         eid = one.search(subject=subj, date=date, number=sess_no)[0]
 
-    _ = one.load(eid, dataset_types=dtypes, download_only=True)
-    ses_path = one.path_from_eid(eid)
+    _ = one.load_datasets(eid, datasets=dtypes, collections=collection, download_only=True,
+                          assert_present=False)
+    ses_path = one.eid2path(eid)
     alf_probe_dir = os.path.join(ses_path, 'alf', probe_name)
     ephys_file_dir = os.path.join(ses_path, 'raw_ephys_data', probe_name)
     raw_files = glob.glob(os.path.join(ephys_file_dir, '*ap.*bin'))
