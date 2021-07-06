@@ -222,4 +222,4 @@ if __name__ == "__main__":
     parser.add_argument('--local', action='store_true', help='run from disk location (lab server')
     args = parser.parse_args()  # returns data from the options specified (echo)
 
-    show_session_task_qc(session=args.session, bpod_only=args.bpod, local=args.local)
+    show_session_task_qc(qc_or_session=args.session, bpod_only=args.bpod, local=args.local)
