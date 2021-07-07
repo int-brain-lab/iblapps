@@ -229,13 +229,9 @@ class TrialWindow(trial_window.MainWindow):
 
 def load_extra_data(probe_id, one=None):
     one = one or ONE()
-    dtypes_probe = ['spikes.samples']
-
-    dsets = one.alyx.rest('datasets', 'list', probe_insertion=probe_id,
-                          dataset_type='spikes.samples')
-    _ = one._download_datasets(dsets)
-
-    trials = one.load_object(dsets[0]['session'][-36:], obj='trials')
+    eid, probe = one.pid2eid(probe_id)
+    _ = one.load_dataset(eid, 'spikes.samples.npy', collection=f'alf/{probe}')
+    trials = one.load_object(eid, obj='trials')
 
     return trials
 
