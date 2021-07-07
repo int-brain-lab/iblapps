@@ -440,6 +440,9 @@ class LoadData:
 
     def upload_dj(self, align_qc, ephys_qc, ephys_desc):
         # Upload qc results to datajoint table
+        # Check the FTP patcher credentials are in the params, so we can upload filed
+        self.check_FTP_patcher_credentials()
+
         user = params.get().ALYX_LOGIN
         if len(ephys_desc) == 0:
             ephys_desc_str = 'None'
@@ -465,3 +468,20 @@ class LoadData:
         self.resolved = results['alignment_resolved']
 
         return self.resolved
+
+    def check_FTP_patcher_credentials(self):
+        par = self.one.alyx._par
+        if not params._get_current_par('FTP_DATA_SERVER_LOGIN', par) \
+                or not params._get_current_par('FTP_DATA_SERVER_PWD', par):
+            print('herehere')
+            par_dict = par.as_dict()
+            par_dict['FTP_DATA_SERVER_LOGIN'] = 'iblftp'
+            par_dict['FTP_DATA_SERVER_PWD'] = params._get_current_par('HTTP_DATA_SERVER_PWD', par)
+            print('saving')
+
+            from one.params import _PAR_ID_STR  # noqa
+            from iblutil.io import params as iopar  # noqa
+            iopar.write(f'{_PAR_ID_STR}/{params._key_from_url(self.one.alyx.base_url)}', par_dict)
+            self.one.alyx._par = params.get(client=self.one.alyx.base_url)
+
+
