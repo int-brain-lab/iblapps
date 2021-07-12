@@ -1,6 +1,4 @@
 from PyQt5 import QtWidgets, QtCore
-import pyqtgraph as pg
-import pyqtgraph.exporters
 
 import data_exploration_gui.cluster as clust
 import data_exploration_gui.scatter as scatt
@@ -8,10 +6,6 @@ import data_exploration_gui.filter as filt
 import data_exploration_gui.plot as plt
 import data_exploration_gui.data_model as dat
 from data_exploration_gui import utils
-import data_exploration_gui.misc_class as misc
-
-from pathlib import Path
-import numpy as np
 
 import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
@@ -34,10 +28,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
             return av
 
-    def __init__(self):
+    def __init__(self, eid, probe, one=None):
         super(MainWindow, self).__init__()
 
-        self.data = dat.DataModel()
+        self.data = dat.DataModel(eid, probe, one=one)
         self.plot = plt.PlotGroup(self.data)
 
         # Initialise cluster group
@@ -119,11 +113,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Populate scatter plot
         self.scatter.populate(self.clust_data.amps, self.clust_data.depths, self.clust_data.ids,
-                              self.clust_data.colours_ks, self.clust_data.colours_ibl )
+                              self.clust_data.colours_ks, self.clust_data.colours_ibl)
         self.scatter.initialise_scatter_index()
 
         # Get the relevant data and plot
-        #self.data.alt_raster(self.clust, self.trial_event)
         self.data._get_spike_data_for_selection(self.clust, self.trial_event)
         self.data._get_behaviour_data_for_selection(self.behav, self.trial_event)
         self.plot.change_all_plots(self.contrasts, self.trial_set, self.order, self.sort,
@@ -153,8 +146,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.filter.trial_buttons.setExclusive(False)
         else:
             self.filter.trial_buttons.blockSignals(True)
-            self.filter.trial_buttons.setExclusive(True)
             self.filter.reset_filters()
+            self.filter.trial_buttons.setExclusive(True)
             self.plot.reset()
             self.filter.trial_buttons.blockSignals(False)
 
@@ -207,7 +200,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.plot.change_all_plots(self.contrasts, self.trial_set, self.order, self.sort,
                                        self.hold, self.trial_event)
 
-
     def on_previous_cluster_clicked(self):
 
         if self.clust != 0:
@@ -237,11 +229,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_cluster_sort_clicked(self):
         self.initialise_gui()
 
-
     def on_reset_filters_clicked(self):
 
         self.filter.trial_buttons.blockSignals(True)
         self.filter.reset_filters()
+        self.filter.hold_button.setCheckState(QtCore.Qt.Checked)
         self.filter.trial_buttons.blockSignals(False)
 
         # cluster sort, trial event, behav_event, sort, order, hold, contrasts, trial_set
@@ -253,8 +245,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.plot.change_all_plots(self.contrasts, self.trial_set, self.order, self.sort,
                                    self.hold, self.trial_event)
-
-
 
 
 def viewer(data=None):
@@ -269,14 +259,33 @@ def viewer(data=None):
 
 
 if __name__ == '__main__':
+
+    from argparse import ArgumentParser
+    import numpy as np
+    from one.api import ONE
+
+    one = ONE()
     app = QtWidgets.QApplication([])
-    mainapp = MainWindow()
+
+    parser = ArgumentParser()
+    parser.add_argument('-pid', '--pid', default=False, required=False,
+                        help='Probe id')
+    parser.add_argument('-eid', '--eid', default=False, required=False,
+                        help='Experiment id')
+    parser.add_argument('-name', '--probe_name', default=False, required=False,
+                        help='Probe name')
+
+    args = parser.parse_args()
+
+    if args.pid:
+        eid, probe = one.pid2eid(str(args.pid))
+        mainapp = MainWindow(eid, probe, one=one)
+    else:
+        if not np.all(np.array([args.eid, args.probe_name],
+                               dtype=object)):
+            print('Must provide eid and probe name')
+        else:
+            mainapp = MainWindow(str(args.eid), str(args.probe_name), one=one)
+
     mainapp.show()
     app.exec_()
-
-
-
-
-
-
-

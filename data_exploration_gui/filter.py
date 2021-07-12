@@ -1,6 +1,5 @@
 from PyQt5 import QtCore, QtWidgets, QtGui
 import numpy as np
-from iblutil.util import Bunch
 from data_exploration_gui import utils
 
 
@@ -101,7 +100,6 @@ class FilterGroup:
         self.behav_layout.addWidget(self.behav_combobox)
         self.behav_group.setLayout(self.behav_layout)
 
-
         # Now group everything into one big box
         self.filter_options_group = QtWidgets.QGroupBox()
         group_layout = QtWidgets.QVBoxLayout()
@@ -118,7 +116,6 @@ class FilterGroup:
     def populate(self, event_options, behav_options):
         self.populate_lists(event_options, self.event_list, self.event_combobox)
         self.populate_lists(behav_options, self.behav_list, self.behav_combobox)
-
 
     def populate_lists(self, data, list_name, combobox):
 
@@ -195,8 +192,8 @@ class FilterGroup:
 
         for button in self.trial_buttons.buttons():
             if button.text() == utils.TRIAL_OPTIONS[0]:
-                if not button.isChecked():
-                    button.setChecked(True)
+                #if not button.isChecked():
+                button.setChecked(True)
             else:
                 button.setChecked(False)
 
@@ -211,18 +208,3 @@ class FilterGroup:
                 button.setChecked(True)
             else:
                 button.setChecked(False)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

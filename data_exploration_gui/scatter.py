@@ -1,4 +1,4 @@
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtCore
 import pyqtgraph as pg
 import numpy as np
 
@@ -41,7 +41,6 @@ class ScatterGroup:
         self.scatter_plot.setData(x=self.clust_amps, y=self.clust_depths, size=10)
         self.scatter_plot.setBrush(clust_color_ibl)
         self.scatter_plot.setPen(clust_color_ks)
-        #self.scatter_plot.setPen(QtGui.QColor(30, 50, 2))
         self.x_min = np.min(self.clust_amps) - 2
         self.x_max = np.max(self.clust_amps) + 2
         self.fig_scatter.setXRange(min=self.x_min, max=self.x_max)
@@ -120,4 +119,3 @@ class ScatterGroup:
         else:
             point[0].setBrush('k')
             point[0].setPen('k')
-

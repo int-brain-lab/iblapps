@@ -1,9 +1,8 @@
-from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt5 import QtGui
 import pyqtgraph as pg
 import pyqtgraph.dockarea
 from data_exploration_gui.utils import (MAP_SORT_OPTIONS, MAP_SIDE_OPTIONS, MAP_CHOICE_OPTIONS,
                                         PSTH_OPTIONS, RASTER_OPTIONS, colours)
-from data_exploration_gui import utils
 import atlaselectrophysiology.ColorBar as cb
 import numpy as np
 
@@ -33,7 +32,6 @@ class PlotGroup:
 
         self.plot_status = {key: False for key in MAP_SORT_OPTIONS.keys()}
 
-
     def create_dock_area(self):
         self.fig_area = pg.dockarea.DockArea()
         self.fig1_area = pg.dockarea.Dock('', autoOrientation='horizontal')
@@ -42,7 +40,6 @@ class PlotGroup:
         self.fig4_area = pg.dockarea.Dock('', autoOrientation='horizontal')
         self.fig5_area = pg.dockarea.Dock('', autoOrientation='horizontal')
         self.fig6_area = pg.dockarea.Dock('', autoOrientation='horizontal')
-        #self.fig7_area = pg.dockarea.Dock('Figure 7: Waveform', autoOrientation='horizontal')
 
         self.fig_area.addDock(self.fig2_area, 'top')
         self.fig_area.addDock(self.fig1_area, 'left', self.fig2_area)
@@ -50,28 +47,18 @@ class PlotGroup:
         self.fig_area.addDock(self.fig4_area, 'bottom', self.fig2_area)
         self.fig_area.addDock(self.fig5_area, 'right')
         self.fig_area.addDock(self.fig6_area, 'bottom', self.fig5_area)
-        #self.fig_area.addDock(self.fig7_area, 'bottom', self.fig6_area)
 
         self.fig3_area.setStretch(x=1, y=18)
         self.fig4_area.setStretch(x=1, y=18)
 
         self.fig5_area.setStretch(x=10, y=1)
         self.fig6_area.setStretch(x=10, y=1)
-        #self.fig7_area.setStretch(x=7, y=1)
-
-    def reset(self):
-
-        for key, val in self.plot_status.items():
-            if val:
-                self.fig_spike_psth.remove_item(key)
-                self.plot_status[key] = False
 
     def change_rasters(self, trial_set, contrast, order, sort, hold, event):
         side = MAP_SIDE_OPTIONS[trial_set]
         choice = MAP_CHOICE_OPTIONS[trial_set]
 
         if hold and trial_set != 'all':
-            #sort = MAP_SORT_OPTIONS[trial_set]
             spike_raster, behav_raster = self.data.get_rasters_for_selection('all', 'all', order,
                                                                              sort, contrast, event)
             raster_options = RASTER_OPTIONS['all'][sort]
@@ -142,12 +129,12 @@ class PlotGroup:
         self.fig_behav_psth.remove_item(trial_set)
 
     def reset(self):
-
         for key, val in self.plot_status.items():
             if val:
                 self.remove_plots(key)
         self.fig_spike_raster.reset()
         self.fig_behav_raster.reset()
+        self.fig_autocorr.reset()
 
 
 class PlotTemplate:
@@ -182,7 +169,7 @@ class PlotTemplate:
         self.fig.removeItem(self.plot_items[trial_set]['fill'])
         self.plot_items.pop(trial_set)
 
-    def plot(self, trial_set, x, y, se, plot_info, ylabel=None ):
+    def plot(self, trial_set, x, y, se, plot_info, ylabel=None):
         self.add_item(trial_set, [np.nanmin(y - se), np.nanmax(y + se)])
 
         self.plot_items[trial_set]['centre'].setData(x=x, y=y)
@@ -368,7 +355,6 @@ class ScatterTemplate:
         return self.region_text[idx]
 
 
-
 class BarTemplate:
     def __init__(self, xlabel, ylabel):
         self.fig = pg.PlotWidget(background='w')
@@ -385,6 +371,3 @@ class BarTemplate:
         self.fig.setXRange(min=np.min(x), max=np.max(x))
         self.fig.setYRange(min=0, max=1.05 * np.max(y))
         self.bar.setOpts(x=x, height=y, width=0.0009, brush='b')
-
-
-

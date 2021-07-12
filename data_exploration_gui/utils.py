@@ -2,22 +2,20 @@ from PyQt5 import QtGui, QtCore
 from iblutil.util import Bunch
 import copy
 
-colours = {
-            'all': QtGui.QColor('#808080'),
-            'correct':  QtGui.QColor('#1f77b4'),
-            'incorrect': QtGui.QColor('#d62728'),
-            'left': QtGui.QColor('#2ca02c'),
-            'right': QtGui.QColor('#bcbd22'),
-            'left correct': QtGui.QColor('#17becf'),
-            'right correct': QtGui.QColor('#9467bd'),
-            'left incorrect': QtGui.QColor('#8c564b'),
-            'right incorrect': QtGui.QColor('#ff7f0e'),
-            'KS good':  QtGui.QColor('#1f77b4'),
-            'KS mua': QtGui.QColor('#fdc086'),
-            'IBL good': QtGui.QColor('#7fc97f'),
-            'IBL bad': QtGui.QColor('#d62728'),
-            'line': QtGui.QColor('#7732a8')
-}
+colours = {'all': QtGui.QColor('#808080'),
+           'correct': QtGui.QColor('#1f77b4'),
+           'incorrect': QtGui.QColor('#d62728'),
+           'left': QtGui.QColor('#2ca02c'),
+           'right': QtGui.QColor('#bcbd22'),
+           'left correct': QtGui.QColor('#17becf'),
+           'right correct': QtGui.QColor('#9467bd'),
+           'left incorrect': QtGui.QColor('#8c564b'),
+           'right incorrect': QtGui.QColor('#ff7f0e'),
+           'KS good': QtGui.QColor('#1f77b4'),
+           'KS mua': QtGui.QColor('#fdc086'),
+           'IBL good': QtGui.QColor('#7fc97f'),
+           'IBL bad': QtGui.QColor('#d62728'),
+           'line': QtGui.QColor('#7732a8')}
 
 
 all = Bunch()
@@ -236,7 +234,6 @@ UNIT_OPTIONS = ['IBL good', 'IBL bad', 'KS good', 'KS mua']
 SORT_CLUSTER_OPTIONS = ['ids', 'n spikes', 'IBL good', 'KS good']
 
 
-
 def get_icon(col_outer, col_inner, pix_size):
 
     p1 = QtGui.QPixmap(pix_size, pix_size)
@@ -244,7 +241,8 @@ def get_icon(col_outer, col_inner, pix_size):
     p2 = QtGui.QPixmap(pix_size, pix_size)
     p2.fill(QtCore.Qt.transparent)
     p = QtGui.QPainter(p2)
-    p.fillRect(int(pix_size/4), int(pix_size/4), int(pix_size/2), int(pix_size/2), col_inner)
+    p.fillRect(int(pix_size / 4), int(pix_size / 4), int(pix_size / 2),
+               int(pix_size / 2), col_inner)
     p.end()
 
     result = QtGui.QPixmap(p1)
@@ -255,4 +253,3 @@ def get_icon(col_outer, col_inner, pix_size):
     painter.end()
 
     return result
-

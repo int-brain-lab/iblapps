@@ -46,7 +46,6 @@ class ClusterGroup:
         self.cluster_previous_button.setFixedSize(90, 30)
 
         self.cluster_list_group = QtWidgets.QGroupBox()
-        #self.cluster_list_group.setFixedSize(400, 300)
 
         group_layout = QtWidgets.QGridLayout()
         group_layout.addWidget(self.cluster_group, 0, 0, 1, 3)

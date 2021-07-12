@@ -7,33 +7,30 @@ from brainbox.behavior.wheel import velocity
 from brainbox.behavior.dlc import get_dlc_everything
 from brainbox.population.decode import xcorr
 from iblutil.util import Bunch
-from iblutil.numerical import ismember
 from data_exploration_gui.utils import colours
-from PyQt5 import QtGui
-one = ONE()
-probe ='probe00'
-# load in the data that you need given eid and pid
+
 EPOCH = [-0.4, 1]
 TBIN = 0.02
 AUTOCORR_WINDOW = 0.1
 AUTOCORR_BIN = 0.001
 FS = 30000
 
+
 class DataModel:
-    def __init__(self, pid='69f42a9c-095d-4a25-bca8-61a9869871d3'):
-        eid, probe = one.pid2eid(pid)
+    def __init__(self, eid, probe, one=None):
+        one = one or ONE()
 
         self.spikes = one.load_object(eid, obj='spikes', collection=f'alf/{probe}',
-                             attribute='clusters|times|amps|depths')
+                                      attribute='clusters|times|amps|depths')
         self.clusters = one.load_object(eid, obj='clusters', collection=f'alf/{probe}',
-                               attribute='metrics|waveforms')
+                                        attribute='metrics|waveforms')
 
         # Get everything we need for the clusters
         # need to get rid of nans in amps and depths
         self.clusters.clust_ids, self.clusters.depths, n_spikes = \
             compute_cluster_average(self.spikes.clusters[~np.isnan(self.spikes.depths)],
                                     self.spikes.depths[~np.isnan(self.spikes.depths)])
-        _ , self.clusters.amps, _ = compute_cluster_average(
+        _, self.clusters.amps, _ = compute_cluster_average(
             self.spikes.clusters[~np.isnan(self.spikes.amps)],
             self.spikes.amps[~np.isnan(self.spikes.amps)])
 
@@ -41,7 +38,7 @@ class DataModel:
         # Bug in the KS2 units, the clusters that do not exist in spikes.clusters have not been
         # filled with Nans like the other features in metrics
         colours_ks = np.array(self.clusters.metrics.ks2_label[:len(self.clusters.clust_ids)])
-        #colours_ks = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
+        # colours_ks = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
         good_ks = np.where(colours_ks == 'good')[0]
         colours_ks[good_ks] = colours['KS good']
         mua_ks = np.where(colours_ks == 'mua')[0]
@@ -56,14 +53,11 @@ class DataModel:
         colours_ibl[bad_ibl] = colours['IBL bad']
         self.clusters.colours_ibl = colours_ibl
 
-
         # Some extra info for sorting clusters
         self.clusters['ids'] = np.arange(len(self.clusters.clust_ids))
         self.clusters['n spikes'] = np.argsort(n_spikes)[::-1]
         self.clusters['KS good'] = np.r_[good_ks, mua_ks]
         self.clusters['IBL good'] = np.r_[good_ibl, bad_ibl]
-
-        #self.sort_clusters('ids')
 
         # Get trial data
         self.trials = one.load_object(eid, obj='trials', collection='alf')
@@ -83,7 +77,6 @@ class DataModel:
         self.spikes_raster_psth = Bunch()
         self.behav_raster = Bunch()
         self.behav_raster_psth = Bunch()
-
 
     def combine_behaviour_data(self, wheel, dlc_left, dlc_right):
         behav = Bunch()
@@ -139,21 +132,14 @@ class DataModel:
         self.spikes_raster_psth['vals'] = raster
         self.spikes_raster_psth['time'] = t
         self.spikes_raster_psth['ylabel'] = 'Firing Rate / Hz'
-#
-        #
-        #raster, t = get_event_aligned_raster(self.spikes.times[self.spikes.clusters ==
-        #                                                       self.clust_ids[clust]],
-        #                         self.trials[trial_event], tbin=0.02)
-        #self.spikes_raster['vals'] = raster
-        #self.spikes_raster['time'] = t
-        #self.spikes_raster['cmap'] = 'binary'
-        #self.spikes_raster['clevels'] = [0, 1]
 
-#
     def _get_spike_raster(self, trial_ids):
         # Ain't most efficient but it will do for now!
 
         data = Bunch()
+
+        x = np.empty(0)
+        y = np.empty(0)
 
         epoch = [0.4, 1]
         spk_times = self.spikes.times[self.spikes.clusters == self.clust_ids[self.clust]]
@@ -161,12 +147,8 @@ class DataModel:
             spks_to_include = np.bitwise_and(spk_times >= val - epoch[0],
                                              spk_times <= val + epoch[1])
             trial_spk_times = spk_times[spks_to_include] - val
-            if idx == 0:
-                x = trial_spk_times
-                y = np.ones(len(trial_spk_times)) * idx
-            else:
-                x = np.r_[x, trial_spk_times]
-                y = np.r_[y, np.ones(len(trial_spk_times)) * idx]
+            x = np.append(x, trial_spk_times)
+            y = np.append(y, np.ones(len(trial_spk_times)) * idx)
 
         data['raster'] = np.c_[x, y]
         data['time'] = EPOCH
@@ -179,9 +161,7 @@ class DataModel:
         x_corr = xcorr(self.spikes.times[self.spikes.clusters == self.clust_ids[self.clust]],
                        self.spikes.clusters[self.spikes.clusters == self.clust_ids[self.clust]],
                        AUTOCORR_BIN, AUTOCORR_WINDOW)
-        t_corr = np.arange(0, AUTOCORR_WINDOW + AUTOCORR_BIN, AUTOCORR_BIN) - AUTOCORR_WINDOW/2
-        #t_corr = np.arange((AUTOCORR_WINDOW / 2) - AUTOCORR_WINDOW,
-        #                    (AUTOCORR_WINDOW / 2) + AUTOCORR_BIN, AUTOCORR_BIN)
+        t_corr = np.arange(0, AUTOCORR_WINDOW + AUTOCORR_BIN, AUTOCORR_BIN) - AUTOCORR_WINDOW / 2
 
         data['vals'] = x_corr[0, 0, :]
         data['time'] = t_corr
@@ -239,22 +219,27 @@ class DataModel:
                 self.behav_raster['clevels'] = np.nanquantile(raster, [0, 0.9])
                 self.behav_raster['ylabel'] = 'px / s'
 
-
     def _get_psth(self, raster, trials_id, tbin=1):
         data = Bunch()
-        data['psth_mean'] = np.nanmean(raster.vals[trials_id], axis=0) / tbin
-        data['psth_std'] = (np.nanstd(raster.vals[trials_id], axis=0) / tbin) \
-                           / np.sqrt(trials_id.shape[0])
-        data['time'] = raster.time
-        data['ylabel'] = raster.ylabel
+        if len(trials_id) == 0:
+            data['psth_mean'] = np.zeros((raster.vals.shape[1]))
+            data['psth_std'] = np.zeros((raster.vals.shape[1]))
+            data['time'] = raster.time
+            data['ylabel'] = raster.ylabel
+        else:
 
+            data['psth_mean'] = np.nanmean(raster.vals[trials_id], axis=0) / tbin
+            data['psth_std'] = ((np.nanstd(raster.vals[trials_id], axis=0) / tbin) /
+                                np.sqrt(trials_id.shape[0]))
+            data['time'] = raster.time
+            data['ylabel'] = raster.ylabel
 
         return data
 
     def _get_raster(self, raster, trials_id):
         data = Bunch()
         data['raster'] = np.r_[raster.vals[trials_id],
-                               np.full((self.n_trials-trials_id.shape[0],
+                               np.full((self.n_trials - trials_id.shape[0],
                                         raster.vals.shape[1]), np.nan)]
         data['time'] = raster.time
         data['cmap'] = raster.cmap
@@ -274,7 +259,6 @@ class DataModel:
         trial_ids, div = find_trial_ids(self.trials, side=side, choice=choice, order=order,
                                         sort=sort, contrast=contrast, event=event)
         dividers = self._get_dividers(div, trial_ids.shape[0])
-        #spike_raster = self._get_raster(self.spikes_raster, trial_ids)
         spike_raster = self._get_spike_raster(trial_ids)
         spike_raster['dividers'] = dividers
         behav_raster = self._get_raster(self.behav_raster, trial_ids)
