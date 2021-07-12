@@ -124,8 +124,6 @@ class DataModel:
         # Store the clust id and trial event
         self.clust = clust
         self.trial_event = trial_event
-        print(clust)
-        print(self.clust_ids[clust])
         raster, t = get_event_aligned_raster(self.spikes.times[self.spikes.clusters ==
                                                                self.clust_ids[clust]],
                                              self.trials[trial_event], tbin=TBIN, epoch=EPOCH)
