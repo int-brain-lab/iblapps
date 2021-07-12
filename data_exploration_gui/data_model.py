@@ -5,6 +5,7 @@ from brainbox.processing import compute_cluster_average
 from brainbox.task.trials import find_trial_ids, get_event_aligned_raster
 from brainbox.behavior.wheel import velocity
 from brainbox.behavior.dlc import get_dlc_everything
+from brainbox.population.decode import xcorr
 from iblutil.util import Bunch
 from iblutil.numerical import ismember
 from data_exploration_gui.utils import colours
@@ -14,9 +15,13 @@ probe ='probe00'
 # load in the data that you need given eid and pid
 EPOCH = [-0.4, 1]
 TBIN = 0.02
+AUTOCORR_WINDOW = 0.1
+AUTOCORR_BIN = 0.001
+FS = 30000
 
 class DataModel:
-    def __init__(self, eid='746d1902-fa59-4cab-b0aa-013be36060d5', probe='probe00'):
+    def __init__(self, pid='f8d0ecdc-b7bd-44cc-b887-3d544e24e561'):
+        eid, probe = one.pid2eid(pid)
 
         self.spikes = one.load_object(eid, obj='spikes', collection=f'alf/{probe}',
                              attribute='clusters|times|amps|depths')
@@ -123,14 +128,14 @@ class DataModel:
         Triggered when one of the filters is changed, inputs should only be the filter options
         :return:
         """
-        # Sorry
+        # Store the clust id and trial event
         self.clust = clust
         self.trial_event = trial_event
         print(clust)
         print(self.clust_ids[clust])
         raster, t = get_event_aligned_raster(self.spikes.times[self.spikes.clusters ==
                                                                self.clust_ids[clust]],
-                                            self.trials[trial_event], tbin=TBIN, epoch=EPOCH)
+                                             self.trials[trial_event], tbin=TBIN, epoch=EPOCH)
         self.spikes_raster_psth['vals'] = raster
         self.spikes_raster_psth['time'] = t
         self.spikes_raster_psth['ylabel'] = 'Firing Rate / Hz'
@@ -166,6 +171,30 @@ class DataModel:
         data['raster'] = np.c_[x, y]
         data['time'] = EPOCH
         data['n_trials'] = self.n_trials
+
+        return data
+
+    def get_autocorr_for_selection(self):
+        data = Bunch()
+        x_corr = xcorr(self.spikes.times[self.spikes.clusters == self.clust_ids[self.clust]],
+                       self.spikes.clusters[self.spikes.clusters == self.clust_ids[self.clust]],
+                       AUTOCORR_BIN, AUTOCORR_WINDOW)
+        t_corr = np.arange(0, AUTOCORR_WINDOW + AUTOCORR_BIN, AUTOCORR_BIN) - AUTOCORR_WINDOW/2
+        #t_corr = np.arange((AUTOCORR_WINDOW / 2) - AUTOCORR_WINDOW,
+        #                    (AUTOCORR_WINDOW / 2) + AUTOCORR_BIN, AUTOCORR_BIN)
+
+        data['vals'] = x_corr[0, 0, :]
+        data['time'] = t_corr
+
+        return data
+
+    def get_template_for_selection(self):
+        data = Bunch()
+        template = (self.clusters.waveforms[self.clust_ids[self.clust], :, 0]) * 1e6
+        t_template = 1e3 * np.arange(template.shape[0]) / FS
+
+        data['vals'] = template
+        data['time'] = t_template
 
         return data
 

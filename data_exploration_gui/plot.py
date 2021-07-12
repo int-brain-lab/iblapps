@@ -25,6 +25,12 @@ class PlotGroup:
         self.fig_behav_raster = ImageTemplate('Time After Event (s)', 'No. of Trials')
         self.fig4_area.addWidget(self.fig_behav_raster.fig)
 
+        self.fig_autocorr = BarTemplate('Time (ms)', 'Corr')
+        self.fig5_area.addWidget(self.fig_autocorr.fig)
+
+        self.fig_template = PlotTemplate('Time (ms)', 'V (uV)')
+        self.fig6_area.addWidget(self.fig_template.fig)
+
         self.plot_status = {key: False for key in MAP_SORT_OPTIONS.keys()}
 
 
@@ -34,25 +40,23 @@ class PlotGroup:
         self.fig2_area = pg.dockarea.Dock('', autoOrientation='horizontal')
         self.fig3_area = pg.dockarea.Dock('', autoOrientation='horizontal')
         self.fig4_area = pg.dockarea.Dock('', autoOrientation='horizontal')
-        #self.fig5_area = pg.dockarea.Dock('Figure 5: Autocorrelogram',
-        #                                  autoOrientation='horizontal')
-        #self.fig6_area = pg.dockarea.Dock('Figure 6: Template Waveform',
-        #                                  autoOrientation='horizontal')
+        self.fig5_area = pg.dockarea.Dock('', autoOrientation='horizontal')
+        self.fig6_area = pg.dockarea.Dock('', autoOrientation='horizontal')
         #self.fig7_area = pg.dockarea.Dock('Figure 7: Waveform', autoOrientation='horizontal')
 
         self.fig_area.addDock(self.fig2_area, 'top')
         self.fig_area.addDock(self.fig1_area, 'left', self.fig2_area)
         self.fig_area.addDock(self.fig3_area, 'bottom', self.fig1_area)
         self.fig_area.addDock(self.fig4_area, 'bottom', self.fig2_area)
-        #self.fig_area.addDock(self.fig5_area, 'right')
-        #self.fig_area.addDock(self.fig6_area, 'bottom', self.fig5_area)
+        self.fig_area.addDock(self.fig5_area, 'right')
+        self.fig_area.addDock(self.fig6_area, 'bottom', self.fig5_area)
         #self.fig_area.addDock(self.fig7_area, 'bottom', self.fig6_area)
 
         self.fig3_area.setStretch(x=1, y=18)
         self.fig4_area.setStretch(x=1, y=18)
 
-        #self.fig5_area.setStretch(x=7, y=1)
-        #self.fig6_area.setStretch(x=7, y=1)
+        self.fig5_area.setStretch(x=7, y=1)
+        self.fig6_area.setStretch(x=7, y=1)
         #self.fig7_area.setStretch(x=7, y=1)
 
     def reset(self):
@@ -124,6 +128,12 @@ class PlotGroup:
                     self.plot_status[key] = True
 
         self.change_rasters(trial_set, contrast, order, sort, hold, event)
+        autocorr = self.data.get_autocorr_for_selection()
+        self.fig_autocorr.plot(autocorr.time, autocorr.vals)
+
+        template = self.data.get_template_for_selection()
+        self.fig_template.plot_line(template.time, template.vals)
+
         self.prev_trial_set = trial_set
 
     def remove_plots(self, trial_set):
@@ -141,13 +151,17 @@ class PlotGroup:
 
 
 class PlotTemplate:
-    def __init__(self, xlabel, ylabel):
+    def __init__(self, xlabel, ylabel, single=True):
         self.fig = pg.PlotWidget(background='w')
         self.fig.setMouseEnabled(x=False, y=False)
         self.fig.setLabel('bottom', xlabel)
         self.fig.setLabel('left', ylabel)
         self.plot_items = dict()
-        self.fig.plotItem.addLine(x=0, pen=colours['line'])
+        if single:
+            self.plot = pg.PlotCurveItem()
+            self.fig.addItem(self.plot)
+        else:
+            self.fig.plotItem.addLine(x=0, pen=colours['line'])
 
     def add_item(self, trial_set, yrange):
 
@@ -190,6 +204,11 @@ class PlotTemplate:
         if ylabel is not None:
             self.fig.setLabel('left', ylabel)
 
+    def plot_line(self, x, y):
+        self.plot.setData(x=x, y=y)
+        self.plot.setPen('b')
+        self.fig.setXRange(min=np.min(x), max=np.max(x))
+        self.fig.setYRange(min=0.95 * np.min(y), max=1.05 * np.max(y))
 
 
 class ImageTemplate:
@@ -235,7 +254,6 @@ class ImageTemplate:
         self.fig.setXRange(min=np.min(t), max=np.max(t))
         self.fig.setYRange(min=0, max=image.shape[0])
 
-
     def add_regions(self, regions, region_info):
         self.regions = regions
         self.region_text = region_info['text']
@@ -246,9 +264,6 @@ class ImageTemplate:
                                          movable=False, orientation='horizontal')
             self.fig.plotItem.addItem(region)
             self.region_items.append(region)
-
-    def add_lines(self, regions):
-        self.lines = []
 
     def remove_regions(self):
         for reg in self.region_items:
@@ -366,9 +381,9 @@ class BarTemplate:
     def reset(self):
         self.bar.setOpts(x=[0], height=[0], width=0)
 
-    def plot(self, x, y, n_bin):
-        self.fig.setXRange(min=x.min(), max=x.max())
-        self.fig.setYRange(min=0, max=1.05 * y.max())
+    def plot(self, x, y):
+        self.fig.setXRange(min=np.min(x), max=np.max(x))
+        self.fig.setYRange(min=0, max=1.05 * np.max(y))
         self.bar.setOpts(x=x, height=y, width=0.0009, brush='b')
 
 
