@@ -20,7 +20,7 @@ AUTOCORR_BIN = 0.001
 FS = 30000
 
 class DataModel:
-    def __init__(self, pid='f8d0ecdc-b7bd-44cc-b887-3d544e24e561'):
+    def __init__(self, pid='69f42a9c-095d-4a25-bca8-61a9869871d3'):
         eid, probe = one.pid2eid(pid)
 
         self.spikes = one.load_object(eid, obj='spikes', collection=f'alf/{probe}',

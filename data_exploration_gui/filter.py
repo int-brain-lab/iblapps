@@ -137,6 +137,11 @@ class FilterGroup:
         # Set the default to be the first option
         combobox.setCurrentIndex(0)
 
+    def set_selected_event(self, event):
+        for it in range(self.event_combobox.count()):
+            if self.event_combobox.itemText(it) == event:
+                self.event_combobox.setCurrentIndex(it)
+
     def get_selected_event(self):
         return self.event_combobox.currentText()
 

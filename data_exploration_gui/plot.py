@@ -55,8 +55,8 @@ class PlotGroup:
         self.fig3_area.setStretch(x=1, y=18)
         self.fig4_area.setStretch(x=1, y=18)
 
-        self.fig5_area.setStretch(x=7, y=1)
-        self.fig6_area.setStretch(x=7, y=1)
+        self.fig5_area.setStretch(x=10, y=1)
+        self.fig6_area.setStretch(x=10, y=1)
         #self.fig7_area.setStretch(x=7, y=1)
 
     def reset(self):
@@ -158,8 +158,8 @@ class PlotTemplate:
         self.fig.setLabel('left', ylabel)
         self.plot_items = dict()
         if single:
-            self.plot = pg.PlotCurveItem()
-            self.fig.addItem(self.plot)
+            self.plot_item = pg.PlotCurveItem()
+            self.fig.addItem(self.plot_item)
         else:
             self.fig.plotItem.addLine(x=0, pen=colours['line'])
 
@@ -205,8 +205,8 @@ class PlotTemplate:
             self.fig.setLabel('left', ylabel)
 
     def plot_line(self, x, y):
-        self.plot.setData(x=x, y=y)
-        self.plot.setPen('b')
+        self.plot_item.setData(x=x, y=y)
+        self.plot_item.setPen('b')
         self.fig.setXRange(min=np.min(x), max=np.max(x))
         self.fig.setYRange(min=0.95 * np.min(y), max=1.05 * np.max(y))
 

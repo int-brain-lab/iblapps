@@ -78,7 +78,9 @@ class MainWindow(QtWidgets.QMainWindow):
         main_widget_layout.addWidget(self.scatter.fig_scatter, 1, 0)
         main_widget_layout.addWidget(self.filter.filter_options_group, 0, 1, 2, 1)
         main_widget_layout.addWidget(self.plot.fig_area, 0, 2, 2, 1)
-
+        main_widget_layout.setColumnStretch(0, 2)
+        main_widget_layout.setColumnStretch(1, 1)
+        main_widget_layout.setColumnStretch(2, 5)
         main_widget.setLayout(main_widget_layout)
 
         self.initialise_gui()
@@ -99,6 +101,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Get filter options
         self.contrasts, self.order, self.sort, self.hold = self.filter.get_selected_filters()
         # Get trial event to align to
+        self.filter.set_selected_event(event='goCue_times')
         self.trial_event = self.filter.get_selected_event()
         # Get behaviour event to display
         self.behav = self.filter.get_selected_behaviour()
