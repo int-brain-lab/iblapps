@@ -143,7 +143,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.track = [0] * (self.max_idx + 1)
         self.features = [0] * (self.max_idx + 1)
 
-
     def set_axis(self, fig, ax, show=True, label=None, pen='k', ticks=True):
         """
         Show/hide and configure axis of figure
@@ -217,7 +216,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # This makes sure the drop down menu is wide enough to showw full length of string
         min_width = combobox.fontMetrics().width(max(data, key=len))
         min_width += combobox.view().autoScrollMargin()
-        min_width += combobox.style().pixelMetric(QtGui.QStyle.PM_ScrollBarExtent)
+        min_width += combobox.style().pixelMetric(QtWidgets.QStyle.PM_ScrollBarExtent)
         combobox.view().setMinimumWidth(min_width)
 
         # Set the default to be the first option
@@ -1554,10 +1553,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
         Alyx
         """
-        upload = QtGui.QMessageBox.question(self, '', "Upload alignment?",
-                                            QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+        upload = QtWidgets.QMessageBox.question(self, '', "Upload alignment?",
+                                            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
 
-        if upload == QtGui.QMessageBox.Yes:
+        if upload == QtWidgets.QMessageBox.Yes:
             upload_channels = self.loaddata.upload_data(self.xyz_channels)
             self.loaddata.update_alignments(self.features[self.idx], self.track[self.idx])
             self.prev_alignments = self.loaddata.get_previous_alignments()
@@ -1567,42 +1566,42 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             if upload_channels and resolved == 0:
                 # channels saved alignment not resolved
-                QtGui.QMessageBox.information(self, 'Status', ("Channels locations saved to Alyx. "
+                QtWidgets.QMessageBox.information(self, 'Status', ("Channels locations saved to Alyx. "
                                                                "Alignment not resolved"))
             if upload_channels and resolved == 1:
                 # channels saved alignment resolved, writen to flatiron
-                QtGui.QMessageBox.information(self, 'Status', ("Channel locations saved to Alyx. "
+                QtWidgets.QMessageBox.information(self, 'Status', ("Channel locations saved to Alyx. "
                                                                "Alignment resolved and channels "
                                                                "datasets written to flatiron"))
             if not upload_channels and resolved == 1:
                 # alignment already resolved, save alignment but channels not written
-                QtGui.QMessageBox.information(self,
+                QtWidgets.QMessageBox.information(self,
                                               'Status', ("Channel locations not saved to Alyx"
                                                          " as alignment has already been "
                                                          "resolved. New user reference lines"
                                                          " have been saved"))
         else:
             pass
-            QtGui.QMessageBox.information(self, 'Status', "Channels not saved")
+            QtWidgets.QMessageBox.information(self, 'Status', "Channels not saved")
 
     def complete_button_pressed_offline(self):
         """
         Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
         json file
         """
-        upload = QtGui.QMessageBox.question(self, '', "Upload alignment?",
-                                            QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+        upload = QtWidgets.QMessageBox.question(self, '', "Upload alignment?",
+                                            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
 
-        if upload == QtGui.QMessageBox.Yes:
+        if upload == QtWidgets.QMessageBox.Yes:
             self.loaddata.upload_data(self.features[self.idx], self.track[self.idx],
                                       self.xyz_channels)
             self.prev_alignments = self.loaddata.get_previous_alignments()
             self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
             self.loaddata.get_starting_alignment(0)
-            QtGui.QMessageBox.information(self, 'Status', "Channels locations saved")
+            QtWidgets.QMessageBox.information(self, 'Status', "Channels locations saved")
         else:
             pass
-            QtGui.QMessageBox.warning(self, 'Status', "Channels not saved")
+            QtWidgets.QMessageBox.warning(self, 'Status', "Channels not saved")
 
     def display_qc_options(self):
         self.qc_dialog.open()
@@ -1616,7 +1615,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 ephys_desc.append(button.text())
 
         if ephys_qc != 'Pass' and len(ephys_desc) == 0:
-            QtGui.QMessageBox.warning(self, 'Status', "You must select a reason for qc choice")
+            QtWidgets.QMessageBox.warning(self, 'Status', "You must select a reason for qc choice")
             self.display_qc_options()
             return
 
@@ -1635,9 +1634,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def display_session_notes(self):
         self.notes_win = ephys_gui.PopupWindow(title='Session notes from Alyx', size=(200, 100),
                                                graphics=False)
-        notes = QtGui.QTextEdit()
+        notes = QtWidgets.QTextEdit()
         notes.setReadOnly(True)
-        notes.setLineWrapMode(QtGui.QTextEdit.WidgetWidth)
+        notes.setLineWrapMode(QtWidgets.QTextEdit.WidgetWidth)
         notes.setText(self.sess_notes)
         self.notes_win.layout.addWidget(notes)
 
