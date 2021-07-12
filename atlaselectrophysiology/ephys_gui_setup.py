@@ -753,8 +753,8 @@ class Setup():
         self.lin_fit_option.move(70, 10)
 
 
-class PopupWindow(QtGui.QMainWindow):
-    closed = QtCore.pyqtSignal(QtGui.QMainWindow)
+class PopupWindow(QtWidgets.QMainWindow):
+    closed = QtCore.pyqtSignal(QtWidgets.QMainWindow)
     moved = QtCore.pyqtSignal()
 
     def __init__(self, title, parent=None, size=(300, 300), graphics=True):
