@@ -60,6 +60,7 @@ class LoadDataLocal:
         # Define alf_path and ephys_path (a bit redundant but so it is compatible with plot data)
         alf_path = self.folder_path
         ephys_path = self.folder_path
+        sess_path = self.folder_path
         self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
         chn_depths = self.chn_coords[:, 1]
 
@@ -70,7 +71,7 @@ class LoadDataLocal:
         else:
             sess_notes = 'No notes for this session'
 
-        return alf_path, ephys_path, chn_depths, sess_notes
+        return alf_path, ephys_path, sess_path, chn_depths, sess_notes
 
     def get_allen_csv(self):
         allen_path = Path(Path(atlas.__file__).parent, 'allen_structure_tree.csv')

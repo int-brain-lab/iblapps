@@ -17,10 +17,12 @@ ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 
 class LoadData:
-    def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None, histology=True):
+    def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None, histology=True,
+                 revision=None, data_only=False):
         self.one = one or ONE(base_url=ONE_BASE_URL)
         self.brain_atlas = brain_atlas or atlas.AllenAtlas(25)
         self.download_hist = histology # whether or not to look for the histology files
+        self.revision = revision
 
         if testing:
             self.probe_id = probe_id
@@ -58,68 +60,107 @@ class LoadData:
                                            probe_insertion=probe_id)
 
     def get_subjects(self):
-        """
-        Finds all subjects that have a histology track trajectory registered
-        :return subjects: list of subjects
-        :type: list of strings
-        """
-        # All sessions that have a histology track
-        all_hist = self.one.alyx.rest('trajectories', 'list', provenance='Histology track')
-        # Some do not have tracing, exclude these ones
-        self.sess_with_hist = [sess for sess in all_hist if sess['x'] is not None]
-        self.subj_with_hist = [sess['session']['subject'] for sess in self.sess_with_hist]
 
-        # For all histology tracks find the trajectory and coordinates of active part (where
-        # electrodes are located). Used in get_nearby trajectories to find sessions close-by
-        # insertions
-        depths = np.arange(200, 4100, 20) / 1e6
-        trajectories = [atlas.Insertion.from_dict(sess) for sess in self.sess_with_hist]
-        self.traj_ids = [sess['id'] for sess in self.sess_with_hist]
-        self.traj_coords = np.empty((len(self.traj_ids), len(depths), 3))
-        for iT, traj in enumerate(trajectories):
-            self.traj_coords[iT, :] = (histology.interpolate_along_track
-                                       (np.vstack([traj.tip, traj.entry]), depths))
+        self.sess_ins = self.one.alyx.rest('insertions', 'list', dataset_type='spikes.times')
+        self.subj_ins = [sess['session_info']['subject'] for sess in self.sess_ins]
 
-        self.subjects = np.unique(self.subj_with_hist)
+        self.subjects = np.unique(self.subj_ins)
 
         return self.subjects
 
     def get_sessions(self, idx):
-        """
-        Finds all sessions for a particular subject that have a histology track trajectory
-        registered
-        :param idx: index of chosen subject from drop-down list
-        :type idx: int
-        :return session: list of sessions associated with subject, displayed as date + probe
-        :type: list of strings
-        """
         subj = self.subjects[idx]
-        sess_idx = [i for i, e in enumerate(self.subj_with_hist) if e == subj]
-        self.sess = [self.sess_with_hist[idx] for idx in sess_idx]
-        session = [(sess['session']['start_time'][:10] + ' ' + sess['probe_name']) for sess in
+        sess_idx = [i for i, e in enumerate(self.subj_ins) if e == subj]
+        self.sess = [self.sess_ins[idx] for idx in sess_idx]
+        session = [(sess['session_info']['start_time'][:10] + ' ' + sess['name']) for sess in
                    self.sess]
         return session
 
     def get_info(self, idx):
-        """
-        Reads in all information about the chosen sessions and looks to see if there are any
-        previous alignments associated with the session
-        :param idx: index of chosen session from drop-down list
-        :type idx: int
-        :return prev_align: list of previous alignments associated with session, if none just has
-        option for 'original' alignment
-        :type: list of strings
-        """
-        self.n_sess = self.sess[idx]['session']['number']
-        self.date = self.sess[idx]['session']['start_time'][:10]
-        self.probe_label = self.sess[idx]['probe_name']
-        self.traj_id = self.sess[idx]['id']
-        self.probe_id = self.sess[idx]['probe_insertion']
-        self.lab = self.sess[idx]['session']['lab']
-        self.eid = self.sess[idx]['session']['id']
-        self.subj = self.sess[idx]['session']['subject']
+        self.n_sess = self.sess[idx]['session_info']['number']
+        self.date = self.sess[idx]['session_info']['start_time'][:10]
+        self.probe_label = self.sess[idx]['name']
+        self.probe_id = self.sess[idx]['id']
+        self.lab = self.sess[idx]['session_info']['lab']
+        self.eid = self.sess[idx]['session']
+        self.subj = self.sess[idx]['session_info']['subject']
 
-        return self.get_previous_alignments()
+        histology_exists = False
+        if self.sess[idx]['json'].get('xyz_picks', None):
+            # Make sure there is a histology track
+            hist_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+                                           provenance='Histology track')
+            if len(hist_traj) == 1:
+                if hist_traj[0]['x'] is not None:
+                    histology_exists = True
+                    self.traj_id = hist_traj[0]['id']
+
+        return self.get_previous_alignments(), histology_exists
+
+
+    #def get_subjects(self):
+    #    """
+    #    Finds all subjects that have a histology track trajectory registered
+    #    :return subjects: list of subjects
+    #    :type: list of strings
+    #    """
+    #    # All sessions that have a histology track
+    #    all_hist = self.one.alyx.rest('trajectories', 'list', provenance='Histology track')
+    #    # Some do not have tracing, exclude these ones
+    #    self.sess_with_hist = [sess for sess in all_hist if sess['x'] is not None]
+    #    self.subj_with_hist = [sess['session']['subject'] for sess in self.sess_with_hist]
+#
+    #    # For all histology tracks find the trajectory and coordinates of active part (where
+    #    # electrodes are located). Used in get_nearby trajectories to find sessions close-by
+    #    # insertions
+    #    depths = np.arange(200, 4100, 20) / 1e6
+    #    trajectories = [atlas.Insertion.from_dict(sess) for sess in self.sess_with_hist]
+    #    self.traj_ids = [sess['id'] for sess in self.sess_with_hist]
+    #    self.traj_coords = np.empty((len(self.traj_ids), len(depths), 3))
+    #    for iT, traj in enumerate(trajectories):
+    #        self.traj_coords[iT, :] = (histology.interpolate_along_track
+    #                                   (np.vstack([traj.tip, traj.entry]), depths))
+#
+    #    self.subjects = np.unique(self.subj_with_hist)
+#
+    #    return self.subjects
+#
+    #def get_sessions(self, idx):
+    #    """
+    #    Finds all sessions for a particular subject that have a histology track trajectory
+    #    registered
+    #    :param idx: index of chosen subject from drop-down list
+    #    :type idx: int
+    #    :return session: list of sessions associated with subject, displayed as date + probe
+    #    :type: list of strings
+    #    """
+    #    subj = self.subjects[idx]
+    #    sess_idx = [i for i, e in enumerate(self.subj_with_hist) if e == subj]
+    #    self.sess = [self.sess_with_hist[idx] for idx in sess_idx]
+    #    session = [(sess['session']['start_time'][:10] + ' ' + sess['probe_name']) for sess in
+    #               self.sess]
+    #    return session
+#
+    #def get_info(self, idx):
+    #    """
+    #    Reads in all information about the chosen sessions and looks to see if there are any
+    #    previous alignments associated with the session
+    #    :param idx: index of chosen session from drop-down list
+    #    :type idx: int
+    #    :return prev_align: list of previous alignments associated with session, if none just has
+    #    option for 'original' alignment
+    #    :type: list of strings
+    #    """
+    #    self.n_sess = self.sess[idx]['session']['number']
+    #    self.date = self.sess[idx]['session']['start_time'][:10]
+    #    self.probe_label = self.sess[idx]['probe_name']
+    #    self.traj_id = self.sess[idx]['id']
+    #    self.probe_id = self.sess[idx]['probe_insertion']
+    #    self.lab = self.sess[idx]['session']['lab']
+    #    self.eid = self.sess[idx]['session']['id']
+    #    self.subj = self.sess[idx]['session']['subject']
+#
+    #    return self.get_previous_alignments()
 
     def get_previous_alignments(self):
 
@@ -174,6 +215,21 @@ class LoadData:
         :type: list of float
         """
 
+        if self.traj_ids is None:
+            self.sess_with_hist = self.one.alyx.rest('trajectories', 'list',
+                                                     provenance='Histology track',
+                                                     django='x__isnull,False,probe_insertion__'
+                                                     'datasets__name__icontains,spikes.times')
+            # Some do not have tracing, exclude these ones
+
+            depths = np.arange(200, 4100, 20) / 1e6
+            trajectories = [atlas.Insertion.from_dict(sess) for sess in self.sess_with_hist]
+            self.traj_ids = [sess['id'] for sess in self.sess_with_hist]
+            self.traj_coords = np.empty((len(self.traj_ids), len(depths), 3))
+            for iT, traj in enumerate(trajectories):
+                self.traj_coords[iT, :] = (histology.interpolate_along_track
+                                           (np.vstack([traj.tip, traj.entry]), depths))
+
         chosen_traj = self.traj_ids.index(self.traj_id)
         avg_dist = np.mean(np.sqrt(np.sum((self.traj_coords - self.traj_coords[chosen_traj]) ** 2,
                                           axis=2)), axis=1)
@@ -206,20 +262,20 @@ class LoadData:
         :type: str
         """
 
-        dtypes_ks = [
-            'spikes.depths.npy',
-            'spikes.amps.npy',
-            'spikes.times.npy',
-            'spikes.clusters.npy',
-            'channels.localCoordinates.npy',
-            'channels.rawInd.npy',
-            'clusters.metrics.pqt',
-            'clusters.peakToTrough.npy',
-            'clusters.waveforms.npy',
-            'clusters.channels.npy',
-        ]
 
-        collection_ks = [f'alf/{self.probe_label}'] * len(dtypes_ks)
+        _ = self.one.load_object(self.eid, 'spikes', collection=f'alf/{self.probe_label}',
+                                 revision=self.revision, attribute='depths|amps|times|clusters',
+                                 download_only=True)
+
+        _ = self.one.load_object(self.eid, 'clusters', collection=f'alf/{self.probe_label}',
+                                 revision=self.revision,
+                                 attribute='metrics|peakToTrough|waveforms|channels',
+                                 download_only=True)
+
+        _ = self.one.load_object(self.eid, 'channels', collection=f'alf/{self.probe_label}',
+                                    revision=self.revision,
+                                    attribute='rawInd|localCoordinates')
+
 
         dtypes_raw = [
             '_iblqc_ephysTimeRmsAP.rms.npy',
@@ -247,8 +303,8 @@ class LoadData:
 
         collection_passive = ['raw_passive_data'] * len(dtypes_passive)
 
-        dtypes = dtypes_ks + dtypes_raw + dtypes_alf + dtypes_passive
-        collections = collection_ks + collection_raw + collection_alf + collection_passive
+        dtypes = dtypes_raw + dtypes_alf + dtypes_passive
+        collections = collection_raw + collection_alf + collection_passive
 
         print(self.subj)
         print(self.probe_label)
@@ -260,12 +316,13 @@ class LoadData:
 
         self.sess_path = self.one.eid2path(self.eid)
 
-        alf_path = Path(self.sess_path, 'alf', self.probe_label)
-        ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
+        if self.revision:
+            revision = f'#{self.revision}#'
+        else:
+            revision = ''
 
-        cluster_file_old = alf_path.joinpath('clusters.metrics.csv')
-        if cluster_file_old.exists():
-            os.remove(cluster_file_old)
+        alf_path = Path(self.sess_path, 'alf', self.probe_label, revision)
+        ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
 
         try:
             self.chn_coords = np.load(Path(alf_path, 'channels.localCoordinates.npy'))
@@ -273,7 +330,7 @@ class LoadData:
             self.cluster_chns = np.load(Path(alf_path, 'clusters.channels.npy'))
         except Exception:
             print('Could not download alf data for this probe - gui will not work')
-            return [None] * 4
+            return [None] * 5
 
         sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
         sess_notes = None
@@ -284,7 +341,7 @@ class LoadData:
         if not sess_notes:
             sess_notes = 'No notes for this session'
 
-        return alf_path, ephys_path, self.chn_depths, sess_notes
+        return alf_path, ephys_path, self.sess_path, self.chn_depths, sess_notes
 
     def get_allen_csv(self):
         """

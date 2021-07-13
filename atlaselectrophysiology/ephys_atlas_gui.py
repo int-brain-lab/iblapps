@@ -16,6 +16,8 @@ import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
 
 
+
+
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
     @staticmethod
@@ -32,7 +34,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             av.setWindowTitle(title)
         return av
 
-    def __init__(self, offline=False, probe_id=None, one=None, histology=True):
+    def __init__(self, offline=False, probe_id=None, one=None, histology=True, revision=None,
+                 data_only=False):
         super(MainWindow, self).__init__()
 
         self.init_variables()
@@ -43,7 +46,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
         elif not offline and probe_id is not None:
-            self.loaddata = LoadData(probe_id=probe_id, one=one, histology=histology)
+            self.loaddata = LoadData(probe_id=probe_id, one=one, histology=histology,
+                                     revision=revision)
             self.loaddata.get_info(0)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
             self.data_status = False
@@ -551,7 +555,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     """
     Plot functions
     """
-
     def plot_histology(self, fig, ax='left', movable=True):
         """
         Plots histology figure - brain regions that intersect with probe track
@@ -1088,8 +1091,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.sess_list.clear()
         sessions = self.loaddata.get_sessions(idx)
         self.populate_lists(sessions, self.sess_list, self.sess_combobox)
-        self.prev_alignments = self.loaddata.get_info(0)
-        self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
+        self.prev_alignments, self.histology_exists = self.loaddata.get_info(0)
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
@@ -1100,8 +1102,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         :type idx: int
         """
         self.data_status = False
-        self.prev_alignments = self.loaddata.get_info(idx)
-        self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
+        self.prev_alignments, self.histology_exists = self.loaddata.get_info(idx)
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
@@ -1124,6 +1125,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Triggered when Get Data button pressed, uses subject and session info to find eid and
         downloads and computes data needed for GUI display
         """
+
         # Clear all plots from previous session
         [self.fig_img.removeItem(plot) for plot in self.img_plots]
         [self.fig_img.removeItem(cbar) for cbar in self.img_cbars]
@@ -1140,38 +1142,43 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Only run once
         if not self.data_status:
-            self.alf_path, ephys_path, self.chn_depths, self.sess_notes = self.loaddata.get_data()
+            self.alf_path, ephys_path, sess_path, self.chn_depths, self.sess_notes = \
+                self.loaddata.get_data()
             if not self.alf_path:
                 return
+
+        # Only get histology specific stuff if the histology tracing exists
+        if self.histology_exists:
+            self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
+            self.xyz_picks = self.loaddata.get_xyzpicks()
+
+            if np.any(self.feature_prev):
+                self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
+                                                 track_prev=self.track_prev,
+                                                 feature_prev=self.feature_prev,
+                                                 brain_atlas=self.loaddata.brain_atlas)
             else:
-                self.xyz_picks = self.loaddata.get_xyzpicks()
+                self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
+                                                 brain_atlas=self.loaddata.brain_atlas)
 
-        if np.any(self.feature_prev):
-            self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
-                                             track_prev=self.track_prev,
-                                             feature_prev=self.feature_prev,
-                                             brain_atlas=self.loaddata.brain_atlas)
-        else:
-            self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
-                                             brain_atlas=self.loaddata.brain_atlas)
+            self.features[self.idx], self.track[self.idx], self.xyz_track \
+                = self.ephysalign.get_track_and_feature()
 
-        self.features[self.idx], self.track[self.idx], self.xyz_track \
-            = self.ephysalign.get_track_and_feature()
+            self.hist_data['region'][self.idx], self.hist_data['axis_label'][self.idx] \
+                = self.ephysalign.scale_histology_regions(self.features[self.idx],
+                                                          self.track[self.idx])
+            self.hist_data['colour'] = self.ephysalign.region_colour
+            self.scale_data['region'][self.idx], self.scale_data['scale'][self.idx] \
+                = self.ephysalign.get_scale_factor(self.hist_data['region'][self.idx])
 
-        self.hist_data['region'][self.idx], self.hist_data['axis_label'][self.idx] \
-            = self.ephysalign.scale_histology_regions(self.features[self.idx],
-                                                      self.track[self.idx])
-        self.hist_data['colour'] = self.ephysalign.region_colour
-        self.scale_data['region'][self.idx], self.scale_data['scale'][self.idx] \
-            = self.ephysalign.get_scale_factor(self.hist_data['region'][self.idx])
+            self.hist_data_ref['region'], self.hist_data_ref['axis_label'] \
+                = self.ephysalign.scale_histology_regions(self.ephysalign.track_extent,
+                                                          self.ephysalign.track_extent)
+            self.hist_data_ref['colour'] = self.ephysalign.region_colour
 
-        self.hist_data_ref['region'], self.hist_data_ref['axis_label'] \
-            = self.ephysalign.scale_histology_regions(self.ephysalign.track_extent,
-                                                      self.ephysalign.track_extent)
-        self.hist_data_ref['colour'] = self.ephysalign.region_colour
-
+        # If we have not loaded in the data before then we load eveything we need
         if not self.data_status:
-            self.plotdata = pd.PlotData(self.alf_path, ephys_path)
+            self.plotdata = pd.PlotData(self.alf_path, ephys_path, sess_path)
             self.scat_drift_data = self.plotdata.get_depth_data_scatter()
             (self.scat_fr_data, self.scat_p2t_data,
              self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
@@ -1185,7 +1192,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
             self.img_stim_data = self.plotdata.get_passive_events()
 
-            self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
+            if self.histology_exists:
+                self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
+            else:
+                # probably need to return an empty array of things
+                self.slice_data = {}
 
             self.data_status = True
 
@@ -1204,17 +1215,18 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_line(self.line_fr_data)
 
         # Initialise histology plots
-        self.plot_histology_ref(self.fig_hist_ref)
-        self.plot_histology(self.fig_hist)
-        self.label_status = False
-        self.toggle_labels_button_pressed()
-        self.plot_scale_factor()
-        if np.any(self.feature_prev):
-            self.create_lines(self.feature_prev[1:-1] * 1e6)
+        if self.histology_exists:
+            self.plot_histology_ref(self.fig_hist_ref)
+            self.plot_histology(self.fig_hist)
+            self.label_status = False
+            self.toggle_labels_button_pressed()
+            self.plot_scale_factor()
+            if np.any(self.feature_prev):
+                self.create_lines(self.feature_prev[1:-1] * 1e6)
 
-        # Initialise slice and fit images
-        self.plot_fit()
-        self.plot_slice(self.slice_data, 'hist_rd')
+            # Initialise slice and fit images
+            self.plot_fit()
+            self.plot_slice(self.slice_data, 'hist_rd')
 
         # Only configure the view the first time the GUI is launched
         self.set_view(view=1, configure=self.configure)

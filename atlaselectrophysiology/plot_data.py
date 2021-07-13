@@ -18,10 +18,11 @@ np.seterr(divide='ignore', invalid='ignore')
 
 
 class PlotData:
-    def __init__(self, alf_path, ephys_path):
+    def __init__(self, alf_path, ephys_path, sess_path):
 
         self.alf_path = alf_path
         self.ephys_path = ephys_path
+        self.sess_path = sess_path
 
         self.channels = alfio.load_object(self.alf_path, 'channels')
         self.chn_coords = self.channels['localCoordinates']
@@ -61,10 +62,10 @@ class PlotData:
             self.lfp_data_status = False
 
         try:
-            rf_map_times = alfio.load_object(self.alf_path.parent, object='passiveRFM',
+            rf_map_times = alfio.load_object(self.sess_path, object='passiveRFM',
                                              namespace='ibl')
             # This needs to go into brainbox!!
-            rf_map_frames_path = (self.alf_path.parent.parent.
+            rf_map_frames_path = (self.sess_path.parent.
                                   joinpath('raw_passive_data', '_iblrig_RFMapStim.raw.bin'))
             rf_map_frames = np.fromfile(rf_map_frames_path, dtype="uint8")
             y_pix, x_pix = 15, 15
@@ -84,7 +85,7 @@ class PlotData:
             self.rfmap_data_status = False
 
         try:
-            self.aud_stim = alfio.load_object(self.alf_path.parent, object='passiveStims',
+            self.aud_stim = alfio.load_object(self.sess_path, object='passiveStims',
                                               namespace='ibl')['table']
             if len(self.aud_stim) > 0:
                 self.passive_data_status = True
@@ -93,7 +94,7 @@ class PlotData:
             self.passive_data_status = False
 
         try:
-            gabor = alfio.load_object(self.alf_path.parent, object='passiveGabor',
+            gabor = alfio.load_object(self.sess_path, object='passiveGabor',
                                       namespace='ibl')['table']
             self.vis_stim = dict()
             self.vis_stim['leftGabor'] = gabor['start'][(gabor['position'] == 35) &
