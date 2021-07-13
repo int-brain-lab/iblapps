@@ -4,6 +4,7 @@ import data_exploration_gui.cluster as clust
 import data_exploration_gui.scatter as scatt
 import data_exploration_gui.filter as filt
 import data_exploration_gui.plot as plt
+import data_exploration_gui.misc as misc
 import data_exploration_gui.data_model as dat
 from data_exploration_gui import utils
 
@@ -61,6 +62,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filter.event_combobox.activated.connect(self.on_event_selected)
         self.filter.behav_combobox.activated.connect(self.on_behav_selected)
 
+        self.misc = misc.MiscGroup()
+
         self.resize(1800, 1000)
         main_widget = QtWidgets.QWidget()
         self.setCentralWidget(main_widget)
@@ -68,13 +71,20 @@ class MainWindow(QtWidgets.QMainWindow):
         main_widget_layout = QtWidgets.QGridLayout()
         main_widget_layout.setHorizontalSpacing(20)
         main_widget_layout.setVerticalSpacing(20)
-        main_widget_layout.addWidget(self.cluster.cluster_list_group, 0, 0)
-        main_widget_layout.addWidget(self.scatter.fig_scatter, 1, 0)
-        main_widget_layout.addWidget(self.filter.filter_options_group, 0, 1, 2, 1)
-        main_widget_layout.addWidget(self.plot.fig_area, 0, 2, 2, 1)
+
+        main_widget_layout.addWidget(self.cluster.cluster_list_group, 0, 0, 3, 1)
+        main_widget_layout.addWidget(self.scatter.fig_scatter, 3, 0, 7, 1)
+        main_widget_layout.addWidget(self.filter.filter_options_group, 0, 1, 10, 1)
+        main_widget_layout.addWidget(self.plot.fig_area, 0, 2, 8, 1)
+        main_widget_layout.addWidget(self.misc.qc_group, 8, 2, 2, 1)
+
         main_widget_layout.setColumnStretch(0, 2)
         main_widget_layout.setColumnStretch(1, 1)
         main_widget_layout.setColumnStretch(2, 5)
+
+
+
+
         main_widget.setLayout(main_widget_layout)
 
         self.initialise_gui()
@@ -121,6 +131,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.data._get_behaviour_data_for_selection(self.behav, self.trial_event)
         self.plot.change_all_plots(self.contrasts, self.trial_set, self.order, self.sort,
                                    self.hold, self.trial_event)
+
+        self.misc.set_sess_qc_text(self.data.sess_qc)
+        self.misc.set_dlc_label(self.data.dlc_aligned)
+        self.misc.set_clust_qc_text(self.data.get_cluster_metrics())
 
     def on_event_selected(self, idx):
         self.trial_event = self.filter.event_combobox.itemText(idx)
@@ -186,6 +200,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.data._get_spike_data_for_selection(self.clust, self.trial_event)
         self.plot.change_all_plots(self.contrasts, self.trial_set, self.order, self.sort,
                                    self.hold, self.trial_event)
+        self.misc.set_clust_qc_text(self.data.get_cluster_metrics())
 
     def on_next_cluster_clicked(self):
 
@@ -199,6 +214,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.data._get_spike_data_for_selection(self.clust, self.trial_event)
             self.plot.change_all_plots(self.contrasts, self.trial_set, self.order, self.sort,
                                        self.hold, self.trial_event)
+            self.misc.set_clust_qc_text(self.data.get_cluster_metrics())
 
     def on_previous_cluster_clicked(self):
 
@@ -212,6 +228,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.data._get_spike_data_for_selection(self.clust, self.trial_event)
             self.plot.change_all_plots(self.contrasts, self.trial_set, self.order, self.sort,
                                        self.hold, self.trial_event)
+            self.misc.set_clust_qc_text(self.data.get_cluster_metrics())
 
     def on_scatter_plot_clicked(self, scatter, point):
 
@@ -225,6 +242,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.data._get_spike_data_for_selection(self.clust, self.trial_event)
         self.plot.change_all_plots(self.contrasts, self.trial_set, self.order, self.sort,
                                    self.hold, self.trial_event)
+        self.misc.set_clust_qc_text(self.data.get_cluster_metrics())
 
     def on_cluster_sort_clicked(self):
         self.initialise_gui()
@@ -245,6 +263,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.plot.change_all_plots(self.contrasts, self.trial_set, self.order, self.sort,
                                    self.hold, self.trial_event)
+
+
 
 
 def viewer(data=None):
@@ -286,6 +306,12 @@ if __name__ == '__main__':
             print('Must provide eid and probe name')
         else:
             mainapp = MainWindow(str(args.eid), str(args.probe_name), one=one)
+
+    # pid = 'ce397420-3cd2-4a55-8fd1-5e28321981f4'
+    # eid, probe = one.pid2eid(pid)
+    # eid = '934dd7a4-fbdc-459c-8830-04fe9033bc28'
+    # probe='probe00'
+    # mainapp = MainWindow(eid, probe, one=one)
 
     mainapp.show()
     app.exec_()

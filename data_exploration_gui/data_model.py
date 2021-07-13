@@ -7,7 +7,7 @@ from brainbox.behavior.wheel import velocity
 from brainbox.behavior.dlc import get_dlc_everything
 from brainbox.population.decode import xcorr
 from iblutil.util import Bunch
-from data_exploration_gui.utils import colours
+from data_exploration_gui.utils import colours, SESS_QC, CLUSTER_QC
 
 EPOCH = [-0.4, 1]
 TBIN = 0.02
@@ -21,9 +21,9 @@ class DataModel:
         one = one or ONE()
 
         self.spikes = one.load_object(eid, obj='spikes', collection=f'alf/{probe}',
-                                      attribute='clusters|times|amps|depths')
+                                      attribute='clusters|times|amps|depths', revision=None)
         self.clusters = one.load_object(eid, obj='clusters', collection=f'alf/{probe}',
-                                        attribute='metrics|waveforms')
+                                        attribute='metrics|waveforms', revision=None)
 
         # Get everything we need for the clusters
         # need to get rid of nans in amps and depths
@@ -37,8 +37,8 @@ class DataModel:
         # KS2 good mua colours
         # Bug in the KS2 units, the clusters that do not exist in spikes.clusters have not been
         # filled with Nans like the other features in metrics
-        colours_ks = np.array(self.clusters.metrics.ks2_label[:len(self.clusters.clust_ids)])
-        # colours_ks = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
+        # colours_ks = np.array(self.clusters.metrics.ks2_label[:len(self.clusters.clust_ids)])
+        colours_ks = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
         good_ks = np.where(colours_ks == 'good')[0]
         colours_ks[good_ks] = colours['KS good']
         mua_ks = np.where(colours_ks == 'mua')[0]
@@ -52,6 +52,7 @@ class DataModel:
         bad_ibl = np.where(self.clusters.metrics.label[self.clusters.clust_ids] != 1)[0]
         colours_ibl[bad_ibl] = colours['IBL bad']
         self.clusters.colours_ibl = colours_ibl
+        self.clusters.metrics['amp_median'] *= 1e6
 
         # Some extra info for sorting clusters
         self.clusters['ids'] = np.arange(len(self.clusters.clust_ids))
@@ -71,16 +72,35 @@ class DataModel:
         dlc_right = one.load_object(eid, obj='rightCamera', collection='alf',
                                     attribute='times|dlc')
 
-        self.behav, self.behav_events = self.combine_behaviour_data(wheel, dlc_left, dlc_right)
+        (self.behav, self.behav_events,
+         self.dlc_aligned) = self.combine_behaviour_data(wheel, dlc_left, dlc_right)
+
+        self.sess_qc = self.get_qc_info(eid, one)
 
         self.spikes_raster = Bunch()
         self.spikes_raster_psth = Bunch()
         self.behav_raster = Bunch()
         self.behav_raster_psth = Bunch()
 
+    def get_cluster_metrics(self):
+        data = Bunch()
+        for qc in CLUSTER_QC:
+            data[qc] = (self.clusters.metrics[qc][self.clust_ids[self.clust]])
+        return data
+
+    def get_qc_info(self, eid, one):
+        data = Bunch()
+        sess = one.alyx.rest('sessions', 'read', id=eid)['extended_qc']
+        for qc in SESS_QC:
+            data[qc] = sess.get(qc, '')
+
+        return data
+
     def combine_behaviour_data(self, wheel, dlc_left, dlc_right):
         behav = Bunch()
         behav_options = []
+        aligned = [True]
+
         if all([val in wheel.keys() for val in ['timestamps', 'position']]):
             behav['wheel'] = wheel
             behav_options = behav_options + ['wheel']
@@ -93,6 +113,8 @@ class DataModel:
             keys = [f'leftCamera_{key}' for key in dlc.keys() if
                     any([key in name for name in ['licks', 'sniffs']])]
             behav_options = behav_options + keys
+            aligned.append(dlc['aligned'])
+
 
         if all([val in dlc_right.keys() for val in ['times', 'dlc']]):
             dlc = get_dlc_everything(dlc_right, 'right')
@@ -102,8 +124,11 @@ class DataModel:
             keys = [f'rightCamera_{key}' for key in dlc.keys() if
                     any([key in name for name in ['licks', 'sniffs']])]
             behav_options = behav_options + keys
+            aligned.append(dlc['aligned'])
 
-        return behav, behav_options
+        aligned = all(aligned)
+
+        return behav, behav_options, aligned
 
     def sort_clusters(self, sort):
         clust_sort = Bunch()

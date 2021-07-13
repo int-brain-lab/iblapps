@@ -233,6 +233,12 @@ SORT_OPTIONS = ['idx', 'choice', 'side', 'choice and side']
 UNIT_OPTIONS = ['IBL good', 'IBL bad', 'KS good', 'KS mua']
 SORT_CLUSTER_OPTIONS = ['ids', 'n spikes', 'IBL good', 'KS good']
 
+SESS_QC = ['task', 'behavior', 'dlcLeft', 'dlcRight', 'videoLeft', 'videoRight']
+CLUSTER_QC = ['noise_cutoff', 'amp_median', 'slidingRP_viol']
+
+dlc_warning = 'WARNING: dlc points and timestamps differ in length, dlc points are ' \
+              'not aligned correctly'
+
 
 def get_icon(col_outer, col_inner, pix_size):
 
