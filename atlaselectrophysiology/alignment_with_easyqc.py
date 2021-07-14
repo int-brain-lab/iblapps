@@ -16,7 +16,7 @@ import data_exploration_gui.gui_main as trial_window
 
 
 class AlignmentWindow(alignment_window.MainWindow):
-    def __init__(self, probe_id=None, one=None, histology=False):
+    def __init__(self, probe_id=None, one=None, histology=False, revision=None):
 
         self.ap = None  # spikeglx.Reader for ap band
         self.lf = None  # spikeglx.Reader for lf band
@@ -27,14 +27,14 @@ class AlignmentWindow(alignment_window.MainWindow):
         self.clicked = None
         self.eqc = {}  # handles for viewdata windows
 
-        super(AlignmentWindow, self).__init__(probe_id=probe_id, one=one, histology=histology)
+        super(AlignmentWindow, self).__init__(probe_id=probe_id, one=one, histology=histology,
+                                              revision=revision)
 
         # remove the lines from the plots
         self.remove_lines_points()
         self.lines_features = []
         self.lines_tracks = []
         self.points = []
-
 
     def on_mouse_double_clicked(self, event):
         if not self.offline:
@@ -105,14 +105,13 @@ class AlignmentWindow(alignment_window.MainWindow):
                 trial_id = np.argmin(np.abs(self.selected_trials - x))
                 print(trial_id)
 
-                idx = np.where(self.trial_gui.data.y == 10*trial_id)
+                idx = np.where(self.trial_gui.data.y == 10 * trial_id)
                 self.trial_scat = pg.ScatterPlotItem()
                 self.trial_gui.plots.fig4_raster.fig.addItem(self.trial_scat)
                 self.trial_scat.setData(self.trial_gui.data.x[idx], self.trial_gui.data.y[idx],
                                         brush='r', size=5)
 
                 self.clicked = None
-
 
     def stream_lf(self, t):
         if self.lf is not None:
@@ -125,6 +124,7 @@ class AlignmentWindow(alignment_window.MainWindow):
         h = neuropixel.trace_header()
         self.eqc['raw_lf'] = viewseis(
             butt.T, si=1 / self.lf.fs, h=h, t0=t0, title='raw_lf', taxis=0)
+        self.lf.close()
 
     def stream_ap(self, t):
         if self.ap is not None:
@@ -150,6 +150,7 @@ class AlignmentWindow(alignment_window.MainWindow):
                        self.plotdata.channels)
         overlay_spikes(self.eqc['ks2'], self.plotdata.spikes, self.plotdata.clusters,
                        self.plotdata.channels)
+        self.ap.close()
 
     def remove_line_x(self, xaxis):
         """
@@ -193,8 +194,6 @@ class AlignmentWindow(alignment_window.MainWindow):
                                                        " an alignment, launch normally"))
 
 
-
-
 class TrialWindow(trial_window.MainWindow):
     def __init__(self):
         super(TrialWindow, self).__init__()
@@ -226,22 +225,22 @@ class TrialWindow(trial_window.MainWindow):
                           self.data.spikes.depths[self.data.clus_idx], brush='g', size=5)
 
 
-
-def load_extra_data(probe_id, one=None):
+def load_extra_data(probe_id, one=None, revision=None):
     one = one or ONE()
     eid, probe = one.pid2eid(probe_id)
-    _ = one.load_dataset(eid, 'spikes.samples.npy', collection=f'alf/{probe}')
+    _ = one.load_object(eid, obj='spikes', collection=f'alf/{probe}', revision=revision,
+                        attribute='samples')
     trials = one.load_object(eid, obj='trials')
 
     return trials
 
 
-def viewer(probe_id=None, one=None, data_explore=False):
+def viewer(probe_id=None, one=None, data_explore=False, revision=None):
     """
     """
     qt.create_app()
-    trials = load_extra_data(probe_id, one=one)
-    av = AlignmentWindow(probe_id=probe_id, one=one)
+    trials = load_extra_data(probe_id, one=one, revision=revision)
+    av = AlignmentWindow(probe_id=probe_id, one=one, revision=revision)
     av.plotdata.trials = trials
     av.show()
 
