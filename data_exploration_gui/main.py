@@ -10,6 +10,7 @@ from data_exploration_gui import utils
 
 import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
+from one.api import ONE
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -29,10 +30,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
             return av
 
-    def __init__(self, eid, probe, one=None):
+    def __init__(self, eid, probe, one=None, spike_collection=None):
         super(MainWindow, self).__init__()
 
-        self.data = dat.DataModel(eid, probe, one=one)
+        self.data = dat.DataModel(eid, probe, one=one, spike_collection=spike_collection)
         self.plot = plt.PlotGroup(self.data)
 
         # Initialise cluster group
@@ -266,15 +267,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 
-
-def viewer(data=None):
+def viewer(pid, one=None, spike_collection=None, title=None):
     """
     """
+    one = one or ONE()
+    eid, probe = one.pid2eid(pid)
     qt.create_app()
-    av = MainWindow._get_or_create()
+    av = MainWindow._get_or_create(title=title, eid=eid, probe=probe, one=one,
+                                   spike_collection=spike_collection)
     av.show()
-    if data is not None:
-        av.on_data_given(data)
     return av
 
 
@@ -282,7 +283,6 @@ if __name__ == '__main__':
 
     from argparse import ArgumentParser
     import numpy as np
-    from one.api import ONE
 
     one = ONE()
     app = QtWidgets.QApplication([])
@@ -294,18 +294,21 @@ if __name__ == '__main__':
                         help='Experiment id')
     parser.add_argument('-name', '--probe_name', default=False, required=False,
                         help='Probe name')
+    parser.add_argument('-c', '--collection', default='', required=False,
+                        help='spike sorting collection')
 
     args = parser.parse_args()
 
     if args.pid:
         eid, probe = one.pid2eid(str(args.pid))
-        mainapp = MainWindow(eid, probe, one=one)
+        mainapp = MainWindow(eid, probe, one=one, spike_collection=args.collection)
     else:
         if not np.all(np.array([args.eid, args.probe_name],
                                dtype=object)):
             print('Must provide eid and probe name')
         else:
-            mainapp = MainWindow(str(args.eid), str(args.probe_name), one=one)
+            mainapp = MainWindow(str(args.eid), str(args.probe_name), one=one,
+                                 spike_collection=args.collection)
 
     # pid = 'ce397420-3cd2-4a55-8fd1-5e28321981f4'
     # eid, probe = one.pid2eid(pid)

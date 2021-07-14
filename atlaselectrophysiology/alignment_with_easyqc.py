@@ -16,7 +16,7 @@ import data_exploration_gui.gui_main as trial_window
 
 
 class AlignmentWindow(alignment_window.MainWindow):
-    def __init__(self, probe_id=None, one=None, histology=False, revision=None):
+    def __init__(self, probe_id=None, one=None, histology=False, spike_collection=None):
 
         self.ap = None  # spikeglx.Reader for ap band
         self.lf = None  # spikeglx.Reader for lf band
@@ -28,8 +28,7 @@ class AlignmentWindow(alignment_window.MainWindow):
         self.eqc = {}  # handles for viewdata windows
 
         super(AlignmentWindow, self).__init__(probe_id=probe_id, one=one, histology=histology,
-                                              revision=revision)
-
+                                              spike_collection=spike_collection)
         # remove the lines from the plots
         self.remove_lines_points()
         self.lines_features = []
@@ -225,22 +224,27 @@ class TrialWindow(trial_window.MainWindow):
                           self.data.spikes.depths[self.data.clus_idx], brush='g', size=5)
 
 
-def load_extra_data(probe_id, one=None, revision=None):
+def load_extra_data(probe_id, one=None, spike_collection=None):
     one = one or ONE()
     eid, probe = one.pid2eid(probe_id)
-    _ = one.load_object(eid, obj='spikes', collection=f'alf/{probe}', revision=revision,
+    if spike_collection:
+        collection = f'alf/{probe}/{spike_collection}'
+    else:
+        collection = f'alf/{probe}'
+
+    _ = one.load_object(eid, obj='spikes', collection=collection,
                         attribute='samples')
     trials = one.load_object(eid, obj='trials')
 
     return trials
 
 
-def viewer(probe_id=None, one=None, data_explore=False, revision=None):
+def viewer(probe_id=None, one=None, data_explore=False, spike_collection=None):
     """
     """
     qt.create_app()
-    trials = load_extra_data(probe_id, one=one, revision=revision)
-    av = AlignmentWindow(probe_id=probe_id, one=one, revision=revision)
+    trials = load_extra_data(probe_id, one=one, spike_collection=spike_collection)
+    av = AlignmentWindow(probe_id=probe_id, one=one, spike_collection=spike_collection)
     av.plotdata.trials = trials
     av.show()
 

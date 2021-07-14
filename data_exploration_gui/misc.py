@@ -37,7 +37,7 @@ class MiscGroup:
     def set_clust_qc_text(self, data):
         for label in self.clust_qc_labels:
             title = label.text().split(':')[0]
-            text = title + ': ' + str(round(data[title], 3))
+            text = title + ': ' + str(data[title])
             label.setText(text)
 
     def set_dlc_label(self, aligned):

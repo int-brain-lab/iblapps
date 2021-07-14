@@ -15,7 +15,8 @@ colours = {'all': QtGui.QColor('#808080'),
            'KS mua': QtGui.QColor('#fdc086'),
            'IBL good': QtGui.QColor('#7fc97f'),
            'IBL bad': QtGui.QColor('#d62728'),
-           'line': QtGui.QColor('#7732a8')}
+           'line': QtGui.QColor('#7732a8'),
+           'no metric': QtGui.QColor('#989898')}
 
 
 all = Bunch()

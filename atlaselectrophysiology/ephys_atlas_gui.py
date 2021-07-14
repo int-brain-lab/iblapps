@@ -32,19 +32,22 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             av.setWindowTitle(title)
         return av
 
-    def __init__(self, offline=False, probe_id=None, one=None, histology=True, revision=None):
+    def __init__(self, offline=False, probe_id=None, one=None, histology=True,
+                 spike_collection=None):
         super(MainWindow, self).__init__()
 
         self.init_variables()
         self.init_layout(self, offline=offline)
         self.configure = True
         if not offline and probe_id is None:
+            print('here i am')
             self.loaddata = LoadData()
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
         elif not offline and probe_id is not None:
+            print('i should not be here')
             self.loaddata = LoadData(probe_id=probe_id, one=one, load_histology=histology,
-                                     revision=revision)
+                                     spike_collection=spike_collection)
             _, self.histology_exists = self.loaddata.get_info(0)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
             self.data_status = False
@@ -2061,11 +2064,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.tot_idx_string.setText(f"Total Index = {self.total_idx}")
 
 
-def viewer(probe_id, one=None, histology=False):
+def viewer(probe_id, one=None, histology=False, spike_collection=None, title=None):
     """
     """
     qt.create_app()
-    av = MainWindow._get_or_create(probe_id=probe_id, one=one, histology=histology)
+    av = MainWindow._get_or_create(probe_id=probe_id, one=one, histology=histology,
+                                   spike_collection=spike_collection, title=title)
     av.show()
     return av
 

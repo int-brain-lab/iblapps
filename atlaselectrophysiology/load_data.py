@@ -12,16 +12,16 @@ import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 import ibllib.qc.critical_reasons as usrpmt
 
-ONE_BASE_URL = "https://dev.alyx.internationalbrainlab.org"
+ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 
 class LoadData:
     def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None,
-                 load_histology=True, revision=None):
+                 load_histology=True, spike_collection=None):
         self.one = one or ONE(base_url=ONE_BASE_URL)
         self.brain_atlas = brain_atlas or atlas.AllenAtlas(25)
         self.download_hist = load_histology  # whether or not to look for the histology files
-        self.revision = revision
+        self.spike_collection = spike_collection
 
         if testing:
             self.probe_id = probe_id
@@ -220,18 +220,20 @@ class LoadData:
         :type: str
         """
 
-        _ = self.one.load_object(self.eid, 'spikes', collection=f'alf/{self.probe_label}',
-                                 revision=self.revision, attribute='depths|amps|times|clusters',
-                                 download_only=True)
+        if self.spike_collection:
+            collection = f'alf/{self.probe_label}/{self.spike_collection}'
+        else:
+            collection = f'alf/{self.probe_label}'
 
-        _ = self.one.load_object(self.eid, 'clusters', collection=f'alf/{self.probe_label}',
-                                 revision=self.revision,
+        _ = self.one.load_object(self.eid, 'spikes', collection=collection,
+                                 attribute='depths|amps|times|clusters', download_only=True)
+
+        _ = self.one.load_object(self.eid, 'clusters', collection=collection,
                                  attribute='metrics|peakToTrough|waveforms|channels',
                                  download_only=True)
 
-        _ = self.one.load_object(self.eid, 'channels', collection=f'alf/{self.probe_label}',
-                                 revision=self.revision,
-                                 attribute='rawInd|localCoordinates')
+        _ = self.one.load_object(self.eid, 'channels', collection=collection,
+                                 attribute='rawInd|localCoordinates', download_only=True)
 
         dtypes_raw = [
             '_iblqc_ephysTimeRmsAP.rms.npy',
@@ -272,12 +274,11 @@ class LoadData:
 
         self.sess_path = self.one.eid2path(self.eid)
 
-        if self.revision:
-            revision = f'#{self.revision}#'
+        if self.spike_collection:
+            probe_path = Path(self.sess_path, 'alf', self.probe_label, self.spike_collection)
         else:
-            revision = ''
+            probe_path = Path(self.sess_path, 'alf', self.probe_label)
 
-        probe_path = Path(self.sess_path, 'alf', self.probe_label, revision)
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
         alf_path = Path(self.sess_path, 'alf')
 

@@ -17,13 +17,18 @@ FS = 30000
 
 
 class DataModel:
-    def __init__(self, eid, probe, one=None):
+    def __init__(self, eid, probe, one=None, spike_collection=None):
         one = one or ONE()
 
-        self.spikes = one.load_object(eid, obj='spikes', collection=f'alf/{probe}',
-                                      attribute='clusters|times|amps|depths', revision=None)
-        self.clusters = one.load_object(eid, obj='clusters', collection=f'alf/{probe}',
-                                        attribute='metrics|waveforms', revision=None)
+        if spike_collection:
+            collection = f'alf/{probe}/{spike_collection}'
+        else:
+            collection = f'alf/{probe}'
+
+        self.spikes = one.load_object(eid, obj='spikes', collection=collection,
+                                      attribute='clusters|times|amps|depths')
+        self.clusters = one.load_object(eid, obj='clusters', collection=collection,
+                                        attribute='metrics|waveforms')
 
         # Get everything we need for the clusters
         # need to get rid of nans in amps and depths
@@ -34,31 +39,54 @@ class DataModel:
             self.spikes.clusters[~np.isnan(self.spikes.amps)],
             self.spikes.amps[~np.isnan(self.spikes.amps)])
 
-        # KS2 good mua colours
-        # Bug in the KS2 units, the clusters that do not exist in spikes.clusters have not been
-        # filled with Nans like the other features in metrics
-        # colours_ks = np.array(self.clusters.metrics.ks2_label[:len(self.clusters.clust_ids)])
-        colours_ks = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
-        good_ks = np.where(colours_ks == 'good')[0]
-        colours_ks[good_ks] = colours['KS good']
-        mua_ks = np.where(colours_ks == 'mua')[0]
-        colours_ks[mua_ks] = colours['KS mua']
-        self.clusters.colours_ks = colours_ks
+        # If we don't have metrics file, we can't assign colours
+        if not any(self.clusters.get('metrics', [None])):
+            col = np.full((len(self.clusters.clust_ids)), colours['no metric'])
+            self.clusters.colours_ks = col
+            self.clusters.colours_ibl = col
+            self.clusters['KS good'] = np.arange(len(self.clusters.clust_ids))
+            self.clusters['IBL good'] = np.arange(len(self.clusters.clust_ids))
+        elif not any(self.clusters.metrics.get('ks2_label', [None])):
+            col = np.full((len(self.clusters.clust_ids)), colours['no metric'])
+            self.clusters.colours_ks = col
 
-        # IBL good bad colours
-        colours_ibl = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
-        good_ibl = np.where(self.clusters.metrics.label[self.clusters.clust_ids] == 1)[0]
-        colours_ibl[good_ibl] = colours['IBL good']
-        bad_ibl = np.where(self.clusters.metrics.label[self.clusters.clust_ids] != 1)[0]
-        colours_ibl[bad_ibl] = colours['IBL bad']
-        self.clusters.colours_ibl = colours_ibl
-        self.clusters.metrics['amp_median'] *= 1e6
+            colours_ibl = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
+            good_ibl = np.where(self.clusters.metrics.label[self.clusters.clust_ids] == 1)[0]
+            colours_ibl[good_ibl] = colours['IBL good']
+            bad_ibl = np.where(self.clusters.metrics.label[self.clusters.clust_ids] != 1)[0]
+            colours_ibl[bad_ibl] = colours['IBL bad']
+            self.clusters.colours_ibl = colours_ibl
+            self.clusters.metrics['amp_median'] *= 1e6
+
+            self.clusters['KS good'] = np.arange(len(self.clusters.clust_ids))
+            self.clusters['IBL good'] = np.r_[good_ibl, bad_ibl]
+        else:
+            # KS2 good mua colours
+            # Bug in the KS2 units, the clusters that do not exist in spikes.clusters have not been
+            # filled with Nans like the other features in metrics
+            # colours_ks = np.array(self.clusters.metrics.ks2_label[:len(self.clusters.clust_ids)])
+            colours_ks = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
+            good_ks = np.where(colours_ks == 'good')[0]
+            colours_ks[good_ks] = colours['KS good']
+            mua_ks = np.where(colours_ks == 'mua')[0]
+            colours_ks[mua_ks] = colours['KS mua']
+            self.clusters.colours_ks = colours_ks
+
+            # IBL good bad colours
+            colours_ibl = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
+            good_ibl = np.where(self.clusters.metrics.label[self.clusters.clust_ids] == 1)[0]
+            colours_ibl[good_ibl] = colours['IBL good']
+            bad_ibl = np.where(self.clusters.metrics.label[self.clusters.clust_ids] != 1)[0]
+            colours_ibl[bad_ibl] = colours['IBL bad']
+            self.clusters.colours_ibl = colours_ibl
+            self.clusters.metrics['amp_median'] *= 1e6
+
+            self.clusters['KS good'] = np.r_[good_ks, mua_ks]
+            self.clusters['IBL good'] = np.r_[good_ibl, bad_ibl]
 
         # Some extra info for sorting clusters
         self.clusters['ids'] = np.arange(len(self.clusters.clust_ids))
         self.clusters['n spikes'] = np.argsort(n_spikes)[::-1]
-        self.clusters['KS good'] = np.r_[good_ks, mua_ks]
-        self.clusters['IBL good'] = np.r_[good_ibl, bad_ibl]
 
         # Get trial data
         self.trials = one.load_object(eid, obj='trials', collection='alf')
@@ -84,8 +112,14 @@ class DataModel:
 
     def get_cluster_metrics(self):
         data = Bunch()
-        for qc in CLUSTER_QC:
-            data[qc] = (self.clusters.metrics[qc][self.clust_ids[self.clust]])
+        # Only if we have the metrics
+        if any(self.clusters.get('metrics', [None])):
+            for qc in CLUSTER_QC:
+                data[qc] = round((self.clusters.metrics[qc][self.clust_ids[self.clust]]), 3)
+        else:
+            for qc in CLUSTER_QC:
+                data[qc] = None
+
         return data
 
     def get_qc_info(self, eid, one):
@@ -114,7 +148,6 @@ class DataModel:
                     any([key in name for name in ['licks', 'sniffs']])]
             behav_options = behav_options + keys
             aligned.append(dlc['aligned'])
-
 
         if all([val in dlc_right.keys() for val in ['times', 'dlc']]):
             dlc = get_dlc_everything(dlc_right, 'right')
