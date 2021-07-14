@@ -180,7 +180,7 @@ class QcFrame(TaskQC):
                                      label=event, color=c, linestyle=ln, **plot_args)
 
 
-def show_session_task_qc(qc_or_session=None, bpod_only=False, local=False):
+def show_session_task_qc(qc_or_session=None, bpod_only=False, local=False, one=None):
     """
     Displays the task QC for a given session
     :param qc_or_session: session_path or TaskQC object
@@ -191,9 +191,9 @@ def show_session_task_qc(qc_or_session=None, bpod_only=False, local=False):
     if isinstance(qc_or_session, QcFrame):
         qc = qc_or_session
     elif isinstance(qc_or_session, TaskQC):
-        qc = QcFrame(qc_or_session)
+        qc = QcFrame(qc_or_session, one=one)
     else:
-        qc = QcFrame(qc_or_session, bpod_only=bpod_only, local=local)
+        qc = QcFrame(qc_or_session, bpod_only=bpod_only, local=local, one=one)
     # Run QC and plot
     w = ViewEphysQC.viewqc(wheel=qc.wheel_data)
     qc.create_plots(w.wplot.canvas.ax,
