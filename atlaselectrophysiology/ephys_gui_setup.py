@@ -58,13 +58,13 @@ class Setup():
         scatter_drift = QtWidgets.QAction('Amplitude', self, checkable=True, checked=False)
         scatter_drift.triggered.connect(lambda: self.plot_scatter(self.scat_drift_data))
         scatter_fr = QtWidgets.QAction('Cluster Amp vs Depth vs FR', self, checkable=True,
-                                   checked=False)
+                                       checked=False)
         scatter_fr.triggered.connect(lambda: self.plot_scatter(self.scat_fr_data))
         scatter_p2t = QtWidgets.QAction('Cluster Amp vs Depth vs Duration', self, checkable=True,
-                                    checked=False)
+                                        checked=False)
         scatter_p2t.triggered.connect(lambda: self.plot_scatter(self.scat_p2t_data))
         scatter_amp = QtWidgets.QAction('Cluster FR vs Depth vs Amp', self, checkable=True,
-                                    checked=False)
+                                        checked=False)
         scatter_amp.triggered.connect(lambda: self.plot_scatter(self.scat_amp_data))
         img_fr = QtWidgets.QAction('Firing Rate', self, checkable=True, checked=True)
         img_fr.triggered.connect(lambda: self.plot_image(self.img_fr_data))
