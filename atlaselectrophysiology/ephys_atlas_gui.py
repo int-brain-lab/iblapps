@@ -40,12 +40,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.init_layout(self, offline=offline)
         self.configure = True
         if not offline and probe_id is None:
-            print('here i am')
             self.loaddata = LoadData()
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
         elif not offline and probe_id is not None:
-            print('i should not be here')
             self.loaddata = LoadData(probe_id=probe_id, one=one, load_histology=histology,
                                      spike_collection=spike_collection)
             _, self.histology_exists = self.loaddata.get_info(0)

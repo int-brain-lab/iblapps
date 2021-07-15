@@ -16,10 +16,10 @@ cd iblapps/data_exploration_gui
 To launch the gui you should run the following from the command line. You can specify either a probe insertion id
 e.g
 ```
-python main.py -pid 9657af01-50bd-4120-8303-416ad9e24a51
+python data_explore_gui.py -pid 9657af01-50bd-4120-8303-416ad9e24a51
 ```
 
 or an eid and probe name, e.g
 ```
-python main.py -eid 7f6b86f9-879a-4ea2-8531-294a221af5d0 -name probe00
+python data_explore_gui.py -eid 7f6b86f9-879a-4ea2-8531-294a221af5d0 -name probe00
 ```
