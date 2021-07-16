@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
@@ -6,12 +7,13 @@ import ibllib.atlas as atlas
 from ibllib.qc.alignment_qc import AlignmentQC
 from one.api import ONE
 from pathlib import Path
-import one.alf.io as alfio
+import one.alf as alf
 from one import params
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 import ibllib.qc.critical_reasons as usrpmt
 
+logger = logging.getLogger('ibllib')
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 
@@ -105,14 +107,14 @@ class LoadData:
         self.subj = self.sess[idx]['session_info']['subject']
 
         histology_exists = False
-        if self.sess[idx]['json'].get('xyz_picks', None):
-            # Make sure there is a histology track
-            hist_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
-                                           provenance='Histology track')
-            if len(hist_traj) == 1:
-                if hist_traj[0]['x'] is not None:
-                    histology_exists = True
-                    self.traj_id = hist_traj[0]['id']
+
+        # Make sure there is a histology track
+        hist_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+                                       provenance='Histology track')
+        if len(hist_traj) == 1:
+            if hist_traj[0]['x'] is not None:
+                histology_exists = True
+                self.traj_id = hist_traj[0]['id']
 
         return self.get_previous_alignments(), histology_exists
 
@@ -225,15 +227,20 @@ class LoadData:
         else:
             collection = f'alf/{self.probe_label}'
 
-        _ = self.one.load_object(self.eid, 'spikes', collection=collection,
-                                 attribute='depths|amps|times|clusters', download_only=True)
+        try:
+            _ = self.one.load_object(self.eid, 'spikes', collection=collection,
+                                     attribute='depths|amps|times|clusters', download_only=True)
 
-        _ = self.one.load_object(self.eid, 'clusters', collection=collection,
-                                 attribute='metrics|peakToTrough|waveforms|channels',
-                                 download_only=True)
+            _ = self.one.load_object(self.eid, 'clusters', collection=collection,
+                                     attribute='metrics|peakToTrough|waveforms|channels',
+                                     download_only=True)
 
-        _ = self.one.load_object(self.eid, 'channels', collection=collection,
-                                 attribute='rawInd|localCoordinates', download_only=True)
+            _ = self.one.load_object(self.eid, 'channels', collection=collection,
+                                     attribute='rawInd|localCoordinates', download_only=True)
+        except alf.exceptions.ALFObjectNotFound:
+            logger.error(f'Could not load spike sorting for probe insertion {self.probe_id}, GUI'
+                         f' will not work')
+            return [None] * 5
 
         dtypes_raw = [
             '_iblqc_ephysTimeRmsAP.rms.npy',
@@ -282,13 +289,9 @@ class LoadData:
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
         alf_path = Path(self.sess_path, 'alf')
 
-        try:
-            self.chn_coords = np.load(Path(probe_path, 'channels.localCoordinates.npy'))
-            self.chn_depths = self.chn_coords[:, 1]
-            self.cluster_chns = np.load(Path(probe_path, 'clusters.channels.npy'))
-        except Exception:
-            print('Could not download alf data for this probe - gui will not work')
-            return [None] * 5
+        self.chn_coords = np.load(Path(probe_path, 'channels.localCoordinates.npy'))
+        self.chn_depths = self.chn_coords[:, 1]
+        self.cluster_chns = np.load(Path(probe_path, 'clusters.channels.npy'))
 
         sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
         sess_notes = None
@@ -308,7 +311,7 @@ class LoadData:
         :type: pd.Dataframe
         """
         allen_path = Path(Path(atlas.__file__).parent, 'allen_structure_tree.csv')
-        allen = alfio.load_file_content(allen_path)
+        allen = alf.io.load_file_content(allen_path)
 
         self.allen_id = allen['id']
 

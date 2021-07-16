@@ -1,5 +1,6 @@
-#
+import logging
 from one.api import ONE
+import one.alf as alf
 import numpy as np
 from brainbox.processing import compute_cluster_average
 from brainbox.task.trials import find_trial_ids, get_event_aligned_raster
@@ -8,6 +9,8 @@ from brainbox.behavior.dlc import get_dlc_everything
 from brainbox.population.decode import xcorr
 from iblutil.util import Bunch
 from data_exploration_gui.utils import colours, SESS_QC, CLUSTER_QC
+
+logger = logging.getLogger('ibllib')
 
 EPOCH = [-0.4, 1]
 TBIN = 0.02
@@ -25,10 +28,16 @@ class DataModel:
         else:
             collection = f'alf/{probe}'
 
-        self.spikes = one.load_object(eid, obj='spikes', collection=collection,
-                                      attribute='clusters|times|amps|depths')
-        self.clusters = one.load_object(eid, obj='clusters', collection=collection,
-                                        attribute='metrics|waveforms')
+        try:
+            self.spikes = one.load_object(eid, obj='spikes', collection=collection,
+                                          attribute='clusters|times|amps|depths')
+            self.clusters = one.load_object(eid, obj='clusters', collection=collection,
+                                            attribute='metrics|waveforms')
+
+        except alf.exceptions.ALFObjectNotFound:
+            logger.error(f'Could not load spike sorting for session: {eid} and probe: {probe}, GUI'
+                         f' will not work')
+            raise
 
         # Get everything we need for the clusters
         # need to get rid of nans in amps and depths
