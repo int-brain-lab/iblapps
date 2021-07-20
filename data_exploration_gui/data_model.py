@@ -8,6 +8,8 @@ from brainbox.behavior.wheel import velocity
 from brainbox.behavior.dlc import get_dlc_everything
 from brainbox.population.decode import xcorr
 from iblutil.util import Bunch
+from ibllib.ephys.spikes import ks_to_npz
+
 from data_exploration_gui.utils import colours, SESS_QC, CLUSTER_QC
 
 logger = logging.getLogger('ibllib')
@@ -28,7 +30,10 @@ class DataModel:
         else:
             collection = f'alf/{probe}'
 
+        probe_path = one.eid2path(eid).joinpath(collection)
+
         try:
+            ks_to_npz(probe_path)
             self.spikes = one.load_object(eid, obj='spikes', collection=collection,
                                           attribute='clusters|times|amps|depths')
             self.clusters = one.load_object(eid, obj='clusters', collection=collection,
