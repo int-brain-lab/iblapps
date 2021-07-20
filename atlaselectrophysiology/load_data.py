@@ -227,7 +227,15 @@ class LoadData:
         else:
             collection = f'alf/{self.probe_label}'
 
+        self.sess_path = self.one.eid2path(self.eid)
+
+        if self.spike_collection:
+            probe_path = Path(self.sess_path, 'alf', self.probe_label, self.spike_collection)
+        else:
+            probe_path = Path(self.sess_path, 'alf', self.probe_label)
+
         try:
+            ks_to_npz(probe_path)
             _ = self.one.load_object(self.eid, 'spikes', collection=collection,
                                      attribute='depths|amps|times|clusters', download_only=True)
 
@@ -278,13 +286,6 @@ class LoadData:
 
         _ = self.one.load_datasets(self.eid, datasets=dtypes, collections=collections,
                                    download_only=True, assert_present=False)
-
-        self.sess_path = self.one.eid2path(self.eid)
-
-        if self.spike_collection:
-            probe_path = Path(self.sess_path, 'alf', self.probe_label, self.spike_collection)
-        else:
-            probe_path = Path(self.sess_path, 'alf', self.probe_label)
 
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
         alf_path = Path(self.sess_path, 'alf')
