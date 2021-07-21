@@ -30,7 +30,7 @@ else:
 
 _ = one.load_object(eid, obj='trials', collection='alf',
                     download_only=True)
-_ = one.load_object(eid, obj='spikes', attribute='times|clusters|amps|depths',
+_ = one.load_object(eid, obj='spikes', attribute=['times', 'clusters', 'amps', 'depths'],
                     collection=f'alf/{str(args.probe_label)}', download_only=True)
 _ = one.load_object(eid, obj='clusters', collection=f'alf/{str(args.probe_label)}',
                     download_only=True)

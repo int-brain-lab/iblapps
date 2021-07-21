@@ -30,9 +30,9 @@ class DataModel:
 
         try:
             self.spikes = one.load_object(eid, obj='spikes', collection=collection,
-                                          attribute='clusters|times|amps|depths')
+                                          attribute=['clusters', 'times', 'amps', 'depths'])
             self.clusters = one.load_object(eid, obj='clusters', collection=collection,
-                                            attribute='metrics|waveforms')
+                                            attribute=['metrics', 'waveforms'])
 
         except alf.exceptions.ALFObjectNotFound:
             logger.error(f'Could not load spike sorting for session: {eid} and probe: {probe}, GUI'
@@ -105,9 +105,9 @@ class DataModel:
         # Get behaviour data
         wheel = one.load_object(eid, obj='wheel', collection='alf')
         dlc_left = one.load_object(eid, obj='leftCamera', collection='alf',
-                                   attribute='times|dlc')
+                                   attribute=['times', 'dlc'])
         dlc_right = one.load_object(eid, obj='rightCamera', collection='alf',
-                                    attribute='times|dlc')
+                                    attribute=['times', 'dlc'])
 
         (self.behav, self.behav_events,
          self.dlc_aligned) = self.combine_behaviour_data(wheel, dlc_left, dlc_right)
@@ -208,9 +208,11 @@ class DataModel:
 
         epoch = [0.4, 1]
         spk_times = self.spikes.times[self.spikes.clusters == self.clust_ids[self.clust]]
+
         for idx, val in enumerate(self.trials[self.trial_event][trial_ids]):
             spks_to_include = np.bitwise_and(spk_times >= val - epoch[0],
                                              spk_times <= val + epoch[1])
+            if np.sum(spks_to_include) == 0:
             trial_spk_times = spk_times[spks_to_include] - val
             x = np.append(x, trial_spk_times)
             y = np.append(y, np.ones(len(trial_spk_times)) * idx)

@@ -229,14 +229,16 @@ class LoadData:
 
         try:
             _ = self.one.load_object(self.eid, 'spikes', collection=collection,
-                                     attribute='depths|amps|times|clusters', download_only=True)
+                                     attribute=['depths', 'amps', 'times', 'clusters'],
+                                     download_only=True)
 
             _ = self.one.load_object(self.eid, 'clusters', collection=collection,
-                                     attribute='metrics|peakToTrough|waveforms|channels',
+                                     attribute=['metrics', 'peakToTrough', 'waveforms',
+                                                'channels'],
                                      download_only=True)
 
             _ = self.one.load_object(self.eid, 'channels', collection=collection,
-                                     attribute='rawInd|localCoordinates', download_only=True)
+                                     attribute=['rawInd', 'localCoordinates'], download_only=True)
         except alf.exceptions.ALFObjectNotFound:
             logger.error(f'Could not load spike sorting for probe insertion {self.probe_id}, GUI'
                          f' will not work')
