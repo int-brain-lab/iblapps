@@ -2,7 +2,7 @@ from pathlib import Path
 import shutil
 
 from ibllib.io import spikeglx
-from oneibl.webclient import dataset_record_to_url
+from one.webclient import dataset_record_to_url
 
 import numpy as np
 import scipy.signal
@@ -62,7 +62,7 @@ def stream(pid, t, one=None, cache=True, dsets=None, typ='ap'):
     :param cache:
     :param dsets:
     :param typ: 'ap' or 'lf'
-    :return:
+    :return: sr, dsets, t0
     """
     tlen = 1
     assert one

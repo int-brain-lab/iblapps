@@ -4,8 +4,8 @@ import scipy
 import matplotlib.pyplot as plt
 from easyqc.gui import viewseis
 
-import alf.io
-from oneibl.one import ONE
+import one.alf.io as alfio
+from one.api import ONE
 from ibllib.io import spikeglx
 from ibllib.ephys import neuropixel
 from ibllib.dsp import voltage
@@ -59,7 +59,7 @@ for i, sorter in enumerate(SORTERS):
     alf_path = SORT_PATH.joinpath(sorter, pid,'alf')
     ss[sorter] = {}
     for k in ['spikes', 'clusters', 'channels']:
-        ss[sorter][k] = alf.io.load_object(alf_path, k)
+        ss[sorter][k] = alfio.load_object(alf_path, k)
     col = (np.array(color_cycle(i)) * 255).astype(np.uint8)
     eqcsort[sorter] = viewseis(destripe.T, si=1 / sr.fs, h=h, t0=t0, title=sorter, taxis=0)
     _, _, _ = overlay_spikes(
@@ -81,8 +81,7 @@ eqc_buts = viewseis(bshift.T, si=1 / sr.fs, h=h, t0=t0, title='shift', taxis=0)
 
 
 ##
-from oneibl.one import ONE
-import alf.io
+from one.api import ONE
 pid = "8413c5c6-b42b-4ec6-b751-881a54413628"
 one = ONE()
 
