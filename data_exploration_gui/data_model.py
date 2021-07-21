@@ -212,7 +212,6 @@ class DataModel:
         for idx, val in enumerate(self.trials[self.trial_event][trial_ids]):
             spks_to_include = np.bitwise_and(spk_times >= val - epoch[0],
                                              spk_times <= val + epoch[1])
-            if np.sum(spks_to_include) == 0:
             trial_spk_times = spk_times[spks_to_include] - val
             x = np.append(x, trial_spk_times)
             y = np.append(y, np.ones(len(trial_spk_times)) * idx)
