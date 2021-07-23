@@ -128,7 +128,7 @@ class FilterGroup:
         # This makes sure the drop down menu is wide enough to show full length of string
         min_width = combobox.fontMetrics().width(max(data, key=len))
         min_width += combobox.view().autoScrollMargin()
-        min_width += combobox.style().pixelMetric(QtGui.QStyle.PM_ScrollBarExtent)
+        min_width += combobox.style().pixelMetric(QtWidgets.QStyle.PM_ScrollBarExtent)
         combobox.view().setMinimumWidth(min_width)
 
         # Set the default to be the first option
