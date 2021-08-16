@@ -71,10 +71,14 @@ class DataModel:
             self.clusters['IBL good'] = np.r_[good_ibl, bad_ibl]
         else:
             # KS2 good mua colours
-            # Bug in the KS2 units, the clusters that do not exist in spikes.clusters have not been
-            # filled with Nans like the other features in metrics
-            # colours_ks = np.array(self.clusters.metrics.ks2_label[:len(self.clusters.clust_ids)])
-            colours_ks = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
+            # Bug in the KS2 units, in some cases, the clusters that do not exist in
+            # spikes.clusters have not been filled with nans like the other features in metrics
+            # Signature of these is for last values in ks_label to be None
+            if len(np.where(self.clusters.metrics.ks2_label.values == None)[0]) > 0: # noqa
+                colours_ks = np.array(self.clusters.metrics.ks2_label
+                                      [:len(self.clusters.clust_ids)])
+            else:
+                colours_ks = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
             good_ks = np.where(colours_ks == 'good')[0]
             colours_ks[good_ks] = colours['KS good']
             mua_ks = np.where(colours_ks == 'mua')[0]
