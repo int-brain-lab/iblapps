@@ -1,12 +1,14 @@
 import numpy as np
 import alf.io
-from oneibl.one import ONE
+#from oneibl.one import ONE
+from one.api import ONE
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 #os.environ['CUDA_VISIBLE_DEVICES'] = str(gputouse)
 from ibllib.io.video import get_video_meta, get_video_frames_preload
+import ibllib.io.video as vidio
 import brainbox.behavior.wheel as wh
 import math
 from brainbox.processing import bincount2D
@@ -16,13 +18,14 @@ import matplotlib.patches as patches
 import string
 from scipy.interpolate import interp1d
 from scipy.stats import zscore
+
 #Generate scatterplots, variances, 2-state AR-HMMs to summarize differences in behavior in different sessions. Develop a 1-page figure per session that provides a behavioral overview.  Would be great to generate these figs for the RS sessions noted in repro-ephys slides above
 #lickogram
 import matplotlib
 # https://github.com/lindermanlab/ssm
-
-
-    
+import os
+   
+   
 def get_all_sess_with_ME():
     one = ONE()
     # get all bwm sessions with dlc
@@ -157,16 +160,15 @@ def get_dlc_XYs(eid, video_type):
 
     #video_type = 'left'    
     one = ONE() 
-    dataset_types = ['camera.dlc', 'camera.times']                     
-    a = one.list(eid,'dataset-types')
-    # for newer iblib version do [x['dataset_type'] for x in a]
-#    if not all([(u in [x['dataset_type'] for x in a]) for u in dataset_types]):
-#        print('not all data available')    
-#        return
-    
-                 
-    one.load(eid, dataset_types = dataset_types)  #clobber=True # force download
-    local_path = one.path_from_eid(eid)  
+    dataset_types = ['alf/_ibl_leftCamera.dlc.pqt', 
+                     'alf/_ibl_leftCamera.times.npy']
+                     
+    a = one.list_datasets(eid)
+    if not all([u in a for u in dataset_types]):
+        print('not all data available')    
+        return
+                     
+    local_path = one.eid2path(eid)  
     alf_path = local_path / 'alf'   
     
     cam0 = alf.io.load_object(
@@ -174,7 +176,6 @@ def get_dlc_XYs(eid, video_type):
         '%sCamera' %
         video_type,
         namespace='ibl')
-
 
     Times = cam0['times']
 
@@ -200,16 +201,15 @@ def get_ME(eid, video_type):
 
     #video_type = 'left'    
     one = ONE() 
-    dataset_types = ['camera.ROIMotionEnergy', 'camera.times']                     
-    a = one.list(eid,'dataset-types')
-    # for newer iblib version do [x['dataset_type'] for x in a]
-#    if not all([(u in [x['dataset_type'] for x in a]) for u in dataset_types]):
-#        print('not all data available')    
-#        return
-    
-                 
-    one.load(eid, dataset_types = dataset_types)
-    local_path = one.path_from_eid(eid)  
+    dataset_types = [f'alf/{video_type}Camera.ROIMotionEnergy.npy',
+                     f'alf/_ibl_{video_type}Camera.times.npy']
+
+    a = one.list_datasets(eid)
+    if not all([u in a for u in dataset_types]):
+        print('not all data available')    
+        return
+                     
+    local_path = one.eid2path(eid)  
     alf_path = local_path / 'alf'   
     
     cam0 = alf.io.load_object(
@@ -241,17 +241,14 @@ def get_example_images(eid):
     
     
     #for eid in eids:
+    urls = vidio.url_from_eid(eid, one=one)
     for video_type in frts:
         
-        frame_idx = [20 * 60 * frts[video_type]]    
+        frame_idx = [5 * 60 * frts[video_type]]    
         try:
         
-            r = one.list(eid, 'dataset_types')
-            recs = [x for x in r if f'{video_type}Camera.raw.mp4' 
-                    in x['name']][0]['file_records']
-            video_path = [x['data_url'] for x in recs 
-                          if x['data_url'] is not None][0]
             
+            video_path = urls[video_type]
             frames = get_video_frames_preload(video_path,
                                               frame_idx,
                                               mask=np.s_[:, :, 0])
@@ -276,10 +273,10 @@ def plot_paw_on_image(eid, video_type='left', XYs = None):
 
     #fig = plt.figure(figsize=(8,4)) 
  
-    
-    Cs_l = {'paw_l':'r','paw_r':'cyan'}
-    Cs_r = {'paw_l':'cyan','paw_r':'r'}
-    #for video_type in ['left','right']:#,'body']: 
+    Cs = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA',
+          '#FFA15A', '#19D3F3', '#FF6692', '#B6E880',
+          '#FF97FF', '#FECB52','cyan']
+
     try:
         r = np.load(f'/home/mic/reproducible_dlc/example_images/'
                   f'{eid}_{video_type}.npy')[0]  
@@ -287,20 +284,15 @@ def plot_paw_on_image(eid, video_type='left', XYs = None):
         get_example_images(eid)
         r = np.load(f'/home/mic/reproducible_dlc/example_images/'
                   f'{eid}_{video_type}.npy')[0]         
-        
     
     try:        
         if XYs == None:          
             _, XYs =  get_dlc_XYs(eid, video_type)  
        
-
+            Cs = dict(zip(XYs.keys(),Cs))
         
         ds = {'body':3,'left':6,'right':15}
         
-        if video_type == 'left':
-            Cs = Cs_l
-        else:
-            Cs = Cs_r    
         
         for point in XYs:# ['paw_l','paw_r']:
             if point in ['tube_bottom', 'tube_top']:
@@ -312,8 +304,9 @@ def plot_paw_on_image(eid, video_type='left', XYs = None):
             ys = XYs[point][1][0::ds[video_type]]
         
             plt.scatter(xs,ys, alpha = 0.05, s = 2, 
-                       label = point)#, color = Cs[point])    
-                       
+                       label = point, color = Cs[point])    
+                                      
+                                           
         # plot whisker pad rectangle               
         mloc = get_mean_positions(XYs)
         p_nose = np.array(mloc['nose_tip'])
@@ -329,8 +322,10 @@ def plot_paw_on_image(eid, video_type='left', XYs = None):
         whxy = [int(dist/2), int(dist/3), 
                 int(p_anchor[0] - dist/4), int(p_anchor[1])]     
         
-        rect = patches.Rectangle((whxy[2], whxy[3]), whxy[0], whxy[1], linewidth=1, 
-                                 edgecolor='lime', facecolor='none')               
+        rect = patches.Rectangle((whxy[2], whxy[3]), whxy[0], whxy[1], 
+                                 linewidth=1, 
+                                 edgecolor='lime',
+                                 facecolor='none')               
         ax = plt.gca()                                  
         ax.add_patch(rect)                                       
 
@@ -338,6 +333,70 @@ def plot_paw_on_image(eid, video_type='left', XYs = None):
         plt.tight_layout()
         plt.imshow(r,cmap='gray')
         plt.tight_layout()
+        
+        # plot eye region zoom as inset in upper right corner
+        pivot = np.nanmean(XYs['pupil_top_r'], axis=1)
+        x0 = int(pivot[0]) - 33
+        x1 = int(pivot[0]) + 33
+        y0 = int(pivot[1]) - 28
+        y1 = int(pivot[1]) + 38        
+        
+        axins = ax.inset_axes([0.65, 0.6, 0.5, 0.5])
+        axins.spines['bottom'].set_color('white')
+        axins.spines['top'].set_color('white') 
+        axins.spines['right'].set_color('white')
+        axins.spines['left'].set_color('white')
+        axins.imshow(r, cmap='gray', origin="lower")
+        
+        for point in XYs:# ['paw_l','paw_r']:
+            if point in ['tube_bottom', 'tube_top']:
+                continue
+         
+            # downsample; normalise number of points to be the same
+            # across all sessions
+            xs = XYs[point][0][0::ds[video_type]]
+            ys = XYs[point][1][0::ds[video_type]]
+        
+            axins.scatter(xs,ys, alpha = 0.05, s = 0.1, 
+                       label = point, color = Cs[point]) 
+        axins.set_xlim(x0, x1)
+        axins.set_ylim(y1, y0)
+        axins.set_xticklabels('')
+        axins.set_yticklabels('')
+        #ax.indicate_inset_zoom(axins, edgecolor="white")
+        
+        # plot tongue region zoom as inset in llower right corner
+        p1 = np.nanmean(XYs['tube_top'], axis=1)
+        p2 = np.nanmean(XYs['tube_bottom'], axis=1)
+        pivot = np.nanmean([p1,p2], axis=0)
+        x0 = int(pivot[0]) - 60
+        x1 = int(pivot[0]) + 100
+        y0 = int(pivot[1]) - 100
+        y1 = int(pivot[1]) + 60        
+        
+        axins = ax.inset_axes([0.65, 0.1, 0.5, 0.5])
+        axins.spines['bottom'].set_color('white')
+        axins.spines['top'].set_color('white') 
+        axins.spines['right'].set_color('white')
+        axins.spines['left'].set_color('white')
+        axins.imshow(r, cmap='gray', origin="upper")
+        
+        for point in XYs:# ['paw_l','paw_r']:
+            if point in ['tube_bottom', 'tube_top']:
+                continue 
+            # downsample; normalise number of points to be the same
+            # across all sessions
+            xs = XYs[point][0][0::ds[video_type]]
+            ys = XYs[point][1][0::ds[video_type]]
+        
+            axins.scatter(xs,ys, alpha = 0.05, s = 0.01, 
+                       label = point, color = Cs[point]) 
+        axins.set_xlim(x0, x1)
+        axins.set_ylim(y1, y0)
+        axins.set_xticklabels('')
+        axins.set_yticklabels('')
+        #ax.indicate_inset_zoom(axins, edgecolor="white")        
+        
     except:
    
         plt.imshow(r,cmap='gray')    
@@ -526,13 +585,18 @@ def plot_licks(eid, combine=True):
         lick_times = []
         for video_type in ['right','left']:
             times, XYs = get_dlc_XYs(eid, video_type)
-            lick_times.append(times[get_licks(XYs)])
+            # for the case that there are less times than DLC points
+            r = get_licks(XYs)
+            idx = np.where(np.array(r)<len(times))[0][-1]            
+            lick_times.append(times[r[:idx]])
         
         lick_times = sorted(np.concatenate(lick_times))
         
     else:
         times, XYs = get_dlc_XYs(eid, 'left')    
-        lick_times = times[get_licks(XYs)]
+        r = get_licks(XYs)
+        idx = np.where(np.array(r)<len(times))[0][-1]              
+        lick_times = times[r[:idx]]
    
     
     R, t, _ = bincount2D(lick_times, np.ones(len(lick_times)), T_BIN)
@@ -591,13 +655,17 @@ def lick_raster(eid, combine=True):
         lick_times = []
         for video_type in ['right','left']:
             times, XYs = get_dlc_XYs(eid, video_type)
-            lick_times.append(times[get_licks(XYs)])
+            r = get_licks(XYs)
+            idx = np.where(np.array(r)<len(times))[0][-1]            
+            lick_times.append(times[r[:idx]])
         
         lick_times = sorted(np.concatenate(lick_times))
         
     else:
         times, XYs = get_dlc_XYs(eid, 'left')    
-        lick_times = times[get_licks(XYs)]
+        r = get_licks(XYs)
+        idx = np.where(np.array(r)<len(times))[0][-1]
+        lick_times = times[r[:idx]]
         
     R, t, _ = bincount2D(lick_times, np.ones(len(lick_times)), T_BIN)
     D = R[0]  
@@ -960,7 +1028,7 @@ def non_uniform_savgol(x, y, window, polynom):
 
 
 
-def pupil_diameter_PSTH(eid, s=None, times=None):
+def pupil_diameter_PSTH(eid, s=None, times=None, per_trial_norm=True):
 
     '''
     nose speed PSTH
@@ -993,9 +1061,18 @@ def pupil_diameter_PSTH(eid, s=None, times=None):
         for i in d:
 
             start_idx = find_nearest(times,d[i][0])
-            end_idx = start_idx  + rt*60  
-
-            D[stype].append(s[start_idx:end_idx])
+            end_idx = start_idx  + rt*60
+              
+            if per_trial_norm:
+                # per trial baseline - at start = 0
+                dia = s[start_idx:end_idx]
+                dia = zscore(dia,nan_policy='omit')
+                dia = dia - dia[0]
+            else:
+                dia = s[start_idx:end_idx]
+            
+           
+            D[stype].append(dia)
 
     
         MEAN = np.mean(D[stype],axis=0)
@@ -1140,7 +1217,7 @@ def plot_all(eid):
     nrows = 2
     ncols = 4
 
-    #plt.ioff()
+    plt.ioff()
   
     plt.figure(figsize=(15,10)) 
     
@@ -1202,10 +1279,44 @@ def plot_all(eid):
     
     plt.suptitle(s1+', DLC version: '+str(task['version'])+' \n '+s2,
                  backgroundcolor= 'white', fontsize=6)
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    #plt.tight_layout()                
-    plt.savefig(f'/home/mic/reproducible_dlc/overviewJune/{eid}.png')
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])               
+    #plt.savefig(f'/home/mic/reproducible_dlc/overviewJune/{eid}.png')
+    plt.savefig(f'/home/mic/reproducible_dlc/all_DLC/{eid}.png')
     plt.close()
     
 
+def inspection():
+    '''
+    go through computed png images
+    to report QC issues
+    ''' 
+    one = ONE()
+    a = os.listdir('/home/mic/reproducible_dlc/overviewJune/') 
     
+    for i in a:
+        plt.figure(figsize=(15,10))
+        eid = i.split('.')[0]
+        p = one.path_from_eid(eid)
+        s1 = '/'.join([str(p).split('/')[i] for i in [4,5,6,7,8]])
+        print(s1)
+        print(eid)
+        img = mpimg.imread('/home/mic/reproducible_dlc/overviewJune/'+i)
+        plt.imshow(img)
+        plt.tight_layout()
+        plt.show()
+        input("Press Enter to continue...")
+        plt.close()
+        
+        
+def get_all_sess_with_ME():
+    one = ONE()
+    # get all bwm sessions with dlc
+    all_sess = one.alyx.rest('sessions', 'list', 
+                              project='ibl_neuropixel_brainwide_01',
+                              task_protocol="ephys", 
+                              dataset_types='camera.ROIMotionEnergy')
+
+    eids = [s['url'].split('/')[-1] for s in all_sess]
+    
+    return eids          
+        
