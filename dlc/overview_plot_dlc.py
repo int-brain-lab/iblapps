@@ -1,6 +1,6 @@
 import numpy as np
 import alf.io
-#from oneibl.one import ONE
+#pip install ONE-api
 from one.api import ONE
 from pathlib import Path
 import pandas as pd
@@ -51,6 +51,8 @@ def get_repeated_sites():
     eids = [s['session']['id'] for s in all_sess]
     
     return eids
+    
+    
     
     
 def check_progress():
@@ -304,98 +306,115 @@ def plot_paw_on_image(eid, video_type='left', XYs = None):
             ys = XYs[point][1][0::ds[video_type]]
         
             plt.scatter(xs,ys, alpha = 0.05, s = 2, 
-                       label = point, color = Cs[point])    
-                                      
-                                           
-        # plot whisker pad rectangle               
-        mloc = get_mean_positions(XYs)
-        p_nose = np.array(mloc['nose_tip'])
-        p_pupil = np.array(mloc['pupil_top_r'])    
-
-        # heuristic to find whisker area in side videos:
-        # square with side length half the distance 
-        # between nose and pupil and anchored on midpoint
-
-        p_anchor = np.mean([p_nose,p_pupil],axis=0)
-        squared_dist = np.sum((p_nose-p_pupil)**2, axis=0)
-        dist = np.sqrt(squared_dist)
-        whxy = [int(dist/2), int(dist/3), 
-                int(p_anchor[0] - dist/4), int(p_anchor[1])]     
-        
-        rect = patches.Rectangle((whxy[2], whxy[3]), whxy[0], whxy[1], 
-                                 linewidth=1, 
-                                 edgecolor='lime',
-                                 facecolor='none')               
-        ax = plt.gca()                                  
-        ax.add_patch(rect)                                       
-
+                       label = point, color = Cs[point])   
+                        
         plt.axis('off')
         plt.tight_layout()
         plt.imshow(r,cmap='gray')
-        plt.tight_layout()
+        plt.tight_layout()    
+                                
+                                  
+        if video_type != 'body':      
         
-        # plot eye region zoom as inset in upper right corner
-        pivot = np.nanmean(XYs['pupil_top_r'], axis=1)
-        x0 = int(pivot[0]) - 33
-        x1 = int(pivot[0]) + 33
-        y0 = int(pivot[1]) - 28
-        y1 = int(pivot[1]) + 38        
-        
-        axins = ax.inset_axes([0.65, 0.6, 0.5, 0.5])
-        axins.spines['bottom'].set_color('white')
-        axins.spines['top'].set_color('white') 
-        axins.spines['right'].set_color('white')
-        axins.spines['left'].set_color('white')
-        axins.imshow(r, cmap='gray', origin="lower")
-        
-        for point in XYs:# ['paw_l','paw_r']:
-            if point in ['tube_bottom', 'tube_top']:
-                continue
-         
-            # downsample; normalise number of points to be the same
-            # across all sessions
-            xs = XYs[point][0][0::ds[video_type]]
-            ys = XYs[point][1][0::ds[video_type]]
-        
-            axins.scatter(xs,ys, alpha = 0.05, s = 0.1, 
-                       label = point, color = Cs[point]) 
-        axins.set_xlim(x0, x1)
-        axins.set_ylim(y1, y0)
-        axins.set_xticklabels('')
-        axins.set_yticklabels('')
-        #ax.indicate_inset_zoom(axins, edgecolor="white")
-        
-        # plot tongue region zoom as inset in llower right corner
-        p1 = np.nanmean(XYs['tube_top'], axis=1)
-        p2 = np.nanmean(XYs['tube_bottom'], axis=1)
-        pivot = np.nanmean([p1,p2], axis=0)
-        x0 = int(pivot[0]) - 60
-        x1 = int(pivot[0]) + 100
-        y0 = int(pivot[1]) - 100
-        y1 = int(pivot[1]) + 60        
-        
-        axins = ax.inset_axes([0.65, 0.1, 0.5, 0.5])
-        axins.spines['bottom'].set_color('white')
-        axins.spines['top'].set_color('white') 
-        axins.spines['right'].set_color('white')
-        axins.spines['left'].set_color('white')
-        axins.imshow(r, cmap='gray', origin="upper")
-        
-        for point in XYs:# ['paw_l','paw_r']:
-            if point in ['tube_bottom', 'tube_top']:
-                continue 
-            # downsample; normalise number of points to be the same
-            # across all sessions
-            xs = XYs[point][0][0::ds[video_type]]
-            ys = XYs[point][1][0::ds[video_type]]
-        
-            axins.scatter(xs,ys, alpha = 0.05, s = 0.01, 
-                       label = point, color = Cs[point]) 
-        axins.set_xlim(x0, x1)
-        axins.set_ylim(y1, y0)
-        axins.set_xticklabels('')
-        axins.set_yticklabels('')
-        #ax.indicate_inset_zoom(axins, edgecolor="white")        
+            if video_type == 'left':
+                fa = 1
+            elif video_type == 'right':       
+                fa = 0.5      
+                                         
+            # plot whisker pad rectangle               
+            mloc = get_mean_positions(XYs)
+            p_nose = np.array(mloc['nose_tip'])
+            p_pupil = np.array(mloc['pupil_top_r'])    
+
+            # heuristic to find whisker area in side videos:
+            # square with side length half the distance 
+            # between nose and pupil and anchored on midpoint
+
+            p_anchor = np.mean([p_nose,p_pupil],axis=0)
+            squared_dist = np.sum((p_nose-p_pupil)**2, axis=0)
+            dist = np.sqrt(squared_dist)
+            whxy = [int(dist/2), int(dist/3), 
+                    int(p_anchor[0] - dist/4), int(p_anchor[1])]     
+            
+            rect = patches.Rectangle((whxy[2], whxy[3]), whxy[0], whxy[1], 
+                                     linewidth=1, 
+                                     edgecolor='lime',
+                                     facecolor='none')               
+            ax = plt.gca()                                  
+            ax.add_patch(rect)                                       
+
+
+            
+            # plot eye region zoom as inset in upper right corner
+            pivot = np.nanmean(XYs['pupil_top_r'], axis=1)
+            x0 = int(pivot[0] - 33 * fa)
+            x1 = int(pivot[0] + 33 * fa)
+            y0 = int(pivot[1] - 28 * fa)
+            y1 = int(pivot[1] + 38 * fa)        
+            
+            if video_type == 'right':
+                axins = ax.inset_axes([0, -0.5, 0.5, 0.5])
+            elif video_type == 'left':
+                axins = ax.inset_axes([0.5, -0.5, 0.5, 0.5])
+                
+            axins.spines['bottom'].set_color('white')
+            axins.spines['top'].set_color('white') 
+            axins.spines['right'].set_color('white')
+            axins.spines['left'].set_color('white')
+            axins.imshow(r, cmap='gray', origin="lower")
+            
+            for point in XYs:# ['paw_l','paw_r']:
+                if point in ['tube_bottom', 'tube_top']:
+                    continue
+             
+                # downsample; normalise number of points to be the same
+                # across all sessions
+                xs = XYs[point][0][0::ds[video_type]]
+                ys = XYs[point][1][0::ds[video_type]]
+            
+                axins.scatter(xs,ys, alpha = 1, s = 0.001, 
+                           label = point, color = Cs[point]) 
+            axins.set_xlim(x0, x1)
+            axins.set_ylim(y1, y0)
+            axins.set_xticklabels('')
+            axins.set_yticklabels('')
+            #ax.indicate_inset_zoom(axins, edgecolor="white")
+            
+            # plot tongue region zoom as inset in llower right corner
+            p1 = np.nanmean(XYs['tube_top'], axis=1)
+            p2 = np.nanmean(XYs['tube_bottom'], axis=1)
+            pivot = np.nanmean([p1,p2], axis=0)
+            x0 = int(pivot[0] - 60 * fa)
+            x1 = int(pivot[0] + 100 * fa)
+            y0 = int(pivot[1] - 100 * fa)
+            y1 = int(pivot[1] + 60 * fa) 
+                 
+            if video_type == 'right':
+                axins = ax.inset_axes([0.5, -0.5, 0.5, 0.5])
+            elif video_type == 'left':
+                axins = ax.inset_axes([0, -0.5, 0.5, 0.5])
+                
+            axins.spines['bottom'].set_color('white')
+            axins.spines['top'].set_color('white') 
+            axins.spines['right'].set_color('white')
+            axins.spines['left'].set_color('white')
+            axins.imshow(r, cmap='gray', origin="upper")
+            
+            for point in XYs:# ['paw_l','paw_r']:
+                if point in ['tube_bottom', 'tube_top']:
+                    continue 
+                # downsample; normalise number of points to be the same
+                # across all sessions
+                xs = XYs[point][0][0::ds[video_type]]
+                ys = XYs[point][1][0::ds[video_type]]
+            
+                axins.scatter(xs,ys, alpha = 1, s = 0.001, 
+                           label = point, color = Cs[point]) 
+            axins.set_xlim(x0, x1)
+            axins.set_ylim(y1, y0)
+            axins.set_xticklabels('')
+            axins.set_yticklabels('')
+            #ax.indicate_inset_zoom(axins, edgecolor="white")        
         
     except:
    
@@ -406,7 +425,17 @@ def plot_paw_on_image(eid, video_type='left', XYs = None):
                  fontsize=10,transform=ax.transAxes)                 
         plt.tight_layout()
     #plt.show()
-    #plt.legend(loc='lower right')    
+    plt.title(video_type)    
+
+
+def plot_paw_on_imageL(eid):
+    plot_paw_on_image(eid, video_type='left')
+    
+def plot_paw_on_imageR(eid):
+    plot_paw_on_image(eid, video_type='right')    
+    
+def plot_paw_on_imageB(eid):
+    plot_paw_on_image(eid, video_type='body')      
 
 
 def paw_speed_PSTH(eid):
@@ -1205,7 +1234,9 @@ def plot_all(eid):
     matplotlib.rcParams.update({'font.size': 10})
     # report eid =  '4a45c8ba-db6f-4f11-9403-56e06a33dfa4'
  
-    panels = {'plot_paw_on_image':plot_paw_on_image,
+    panels = {'plot_paw_on_imageL':plot_paw_on_imageL,
+            'plot_paw_on_imageR':plot_paw_on_imageR,
+            'plot_paw_on_imageB':plot_paw_on_imageB,
             'plot_wheel_position':plot_wheel_position,
             'paw_speed_PSTH':paw_speed_PSTH,
             'plot_licks':plot_licks, 
@@ -1215,11 +1246,11 @@ def plot_all(eid):
             'motion_energy_PSTH':motion_energy_PSTH}
  
     nrows = 2
-    ncols = 4
+    ncols = int(np.ceil(len(panels)/2))
 
     plt.ioff()
   
-    plt.figure(figsize=(15,10)) 
+    plt.figure(figsize=(17,10)) 
     
     k = 1
     for panel in panels:
@@ -1244,7 +1275,7 @@ def plot_all(eid):
     task = one.alyx.rest('tasks', 'list', session=eid, name='EphysDLC')[0]   
     det = one.get_details(eid, True)['extended_qc']
     p = one.path_from_eid(eid)
-    s1 = ' '.join([str(p).split('/')[i] for i in [4,6,7,8]])
+    s1 = '_'.join([str(p).split('/')[i] for i in [4,6,7,8]])
     
     dlc_qcs = [ 'time_trace_length_match',
                 'trace_all_nan',
@@ -1276,12 +1307,16 @@ def plot_all(eid):
     
     s2 = ' '.join(l)
     
+    ntrials = len(one.load_object(eid, 'trials')['goCue_times'])
     
-    plt.suptitle(s1+', DLC version: '+str(task['version'])+' \n '+s2,
+    
+    plt.suptitle(s1+'#Trials:'+str(ntrials)+', DLC version: '
+                 +str(task['version'])+' \n '+s2,
                  backgroundcolor= 'white', fontsize=6)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])               
     #plt.savefig(f'/home/mic/reproducible_dlc/overviewJune/{eid}.png')
-    plt.savefig(f'/home/mic/reproducible_dlc/all_DLC/{eid}.png')
+    #plt.savefig(f'/home/mic/reproducible_dlc/all_DLC/{s1}_{eid}.png')
+    plt.savefig(f'/home/mic/reproducible_dlc/repro/{s1}_{eid}.png')    
     plt.close()
     
 
@@ -1307,16 +1342,5 @@ def inspection():
         input("Press Enter to continue...")
         plt.close()
         
-        
-def get_all_sess_with_ME():
-    one = ONE()
-    # get all bwm sessions with dlc
-    all_sess = one.alyx.rest('sessions', 'list', 
-                              project='ibl_neuropixel_brainwide_01',
-                              task_protocol="ephys", 
-                              dataset_types='camera.ROIMotionEnergy')
-
-    eids = [s['url'].split('/')[-1] for s in all_sess]
-    
-    return eids          
+             
         
