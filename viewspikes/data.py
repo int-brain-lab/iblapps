@@ -53,7 +53,7 @@ def get_spikes(dsets, one):
     return spikes, clusters, channels
 
 
-def stream(pid, t, one=None, cache=True, dsets=None, typ='ap'):
+def stream(pid, t, one=None, cache=True, dsets=None, typ='ap', tlen=1):
     """
     NB: returned Reader object must be closed after use
     :param pid: Probe UUID
@@ -62,9 +62,10 @@ def stream(pid, t, one=None, cache=True, dsets=None, typ='ap'):
     :param cache:
     :param dsets:
     :param typ: 'ap' or 'lf'
+    :param tlen: no. of seconds to stream
     :return: sr, dsets, t0
     """
-    tlen = 1
+
     assert one
     assert typ in ['lf', 'ap']
     t0 = np.floor(t / CHUNK_DURATION_SECS) * CHUNK_DURATION_SECS
