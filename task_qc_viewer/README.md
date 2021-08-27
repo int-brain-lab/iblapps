@@ -10,13 +10,13 @@ Needs the iblenv installed properly. Follow this guide for setup: https://github
 ## Usage: command line
 If on the server PC, activate the environment by typing:
 ```
-iblscripts
+conda activate iblenv
 ```
 Otherwise, activate the iblenv as described in the guide above.
 
 Go into the iblapps directory that you cloned:
 ```
-cd /home/olivier/Documents/PYTHON/iblapps/task_qc_viewer
+cd ~/Documents/PYTHON/iblapps/task_qc_viewer
 git checkout develop
 git pull
 ```
