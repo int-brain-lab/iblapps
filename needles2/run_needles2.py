@@ -215,6 +215,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.coverage.ctrl.set_value(y, 'y')
         self.coverage.update_view()
 
+    def add_volume_layer(self, volume, name, cmap='viridis', opacity=0.8, levels=None,
+                         bc=None):
+        self.coronal.ctrl.add_volume_layer(volume, name=name, cmap=cmap, opacity=opacity,
+                                           levels=levels, bc=bc)
+        self.sagittal.ctrl.add_volume_layer(volume, name=name, cmap=cmap, opacity=opacity,
+                                            levels=levels, bc=bc)
+        self.horizontal.ctrl.add_volume_layer(volume, name=name, cmap=cmap, opacity=opacity,
+                                              levels=levels, bc=bc)
+
+    def remove_volume_layer(self, name):
+        self.coronal.ctrl.remove_image_layer(name)
+        self.sagittal.ctrl.remove_image_layer(name)
+        self.horizontal.ctrl.remove_image_layer(name)
+
     def add_insertion_by_id(self, ins_id):
         traj, ins = self.probe_model.insertion_by_id(ins_id)
         self.add_extra_coverage(traj, ins)
@@ -1091,3 +1105,5 @@ def view(title=None, lazy=False):
 # self.la2.initialize(self.plt)
 # self.la2.reveal_regions(0)
 # self.frame.setLayout(self.vl)
+
+

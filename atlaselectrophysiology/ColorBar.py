@@ -2,11 +2,12 @@ from PyQt5 import QtCore, QtGui
 import pyqtgraph as pg
 import matplotlib
 import numpy as np
+from pyqtgraph.functions import makeARGB
 
 
 class ColorBar(pg.GraphicsWidget):
 
-    def __init__(self, cmap_name, cbin=256, parent=None):
+    def __init__(self, cmap_name, cbin=256, parent=None, data=None):
         pg.GraphicsWidget.__init__(self)
 
         # Create colour map from matplotlib colourmap name
@@ -22,6 +23,13 @@ class ColorBar(pg.GraphicsWidget):
         self.map = pg.ColorMap(positions, colors)
         self.lut = self.map.getLookupTable()
         self.grad = self.map.getGradient()
+
+    def getBrush(self, data, levels=None):
+        if levels is None:
+            levels = [np.min(data), np.max(data)]
+        brush_rgb, _ = makeARGB(data[:, np.newaxis], levels=levels, lut=self.lut, useRGBA=True)
+        brush = [QtGui.QColor(*col) for col in np.squeeze(brush_rgb)]
+        return brush
 
     def getColourMap(self):
         return self.lut

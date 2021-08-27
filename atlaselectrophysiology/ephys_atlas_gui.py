@@ -202,6 +202,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if height:
             axis.setHeight(height)
 
+    def set_lims(self, min, max):
+        self.probe_tip = min
+        self.probe_top = max
+
+        [top_line.setY(self.probe_top) for top_line in self.probe_top_lines]
+        [tip_line.setY(self.probe_tip) for tip_line in self.probe_tip_lines]
+
     def populate_lists(self, data, list_name, combobox):
         """
         Populate drop down lists with subject/session/alignment options
@@ -948,6 +955,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             self.img_plots = []
             self.img_cbars = []
+
             size = data['size'].tolist()
             symbol = data['symbol'].tolist()
 
@@ -962,8 +970,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 plot = pg.ScatterPlotItem()
                 plot.setData(x=data['x'], y=data['y'],
                              symbol=symbol, size=size, brush=brush, pen=data['pen'])
+
             else:
-                brush = color_bar.map.mapToQColor(data['colours'])
+                brush = color_bar.getBrush(data['colours'],
+                                           levels=[data['levels'][0], data['levels'][1]])
                 plot = pg.ScatterPlotItem()
                 plot.setData(x=data['x'], y=data['y'],
                              symbol=symbol, size=size, brush=brush, pen=data['pen'])
@@ -1139,6 +1149,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.prev_alignments, self.histology_exists = self.loaddata.get_info(0)
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
+        # For IBL case at the moment we only using single shank
+        self.current_shank_idx = 0
 
     def on_session_selected(self, idx):
         """
@@ -1158,7 +1170,19 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.data_status = False
         folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
         self.folder_line.setText(str(folder_path))
-        self.prev_alignments = self.loaddata.get_info(folder_path)
+        self.prev_alignments, shank_options = self.loaddata.get_info(folder_path)
+        self.populate_lists(shank_options, self.shank_list, self.shank_combobox)
+        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        self.on_shank_selected(0)
+
+    def on_shank_selected(self, idx):
+        """
+        Triggered in offline mode for selecting shank when using NP2.0
+        """
+        self.data_status = False
+        self.current_shank_idx = idx
+        # Update prev_alignments
+        self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
         self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
@@ -1225,7 +1249,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # If we have not loaded in the data before then we load eveything we need
         if not self.data_status:
-            self.plotdata = pd.PlotData(self.probe_path, ephys_path, alf_path)
+            self.plotdata = pd.PlotData(self.alf_path, ephys_path, self.current_shank_idx)
+            self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
             self.scat_drift_data = self.plotdata.get_depth_data_scatter()
             (self.scat_fr_data, self.scat_p2t_data,
              self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
@@ -1246,8 +1271,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 self.slice_data = {}
 
             self.data_status = True
-
             self.init_menubar()
+        else:
+            self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
 
         # Initialise checked plots
         self.img_init.setChecked(True)
