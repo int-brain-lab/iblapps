@@ -84,30 +84,14 @@
      </rect>
     </property>
    </widget>
-   <widget class="QLabel" name="per_title_label">
+   <widget class="QWidget" name="layer_placeholder" native="true">
     <property name="geometry">
      <rect>
-      <x>20</x>
-      <y>530</y>
-      <width>101</width>
-      <height>16</height>
+      <x>10</x>
+      <y>520</y>
+      <width>321</width>
+      <height>241</height>
      </rect>
-    </property>
-    <property name="text">
-     <string>Coverage increase</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="per_label">
-    <property name="geometry">
-     <rect>
-      <x>130</x>
-      <y>530</y>
-      <width>47</width>
-      <height>13</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string/>
     </property>
    </widget>
   </widget>
