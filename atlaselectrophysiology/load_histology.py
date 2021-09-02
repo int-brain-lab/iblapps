@@ -3,7 +3,7 @@ from pathlib import Path
 import requests
 import re
 from one import params
-from oneibl.webclient import http_download_file
+from one.webclient import http_download_file
 import SimpleITK as sitk
 
 

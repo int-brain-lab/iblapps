@@ -222,10 +222,37 @@ class LoadData:
         :type: str
         """
 
-        if self.spike_collection:
-            collection = f'alf/{self.probe_label}/{self.spike_collection}'
-        else:
+        self.sess_path = self.one.eid2path(self.eid)
+
+        # THIS IS STUPID
+        if self.spike_collection == '':
             collection = f'alf/{self.probe_label}'
+            probe_path = Path(self.sess_path, 'alf', self.probe_label)
+        elif self.spike_collection:
+            collection = f'alf/{self.probe_label}/{self.spike_collection}'
+            probe_path = Path(self.sess_path, 'alf', self.probe_label, self.spike_collection)
+        else:
+            # For now keep kilosort as default, but look for pykilosort if it exists
+            # Set to default and overwrite it pykilosort is present
+            collection = None
+            probe_path = None
+            # Find all collections
+            all_collections = self.one.list_collections(self.eid)
+
+            # I'm sure there is a nicer way to do this!
+            # First look for spikesorting in alf/probexx
+            for coll in all_collections:
+                if coll == f'alf/{self.probe_label}':
+                    collection = f'alf/{self.probe_label}'
+                    probe_path = Path(self.sess_path, 'alf', self.probe_label)
+                    break
+            # If it doesn't exist then look in pykilosort forlder
+            if not collection:
+                for coll in all_collections:
+                    if coll == f'alf/{self.probe_label}/pykilosort':
+                        collection = f'alf/{self.probe_label}/pykilosort'
+                        probe_path = Path(self.sess_path, 'alf', self.probe_label, 'pykilosort')
+                        break
 
         try:
             _ = self.one.load_object(self.eid, 'spikes', collection=collection,
@@ -277,16 +304,10 @@ class LoadData:
         print(self.probe_label)
         print(self.date)
         print(self.eid)
+        print(collection)
 
         _ = self.one.load_datasets(self.eid, datasets=dtypes, collections=collections,
                                    download_only=True, assert_present=False)
-
-        self.sess_path = self.one.eid2path(self.eid)
-
-        if self.spike_collection:
-            probe_path = Path(self.sess_path, 'alf', self.probe_label, self.spike_collection)
-        else:
-            probe_path = Path(self.sess_path, 'alf', self.probe_label)
 
         ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
         alf_path = Path(self.sess_path, 'alf')
