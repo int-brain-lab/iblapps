@@ -245,10 +245,16 @@ class ProbeModel:
     def get_brain_regions(self, traj, ins=None, mapping='Allen'):
         depths = SITES_COORDINATES[:, 1]
         xyz_channels = self.get_channels(traj, ins=ins, depths=depths)
-        (region, region_label,
-         region_colour, _) = EphysAlignment.get_histology_regions(xyz_channels, depths,
-                                                                  brain_atlas=self.ba,
-                                                                  mapping=mapping)
+        region_ids = self.ba.get_labels(xyz_channels, mapping=mapping)
+        if all(region_ids == 0):
+            region = [[0, 3840]]
+            region_label = [[3840/2, 'VOID']]
+            region_colour = [[0, 0, 0]]
+        else:
+            (region, region_label,
+             region_colour, _) = EphysAlignment.get_histology_regions(xyz_channels, depths,
+                                                                      brain_atlas=self.ba,
+                                                                      mapping=mapping)
         return region, region_label, region_colour
 
 

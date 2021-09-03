@@ -7,19 +7,19 @@
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>82</height>
+    <height>300</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <widget class="QListWidget" name="layer_list">
+  <widget class="QTableView" name="tableview">
    <property name="geometry">
     <rect>
-     <x>20</x>
-     <y>20</y>
-     <width>341</width>
-     <height>41</height>
+     <x>10</x>
+     <y>10</y>
+     <width>321</width>
+     <height>271</height>
     </rect>
    </property>
   </widget>
