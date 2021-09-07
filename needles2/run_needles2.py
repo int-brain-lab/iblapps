@@ -107,9 +107,9 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.region)
         self.region_placeholder.setLayout(layout)
 
-        self.load_first_pass_map()
         self.add_insertions()
         self.add_coverage()
+        self.load_first_pass_map()
         self.layers.initialise_table()
 
 
@@ -150,8 +150,8 @@ class MainWindow(QtWidgets.QMainWindow):
             bin_size = int(coverage_choice[-3:])
             cov, bc = self.probe_model.grid_coverage(all_channels, bin_size)
         else:
-            dist = int(coverage_choice[-3:])
-            cov = self.probe_model.report_coverage(self.provenance, dist)
+            self.dist = int(coverage_choice[-3:])
+            cov = self.probe_model.report_coverage(self.provenance, self.dist)
             bc = None
 
         self.add_volume_layer(cov, 'coverage', bc=bc)
@@ -180,7 +180,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if self.table.ctrl.model.rowCount() > 0:
             cov, _ = self.probe_model.compute_coverage(self.table.ctrl.model.to_dict(),
-                                                       dist_fcn=[250, 251])
+                                                       dist_fcn=[self.dist, self.dist + 1])
             self.add_volume_layer(cov, name='planned_insertions', cmap='Purples', levels=(0, 1))
             self.top.ctrl.set_scatter_layer('planned_insertions',
                                             x=self.table.ctrl.model.arraydata.x.values / 1e6,
@@ -420,7 +420,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.first_pass_map['provenance'] = 'Planned'
 
         cov, _ = self.probe_model.compute_coverage(self.first_pass_map.to_dict(orient='records'),
-                                                   dist_fcn=[250, 251])
+                                                   dist_fcn=[self.dist, self.dist + 1])
         self.add_volume_layer(cov, name='first_pass', cmap='YlGnBu', levels=(0, 1))
         self.top.ctrl.set_scatter_layer('first_pass', x=self.first_pass_map.x.values / 1e6,
                                         y=self.first_pass_map.y.values / 1e6)
