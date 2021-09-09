@@ -379,6 +379,19 @@
     <string>Add</string>
    </property>
   </widget>
+  <widget class="QLabel" name="coverage_label">
+   <property name="geometry">
+    <rect>
+     <x>170</x>
+     <y>180</y>
+     <width>121</width>
+     <height>30</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Coverage:</string>
+   </property>
+  </widget>
  </widget>
  <resources/>
  <connections/>

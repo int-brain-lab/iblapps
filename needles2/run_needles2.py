@@ -8,11 +8,14 @@ from PyQt5.QtGui import QTransform
 import pyqtgraph as pg
 import matplotlib
 
-from ibllib.atlas import AllenAtlas, regions
+from ibllib.atlas import AllenAtlas
+from ibllib.atlas.regions import BrainRegions
+from iblutil.numerical import ismember
 import qt
 
 from one.api import ONE
 from needles2.probe_model import ProbeModel
+import copy
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -38,7 +41,7 @@ class MainWindow(QtWidgets.QMainWindow):
         uic.loadUi(Path(__file__).parent.joinpath('mainUI.ui'), self)
 
         self.atlas = AllenAtlas(25)
-        one = ONE()
+        one = ONE(mode='local')
 
         # Configure the Menu bar
         menu_bar = QtWidgets.QMenuBar(self)
@@ -109,8 +112,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.add_insertions()
         self.add_coverage()
-        self.load_first_pass_map()
+        # self.load_first_pass_map()
+        self.missing_coverage()
+        #self.load_second_pass_volume()
         self.layers.initialise_table()
+
+    def missing_coverage(self):
+        # get the coverage volume layer from the coverage
+        cov = self.coronal.ctrl.get_image_layer('coverage').slice_kwargs['region_values']
+        second_pass = self.load_second_pass_volume()
+        second_pass[cov >= 1] = np.nan
+        self.ixyz_second = np.where(~np.isnan(second_pass.flatten()))[0]
+        self.add_volume_layer(second_pass, name='missing', cmap='Reds', levels=(0, 1))
+
 
 
     def change_mapping(self):
@@ -195,6 +209,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.ctrl.set_scatter_layer('selected_insertion')
         self._refresh()
         self.layers.update_table('planned_insertions')
+        self.coverage_increase()
 
 
     def add_trajectory(self, x, y):
@@ -239,6 +254,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.provenance = 'Best'
         else:
             if not 'traj' in self.probe_model.traj[provenance].keys():
+
                 self.probe_model.get_traj_for_provenance(provenance)
             self.provenance = provenance
 
@@ -272,7 +288,8 @@ class MainWindow(QtWidgets.QMainWindow):
             traj, mapping=self.get_mapping())
         self.probe.plot_region_along_probe(region, region_lab, region_col)
 
-        cov, xyz_cnt = self.probe_model.compute_coverage([traj], limit=False)
+        cov, xyz_cnt = self.probe_model.compute_coverage([traj], limit=False,
+                                                         dist_fcn=[self.dist, self.dist + 1])
         self.add_volume_layer(cov, name='selected_insertion', cmap='Wistia')
 
         self.refresh_slices('horizontal', 'x', xyz_cnt[1])
@@ -410,7 +427,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._refresh_sagittal()
 
     def load_first_pass_map(self):
-        first_pass_map_path=r'C:\Users\Mayo\iblenv\ibllib-matlab\needles\maps\first_pass_map.csv'
+        first_pass_map_path = r'C:\Users\Mayo\iblenv\ibllib-matlab\needles\maps\first_pass_map.csv'
         self.first_pass_map = pd.read_csv(first_pass_map_path)
         self.first_pass_map = self.first_pass_map.rename(columns={'ml_um': 'x', 'ap_um': 'y',
                                                                   'dv_um': 'z',
@@ -425,6 +442,94 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.ctrl.set_scatter_layer('first_pass', x=self.first_pass_map.x.values / 1e6,
                                         y=self.first_pass_map.y.values / 1e6)
 
+    def load_second_pass_volume(self):
+
+
+
+        #r = BrainRegions()
+        #_brain_id = r.get(ids=r.id)
+        #all_levels = {}
+        #all_acro = {}
+        #level = 10
+        #while level > 0:
+        #    brain_regions = r.get(ids=_brain_id['id'])
+        #    level = np.nanmax(brain_regions.level).astype(int)
+        #    all_levels[f'level_{level}'] = brain_regions['id']
+        #    idx = np.where(brain_regions['level'] == level)[0]
+        #    # urgh need to copy
+        #    _brain_id = copy.deepcopy(brain_regions)
+        #    _brain_id['id'][idx] = _brain_id['parent'][idx]
+
+        flat_ind = np.arange(self.probe_model.ba.image.shape[0] *
+                             self.probe_model.ba.image.shape[1] *
+                             self.probe_model.ba.image.shape[2])
+        ixyz = np.unravel_index(flat_ind,
+                                shape=(self.probe_model.ba.image.shape[0],
+                                       self.probe_model.ba.image.shape[1],
+                                       self.probe_model.ba.image.shape[2]))
+        ixyz = (np.c_[ixyz[1], ixyz[0], ixyz[2]])
+        xyz = self.probe_model.ba.bc.i2xyz(ixyz.astype(np.float))
+
+        ra = self.probe_model.ba.label.flatten().astype(np.float64)
+        flat = np.zeros_like(ra)
+
+        # because
+        rh = int((np.max(ra) + 1) / 2)
+        t = np.where(ra >= rh)
+        #t = np.bitwise_and(ra >= rh, xyz[:, 1] > -5000 / 1e6)
+        flat[t] = 1
+
+
+        #rh = int((np.max(ra) + 1) / 2)
+        #t = np.where(ra >= rh)
+        #t = np.bitwise_and(ra < rh, xyz[:, 1] <= -5000 / 1e6)
+        #flat[t] = 1
+
+        # Adjust for cerebellum
+        #id_int = -512
+        #lev = int(r.level[r.id == id_int][0])
+        #vals = np.where(all_levels[f'level_{lev}'] == id_int)[0]
+        #t, _ = ismember(ra, vals)
+        #flat[t] = 0
+#
+        #id_int = 512
+        #lev = int(r.level[r.id == id_int][0])
+        #vals = np.where(all_levels[f'level_{lev}'] == id_int)[0]
+        #t, _ = ismember(ra, vals)
+        #flat[t] = 1
+
+        flat[ra == 0] = 0
+        reg_volume2 = flat.reshape(self.probe_model.ba.image.shape[0],
+                                   self.probe_model.ba.image.shape[1],
+                                   self.probe_model.ba.image.shape[2]).astype(np.float32)
+        reg_volume2[reg_volume2 == 0] = np.nan
+        # self.add_volume_layer(reg_volume2, name='second_pass', cmap='Reds', levels=(0, 1))
+
+        return reg_volume2
+
+    def coverage_increase(self):
+        # need to compare the
+        # find the voxels that are in the bad
+
+        # need to sum the additional coverage plus the new coverage
+        # additional coverage
+        layer = None
+        layer_planned = self.coronal.ctrl.get_image_layer('planned_insertions')
+        if layer_planned is not None:
+            layer = copy.deepcopy(layer_planned.slice_kwargs['region_values'])
+            # layer = (layer_planned.slice_kwargs['region_values'])
+        layer_active = self.coronal.ctrl.get_image_layer('selected_insertion')
+        if layer_active is not None:
+            if layer is not None:
+                layer += copy.deepcopy(layer_active.slice_kwargs['region_values'])
+            else:
+                layer = copy.deepcopy(layer_active.slice_kwargs['region_values'])
+
+        if layer is not None:
+            la = layer.flatten()
+            bla = la[self.ixyz_second]
+            per = (np.where(bla > 0)[0].shape[0] / self.ixyz_second.shape[0]) * 100
+            self.coverage.coverage_label.setText(f'{np.round(per, 2)} %')
 
 
 class LayersView(QtWidgets.QWidget):
@@ -581,6 +686,7 @@ class CoverageView(QtWidgets.QWidget):
     def update_view(self):
         self.update_labels()
         self.qmain.add_extra_coverage(self.ctrl.model.get_traj())
+        self.qmain.coverage_increase()
 
     def set_values(self):
         self.ctrl.set_value(int(self.x_label.text()), 'x')
@@ -1020,8 +1126,11 @@ class BaseController:
         if not name:
             return self.image_layers[0]
         else:
-            im_idx = np.where([im.name == name for im in self.image_layers])[0][0]
-            return self.image_layers[im_idx]
+            im_idx = np.where([im.name == name for im in self.image_layers])[0]
+            if len(im_idx) == 1:
+                return self.image_layers[im_idx[0]]
+            else:
+                return None
 
     def toggle_image_layer(self, name, checked=True):
         layer = self.get_image_layer(name=name)
@@ -1067,8 +1176,12 @@ class TopController(BaseController):
         if not name:
             return self.scatter_layers[0]
         else:
-            sc_idx = np.where([sc.name == name for sc in self.scatter_layers])[0][0]
-            return self.scatter_layers[sc_idx]
+            sc_idx = np.where([sc.name == name for sc in self.scatter_layers])[0]
+            if len(sc_idx) == 1:
+                return self.scatter_layers[sc_idx[0]]
+            else:
+                return None
+
 
     def add_scatter(self, idx=None, **kwargs):
         """
@@ -1094,10 +1207,11 @@ class TopController(BaseController):
 
     def toggle_scatter_layer(self, name, checked=True):
         layer = self.get_scatter_layer(name=name)
-        if checked:
-            self.fig.addItem(layer.scatter_item)
-        else:
-            self.fig.removeItem(layer.scatter_item)
+        if layer:
+            if checked:
+                self.fig.addItem(layer.scatter_item)
+            else:
+                self.fig.removeItem(layer.scatter_item)
 
 
 

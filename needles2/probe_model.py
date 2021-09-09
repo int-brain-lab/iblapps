@@ -66,11 +66,54 @@ class ProbeModel:
 
         django_base = ['probe_insertion__session__project__name__icontains,'
                        'ibl_neuropixel_brainwide_01']
+        django = ['probe_insertion__session__qc__lt,50',
+                  '~probe_insertion__json__qc,CRITICAL',
+                  'probe_insertion__json__extended_qc__tracing_exists,True',
+                  'probe_insertion__session__extended_qc__behavior,1']
+
+        #task_qc_chek = ['audio_pre_trial',
+        #                'correct_trial_event_sequence',
+        #                'error_trial_event_sequence',
+        #                'n_trial_events',
+        #                'response_feedback_delays',
+        #                'reward_volume_set',
+        #                'reward_volumes',
+        #                'stimOn_goCue_delays',
+        #                'stimulus_move_before_goCue',
+        #                'wheel_move_before_feedback',
+        #                'wheel_freeze_during_quiescence'
+        #                ]
+#
+        #threshold = 0.95
+        #str_queries = ''
+        #for i_task in task_qc_chek:
+        #    str_append = f'probe_insertion__session__extended_qc___task_{i_task}__gte,{threshold},'
+        #    str_queries = str_queries + str_append
+#
+        #str_queries = [str_queries[:-1]]
+
         django_str = ','.join(django_base + django)
 
         self.traj[prov_dict]['traj'] = np.array(self.one.alyx.rest('trajectories', 'list',
                                                                    provenance=provenance,
                                                                    django=django_str))
+
+        start = time.time()
+        for ip, p in enumerate(self.traj[prov_dict]['traj']):
+           if p['x'] < 0:
+               continue
+           elif p['y'] < -4400:
+               self.traj[prov_dict]['traj'][ip]['x'] = -1 * p['x']
+               if p['phi'] == 180:
+                   self.traj[prov_dict]['traj'][ip]['phi'] = 0
+               else:
+                   self.traj[prov_dict]['traj'][ip]['phi'] = 180
+
+        end = time.time()
+        print('this time')
+        print(end-start)
+
+
         ins_ids, x, y = zip(*[self.get_traj_info(traj) for traj in self.traj[prov_dict]['traj']])
         self.traj[prov_dict]['ins'] = np.array(ins_ids)
         self.traj[prov_dict]['x'] = np.array(x)
@@ -87,7 +130,6 @@ class ProbeModel:
 
         end = time.time()
         print(end-start)
-
 
     def compute_best_for_provenance(self, provenance='Histology track'):
         val = PROV_2_VAL[provenance]
