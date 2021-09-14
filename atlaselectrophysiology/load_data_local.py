@@ -10,7 +10,7 @@ from one.api import ONE
 
 class LoadDataLocal:
     def __init__(self):
-        ONE(silent=True)
+        ONE(silent=True, password='international')
         self.brain_atlas = atlas.AllenAtlas(25)
         self.folder_path = []
         self.chn_coords = []
