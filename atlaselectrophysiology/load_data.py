@@ -29,6 +29,7 @@ class LoadData:
             self.probe_id = probe_id
             self.chn_coords = SITES_COORDINATES
             self.chn_depths = SITES_COORDINATES[:, 1]
+            self.probe_collection = None
         else:
             self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
             self.chn_coords = None
@@ -226,45 +227,34 @@ class LoadData:
 
         # THIS IS STUPID
         if self.spike_collection == '':
-            collection = f'alf/{self.probe_label}'
+            self.probe_collection = f'alf/{self.probe_label}'
             probe_path = Path(self.sess_path, 'alf', self.probe_label)
         elif self.spike_collection:
-            collection = f'alf/{self.probe_label}/{self.spike_collection}'
+            self.probe_collection = f'alf/{self.probe_label}/{self.spike_collection}'
             probe_path = Path(self.sess_path, 'alf', self.probe_label, self.spike_collection)
         else:
-            # For now keep kilosort as default, but look for pykilosort if it exists
-            # Set to default and overwrite it pykilosort is present
-            collection = None
-            probe_path = None
+            # Pykilosort is default, if not present look for normal kilosort
             # Find all collections
             all_collections = self.one.list_collections(self.eid)
 
-            # I'm sure there is a nicer way to do this!
-            # First look for spikesorting in alf/probexx
-            for coll in all_collections:
-                if coll == f'alf/{self.probe_label}':
-                    collection = f'alf/{self.probe_label}'
-                    probe_path = Path(self.sess_path, 'alf', self.probe_label)
-                    break
-            # If it doesn't exist then look in pykilosort forlder
-            if not collection:
-                for coll in all_collections:
-                    if coll == f'alf/{self.probe_label}/pykilosort':
-                        collection = f'alf/{self.probe_label}/pykilosort'
-                        probe_path = Path(self.sess_path, 'alf', self.probe_label, 'pykilosort')
-                        break
+            if f'alf/{self.probe_label}/pykilosort' in all_collections:
+                self.probe_collection = f'alf/{self.probe_label}/pykilosort'
+                probe_path = Path(self.sess_path, 'alf', self.probe_label, 'pykilosort')
+            else:
+                self.probe_collection = f'alf/{self.probe_label}'
+                probe_path = Path(self.sess_path, 'alf', self.probe_label)
 
         try:
-            _ = self.one.load_object(self.eid, 'spikes', collection=collection,
+            _ = self.one.load_object(self.eid, 'spikes', collection=self.probe_collection,
                                      attribute=['depths', 'amps', 'times', 'clusters'],
                                      download_only=True)
 
-            _ = self.one.load_object(self.eid, 'clusters', collection=collection,
+            _ = self.one.load_object(self.eid, 'clusters', collection=self.probe_collection,
                                      attribute=['metrics', 'peakToTrough', 'waveforms',
                                                 'channels'],
                                      download_only=True)
 
-            _ = self.one.load_object(self.eid, 'channels', collection=collection,
+            _ = self.one.load_object(self.eid, 'channels', collection=self.probe_collection,
                                      attribute=['rawInd', 'localCoordinates'], download_only=True)
         except alf.exceptions.ALFObjectNotFound:
             logger.error(f'Could not load spike sorting for probe insertion {self.probe_id}, GUI'
@@ -304,7 +294,7 @@ class LoadData:
         print(self.probe_label)
         print(self.date)
         print(self.eid)
-        print(collection)
+        print(self.probe_collection)
 
         _ = self.one.load_datasets(self.eid, datasets=dtypes, collections=collections,
                                    download_only=True, assert_present=False)
@@ -496,9 +486,11 @@ class LoadData:
 
     def update_qc(self, upload_alyx=True, upload_flatiron=True):
         # if resolved just update the alignment_number
-        align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas)
+        align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas,
+                               collection=self.probe_collection)
         align_qc.load_data(prev_alignments=self.alignments, xyz_picks=self.xyz_picks,
-                           depths=self.chn_depths, cluster_chns=self.cluster_chns)
+                           depths=self.chn_depths, cluster_chns=self.cluster_chns,
+                           chn_coords=self.chn_coords)
         results = align_qc.run(update=True, upload_alyx=upload_alyx,
                                upload_flatiron=upload_flatiron)
         align_qc.update_experimenter_evaluation(prev_alignments=self.alignments)

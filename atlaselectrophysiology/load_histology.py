@@ -11,6 +11,8 @@ def download_histology_data(subject, lab):
 
     if lab == 'hoferlab':
         lab_temp = 'mrsicflogellab'
+    elif lab == 'churchlandlab_ucla':
+        lab_temp = 'churchlandlab'
     else:
         lab_temp = lab
 
