@@ -61,7 +61,7 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
     raw_files = glob.glob(os.path.join(ephys_file_dir, '*ap.*bin'))
     raw_file = [raw_files[0]] if raw_files else None
 
-    # TODO download ephys meta-data, and extract TemplateController input arg params
+
 
     # Launch phy #
     # -------------------- #
