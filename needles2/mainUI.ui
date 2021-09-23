@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1521</width>
+    <width>1896</width>
     <height>917</height>
    </rect>
   </property>
@@ -93,10 +93,10 @@
    <widget class="QTableView" name="tableview">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>580</y>
-      <width>321</width>
-      <height>271</height>
+      <x>1530</x>
+      <y>60</y>
+      <width>351</width>
+      <height>781</height>
      </rect>
     </property>
     <attribute name="horizontalHeaderDefaultSectionSize">
@@ -116,9 +116,9 @@
    <widget class="QPushButton" name="delete_button">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>850</y>
-      <width>75</width>
+      <x>1530</x>
+      <y>20</y>
+      <width>121</width>
       <height>23</height>
      </rect>
     </property>
@@ -132,7 +132,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1521</width>
+     <width>1896</width>
      <height>21</height>
     </rect>
    </property>

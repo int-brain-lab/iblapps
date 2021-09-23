@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>320</width>
-    <height>210</height>
+    <height>255</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -382,9 +382,9 @@
   <widget class="QLabel" name="coverage_label">
    <property name="geometry">
     <rect>
-     <x>170</x>
-     <y>180</y>
-     <width>121</width>
+     <x>20</x>
+     <y>210</y>
+     <width>271</width>
      <height>30</height>
     </rect>
    </property>

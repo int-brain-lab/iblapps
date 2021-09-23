@@ -112,19 +112,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.add_insertions()
         self.add_coverage()
-        # self.load_first_pass_map()
         self.missing_coverage()
-        #self.load_second_pass_volume()
+        self.coverage_increase()
         self.layers.initialise_table()
 
     def missing_coverage(self):
         # get the coverage volume layer from the coverage
         cov = self.coronal.ctrl.get_image_layer('coverage').slice_kwargs['region_values']
-        second_pass = self.load_second_pass_volume()
-        second_pass[cov >= 1] = np.nan
-        self.ixyz_second = np.where(~np.isnan(second_pass.flatten()))[0]
-        self.add_volume_layer(second_pass, name='missing', cmap='Reds', levels=(0, 1))
-
+        self.second_pass = self.load_second_pass_volume()
+        self.second_pass_missing = np.copy(self.second_pass)
+        self.second_pass_missing[cov >= 1] = np.nan
+        self.ixyz_second = np.where(~np.isnan(self.second_pass.flatten()))[0]
+        self.ixyz_second_missing = np.where(~np.isnan(self.second_pass_missing.flatten()))[0]
+        self.add_volume_layer(self.second_pass_missing, name='missing', cmap='Reds', levels=(0, 1))
 
 
     def change_mapping(self):
@@ -444,22 +444,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def load_second_pass_volume(self):
 
-
-
-        #r = BrainRegions()
-        #_brain_id = r.get(ids=r.id)
-        #all_levels = {}
-        #all_acro = {}
-        #level = 10
-        #while level > 0:
-        #    brain_regions = r.get(ids=_brain_id['id'])
-        #    level = np.nanmax(brain_regions.level).astype(int)
-        #    all_levels[f'level_{level}'] = brain_regions['id']
-        #    idx = np.where(brain_regions['level'] == level)[0]
-        #    # urgh need to copy
-        #    _brain_id = copy.deepcopy(brain_regions)
-        #    _brain_id['id'][idx] = _brain_id['parent'][idx]
-
         flat_ind = np.arange(self.probe_model.ba.image.shape[0] *
                              self.probe_model.ba.image.shape[1] *
                              self.probe_model.ba.image.shape[2])
@@ -476,60 +460,50 @@ class MainWindow(QtWidgets.QMainWindow):
         # because
         rh = int((np.max(ra) + 1) / 2)
         t = np.where(ra >= rh)
-        #t = np.bitwise_and(ra >= rh, xyz[:, 1] > -5000 / 1e6)
         flat[t] = 1
-
-
-        #rh = int((np.max(ra) + 1) / 2)
-        #t = np.where(ra >= rh)
-        #t = np.bitwise_and(ra < rh, xyz[:, 1] <= -5000 / 1e6)
-        #flat[t] = 1
-
-        # Adjust for cerebellum
-        #id_int = -512
-        #lev = int(r.level[r.id == id_int][0])
-        #vals = np.where(all_levels[f'level_{lev}'] == id_int)[0]
-        #t, _ = ismember(ra, vals)
-        #flat[t] = 0
-#
-        #id_int = 512
-        #lev = int(r.level[r.id == id_int][0])
-        #vals = np.where(all_levels[f'level_{lev}'] == id_int)[0]
-        #t, _ = ismember(ra, vals)
-        #flat[t] = 1
-
         flat[ra == 0] = 0
         reg_volume2 = flat.reshape(self.probe_model.ba.image.shape[0],
                                    self.probe_model.ba.image.shape[1],
                                    self.probe_model.ba.image.shape[2]).astype(np.float32)
         reg_volume2[reg_volume2 == 0] = np.nan
-        # self.add_volume_layer(reg_volume2, name='second_pass', cmap='Reds', levels=(0, 1))
 
         return reg_volume2
 
     def coverage_increase(self):
-        # need to compare the
-        # find the voxels that are in the bad
 
-        # need to sum the additional coverage plus the new coverage
-        # additional coverage
         layer = None
         layer_planned = self.coronal.ctrl.get_image_layer('planned_insertions')
         if layer_planned is not None:
-            layer = copy.deepcopy(layer_planned.slice_kwargs['region_values'])
+            layer = (copy.deepcopy(layer_planned.slice_kwargs['region_values']) * 2)
             # layer = (layer_planned.slice_kwargs['region_values'])
         layer_active = self.coronal.ctrl.get_image_layer('selected_insertion')
         if layer_active is not None:
             if layer is not None:
-                layer += copy.deepcopy(layer_active.slice_kwargs['region_values'])
+                layer += (copy.deepcopy(layer_active.slice_kwargs['region_values']) * 2)
             else:
-                layer = copy.deepcopy(layer_active.slice_kwargs['region_values'])
+                layer = (copy.deepcopy(layer_active.slice_kwargs['region_values']) * 2)
 
+        layer_covered = self.coronal.ctrl.get_image_layer('coverage')
+        if layer_covered is not None:
+            if layer is not None:
+                layer += copy.deepcopy(layer_covered.slice_kwargs['region_values'])
+            else:
+                layer = copy.deepcopy(layer_covered.slice_kwargs['region_values'])
+
+        self.layer_val = layer
         if layer is not None:
             la = layer.flatten()
+            # percentage of the second volume that is covered,
+            # so we need to add the coverage to the main coverage
+
             bla = la[self.ixyz_second]
-            per = (np.where(bla > 0)[0].shape[0] / self.ixyz_second.shape[0]) * 100
-            self.coverage.coverage_label.setText(f'{np.round(per, 2)} %')
+            per0 = (np.where(bla == 0)[0].shape[0] / self.ixyz_second.shape[0]) * 100
+            per1 = (np.where(bla == 1)[0].shape[0] / self.ixyz_second.shape[0]) * 100
+            per2 = (np.where(bla > 1)[0].shape[0] / self.ixyz_second.shape[0]) * 100
+
+            self.coverage.coverage_label.setText(f'0%: {np.round(per0, 2)} %, '
+                                                 f'1%: {np.round(per1, 2)} %, '
+                                                 f'2%: {np.round(per2, 2)} % ')
 
 
 class LayersView(QtWidgets.QWidget):

@@ -71,26 +71,6 @@ class ProbeModel:
                   'probe_insertion__json__extended_qc__tracing_exists,True',
                   'probe_insertion__session__extended_qc__behavior,1']
 
-        #task_qc_chek = ['audio_pre_trial',
-        #                'correct_trial_event_sequence',
-        #                'error_trial_event_sequence',
-        #                'n_trial_events',
-        #                'response_feedback_delays',
-        #                'reward_volume_set',
-        #                'reward_volumes',
-        #                'stimOn_goCue_delays',
-        #                'stimulus_move_before_goCue',
-        #                'wheel_move_before_feedback',
-        #                'wheel_freeze_during_quiescence'
-        #                ]
-#
-        #threshold = 0.95
-        #str_queries = ''
-        #for i_task in task_qc_chek:
-        #    str_append = f'probe_insertion__session__extended_qc___task_{i_task}__gte,{threshold},'
-        #    str_queries = str_queries + str_append
-#
-        #str_queries = [str_queries[:-1]]
 
         django_str = ','.join(django_base + django)
 
@@ -98,7 +78,6 @@ class ProbeModel:
                                                                    provenance=provenance,
                                                                    django=django_str))
 
-        start = time.time()
         for ip, p in enumerate(self.traj[prov_dict]['traj']):
            if p['x'] < 0:
                continue
@@ -108,10 +87,6 @@ class ProbeModel:
                    self.traj[prov_dict]['traj'][ip]['phi'] = 0
                else:
                    self.traj[prov_dict]['traj'][ip]['phi'] = 180
-
-        end = time.time()
-        print('this time')
-        print(end-start)
 
 
         ins_ids, x, y = zip(*[self.get_traj_info(traj) for traj in self.traj[prov_dict]['traj']])
@@ -185,7 +160,6 @@ class ProbeModel:
     def get_all_channels(self, provenance):
 
         depths = SITES_COORDINATES[:, 1]
-        start1 = time.time()
         for iT, traj in enumerate(self.traj[provenance]['traj']):
             try:
                 xyz_channels = self.get_channels(traj, depths=depths)
@@ -197,8 +171,6 @@ class ProbeModel:
                 print(err)
                 print(traj['id'])
 
-        end = time.time()
-        print(end-start1)
         iii = self.ba.bc.xyz2i(all_channels)
         keep_idx = np.setdiff1d(np.arange(all_channels.shape[0]), np.unique(np.where(iii < 0)[0]))
         return all_channels[keep_idx, :]
