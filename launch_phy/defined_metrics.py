@@ -11,14 +11,9 @@ Computes metrics for assessing quality of single units.
 
 
 import time
-from pathlib import Path
 import numpy as np
-import alf.io as aio
-import matplotlib.pyplot as plt
 import brainbox as bb
 from phylib.stats import correlograms
-import pandas as pd
-from ibllib.io import spikeglx
 import scipy.stats as stats
 import scipy.ndimage.filters as filters
 from ibllib.io import spikeglx

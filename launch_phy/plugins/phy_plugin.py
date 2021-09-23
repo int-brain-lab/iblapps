@@ -4,7 +4,7 @@
 import logging
 import numpy as np
 from phy import IPlugin
-#import brainbox as bb
+from brainbox.singlecell import firing_rate
 from defined_metrics import *
 
 
@@ -30,7 +30,7 @@ class IBLMetricsPlugin(IPlugin):
 
         def cv_fr(cluster_id):
             ts = controller.get_spike_times(cluster_id).data
-            fr = bb.singlecell.firing_rate(ts, hist_win=0.01, fr_win=0.25)
+            fr = firing_rate(ts, hist_win=0.01, fr_win=0.25)
             return np.std(fr) / np.mean(fr) if len(fr) >= 1 else 0
 
         def frac_isi_viol(cluster_id):

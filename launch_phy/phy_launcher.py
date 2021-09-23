@@ -6,8 +6,7 @@ from phy.apps.template import TemplateController, template_gui
 from phy.gui.qt import create_app, run_app
 from phylib import add_default_handler
 from one.api import ONE
-from metrics import gen_metrics_labels
-from defined_metrics import *
+from pathlib import Path
 
 
 def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=None):
@@ -70,9 +69,9 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
     add_default_handler('DEBUG', logging.getLogger("phylib"))
     create_app()
     controller = TemplateController(dat_path=raw_file, dir_path=alf_probe_dir, dtype=np.int16,
-                                    n_channels_dat=384, sample_rate=3e4)
-                                    # plugins=['IBLMetricsPlugin'],
-                                    # plugin_dirs=[Path(__file__).resolve().parent / 'plugins'])
+                                    n_channels_dat=384, sample_rate=3e4,
+                                    plugins=['IBLMetricsPlugin'],
+                                    plugin_dirs=[Path(__file__).resolve().parent / 'plugins'])
     gui = controller.create_gui()
     gui.show()
     run_app()
