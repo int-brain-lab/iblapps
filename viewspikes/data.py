@@ -7,7 +7,7 @@ from one.webclient import dataset_record_to_url
 import numpy as np
 import scipy.signal
 
-import alf.io
+import one.alf.io
 
 
 CHUNK_DURATION_SECS = 1
@@ -31,7 +31,7 @@ def get_ks2(raw, dsets, one):
     kwm = np.load(one._download_dataset(kwm))
     channels = [dset for dset in dsets if dset['dataset_type'].startswith('channels')]
     malf_path = next(iter(one._download_datasets(channels))).parent
-    channels = alf.io.load_object(malf_path, 'channels')
+    channels = one.alf.io.load_object(malf_path, 'channels')
     _car = raw[channels['rawInd'], :] - np.mean(raw[channels.rawInd, :], axis=0)
     sos = scipy.signal.butter(3, 300 / 30000 / 2, btype='highpass', output='sos')
     ks2 = np.zeros_like(raw)
@@ -47,9 +47,9 @@ def get_spikes(dsets, one):
                      'spikes.samples', 'spikes.depths']
     dsets_spikes = [dset for dset in dsets if dset['dataset_type'] in dtypes_spikes]
     malf_path = next(iter(one._download_datasets(dsets_spikes))).parent
-    channels = alf.io.load_object(malf_path, 'channels')
-    clusters = alf.io.load_object(malf_path, 'clusters')
-    spikes = alf.io.load_object(malf_path, 'spikes')
+    channels = one.alf.io.load_object(malf_path, 'channels')
+    clusters = one.alf.io.load_object(malf_path, 'clusters')
+    spikes = one.alf.io.load_object(malf_path, 'spikes')
     return spikes, clusters, channels
 
 
