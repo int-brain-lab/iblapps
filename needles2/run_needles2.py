@@ -459,9 +459,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # because
         rh = int((np.max(ra) + 1) / 2)
-        t = np.where(ra >= rh)
+        t = np.bitwise_and(ra >= rh, xyz[:, 1] < 3800 / 1e6)
+        # t = np.where(ra >= rh)
         flat[t] = 1
         flat[ra == 0] = 0
+
         reg_volume2 = flat.reshape(self.probe_model.ba.image.shape[0],
                                    self.probe_model.ba.image.shape[1],
                                    self.probe_model.ba.image.shape[2]).astype(np.float32)
