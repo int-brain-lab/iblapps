@@ -1249,7 +1249,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # If we have not loaded in the data before then we load eveything we need
         if not self.data_status:
-            self.plotdata = pd.PlotData(self.alf_path, ephys_path, self.current_shank_idx)
+            self.plotdata = pd.PlotData(self.probe_path, ephys_path, alf_path,
+                                        self.current_shank_idx)
             self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
             self.scat_drift_data = self.plotdata.get_depth_data_scatter()
             (self.scat_fr_data, self.scat_p2t_data,

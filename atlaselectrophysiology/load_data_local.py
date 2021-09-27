@@ -106,7 +106,7 @@ class LoadDataLocal:
         else:
             sess_notes = 'No notes for this session'
 
-        return alf_path, ephys_path, sess_path, chn_depths, sess_notes
+        return alf_path, ephys_path, alf_path, chn_depths, sess_notes
 
     def get_allen_csv(self):
         allen_path = Path(Path(atlas.__file__).parent, 'allen_structure_tree.csv')

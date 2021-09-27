@@ -17,14 +17,14 @@ np.seterr(divide='ignore', invalid='ignore')
 
 
 class PlotData:
-    def __init__(self, alf_path, ephys_path, shank_idx):
+    def __init__(self, probe_path, ephys_path, alf_path, shank_idx):
 
         self.probe_path = probe_path
         self.ephys_path = ephys_path
         self.alf_path = alf_path
 
-        self.chn_coords_all = np.load(Path(self.alf_path, 'channels.localCoordinates.npy'))
-        self.chn_ind_all = np.load(Path(self.alf_path, 'channels.rawInd.npy'))
+        self.chn_coords_all = np.load(Path(self.probe_path, 'channels.localCoordinates.npy'))
+        self.chn_ind_all = np.load(Path(self.probe_path, 'channels.rawInd.npy'))
 
         self.chn_min = np.min(self.chn_coords_all[:, 1])
         self.chn_max = np.max(self.chn_coords_all[:, 1])
@@ -61,7 +61,7 @@ class PlotData:
             self.spike_data_status = False
 
         try:
-            self.clusters = alf.io.load_object(self.alf_path, 'clusters')
+            self.clusters = alf.io.load_object(self.probe_path, 'clusters')
             shank_spikes = np.isin(self.chn_ind_all[self.clusters.channels[self.spikes.clusters]],
                                    self.chn_ind)
             for key in self.spikes.keys():
