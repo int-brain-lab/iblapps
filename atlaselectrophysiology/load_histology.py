@@ -3,7 +3,7 @@ from pathlib import Path
 import requests
 import re
 from one import params
-from oneibl.webclient import http_download_file
+from one.webclient import http_download_file
 import SimpleITK as sitk
 
 
@@ -11,6 +11,8 @@ def download_histology_data(subject, lab):
 
     if lab == 'hoferlab':
         lab_temp = 'mrsicflogellab'
+    elif lab == 'churchlandlab_ucla':
+        lab_temp = 'churchlandlab'
     else:
         lab_temp = lab
 
