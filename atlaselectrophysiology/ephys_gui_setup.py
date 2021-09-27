@@ -443,6 +443,12 @@ class Setup():
         self.align_combobox.setModel(self.align_list)
         self.align_combobox.activated.connect(self.on_alignment_selected)
 
+        # Drop down list to select shank
+        self.shank_list = QtGui.QStandardItemModel()
+        self.shank_combobox = QtWidgets.QComboBox()
+        self.shank_combobox.setModel(self.shank_list)
+        self.shank_combobox.activated.connect(self.on_shank_selected)
+
         # Button to get data to display in GUI
         self.data_button = QtWidgets.QPushButton('Get Data')
         self.data_button.clicked.connect(self.data_button_pressed)
@@ -475,6 +481,7 @@ class Setup():
         else:
             self.interaction_layout3.addWidget(self.folder_line, stretch=2)
             self.interaction_layout3.addWidget(self.folder_button, stretch=1)
+            self.interaction_layout3.addWidget(self.shank_combobox, stretch=1)
             self.interaction_layout3.addWidget(self.align_combobox, stretch=2)
             self.interaction_layout3.addWidget(self.data_button, stretch=1)
 
@@ -573,13 +580,19 @@ class Setup():
         """
         Create all figures that will be added to the GUI
         """
+        # Lists to store the position of probe top and tip
+        self.probe_top_lines = []
+        self.probe_tip_lines = []
+
         # Figures to show ephys data
         # 2D scatter/ image plot
         self.fig_img = pg.PlotItem()
         self.fig_img.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                self.probe_extra, padding=self.pad)
-        self.fig_img.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)
-        self.fig_img.addLine(y=self.probe_top, pen=self.kpen_dot, z=50)
+        self.probe_tip_lines.append(self.fig_img.addLine(y=self.probe_tip, pen=self.kpen_dot,
+                                                         z=50))
+        self.probe_top_lines.append(self.fig_img.addLine(y=self.probe_top, pen=self.kpen_dot,
+                                                         z=50))
         self.set_axis(self.fig_img, 'bottom')
         self.fig_data_ax = self.set_axis(self.fig_img, 'left',
                                          label='Distance from probe tip (uV)')
@@ -596,8 +609,10 @@ class Setup():
         self.fig_line.setMouseEnabled(x=False, y=False)
         self.fig_line.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
-        self.fig_line.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)
-        self.fig_line.addLine(y=self.probe_top, pen=self.kpen_dot, z=50)
+        self.probe_tip_lines.append(self.fig_line.addLine(y=self.probe_tip, pen=self.kpen_dot,
+                                                          z=50))
+        self.probe_top_lines.append(self.fig_line.addLine(y=self.probe_top, pen=self.kpen_dot,
+                                                          z=50))
         self.set_axis(self.fig_line, 'bottom')
         self.set_axis(self.fig_line, 'left', show=False)
 
@@ -607,8 +622,10 @@ class Setup():
         self.fig_probe.setMaximumWidth(50)
         self.fig_probe.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                  self.probe_extra, padding=self.pad)
-        self.fig_probe.addLine(y=self.probe_tip, pen=self.kpen_dot, z=50)
-        self.fig_probe.addLine(y=self.probe_top, pen=self.kpen_dot, z=50)
+        self.probe_tip_lines.append(self.fig_probe.addLine(y=self.probe_tip, pen=self.kpen_dot,
+                                                           z=50))
+        self.probe_top_lines.append(self.fig_probe.addLine(y=self.probe_top, pen=self.kpen_dot,
+                                                           z=50))
         self.set_axis(self.fig_probe, 'bottom', pen='w')
         self.set_axis(self.fig_probe, 'left', show=False)
 
@@ -647,6 +664,10 @@ class Setup():
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
         self.set_axis(self.fig_hist, 'bottom', pen='w')
+
+        # This is the solution from pyqtgraph people, but doesn't show ticks
+        # self.fig_hist.showGrid(False, True, 0)
+
         replace_axis(self.fig_hist)
         self.ax_hist = self.set_axis(self.fig_hist, 'left', pen=None)
         self.ax_hist.setWidth(0)
