@@ -53,6 +53,28 @@ def get_repeated_sites():
     return eids
     
     
+def get_bwm_sessions():
+    one = ONE()
+    traj_traced = one.alyx.rest('trajectories', 'list', provenance='Planned',
+                         django='probe_insertion__session__project__name__'
+                                'icontains,ibl_neuropixel_brainwide_01,'
+                                'probe_insertion__session__qc__lt,50,'
+                                'probe_insertion__session__extended_qc__behavior,1,'
+                                'probe_insertion__json__extended_qc__tracing_exists,True,'
+                                '~probe_insertion__session__extended_qc___task_stimOn_goCue_delays__lt,0.9,'
+                                '~probe_insertion__session__extended_qc___task_response_feedback_delays__lt,0.9,'
+                                '~probe_insertion__session__extended_qc___task_response_stimFreeze_delays__lt,0.9,'
+                                '~probe_insertion__session__extended_qc___task_wheel_move_before_feedback__lt,0.9,'
+                                '~probe_insertion__session__extended_qc___task_wheel_freeze_during_quiescence__lt,0.9,'
+                                '~probe_insertion__session__extended_qc___task_error_trial_event_sequence__lt,0.9,'
+                                '~probe_insertion__session__extended_qc___task_correct_trial_event_sequence__lt,0.9,'
+                                '~probe_insertion__session__extended_qc___task_n_trial_events__lt,0.9,'
+                                '~probe_insertion__session__extended_qc___task_reward_volumes__lt,0.9,'
+                                '~probe_insertion__session__extended_qc___task_reward_volume_set__lt,0.9,'
+                                '~probe_insertion__session__extended_qc___task_stimulus_move_before_goCue__lt,0.9,'
+                                '~probe_insertion__session__extended_qc___task_audio_pre_trial__lt,0.9')
+    eids = [[x['session']['id'],x['probe_name']] for x in traj_traced]
+    return eids    
     
     
 def check_progress():
@@ -162,26 +184,8 @@ def get_dlc_XYs(eid, video_type):
 
     #video_type = 'left'    
     one = ONE() 
-    dataset_types = ['alf/_ibl_leftCamera.dlc.pqt', 
-                     'alf/_ibl_leftCamera.times.npy']
-                     
-    a = one.list_datasets(eid)
-    if not all([u in a for u in dataset_types]):
-        print('not all data available')    
-        return
-                     
-    local_path = one.eid2path(eid)  
-    alf_path = local_path / 'alf'   
-    
-    cam0 = alf.io.load_object(
-        alf_path,
-        '%sCamera' %
-        video_type,
-        namespace='ibl')
-
-    Times = cam0['times']
-
-    cam = cam0['dlc']
+    Times = one.load_dataset(eid,f'alf/_ibl_{video_type}Camera.times.npy') 
+    cam = one.load_dataset(eid,f'alf/_ibl_{video_type}Camera.dlc.pqt')
     points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
 
     # Set values to nan if likelyhood is too low # for pqt: .to_numpy()
@@ -196,35 +200,23 @@ def get_dlc_XYs(eid, video_type):
         XYs[point] = np.array(
             [x, y])    
 
-    return Times, XYs      
+    return Times, XYs 
 
-
+#    a = one.list_datasets(eid)
+#    if not all([u in a for u in dataset_types]):
+#        print('not all data available')    
+#        return
+        
 def get_ME(eid, video_type):
 
     #video_type = 'left'    
-    one = ONE() 
-    dataset_types = [f'alf/{video_type}Camera.ROIMotionEnergy.npy',
-                     f'alf/_ibl_{video_type}Camera.times.npy']
-
-    a = one.list_datasets(eid)
-    if not all([u in a for u in dataset_types]):
-        print('not all data available')    
-        return
-                     
-    local_path = one.eid2path(eid)  
-    alf_path = local_path / 'alf'   
+    one = ONE()       
     
-    cam0 = alf.io.load_object(
-        alf_path,
-        '%sCamera' %
-        video_type,
-        namespace='ibl')
+    
+    Times = one.load_dataset(eid,f'alf/_ibl_{video_type}Camera.times.npy') 
+    ME = one.load_dataset(eid,f'alf/{video_type}Camera.ROIMotionEnergy.npy')
 
-    ME = np.load(alf_path / f'{video_type}Camera.ROIMotionEnergy.npy')
-
-    Times = cam0['times']  
-
-    return Times, ME    
+    return Times, ME 
 
 
 
@@ -267,7 +259,10 @@ def get_example_images(eid):
 def get_mean_positions(XYs):
     mloc = {} # mean locations
     for point in XYs:
-        mloc[point] = [int(np.nanmean(XYs[point][0])), int(np.nanmean(XYs[point][1]))]
+        if point in ['tube_bottom', 'tube_top']:
+            continue
+        mloc[point] = [int(np.nanmean(XYs[point][0])),
+                       int(np.nanmean(XYs[point][1]))]
     return mloc
                
     
@@ -291,7 +286,7 @@ def plot_paw_on_image(eid, video_type='left', XYs = None):
         if XYs == None:          
             _, XYs =  get_dlc_XYs(eid, video_type)  
        
-            Cs = dict(zip(XYs.keys(),Cs))
+        Cs = dict(zip(XYs.keys(),Cs))
         
         ds = {'body':3,'left':6,'right':15}
         
@@ -306,7 +301,7 @@ def plot_paw_on_image(eid, video_type='left', XYs = None):
             ys = XYs[point][1][0::ds[video_type]]
         
             plt.scatter(xs,ys, alpha = 0.05, s = 2, 
-                       label = point, color = Cs[point])   
+                       label = point, c = Cs[point])   
                         
         plt.axis('off')
         plt.tight_layout()
@@ -373,7 +368,7 @@ def plot_paw_on_image(eid, video_type='left', XYs = None):
                 ys = XYs[point][1][0::ds[video_type]]
             
                 axins.scatter(xs,ys, alpha = 1, s = 0.001, 
-                           label = point, color = Cs[point]) 
+                           label = point, c = Cs[point]) 
             axins.set_xlim(x0, x1)
             axins.set_ylim(y1, y0)
             axins.set_xticklabels('')
@@ -1272,9 +1267,9 @@ def plot_all(eid):
     
     # print QC outcome in title and DLC task version
     one = ONE()
-    task = one.alyx.rest('tasks', 'list', session=eid, name='EphysDLC')[0]   
+   
     det = one.get_details(eid, True)['extended_qc']
-    p = one.path_from_eid(eid)
+    p = one.eid2path(eid)
     s1 = '_'.join([str(p).split('/')[i] for i in [4,6,7,8]])
     
     dlc_qcs = [ 'time_trace_length_match',
@@ -1283,6 +1278,11 @@ def plot_all(eid):
                 'pupil_blocked',
                 'lick_detection']
     
+    raw_qcs = ['focus','position','brightness',
+               'resolution','timestamps','file_headers',
+               'wheel_alignment','camera_times','framerate',
+               'pin_state','dropped_frames']
+
 
     qcs = ['task','behavior','videoLeft','videoRight','videoBody',
            'dlcLeft','dlcRight','dlcBody']           
@@ -1292,14 +1292,27 @@ def plot_all(eid):
         try:
             if det[q] == 'FAIL':
 
-                if 'dlc' in q:
+                if ('dlc' in q):
                     l.append('\n')
                     l.append(q+':'+str(det[q])+'-->') 
                     video_type = q[3:]
                     for dlc_qc in dlc_qcs:
                         w = f'_dlc{video_type}_{dlc_qc}'
                         if not det[w]:
-                            l.append(w+':'+str(det[w])+',')  
+                            l.append(w+':'+str(det[w])+',')
+                elif ('video' in q): 
+                    l.append('\n')
+                    l.append(q+':'+str(det[q])+'-->') 
+                    video_type = q[5:]
+                    for raw_qc in raw_qcs:
+                        w = f'_video{video_type}_{raw_qc}'
+                        if type(det[w]) == bool:
+                            if (not det[w]):
+                                l.append(w+':'+str(det[w])+',')    
+                        if type(det[w]) != bool: 
+                            if not det[w][0]:
+                                l.append(w+':'+str(det[w])+',')                
+                              
                 else:            
                     l.append(q+':'+str(det[q])+',')               
         except:
@@ -1309,14 +1322,21 @@ def plot_all(eid):
     
     ntrials = len(one.load_object(eid, 'trials')['goCue_times'])
     
+    task = one.alyx.rest('tasks', 'list', session=eid, name='EphysDLC')
     
-    plt.suptitle(s1+'#Trials:'+str(ntrials)+', DLC version: '
-                 +str(task['version'])+' \n '+s2,
-                 backgroundcolor= 'white', fontsize=6)
+    try:
+        plt.suptitle(s1+'#Trials:'+str(ntrials)+', DLC version: '
+                     +str(task[0]['version'])+' \n '+s2,
+                     backgroundcolor= 'white', fontsize=6)
+    except:
+        plt.suptitle(s1+'#Trials:'+str(ntrials)+', DLC version: ??'
+                     +' \n '+s2,
+                     backgroundcolor= 'white', fontsize=6)        
+        
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])               
     #plt.savefig(f'/home/mic/reproducible_dlc/overviewJune/{eid}.png')
     #plt.savefig(f'/home/mic/reproducible_dlc/all_DLC/{s1}_{eid}.png')
-    plt.savefig(f'/home/mic/reproducible_dlc/repro/{s1}_{eid}.png')    
+    plt.savefig(f'/home/mic/reproducible_dlc/miles_QC_update/{s1}_{eid}.png')    
     plt.close()
     
 
