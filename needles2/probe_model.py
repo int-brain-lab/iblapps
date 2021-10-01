@@ -69,7 +69,8 @@ class ProbeModel:
         django = ['probe_insertion__session__qc__lt,50',
                   '~probe_insertion__json__qc,CRITICAL',
                   'probe_insertion__json__extended_qc__tracing_exists,True',
-                  'probe_insertion__session__extended_qc__behavior,1']
+                  'probe_insertion__session__extended_qc__behavior,1,'
+                  'probe_insertion__session__json__IS_MOCK,False']
 
 
         django_str = ','.join(django_base + django)
