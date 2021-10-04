@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>320</width>
-    <height>210</height>
+    <height>255</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -365,6 +365,32 @@
      </rect>
     </property>
    </widget>
+  </widget>
+  <widget class="QPushButton" name="add_pushButton">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>180</y>
+     <width>75</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Add</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="coverage_label">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>210</y>
+     <width>271</width>
+     <height>30</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Coverage:</string>
+   </property>
   </widget>
  </widget>
  <resources/>

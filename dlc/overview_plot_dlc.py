@@ -219,6 +219,7 @@ def get_ME(eid, video_type):
     return Times, ME 
 
 
+    Times = cam0['times']  
 
 def get_example_images(eid):
 
@@ -1264,6 +1265,7 @@ def plot_all(eid):
 
     plt.tight_layout()
     
+    s2 = ' '.join(l)
     
     # print QC outcome in title and DLC task version
     one = ONE()

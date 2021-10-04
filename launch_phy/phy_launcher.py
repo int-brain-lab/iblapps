@@ -1,13 +1,14 @@
 import glob
 import logging
 import os
+import pandas as pd
 
 from phy.apps.template import TemplateController, template_gui
 from phy.gui.qt import create_app, run_app
 from phylib import add_default_handler
-from oneibl.one import ONE
-from metrics import gen_metrics_labels
-from defined_metrics import *
+from one.api import ONE
+from brainbox.metrics.single_units import quick_unit_metrics
+from pathlib import Path
 
 
 def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=None):
@@ -26,41 +27,60 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
         one = ONE()
 
     dtypes = [
-        'spikes.times',
-        'spikes.clusters',
-        'spikes.amps',
-        'spikes.templates',
-        'spikes.samples',
-        'spikes.depths',
-        'templates.waveforms',
-        'templates.waveformsChannels',
-        'clusters.uuids',
-        'clusters.metrics',
-        'clusters.waveforms',
-        'clusters.waveformsChannels',
-        'clusters.depths',
-        'clusters.amps',
-        'clusters.channels',
-        'channels.probes',
-        'channels.rawInd',
-        'channels.localCoordinates',
+        'spikes.times.npy',
+        'spikes.clusters.npy',
+        'spikes.amps.npy',
+        'spikes.templates.npy',
+        'spikes.samples.npy',
+        'spikes.depths.npy',
+        'templates.waveforms.npy',
+        'templates.waveformsChannels.npy',
+        'clusters.uuids.csv',
+        'clusters.metrics.pqt',
+        'clusters.waveforms.npy',
+        'clusters.waveformsChannels.npy',
+        'clusters.depths.npy',
+        'clusters.amps.npy',
+        'clusters.channels.npy',
+        'channels.rawInd.npy',
+        'channels.localCoordinates.npy',
         # 'ephysData.raw.ap'
-        '_phy_spikes_subset.waveforms',
-        '_phy_spikes_subset.spikes',
-        '_phy_spikes_subset.channels'
+        '_phy_spikes_subset.waveforms.npy',
+        '_phy_spikes_subset.spikes.npy',
+        '_phy_spikes_subset.channels.npy'
     ]
+
+    cols = one.list_collections(eid)
+    if f'alf/{probe_name}/pykilosort' in cols:
+        collection = f'alf/{probe_name}/pykilosort'
+        collections = [collection] * len(dtypes)
+    else:
+        collection = f'alf/{probe_name}'
+        collections = [collection] * len(dtypes)
 
     if eid is None:
         eid = one.search(subject=subj, date=date, number=sess_no)[0]
 
-    _ = one.load(eid, dataset_types=dtypes, download_only=True)
-    ses_path = one.path_from_eid(eid)
-    alf_probe_dir = os.path.join(ses_path, 'alf', probe_name)
-    ephys_file_dir = os.path.join(ses_path, 'raw_ephys_data', probe_name)
+    _ = one.load_datasets(eid, datasets=dtypes, collections=collections, download_only=True,
+                          assert_present=False)
+
+    ses_path = one.eid2path(eid)
+    alf_probe_dir = ses_path.joinpath(collection)
+    ephys_file_dir = ses_path.joinpath('raw_ephys_data', probe_name)
     raw_files = glob.glob(os.path.join(ephys_file_dir, '*ap.*bin'))
     raw_file = [raw_files[0]] if raw_files else None
 
-    # TODO download ephys meta-data, and extract TemplateController input arg params
+    cluster_metrics_path = alf_probe_dir.joinpath('clusters.metrics.pqt')
+    if not cluster_metrics_path.exists():
+        print('computing metrics this may take a bit of time')
+        spikes = one.load_object(eid, 'spikes', collection=collection,
+                                 attribute=['depths', 'time', 'amps', 'clusters'])
+        clusters = one.load_object(eid, 'clusters', collection=collection, attribute=['channels'])
+
+        r = quick_unit_metrics(spikes.clusters, spikes.times, spikes.amps, spikes.depths,
+                               cluster_ids=np.arange(clusters.channels.size))
+        r = pd.DataFrame(r)
+        r.to_parquet(cluster_metrics_path)
 
     # Launch phy #
     # -------------------- #

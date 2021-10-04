@@ -4,7 +4,7 @@ import ibllib.dsp as dsp
 from scipy import signal
 from ibllib.misc import print_progress
 from pathlib import Path
-import alf.io as aio
+import one.alf.io as alfio
 import logging
 import ibllib.ephys.ephysqc as ephysqc
 from phylib.io import alf
@@ -27,7 +27,9 @@ def rmsmap(fbin, spectra=True):
     :return: a dictionary with amplitudes in channeltime space, channelfrequency space, time
      and frequency scales
     """
-    sglx = spikeglx.Reader(fbin, open=True)
+    if not isinstance(fbin, spikeglx.Reader):
+        sglx = spikeglx.Reader(fbin)
+        sglx.open()
     rms_win_length_samples = 2 ** np.ceil(np.log2(sglx.fs * RMS_WIN_LENGTH_SECS))
     # the window generator will generates window indices
     wingen = dsp.WindowGenerator(ns=sglx.ns, nswin=rms_win_length_samples, overlap=0)
@@ -57,6 +59,7 @@ def rmsmap(fbin, spectra=True):
         # print at least every 20 windows
         if (iw % min(20, max(int(np.floor(wingen.nwin / 75)), 1))) == 0:
             print_progress(iw, wingen.nwin)
+
     sglx.close()
     return win
 
@@ -88,11 +91,11 @@ def extract_rmsmap(fbin, out_folder=None, spectra=True):
     if not out_folder.exists():
         out_folder.mkdir()
     tdict = {'rms': rms['TRMS'].astype(np.single), 'timestamps': rms['tscale'].astype(np.single)}
-    aio.save_object_npy(out_folder, object=alf_object_time, dico=tdict)
+    alfio.save_object_npy(out_folder, object=alf_object_time, dico=tdict)
     if spectra:
         fdict = {'power': rms['spectral_density'].astype(np.single),
                  'freqs': rms['fscale'].astype(np.single)}
-        aio.save_object_npy(out_folder, object=alf_object_freq, dico=fdict)
+        alfio.save_object_npy(out_folder, object=alf_object_freq, dico=fdict)
 
 
 def _sample2v(ap_file):
@@ -113,7 +116,7 @@ def ks2_to_alf(ks_path, bin_path, out_path, bin_file=None, ampfactor=1, label=No
     :return:
     """
     m = ephysqc.phy_model_from_ks2_path(ks2_path=ks_path, bin_path=bin_path, bin_file=bin_file)
-    ephysqc.spike_sorting_metrics_ks2(ks_path, m, save=True)
+    ephysqc.spike_sorting_metrics_ks2(ks_path, m, save=True, save_path=out_path)
     ac = alf.EphysAlfCreator(m)
     ac.convert(out_path, label=label, force=force, ampfactor=ampfactor)
 

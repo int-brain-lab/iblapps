@@ -125,7 +125,7 @@ def plot_alignment(insertion, traj, ind=None):
     plt.show()
 
 
-def overlay_spikes(self, spikes, clusters, channels, rgb=None, label='default', symbol='x'):
+def overlay_spikes(self, spikes, clusters, channels, rgb=None, label='default', symbol='x', size=8):
     first_sample = self.ctrl.model.t0 / self.ctrl.model.si
     last_sample = first_sample + self.ctrl.model.ns
 
@@ -144,7 +144,7 @@ def overlay_spikes(self, spikes, clusters, channels, rgb=None, label='default', 
     else:
         self.ctrl.add_scatter(tspi, xspi, label=label)
     sc = self.layers[label]['layer']
-    sc.setSize(8)
+    sc.setSize(size)
     sc.setSymbol(symbol)
     # sc.setPen(pg.mkPen((0, 255, 0, 155), width=1))
     if rgb is None:

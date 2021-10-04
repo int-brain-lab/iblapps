@@ -4,25 +4,7 @@ GUI to allow user to explore ephys data from IBL task
 
 ## Setup
 
-GUI must be run from an environment where brainbox is installed.
-
-To create a conda environment with brainbox follow the install instructions here:
-http://brainbox.internationalbrainlab.org/usage/installation.html
-
-You will also need to install PyQt5 and pyqtgraph.
-These can be installed using the following commands (from within the brainbox environment)
-
-```
-pip install pyqt5
-pip install pyqtgraph
-```
-
-Clone the iblapps repository onto your computer where you have IBL packages installed and checkout the develop branch
-
-```
-git clone https://github.com/int-brain-lab/iblapps.git
-git checkout develop
-```
+Install ibl environment following [these instructions](https://github.com/int-brain-lab/iblenv#iblenv-installation-guide) 
 
 Go to the ```data_exploration_gui``` folder
 
@@ -30,31 +12,14 @@ Go to the ```data_exploration_gui``` folder
 cd iblapps/data_exploration_gui
 ```
 
-## Usage
-### Getting Data
-To download the data run (change the subject (s), date (d) and session number (n) according to the data you want to download)
-
-```
-python load_data.py -s SWC_014 -d 2019-12-10 -n 1 
-```
-
-The GUI can run with or without the ephys.bin data. 
-
-If you want to dowload the ephys data parse an extra argument ``` -e True ```  to load_data.py **N.B. Downloading ephys.bin data can take a long time!**
-
-
-
 ### Using GUI
-Main window can be launched by running
-
+To launch the gui you should run the following from the command line. You can specify either a probe insertion id
+e.g
 ```
-python gui_main.py
+python data_explore_gui.py -pid 9657af01-50bd-4120-8303-416ad9e24a51
 ```
 
-To read in data click on the ```...``` button in the top left corner and select a data folder.
-
-The GUI expects the ```\alf\probe``` folder. An example selection would be 
-```C:\Users\Mayo\Downloads\FlatIron\hoferlab\Subjects\SWC_014\2019-12-10\001\alf\probe00```
-
-N.B. The first time you run the gui with a new dataset it will take a bit of time to load as it is performing some initial calculations of cluster depth and amplitude
-
+or an eid and probe name, e.g
+```
+python data_explore_gui.py -eid 7f6b86f9-879a-4ea2-8531-294a221af5d0 -name probe00
+```

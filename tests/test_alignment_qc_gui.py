@@ -5,7 +5,7 @@ from inspect import getmembers, isfunction
 
 import numpy as np
 
-from oneibl.one import ONE
+from one.api import ONE
 from ibllib.atlas import AllenAtlas
 from atlaselectrophysiology.load_data import LoadData
 from ibllib.pipes.ephys_alignment import EphysAlignment
@@ -14,8 +14,7 @@ from ibllib.pipes.histology import register_track
 
 
 EPHYS_SESSION = 'b1c968ad-4874-468d-b2e4-5ffa9b9964e9'
-one = ONE(username='test_user', password='TapetesBloc18',
-          base_url='https://test.alyx.internationalbrainlab.org')
+one = ONE(base_url='https://test.alyx.internationalbrainlab.org')
 brain_atlas = AllenAtlas(25)
 
 
@@ -23,12 +22,13 @@ class TestsAlignmentQcGUI(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         probe = ['probe00', 'probe01']
-        create_alyx_probe_insertions(session_path=EPHYS_SESSION, model='3B2', labels=probe,
-                                     one=one, force=True)
+        insertions = create_alyx_probe_insertions(session_path=EPHYS_SESSION, model='3B2',
+                                                  labels=probe, one=one, force=True)
+        print(insertions)
         cls.probe_id = one.alyx.rest('insertions', 'list', session=EPHYS_SESSION,
-                                     name='probe00')[0]['id']
+                                     name='probe00', no_cache=True)[0]['id']
         cls.probe_id2 = one.alyx.rest('insertions', 'list', session=EPHYS_SESSION,
-                                      name='probe01')[0]['id']
+                                      name='probe01', no_cache=True)[0]['id']
         data = np.load(Path(Path(__file__).parent.
                             joinpath('fixtures', 'data_alignmentqc_gui.npz')), allow_pickle=True)
         cls.xyz_picks = data['xyz_picks']
@@ -49,7 +49,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         self.ephysalign = EphysAlignment(self.ld.xyz_picks, self.ld.chn_depths,
                                          brain_atlas=self.ld.brain_atlas)
         traj = one.alyx.rest('trajectories', 'list', probe_id=self.probe_id,
-                             provenance='Ephys aligned histology track')
+                             provenance='Ephys aligned histology track', no_cache=True)
         if traj:
             self.prev_traj_id = traj[0]['id']
 
@@ -85,14 +85,14 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (self.ld.current_align == key)
 
         traj = one.alyx.rest('trajectories', 'list', probe_id=self.probe_id,
-                             provenance='Ephys aligned histology track')
+                             provenance='Ephys aligned histology track', no_cache=True)
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
         assert (len(traj[0]['json']) == 1)
         # Not added user evaluation so should just contain feature and track lists
         assert(len(traj[0]['json'][key]) == 2)
 
         self.ld.update_qc(upload_flatiron=False)
-        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
+        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id, no_cache=True)
         assert (insertion['json']['extended_qc']['alignment_count'] == 1)
         assert (insertion['json']['extended_qc']['alignment_stored'] == key)
         assert (not insertion['json']['extended_qc'].get('experimenter', None))
@@ -113,7 +113,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (self.ld.current_align == key)
 
         traj = one.alyx.rest('trajectories', 'list', probe_id=self.probe_id,
-                             provenance='Ephys aligned histology track')
+                             provenance='Ephys aligned histology track', no_cache=True)
         traj_id = traj[0]['id']
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
         assert (len(traj[0]['json']) == 1)
@@ -121,7 +121,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (traj_id != self.prev_traj_id)
 
         self.ld.update_qc(upload_flatiron=False)
-        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
+        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id, no_cache=True)
         assert (insertion['json']['extended_qc']['alignment_count'] == 1)
         assert (insertion['json']['extended_qc']['alignment_stored'] == key)
         assert (insertion['json']['extended_qc']['alignment_resolved'] == 0)
@@ -142,7 +142,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (self.ld.current_align == key)
 
         traj = one.alyx.rest('trajectories', 'list', probe_id=self.probe_id,
-                             provenance='Ephys aligned histology track')
+                             provenance='Ephys aligned histology track', no_cache=True)
         traj_id = traj[0]['id']
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
         assert (len(traj[0]['json']) == 2)
@@ -151,7 +151,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         # Also assert all the keys match
 
         self.ld.update_qc(upload_flatiron=False)
-        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
+        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id, no_cache=True)
         assert (insertion['json']['qc'] == 'PASS')
         assert (insertion['json']['extended_qc']['experimenter'] == 'PASS')
         assert (insertion['json']['extended_qc']['alignment_count'] == 2)
@@ -176,7 +176,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (self.ld.current_align == key)
 
         traj = one.alyx.rest('trajectories', 'list', probe_id=self.probe_id,
-                             provenance='Ephys aligned histology track')
+                             provenance='Ephys aligned histology track', no_cache=True)
         traj_id = traj[0]['id']
         assert (len(traj[0]['json']) == 3)
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
@@ -184,7 +184,7 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (traj_id != self.prev_traj_id)
 
         self.ld.update_qc(upload_flatiron=False)
-        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
+        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id, no_cache=True)
         assert (insertion['json']['qc'] == 'WARNING')
         assert (insertion['json']['extended_qc']['experimenter'] == 'WARNING')
         assert (insertion['json']['extended_qc']['alignment_count'] == 3)
@@ -209,14 +209,14 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (self.ld.current_align == key)
 
         traj = one.alyx.rest('trajectories', 'list', probe_id=self.probe_id,
-                             provenance='Ephys aligned histology track')
+                             provenance='Ephys aligned histology track', no_cache=True)
         traj_id = traj[0]['id']
         assert (len(traj[0]['json']) == 4)
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
         assert (traj_id == self.prev_traj_id)
 
         self.ld.update_qc(upload_flatiron=False)
-        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
+        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id, no_cache=True)
         assert (insertion['json']['qc'] == 'WARNING')
         assert (insertion['json']['extended_qc']['experimenter'] == 'WARNING')
         assert (insertion['json']['extended_qc']['alignment_count'] == 4)
@@ -241,14 +241,14 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         assert (self.ld.current_align == key)
 
         traj = one.alyx.rest('trajectories', 'list', probe_id=self.probe_id,
-                             provenance='Ephys aligned histology track')
+                             provenance='Ephys aligned histology track', no_cache=True)
         traj_id = traj[0]['id']
         assert (sorted(list(traj[0]['json'].keys()), reverse=True)[0] == key)
         assert (len(traj[0]['json']) == 5)
         assert (traj_id == self.prev_traj_id)
 
         self.ld.update_qc(upload_flatiron=False)
-        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id)
+        insertion = one.alyx.rest('insertions', 'read', id=self.probe_id, no_cache=True)
         assert (insertion['json']['qc'] == 'CRITICAL')
         assert (insertion['json']['extended_qc']['experimenter'] == 'CRITICAL')
         assert (insertion['json']['extended_qc']['alignment_count'] == 5)

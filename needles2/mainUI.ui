@@ -6,9 +6,15 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1521</width>
-    <height>908</height>
+    <width>1896</width>
+    <height>917</height>
    </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
   </property>
   <property name="windowTitle">
    <string>MainWindow</string>
@@ -30,7 +36,7 @@
       <x>10</x>
       <y>10</y>
       <width>321</width>
-      <height>241</height>
+      <height>230</height>
      </rect>
     </property>
    </widget>
@@ -38,9 +44,9 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>260</y>
+      <y>250</y>
       <width>321</width>
-      <height>241</height>
+      <height>331</height>
      </rect>
     </property>
    </widget>
@@ -84,30 +90,40 @@
      </rect>
     </property>
    </widget>
-   <widget class="QLabel" name="per_title_label">
+   <widget class="QTableView" name="tableview">
     <property name="geometry">
      <rect>
-      <x>20</x>
-      <y>530</y>
-      <width>101</width>
-      <height>16</height>
+      <x>1530</x>
+      <y>60</y>
+      <width>351</width>
+      <height>781</height>
      </rect>
     </property>
-    <property name="text">
-     <string>Coverage increase</string>
+    <attribute name="horizontalHeaderDefaultSectionSize">
+     <number>50</number>
+    </attribute>
+   </widget>
+   <widget class="QListWidget" name="layer_list">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>610</y>
+      <width>321</width>
+      <height>71</height>
+     </rect>
     </property>
    </widget>
-   <widget class="QLabel" name="per_label">
+   <widget class="QPushButton" name="delete_button">
     <property name="geometry">
      <rect>
-      <x>130</x>
-      <y>530</y>
-      <width>47</width>
-      <height>13</height>
+      <x>1530</x>
+      <y>20</y>
+      <width>121</width>
+      <height>23</height>
      </rect>
     </property>
     <property name="text">
-     <string/>
+     <string>-</string>
     </property>
    </widget>
   </widget>
@@ -116,7 +132,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1521</width>
+     <width>1896</width>
      <height>21</height>
     </rect>
    </property>

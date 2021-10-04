@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtWidgets, QtGui
 import numpy as np
-from brainbox.core import Bunch
+from iblutil.util import Bunch
 
 
 class FilterGroup:
