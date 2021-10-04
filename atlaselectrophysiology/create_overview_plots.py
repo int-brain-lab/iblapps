@@ -82,4 +82,5 @@ def make_overview_plot(folder, sess_info, save_folder=None):
     ax.text(0.5, 0, image_info[:-1], va="center", ha="center", transform=ax.transAxes)
     plt.savefig(save_folder.joinpath(image_info + "overview.png"),
                 bbox_inches='tight', pad_inches=0)
-    plt.show()
+    # plt.close()
+    # plt.show()

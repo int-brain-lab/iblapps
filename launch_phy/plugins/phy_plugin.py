@@ -72,7 +72,10 @@ class IBLMetricsPlugin(IPlugin):
             return self.metrics['label'].iloc[cluster_id]
 
         def ks2_label(cluster_id):
-            return self.metrics['ks2_label'].iloc[cluster_id]
+            if 'ks2_label' in self.metrics.columns:
+                return self.metrics['ks2_label'].iloc[cluster_id]
+            else:
+                return 'nan'
 
         controller.cluster_metrics['amplitudes'] = controller.context.memcache(amplitudes)
         controller.cluster_metrics['amp_max'] = controller.context.memcache(amp_max)

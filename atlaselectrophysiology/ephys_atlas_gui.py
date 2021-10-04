@@ -46,6 +46,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         elif not offline and probe_id is not None:
             self.loaddata = LoadData(probe_id=probe_id, one=one, load_histology=histology,
                                      spike_collection=spike_collection)
+            self.current_shank_idx = 0
             _, self.histology_exists = self.loaddata.get_info(0)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
             self.data_status = False

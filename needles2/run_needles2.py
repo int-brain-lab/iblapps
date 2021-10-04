@@ -42,6 +42,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.atlas = AllenAtlas(25)
         one = ONE(mode='local')
+        self.dist = 250
 
         # Configure the Menu bar
         menu_bar = QtWidgets.QMenuBar(self)
@@ -110,6 +111,10 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.region)
         self.region_placeholder.setLayout(layout)
 
+        if not lazy:
+            self.intialise()
+
+    def intialise(self):
         self.add_insertions()
         self.add_coverage()
         self.missing_coverage()
@@ -176,7 +181,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # when double clicked
         self.top.ctrl.set_scatter_layer('active_insertion', x=[traj['x'] / 1e6],
                                         y=[traj['y'] / 1e6])
-        self.do_this_thing(traj)
+        self.do_this_thing(traj, ins=ins)
 
     def coverage_added(self):
         # when add button pressed
@@ -279,13 +284,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
 # TODO need to catch for dodgey coordinates that return rubbish
 
-    def do_this_thing(self, traj):
+    def do_this_thing(self, traj, ins=None):
         self.top.ctrl.set_scatter_layer('selected_insertion', x=[traj['x'] / 1e6],
                                         y=[traj['y'] / 1e6])
 
 
         (region, region_lab, region_col) = self.probe_model.get_brain_regions(
-            traj, mapping=self.get_mapping())
+            traj, ins=ins, mapping=self.get_mapping())
         self.probe.plot_region_along_probe(region, region_lab, region_col)
 
         cov, xyz_cnt = self.probe_model.compute_coverage([traj], limit=False,
