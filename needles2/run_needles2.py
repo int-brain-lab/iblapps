@@ -512,6 +512,18 @@ class MainWindow(QtWidgets.QMainWindow):
                                                  f'1%: {np.round(per1, 2)} %, '
                                                  f'2%: {np.round(per2, 2)} % ')
 
+    def add_volume_from_csv(self, csv_file, cmap='Greens', color='g'):
+        new_layer = pd.read_csv(csv_file)
+        new_layer = new_layer[['x', 'y', 'z', 'phi', 'theta', 'depth', 'provenance']]
+        cov, _ = self.probe_model.compute_coverage(new_layer.to_dict(orient='records'),
+                                                   dist_fcn=[self.dist, self.dist + 1])
+        layer_name = Path(csv_file).name
+        self.add_volume_layer(cov, name=layer_name, cmap=cmap, levels=(0, 1))
+        self.top.ctrl.add_scatter_layer(layer_name, pen=color, brush=color)
+        self.top.ctrl.set_scatter_layer(layer_name, x=new_layer.x.values / 1e6,
+                                        y=new_layer.y.values / 1e6)
+        self.layers.update_table(layer_name)
+
 
 class LayersView(QtWidgets.QWidget):
     def __init__(self, qmain: MainWindow):
