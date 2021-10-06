@@ -65,7 +65,7 @@ def download_histology_data(subject, lab):
 
 
 def tif2nrrd(path_to_image):
-    path_to_nrrd = Path(path_to_image.parent, path_to_image.parts[-1][:-3] + 'nrrd')
+    path_to_nrrd = Path(path_to_image).with_suffix('.nrrd')
     if not path_to_nrrd.exists():
         reader = sitk.ImageFileReader()
         reader.SetImageIO("TIFFImageIO")
