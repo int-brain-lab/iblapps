@@ -7,6 +7,10 @@ import glob
 import json
 from one.api import ONE
 
+# temporarily add this in for neuropixel course until figured out fix to problem on win32
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 
 class LoadDataLocal:
     def __init__(self):
