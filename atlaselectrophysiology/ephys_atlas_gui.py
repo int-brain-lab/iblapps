@@ -1,3 +1,10 @@
+import os
+import platform
+
+if platform.system() == 'Darwin':
+    if platform.release() >= 11.0:
+        os.environ["QT_MAC_WANTS_LAYER"] = "1"
+
 from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import pyqtgraph.exporters
@@ -11,7 +18,6 @@ import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
-import os
 import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
 
