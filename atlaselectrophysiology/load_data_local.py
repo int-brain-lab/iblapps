@@ -6,6 +6,7 @@ import one.alf.io as alfio
 import glob
 import json
 from one.api import ONE
+from atlaselectrophysiology.load_histology import tif2nrrd
 
 # temporarily add this in for neuropixel course until figured out fix to problem on win32
 import ssl
@@ -137,15 +138,21 @@ class LoadDataLocal:
         # First see if the histology file exists before attempting to connect with FlatIron and
         # download
 
-        path_to_rd_image = glob.glob(str(self.folder_path) + '/*RD.nrrd')
-        if path_to_rd_image:
-            hist_path_rd = Path(path_to_rd_image[0])
+        path_to_rd_image_nrrd = glob.glob(str(self.folder_path) + '/*RD.nrrd')
+        path_to_rd_image_tif = glob.glob(str(self.folder_path) + '/*RD.tif')
+        if path_to_rd_image_nrrd:
+            hist_path_rd = Path(path_to_rd_image_nrrd[0])
+        elif path_to_rd_image_tif:
+            hist_path_rd = tif2nrrd(path_to_rd_image_tif[0])
         else:
             hist_path_rd = []
 
-        path_to_gr_image = glob.glob(str(self.folder_path) + '/*GR.nrrd')
-        if path_to_gr_image:
-            hist_path_gr = Path(path_to_gr_image[0])
+        path_to_gr_image_nrrd = glob.glob(str(self.folder_path) + '/*GR.nrrd')
+        path_to_gr_image_tif = glob.glob(str(self.folder_path) + '/*GR.tif')
+        if path_to_gr_image_nrrd:
+            hist_path_gr = Path(path_to_gr_image_nrrd[0])
+        elif path_to_gr_image_tif:
+            hist_path_gr = tif2nrrd(path_to_gr_image_tif[0])
         else:
             hist_path_gr = []
 
