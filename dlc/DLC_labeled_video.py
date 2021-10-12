@@ -41,8 +41,6 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     '''
 
     save_vids_here = str(Path.home())
-    if save_vids_here[-1] != '/':
-        return 'Last character of save_vids_here must be slash'
 
     one = ONE()
     alf_path = one.eid2path(eid)
