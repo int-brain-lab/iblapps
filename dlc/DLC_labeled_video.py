@@ -40,7 +40,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     3D example: 'cb2ad999-a6cb-42ff-bf71-1774c57e5308', [5,7]
     '''
 
-    save_vids_here = str(Path.home())
+    save_vids_here = Path.home()
 
     one = ONE()
     alf_path = one.eid2path(eid)
@@ -177,11 +177,10 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
             dot_s = 5
 
     if save_video:
-        loc = save_vids_here + '%s_trials_%s_%s_%s.mp4' % (eid,
-                                                           trial_range[0],
-                                                           trial_range[-1],
-                                                           video_type)
-        out = cv2.VideoWriter(loc,
+        loc = (save_vids_here / 
+        f'{eid}_trials_{trial_range[0]}_{trial_range[-1]}_{video_type}.mp4')
+
+        out = cv2.VideoWriter(str(loc),
                               cv2.VideoWriter_fourcc(*'mp4v'),
                               fps,
                               size)  # put , 0 if grey scale
