@@ -40,7 +40,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     3D example: 'cb2ad999-a6cb-42ff-bf71-1774c57e5308', [5,7]
     '''
 
-    save_vids_here = '/home/mic/'
+    save_vids_here = str(Path.home())
     if save_vids_here[-1] != '/':
         return 'Last character of save_vids_here must be slash'
 
