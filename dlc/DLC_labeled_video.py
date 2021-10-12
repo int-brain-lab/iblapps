@@ -1,14 +1,26 @@
 import numpy as np
-import alf.io
-from oneibl.one import ONE
+from one.api import ONE
 from pathlib import Path
 import cv2
-import os
-from oneibl.webclient import http_download_file_list
+import os,fnmatch
 import matplotlib
 import pandas as pd
 # conda install -c conda-forge pyarrow
+import os
 
+def Find(pattern, path):
+
+    '''
+    find a local video like so:
+    flatiron='/home/mic/Downloads/FlatIron'      
+    vids = Find('*.mp4', flatiron)
+    '''
+    result = []
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, pattern):
+                result.append(os.path.join(root, name))
+    return result
 
 def find_nearest(array, value):
     array = np.asarray(array)
@@ -16,51 +28,12 @@ def find_nearest(array, value):
     return idx
 
 
-def download_raw_video(eid, cameras=None):
-    """
-    Downloads the raw video from FlatIron or cache dir.
-    This allows you to download just one of the
-    three videos
-    :param cameras: the specific camera to load
-    (i.e. 'left', 'right', or 'body') If None all
-    three videos are downloaded.
-    :return: the file path(s) of the raw videos
-    """
-    one = ONE()
-    if cameras:
-        cameras = [cameras] if isinstance(cameras, str) else cameras
-        cam_files = ['_iblrig_{}Camera.raw.mp4'.format(cam) for cam in cameras]
-        datasets = one._alyxClient.get(
-            'sessions/' + eid)['data_dataset_session_related']
-        urls = [ds['data_url'] for ds in datasets if ds['name'] in cam_files]
-        cache_dir = one.path_from_eid(eid).joinpath('raw_video_data')
-        if not os.path.exists(str(cache_dir)):
-            os.mkdir(str(cache_dir))
-        else:  # Check if file already downloaded
-            # cam_files = [fi[:-4] for fi in cam_files]  # Remove ext
-            filenames = [f for f in os.listdir(str(cache_dir))
-                         if any([cam in f for cam in cam_files])]
-            if filenames:
-                return [cache_dir.joinpath(file) for file in filenames]
-
-        http_download_file_list(
-            urls,
-            username=one._par.HTTP_DATA_SERVER_LOGIN,
-            password=one._par.HTTP_DATA_SERVER_PWD,
-            cache_dir=str(cache_dir))
-
-        return
-
-    else:
-        return one.load(eid, ['_iblrig_Camera.raw'], download_only=True)
-
-
 def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     '''
     eid: session id, e.g. '3663d82b-f197-4e8b-b299-7b803a155b84'
     video_type: one of 'left', 'right', 'body'
     trial_range: first and last trial number of range to be shown, e.g. [5,7]
-    save_video: video is displayed and saved in local folder
+    save_video: video is saved this local folder
 
     Example usage to view and save labeled video with wheel angle:
     Viewer('3663d82b-f197-4e8b-b299-7b803a155b84', 'left', [5,7])
@@ -72,47 +45,33 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
         return 'Last character of save_vids_here must be slash'
 
     one = ONE()
-    dataset_types = ['camera.times',
-                     'wheel.position',
-                     'wheel.timestamps',
-                     'trials.intervals',
-                     'camera.dlc']
-
-    a = one.list(eid, 'dataset-types')
-
-    assert all([i in a for i in dataset_types]
-               ), 'For this eid, not all data available'
-
-    D = one.load(eid, dataset_types=dataset_types, dclass_output=True)
-    alf_path = Path(D.local_path[0]).parent.parent / 'alf'
+    alf_path = one.eid2path(eid)
 
     # Download a single video
-    video_data = alf_path.parent / 'raw_video_data'
-    download_raw_video(eid, cameras=[video_type])
-    video_path = list(
-        video_data.rglob(
-            '_iblrig_%sCamera.raw.*' %
-            video_type))[0]
-    print(video_path)
+    video_path = (alf_path / 
+        f'raw_video_data/_iblrig_{video_type}Camera.raw.mp4')
+    
+    if not os.path.isfile(video_path):
+        print('mp4 not found locally, downloading it ...')
+        video_path = one.load_dataset(eid,
+            f'raw_video_data/_iblrig_{video_type}Camera.raw.mp4',
+            download_only=True)
 
-    # that gives cam time stamps and DLC output (change to alf_path eventually)
+    # Get trials info
+    trials = one.load_object(eid, 'trials', download_only=True)
+    
 
-    cam = alf.io.load_object(
-        alf_path,
-        '%sCamera' %
-        video_type,
-        namespace='ibl')
-
-    # just to read in times for newer data (which has DLC results in pqt format
-    # cam = alf.io.load_object(alf_path, '_ibl_%sCamera' % video_type)
-
-    # set where to read and save video and get video info
+    # Download DLC traces and stamps
+    Times = one.load_dataset(eid,f'alf/_ibl_{video_type}Camera.times.npy') 
+    cam = one.load_dataset(eid,f'alf/_ibl_{video_type}Camera.dlc.pqt')
+                                                      
+    # get video info
     cap = cv2.VideoCapture(video_path.as_uri())
     length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS)
     size = (int(cap.get(3)), int(cap.get(4)))
 
-    assert length < len(cam['times']), '#frames > #stamps'
+
     print(eid,
           ', ',
           video_type,
@@ -121,26 +80,26 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
           ', #frames:',
           length,
           ', #stamps:',
-          len(cam['times']),
+          len(Times),
           ', #frames - #stamps = ',
-          length - len(cam['times']))
+          length - len(Times))
 
     # pick trial range for which to display stuff
-    trials = alf.io.load_object(alf_path, 'trials', namespace='ibl')
+    trials = one.load_object(eid, 'trials')
     num_trials = len(trials['intervals'])
     if trial_range[-1] > num_trials - 1:
         print('There are only %s trials' % num_trials)
-
-    frame_start = find_nearest(cam['times'],
+    print('There are %s trials' % num_trials)
+    frame_start = find_nearest(Times,
                                [trials['intervals'][trial_range[0]][0]])
-    frame_stop = find_nearest(cam['times'],
+    frame_stop = find_nearest(Times,
                               [trials['intervals'][trial_range[-1]][1]])
 
     '''
-    wheel related stuff
+    load wheel
     '''
 
-    wheel = alf.io.load_object(alf_path, 'wheel', namespace='ibl')
+    wheel = one.load_object(eid, 'wheel')
     import brainbox.behavior.wheel as wh
     try:
         pos, t = wh.interpolate_position(
@@ -159,7 +118,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     # alignment of cam stamps and interpolated wheel stamps
     wheel_pos = []
     kk = 0
-    for wt in cam['times'][frame_start:frame_stop]:
+    for wt in Times[frame_start:frame_stop]:
         wheel_pos.append(pos_int[find_nearest(t_int, wt)])
         kk += 1
         if kk % 3000 == 0:
@@ -168,26 +127,14 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     '''
     DLC related stuff
     '''
-    Times = cam['times'][frame_start:frame_stop]
-    del cam['times']
+    Times = Times[frame_start:frame_stop]
 
     # some exception for inconsisitent data formats
-    try:
-        dlc_name = '_ibl_%sCamera.dlc.pqt' % video_type
-        dlc_path = alf_path / dlc_name
-        cam = pd.read_parquet(dlc_path, engine="fastparquet")
-        print('it is pqt')
-    except BaseException:
-        raw_vid_path = alf_path.parent / 'raw_video_data'
-        cam = alf.io.load_object(
-            raw_vid_path,
-            '%sCamera' %
-            video_type,
-            namespace='ibl')
 
+ 
+    
     points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
     if len(points) == 1:
-        cam = cam['dlc']
         points = np.unique(['_'.join(x.split('_')[:-1]) for x in cam.keys()])
 
     if video_type != 'body':
@@ -319,14 +266,17 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
                 # col = np.array([0, 0, 255]) # all points red
                 X = X.astype(int)
                 Y = Y.astype(int)
+#                cv2.imshow('frame', gray)
+#                print(gray.shape)
+#                print(X - dot_s,X + dot_s, Y - dot_s,Y + dot_s)
                 gray[X - dot_s:X + dot_s, Y - dot_s:Y + dot_s] = block * col
             ll += 1
 
         gray = gray[y0:y1, x0:x1]
         if save_video:
             out.write(gray)
-        cv2.imshow('frame', gray)
-        cv2.waitKey(1)
+        #cv2.imshow('frame', gray)
+        #cv2.waitKey(1)
         k += 1
         if k == (frame_stop - frame_start) - 1:
             break
@@ -334,4 +284,7 @@ def Viewer(eid, video_type, trial_range, save_video=True, eye_zoom=False):
     if save_video:
         out.release()
     cap.release()
-    cv2.destroyAllWindows()
+    #cv2.destroyAllWindows()
+    
+    print(eid, video_type, frame_stop, frame_start)
+    #return XYs, Times
