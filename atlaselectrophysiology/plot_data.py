@@ -295,9 +295,11 @@ class PlotData:
         else:
             T_BIN = 0.05
             D_BIN = 5
+            chn_min = np.min(np.r_[self.chn_min, self.spikes['depths'][self.spike_idx][self.kp_idx]])
+            chn_max = np.max(np.r_[self.chn_max, self.spikes['depths'][self.spike_idx][self.kp_idx]])
             n, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
                                           self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                          T_BIN, D_BIN, ylim=[self.chn_min, self.chn_max])
+                                          T_BIN, D_BIN, ylim=[chn_min, chn_max])
             img = n.T / T_BIN
             xscale = (times[-1] - times[0]) / img.shape[0]
             yscale = (depths[-1] - depths[0]) / img.shape[1]
@@ -323,14 +325,16 @@ class PlotData:
         else:
             T_BIN = np.max(self.spikes['times'])
             D_BIN = 10
+            chn_min = np.min(np.r_[self.chn_min, self.spikes['depths'][self.spike_idx][self.kp_idx]])
+            chn_max = np.max(np.r_[self.chn_max, self.spikes['depths'][self.spike_idx][self.kp_idx]])
             nspikes, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
                                                 self.spikes['depths'][self.spike_idx][self.kp_idx],
                                                 T_BIN, D_BIN,
-                                                ylim=[self.chn_min, self.chn_max])
+                                                ylim=[chn_min, chn_max])
 
             amp, times, depths = bincount2D(self.spikes['amps'][self.spike_idx][self.kp_idx],
                                             self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                            T_BIN, D_BIN, ylim=[self.chn_min, self.chn_max],
+                                            T_BIN, D_BIN, ylim=[chn_min, chn_max],
                                             weights=self.spikes['amps'][self.spike_idx]
                                             [self.kp_idx])
             mean_fr = nspikes[:, 0] / T_BIN
@@ -363,9 +367,11 @@ class PlotData:
         else:
             T_BIN = 0.05
             D_BIN = 40
+            chn_min = np.min(np.r_[self.chn_min, self.spikes['depths'][self.spike_idx][self.kp_idx]])
+            chn_max = np.max(np.r_[self.chn_max, self.spikes['depths'][self.spike_idx][self.kp_idx]])
             R, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
                                           self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                          T_BIN, D_BIN, ylim=[self.chn_min, self.chn_max])
+                                          T_BIN, D_BIN, ylim=[chn_min, chn_max])
             corr = np.corrcoef(R)
             corr[np.isnan(corr)] = 0
             scale = (np.max(depths) - np.min(depths)) / corr.shape[0]
