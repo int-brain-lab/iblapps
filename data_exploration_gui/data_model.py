@@ -23,10 +23,18 @@ class DataModel:
     def __init__(self, eid, probe, one=None, spike_collection=None):
         one = one or ONE()
 
-        if spike_collection:
+        if spike_collection == '':
+            collection = f'alf/{probe}'
+        elif spike_collection:
             collection = f'alf/{probe}/{spike_collection}'
         else:
-            collection = f'alf/{probe}'
+            # Pykilosort is default, if not present look for normal kilosort
+            all_collections = one.list_collections(eid)
+
+            if f'alf/{probe}/pykilosort' in all_collections:
+                collection = f'alf/{probe}/pykilosort'
+            else:
+                collection = f'alf/{probe}'
 
         try:
             self.spikes = one.load_object(eid, obj='spikes', collection=collection,
