@@ -51,7 +51,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Add menu bar for mappings
         self.map_menu = menu_bar.addMenu('Mappings')
-        self.map_group = QtGui.QActionGroup(self.map_menu)
+        self.map_group = QtWidgets.QActionGroup(self.map_menu)
         # Only allow one to plot to be selected at any one time
         self.map_group.setExclusive(True)
         self.add_menu_bar(self.map_menu, self.map_group, list(self.atlas.regions.mappings.keys()),
@@ -59,7 +59,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Add menu bar for base image
         self.img_menu = menu_bar.addMenu('Images')
-        self.img_group = QtGui.QActionGroup(self.img_menu)
+        self.img_group = QtWidgets.QActionGroup(self.img_menu)
         self.img_group.setExclusive(True)
         images = ['Image', 'Annotation']
         self.add_menu_bar(self.img_menu, self.img_group, images, callback=self.change_image,
@@ -67,7 +67,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Add menu bar for coverage
         self.coverage_menu = menu_bar.addMenu('Coverage')
-        self.coverage_group = QtGui.QActionGroup(self.coverage_menu)
+        self.coverage_group = QtWidgets.QActionGroup(self.coverage_menu)
         self.coverage_group.setExclusive(True)
         # coverages = ['Coverage cosine', 'Coverage grid 500', 'Coverage grid 250',
         #              'Coverage grid 100', 'Coverage 354', 'Coverage 250', 'Coverage 120']
@@ -77,7 +77,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Add menubar for insertions
         self.insertion_menu = menu_bar.addMenu('Insertions')
-        self.insertion_group = QtGui.QActionGroup(self.insertion_menu)
+        self.insertion_group = QtWidgets.QActionGroup(self.insertion_menu)
         self.insertion_group.setExclusive(True)
         insertions = ['Resolved', 'Ephys aligned histology track', 'Histology track',
                       'Histology track (best)', 'Micro-manipulator', 'Micro-manipulator (best)',
@@ -326,9 +326,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def add_menu_bar(self, menu, group, items, callback=None, default=None):
         for item in items:
             if item == default:
-                _item = QtGui.QAction(item, self, checkable=True, checked=True)
+                _item = QtWidgets.QAction(item, self, checkable=True, checked=True)
             else:
-                _item = QtGui.QAction(item, self, checkable=True, checked=False)
+                _item = QtWidgets.QAction(item, self, checkable=True, checked=False)
             if callback:
                 _item.triggered.connect(callback)
             menu.addAction(_item)
@@ -525,7 +525,7 @@ class LayersView(QtWidgets.QWidget):
     def initialise_table(self):
         for layer in self.qmain.coronal.ctrl.image_layers:
             if not layer.name in self.ignore_layers:
-                item = QtGui.QListWidgetItem()
+                item = QtWidgets.QListWidgetItem()
                 item.setText(layer.name)
                 item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
                 item.setCheckState(QtCore.Qt.Checked)
@@ -553,7 +553,7 @@ class LayersView(QtWidgets.QWidget):
                 return
 
         # Otherwise add to the list
-        item = QtGui.QListWidgetItem()
+        item = QtWidgets.QListWidgetItem()
         item.setText(name)
         item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
         item.setCheckState(QtCore.Qt.Checked)
