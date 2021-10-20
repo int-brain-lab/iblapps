@@ -1,5 +1,5 @@
 import numpy as np
-from brainbox.numerical import ismember
+from iblutil.numerical import ismember
 from one.api import ONE
 from ibllib.pipes import histology
 from ibllib.atlas import AllenAtlas, atlas
@@ -81,10 +81,13 @@ class ProbeModel:
             ['134e8241-f5d7-4ad7-a8c0-11b34f2eedc3',
              '6d3b68e0-3efd-4b03-b747-16e44118a0a9',
              '6a098711-5423-4072-8909-7cff0e2d4531',
+             '3ccb2d59-9e94-48e6-9e72-0b7b96bd3f9b',
              'a69887c2-f35d-497c-a2db-d9c44406369a',
              'c0c3c95d-43c3-4e30-9ce7-0519d0473911',
+             '05ccc92c-fcb0-4e92-84d3-de033890c7a8',
              '1a276285-8b0e-4cc9-9f0a-a3a002978724',
              '54c8f5de-83d7-49b9-9b4c-67fe0f07289b',
+             '7dcd74a9-fc7a-4c3c-85b9-769d869629ec',
              '2a7caaa4-1710-49a1-ade4-db0a986ae6f5',
              '37137b1d-34d4-4183-9796-abfc9ffb6abe',
              '450cea3b-9289-4708-9df2-a2518bdc4b59',
@@ -92,6 +95,7 @@ class ProbeModel:
              '91fb4ed3-ee27-4d7e-ba5d-f61202ed9884',
              '4c04120d-523a-4795-ba8f-49dbb8d9f63a',
              '8dfb86c8-d45c-46c4-90ec-33078014d434',
+             '3e7618b8-34ca-4e48-ba3a-0e0f88a43131',
              '72274871-80e5-4fb9-be1a-bb04acebb1de',
              'f8ef3dfc-f789-43a1-9015-c82ffa8e7df0',
              '491540f7-7878-410f-894e-7ac4766b5105',
@@ -100,12 +104,14 @@ class ProbeModel:
              '396a41bc-78fc-4fc5-b559-b83a5cdb86fd',
              '4037a618-e6ba-4142-a6d2-3e32ef25fd1b',
              '262337f9-2cff-4dc0-8b1b-65b34bb41d5e',
+             '31f0400a-71f5-436c-ada4-dce50627dc73',
              '5a9f8899-556a-43ea-892d-5e35b969ff38',
              '1d1f11e4-fa84-43b4-9b89-f2ac777b8d96',
              '30dfb8c6-9202-43fd-a92d-19fe68602b6f',
              'd14f70e6-bf7b-4d6d-a380-bfd0a46ed7a1',
              '64d04585-67e7-4320-baad-8d4589fd18f7',
              'f698f893-da01-49a1-ae4b-16f7e42e5ff5',
+             '4f46198d-c54d-4627-9e4e-3c8fd4c3c070',
              '0ece5c6a-7d1e-4365-893d-ac1cc04f1d7b']
         test = self.one.alyx.rest('trajectories', 'list', provenance=provenance, django=django_str)
         test_2 = [item for item in test if (item['probe_insertion'] not in list_pid)]
