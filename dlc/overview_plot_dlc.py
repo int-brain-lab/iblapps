@@ -219,17 +219,16 @@ def get_ME(eid, video_type):
     return Times, ME 
 
 
-    Times = cam0['times']  
 
 def get_example_images(eid):
 
 
-    eids = get_repeated_sites()
-#    eid = eids[23]
-#    video_type = 'body'
+#    eids = get_repeated_sites()
+##    eid = eids[23]
+##    video_type = 'body'
 
-    #eids = ['15f742e1-1043-45c9-9504-f1e8a53c1744']
-    eids = ['4a45c8ba-db6f-4f11-9403-56e06a33dfa4']
+#    #eids = ['15f742e1-1043-45c9-9504-f1e8a53c1744']
+#    eids = ['4a45c8ba-db6f-4f11-9403-56e06a33dfa4']
     frts = {'body':30, 'left':60,'right':150}    
 
     one=ONE()   
@@ -1265,7 +1264,6 @@ def plot_all(eid):
 
     plt.tight_layout()
     
-    s2 = ' '.join(l)
     
     # print QC outcome in title and DLC task version
     one = ONE()
@@ -1338,7 +1336,7 @@ def plot_all(eid):
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])               
     #plt.savefig(f'/home/mic/reproducible_dlc/overviewJune/{eid}.png')
     #plt.savefig(f'/home/mic/reproducible_dlc/all_DLC/{s1}_{eid}.png')
-    plt.savefig(f'/home/mic/reproducible_dlc/miles_QC_update/{s1}_{eid}.png')    
+    plt.savefig(f'/home/mic/reproducible_dlc/motor_correlate/{s1}_{eid}.png')    
     plt.close()
     
 
