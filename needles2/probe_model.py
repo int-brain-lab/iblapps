@@ -1,6 +1,7 @@
 import time
-
+import copy
 import numpy as np
+import pandas as pd
 from scipy.signal import fftconvolve
 from one.api import ONE
 from iblutil.numerical import ismember
@@ -36,6 +37,7 @@ class ProbeModel:
         self.cvol = None
         self.cvol_flat = None
         self.initialised = False
+        self.mirror = False
 
         if not lazy:
             self.initialise()
@@ -80,15 +82,17 @@ class ProbeModel:
                                                                    provenance=provenance,
                                                                    django=django_str))
 
-        for ip, p in enumerate(self.traj[prov_dict]['traj']):
-           if p['x'] < 0:
-               continue
-           elif p['y'] < -4400:
-               self.traj[prov_dict]['traj'][ip]['x'] = -1 * p['x']
-               if p['phi'] == 180:
-                   self.traj[prov_dict]['traj'][ip]['phi'] = 0
-               else:
-                   self.traj[prov_dict]['traj'][ip]['phi'] = 180
+        if self.mirror:
+            # if we want to mirror all insertions onto one hemisphere
+            for ip, p in enumerate(self.traj[prov_dict]['traj']):
+               if p['x'] < 0:
+                   continue
+               elif p['y'] < -4400:
+                   self.traj[prov_dict]['traj'][ip]['x'] = -1 * p['x']
+                   if p['phi'] == 180:
+                       self.traj[prov_dict]['traj'][ip]['phi'] = 0
+                   else:
+                       self.traj[prov_dict]['traj'][ip]['phi'] = 180
 
 
         ins_ids, x, y = zip(*[self.get_traj_info(traj) for traj in self.traj[prov_dict]['traj']])
@@ -281,7 +285,7 @@ class ProbeModel:
         return coverage
 
 
-    def compute_coverage(self, trajs, dist_fcn=[50, 100], limit=True):
+    def compute_coverage(self, trajs, dist_fcn=[50, 100], limit=True, coverage=None, pl_voxels=None, factor=1):
         """
         Computes a coverage volume from
         :param trajs: dictionary of trajectories from Alyx rest endpoint (one.alyx.rest...)
@@ -296,7 +300,17 @@ class ProbeModel:
         def crawl_up_from_tip(ins, d):
             return (ins.entry - ins.tip) * (d[:, np.newaxis] /
                                             np.linalg.norm(ins.entry - ins.tip)) + ins.tip
-        full_coverage = np.zeros(ba.image.shape, dtype=np.float32).flatten()
+        if coverage is None:
+            full_coverage = np.zeros(ba.image.shape, dtype=np.float32)
+        else:
+            full_coverage = copy.deepcopy(coverage)
+
+        full_coverage[ba.label == 0] = np.nan
+        full_coverage = full_coverage.flatten()
+
+        per2 = []
+        per1 = []
+        per0 = []
 
         for p in np.arange(len(trajs)):
             if len(trajs) > 20:
@@ -350,80 +364,52 @@ class ProbeModel:
                 coverage[coverage > 0] = 1
             # remap to the coverage volume
             flat_ind = ba._lookup_inds(ixyz)
-            full_coverage[flat_ind] += coverage
+            full_coverage[flat_ind] += (coverage * factor)
+
+            if pl_voxels is not None:
+                n_pl_voxels = pl_voxels.shape[0]
+                fp_voxels_2 = np.where(full_coverage[pl_voxels] >= 2)[0].shape[0]
+                fp_voxels_1 = np.where(full_coverage[pl_voxels] == 1)[0].shape[0]
+                fp_voxels_0 = np.where(full_coverage[pl_voxels] == 0)[0].shape[0]
+
+                per2.append((fp_voxels_2 / n_pl_voxels) * 100)
+                per1.append((fp_voxels_1 / n_pl_voxels) * 100)
+                per0.append((fp_voxels_0 / n_pl_voxels) * 100)
 
         full_coverage = full_coverage.reshape(ba.image.shape)
-        full_coverage[ba.label == 0] = np.nan
+        # full_coverage[ba.label == 0] = np.nan
 
-        return full_coverage, np.mean(xyz, 0)
-#
-# cvol[np.unravel_index(ba._lookup(all_channels), cvol.shape)] = 1
+        if pl_voxels is not None:
+            return full_coverage, per0, per1, per2
+        else:
+            return full_coverage, np.mean(xyz, 0)
 
-# from ibllib.atlas import AllenAtlas
-# ba = AllenAtlas()
-# import vedo
-# import numpy as np
-#
-# actor = vedo.Volume(ba.image, c='bone', spacing = np.array([25]*3), mapper='smart', mode=0, alphaGradient=0.5)
-# plt = vedo.Plotter()
-# plt.add(actor)
-# plt.show()
 
-#from vedo import *
-#from ibllib.atlas import AllenAtlas
-#ba = AllenAtlas()
-#import numpy as np
-#import vtk
-#la = ba.label
-#la[la != 0] = 1
-#vol2 = Volume(la).alpha([0, 0, 0.5])
-#vol = Volume(ba.image).alpha([0, 0, 0.8]).c('bone').pickable(False)
-##vol = Volume(ba.image).c('bone').pickable(False)
-#
-#plane = vtk.vtkPlane()
-#clipping_planes = vtk.vtkPlaneCollection()
-#clipping_planes.AddItem(plane)
-#vol2.mapper().SetClippingPlanes(clipping_planes)
-##
-#plane.SetOrigin(vol.center() + np.array([0, -100, 0]))
-#plane.SetNormal(0.5, 0.866, 0)
-##
-#sl = vol.slicePlane(origin=vol.center() + np.array([0, 100, 50]), normal=(0.5, 0.866, 0))
-#s2 = vol.slicePlane(origin=vol.center(), normal=(0.5, 0, 0.866))
-#s3 = vol.slicePlane(origin=vol.center() + np.array([0, -100, -50]), normal=(1, 0, 0)) # this is 30 degree in coronal
-##s3 = vol.slicePlane(origin=vol.center(), normal=(0.5, 0, 0.866)) # this is 30 degree in coronal
-#
-#sl.cmap('Purples_r').lighting('off').addScalarBar(title='Slice', c='w')
-#s2.cmap('Blues_r').lighting('off')
-#s3.cmap('Greens_r').lighting('off')
-#def func(evt):
-#    if not evt.actor:
-#        return
-#    pid = evt.actor.closestPoint(evt.picked3d, returnPointId=True)
-#    txt = f"Probing:\n{precision(evt.actor.picked3d, 3)}\nvalue = {pid}"
-#    sph = Sphere(evt.actor.points(pid), c='orange7').pickable(False)
-#    vig = sph.vignette(txt, s=7, offset=(-150,15), font=2).followCamera()
-#    plt.remove(plt.actors[-2:]).add([sph, vig]) #remove old 2 & add the new 2
-#
-#plt = show(vol, sl, s2, s3, __doc__, axes=9, bg='k', bg2='bb', interactive=False)
-#plt.actors += [None, None]  # 2 placeholders for [sphere, vignette]
-#plt.addCallback('as my mouse moves please call', func)
-#interactive()
-#
-#from vedo.utils import versor
-#
-#
-#from vedo import *
-#
-#vol = Volume(dataurl+'embryo.slc').alpha([0,0,0.5]).c('k')
-#
-#slices = []
-#for i in range(4):
-#    sl = vol.slicePlane(origin=[150,150,i*50+50], normal=(-1,0,1))
-#    slices.append(sl)
-#
-#amap = [0, 1, 1, 1, 1]  # hide low value points giving them alpha 0
-#mslices = merge(slices) # merge all slices into a single Mesh
-#mslices.cmap('hot_r', alpha=amap).lighting('off').addScalarBar3D()
-#
-#show(vol, mslices, __doc__, axes=1)
+def coverage_with_insertions(csv_file):
+    pr = ProbeModel()
+    pr.initialise()
+    pr.compute_best_for_provenance(provenance='Histology track')
+    first_pass_coverage = pr.report_coverage(provenance='Best', dist=354)
+
+    second_pass_coverage = np.load(r'C:\Users\Mayo\iblenv\volume.npy')
+    second_pass_coverage = second_pass_coverage.flatten()
+    second_pass_coverage[second_pass_coverage == 0] = np.nan
+    ixyz_second = np.where(~np.isnan(second_pass_coverage.flatten()))[0]
+
+    insertions = pd.read_csv(csv_file).to_dict(orient='records')
+
+    # want to make it twice for each insertion
+
+    new_coverage, per0, per1, per2 = pr.compute_coverage(insertions, dist_fcn=[354, 355], coverage=first_pass_coverage,
+                                                         pl_voxels=ixyz_second, factor=2)
+
+    return new_coverage, per0, per1, per2
+
+
+
+
+
+
+
+
+

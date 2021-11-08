@@ -42,7 +42,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.atlas = AllenAtlas(25)
         one = ONE(mode='local')
-        self.dist = 250
+        self.dist = 354
 
         # Configure the Menu bar
         menu_bar = QtWidgets.QMenuBar(self)
@@ -73,7 +73,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #              'Coverage grid 100', 'Coverage 354', 'Coverage 250', 'Coverage 120']
         coverages = ['Coverage 354', 'Coverage 250', 'Coverage 120']
         self.add_menu_bar(self.coverage_menu, self.coverage_group, coverages,
-                          callback=self.add_coverage, default='Coverage 250')
+                          callback=self.add_coverage, default='Coverage 354')
 
         # Add menubar for insertions
         self.insertion_menu = menu_bar.addMenu('Insertions')
@@ -114,17 +114,17 @@ class MainWindow(QtWidgets.QMainWindow):
         if not lazy:
             self.intialise()
 
-    def intialise(self):
+    def intialise(self, second_pass_map=None):
         self.add_insertions()
         self.add_coverage()
-        self.missing_coverage()
+        self.missing_coverage(second_pass_map=second_pass_map)
         self.coverage_increase()
         self.layers.initialise_table()
 
-    def missing_coverage(self):
+    def missing_coverage(self, second_pass_map=None):
         # get the coverage volume layer from the coverage
         cov = self.coronal.ctrl.get_image_layer('coverage').slice_kwargs['region_values']
-        self.second_pass = self.load_second_pass_volume()
+        self.second_pass = self.load_second_pass_volume(second_pass_map=second_pass_map)
         self.second_pass_missing = np.copy(self.second_pass)
         self.second_pass_missing[cov >= 1] = np.nan
         self.ixyz_second = np.where(~np.isnan(self.second_pass.flatten()))[0]
@@ -170,6 +170,7 @@ class MainWindow(QtWidgets.QMainWindow):
             cov, bc = self.probe_model.grid_coverage(all_channels, bin_size)
         else:
             self.dist = int(coverage_choice[-3:])
+            # self.dist = 354
             cov = self.probe_model.report_coverage(self.provenance, self.dist)
             bc = None
 
@@ -447,32 +448,36 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.ctrl.set_scatter_layer('first_pass', x=self.first_pass_map.x.values / 1e6,
                                         y=self.first_pass_map.y.values / 1e6)
 
-    def load_second_pass_volume(self):
+    def load_second_pass_volume(self, second_pass_map=None):
 
-        flat_ind = np.arange(self.probe_model.ba.image.shape[0] *
-                             self.probe_model.ba.image.shape[1] *
-                             self.probe_model.ba.image.shape[2])
-        ixyz = np.unravel_index(flat_ind,
-                                shape=(self.probe_model.ba.image.shape[0],
+        if second_pass_map:
+            reg_volume2 = np.load(r'C:\Users\Mayo\iblenv\volume.npy')
+            reg_volume2[reg_volume2 == 0] = np.nan
+        else:
+            flat_ind = np.arange(self.probe_model.ba.image.shape[0] *
+                                 self.probe_model.ba.image.shape[1] *
+                                 self.probe_model.ba.image.shape[2])
+            ixyz = np.unravel_index(flat_ind,
+                                    shape=(self.probe_model.ba.image.shape[0],
+                                           self.probe_model.ba.image.shape[1],
+                                           self.probe_model.ba.image.shape[2]))
+            ixyz = (np.c_[ixyz[1], ixyz[0], ixyz[2]])
+            xyz = self.probe_model.ba.bc.i2xyz(ixyz.astype(np.float))
+
+            ra = self.probe_model.ba.label.flatten().astype(np.float64)
+            flat = np.zeros_like(ra)
+
+            # because
+            rh = int((np.max(ra) + 1) / 2)
+            t = np.bitwise_and(ra >= rh, xyz[:, 1] < 3800 / 1e6)
+            # t = np.where(ra >= rh)
+            flat[t] = 1
+            flat[ra == 0] = 0
+
+            reg_volume2 = flat.reshape(self.probe_model.ba.image.shape[0],
                                        self.probe_model.ba.image.shape[1],
-                                       self.probe_model.ba.image.shape[2]))
-        ixyz = (np.c_[ixyz[1], ixyz[0], ixyz[2]])
-        xyz = self.probe_model.ba.bc.i2xyz(ixyz.astype(np.float))
-
-        ra = self.probe_model.ba.label.flatten().astype(np.float64)
-        flat = np.zeros_like(ra)
-
-        # because
-        rh = int((np.max(ra) + 1) / 2)
-        t = np.bitwise_and(ra >= rh, xyz[:, 1] < 3800 / 1e6)
-        # t = np.where(ra >= rh)
-        flat[t] = 1
-        flat[ra == 0] = 0
-
-        reg_volume2 = flat.reshape(self.probe_model.ba.image.shape[0],
-                                   self.probe_model.ba.image.shape[1],
-                                   self.probe_model.ba.image.shape[2]).astype(np.float32)
-        reg_volume2[reg_volume2 == 0] = np.nan
+                                       self.probe_model.ba.image.shape[2]).astype(np.float32)
+            reg_volume2[reg_volume2 == 0] = np.nan
 
         return reg_volume2
 
@@ -482,7 +487,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layer_planned = self.coronal.ctrl.get_image_layer('planned_insertions')
         if layer_planned is not None:
             layer = (copy.deepcopy(layer_planned.slice_kwargs['region_values']) * 2)
-            # layer = (layer_planned.slice_kwargs['region_values'])
+
         layer_active = self.coronal.ctrl.get_image_layer('selected_insertion')
         if layer_active is not None:
             if layer is not None:
