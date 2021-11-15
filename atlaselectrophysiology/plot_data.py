@@ -23,8 +23,9 @@ class PlotData:
         self.ephys_path = ephys_path
         self.alf_path = alf_path
 
-        self.chn_coords_all = np.load(Path(self.probe_path, 'channels.localCoordinates.npy'))
-        self.chn_ind_all = np.load(Path(self.probe_path, 'channels.rawInd.npy'))
+        channels = alf.io.load_object(self.probe_path, 'channels')
+        self.chn_coords_all = channels['localCoordinates']
+        self.chn_ind_all = channels['rawInd'].astype(int)
 
         self.chn_min = np.min(self.chn_coords_all[:, 1])
         self.chn_max = np.max(self.chn_coords_all[:, 1])
@@ -71,7 +72,8 @@ class PlotData:
             self.cluster_data_status = True
             self.compute_timescales()
 
-        except Exception:
+        except Exception as err:
+            print(err)
             print('cluster data was not found, some plots will not display')
             self.cluster_data_status = False
 
