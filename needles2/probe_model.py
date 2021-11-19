@@ -385,13 +385,13 @@ class ProbeModel:
             return full_coverage, np.mean(xyz, 0)
 
 
-def coverage_with_insertions(csv_file):
+def coverage_with_insertions(csv_file, second_pass_volume):
     pr = ProbeModel()
     pr.initialise()
     pr.compute_best_for_provenance(provenance='Histology track')
     first_pass_coverage = pr.report_coverage(provenance='Best', dist=354)
 
-    second_pass_coverage = np.load(r'C:\Users\Mayo\iblenv\volume.npy')
+    second_pass_coverage = np.load(second_pass_volume)
     second_pass_coverage = second_pass_coverage.flatten()
     second_pass_coverage[second_pass_coverage == 0] = np.nan
     ixyz_second = np.where(~np.isnan(second_pass_coverage.flatten()))[0]
