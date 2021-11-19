@@ -41,7 +41,7 @@ class MainWindow(QtWidgets.QMainWindow):
         uic.loadUi(Path(__file__).parent.joinpath('mainUI.ui'), self)
 
         self.atlas = AllenAtlas(25)
-        one = ONE(mode='local')
+        one = ONE()
         self.dist = 354
 
         # Configure the Menu bar
@@ -114,7 +114,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not lazy:
             self.intialise()
 
-    def intialise(self, second_pass_map=None):
+    def initialise(self, second_pass_map=None):
         self.add_insertions()
         self.add_coverage()
         self.missing_coverage(second_pass_map=second_pass_map)
