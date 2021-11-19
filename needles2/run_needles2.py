@@ -451,7 +451,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def load_second_pass_volume(self, second_pass_map=None):
 
         if second_pass_map:
-            reg_volume2 = np.load(r'C:\Users\Mayo\iblenv\volume.npy')
+            reg_volume2 = np.load(second_pass_map)
             reg_volume2[reg_volume2 == 0] = np.nan
         else:
             flat_ind = np.arange(self.probe_model.ba.image.shape[0] *
