@@ -401,7 +401,7 @@ def coverage_with_insertions(csv_file, second_pass_volume):
     # want to make it twice for each insertion
 
     new_coverage, per0, per1, per2 = pr.compute_coverage(insertions, dist_fcn=[354, 355], coverage=first_pass_coverage,
-                                                         pl_voxels=ixyz_second, factor=2)
+                                                         pl_voxels=ixyz_second, factor=1)
 
     return new_coverage, per0, per1, per2
 

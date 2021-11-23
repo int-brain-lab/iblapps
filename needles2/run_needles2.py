@@ -188,6 +188,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # when add button pressed
         # get out the pandas df
         df = self.coverage.ctrl.model.to_df()
+        # Add the insertions twice
+        self.table.ctrl.model.insertRow(df)
         self.table.ctrl.model.insertRow(df)
 
         self.get_coverage_from_table()
@@ -486,7 +488,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layer = None
         layer_planned = self.coronal.ctrl.get_image_layer('planned_insertions')
         if layer_planned is not None:
-            layer = (copy.deepcopy(layer_planned.slice_kwargs['region_values']) * 2)
+            layer = (copy.deepcopy(layer_planned.slice_kwargs['region_values']))
 
         layer_active = self.coronal.ctrl.get_image_layer('selected_insertion')
         if layer_active is not None:
