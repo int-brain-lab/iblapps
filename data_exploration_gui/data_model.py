@@ -23,9 +23,7 @@ class DataModel:
     def __init__(self, eid, probe, one=None, spike_collection=None):
         one = one or ONE()
 
-        if spike_collection == '':
-            collection = f'alf/{probe}'
-        elif spike_collection:
+        if spike_collection:
             collection = f'alf/{probe}/{spike_collection}'
         else:
             # Pykilosort is default, if not present look for normal kilosort
@@ -35,6 +33,9 @@ class DataModel:
                 collection = f'alf/{probe}/pykilosort'
             else:
                 collection = f'alf/{probe}'
+
+        print(collection)
+        #collection = f'alf/{probe}'
 
         try:
             self.spikes = one.load_object(eid, obj='spikes', collection=collection,
@@ -67,7 +68,7 @@ class DataModel:
             col = np.full((len(self.clusters.clust_ids)), colours['no metric'])
             self.clusters.colours_ks = col
 
-            colours_ibl = np.array(self.clusters.metrics.ks2_label[self.clusters.clust_ids])
+            colours_ibl = np.full((len(self.clusters.clust_ids)), colours['no metric'])
             good_ibl = np.where(self.clusters.metrics.label[self.clusters.clust_ids] == 1)[0]
             colours_ibl[good_ibl] = colours['IBL good']
             bad_ibl = np.where(self.clusters.metrics.label[self.clusters.clust_ids] != 1)[0]
