@@ -112,7 +112,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.region_placeholder.setLayout(layout)
 
         if not lazy:
-            self.intialise()
+            self.initialise()
 
     def initialise(self, second_pass_map=None):
         self.add_insertions()
