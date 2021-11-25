@@ -317,7 +317,8 @@ class ProbeModel:
                 if p % 20 == 0:
                     print(p / len(trajs))
             traj = trajs[p]
-            ins = atlas.Insertion.from_dict(traj)
+            ins = atlas.Insertion.from_dict(traj, brain_atlas=ba)
+
             # those are the top and bottom coordinates of the active part of the shank extended
             # to maxdist
             d = (np.array([ACTIVE_LENGTH_UM + MAX_DIST_UM * np.sqrt(2),

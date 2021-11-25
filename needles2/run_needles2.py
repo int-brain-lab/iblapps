@@ -864,12 +864,12 @@ class CoverageModel:
         self.data[target]['max'] = minmax[1]
 
     def get_traj(self):
-        traj = {'x': int(self.data['x']['value']),
-                'y': int(self.data['y']['value']),
+        traj = {'x': float(self.data['x']['value']),
+                'y': float(self.data['y']['value']),
                 'z': 0.0,
-                'phi': self.data['p']['value'],
-                'theta': self.data['t']['value'],
-                'depth': int(self.data['d']['value']),
+                'phi': float(self.data['p']['value']),
+                'theta': float(self.data['t']['value']),
+                'depth': float(self.data['d']['value']),
                 'provenance': 'Planned'}
 
         return traj
