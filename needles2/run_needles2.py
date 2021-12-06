@@ -36,11 +36,11 @@ class MainWindow(QtWidgets.QMainWindow):
             av.setWindowTitle(title)
         return av
 
-    def __init__(self, lazy=False):
+    def __init__(self, lazy=False, res=25):
         super(MainWindow, self).__init__()
         uic.loadUi(Path(__file__).parent.joinpath('mainUI.ui'), self)
 
-        self.atlas = AllenAtlas(25)
+        self.atlas = AllenAtlas(res_um=res)
         one = ONE()
         self.dist = 354
 
@@ -1287,11 +1287,11 @@ class ScatterLayer:
     scatter_kwargs: dict = field(default_factory=lambda: {'x': None, 'y': None})
 
 
-def view(title=None, lazy=False):
+def view(title=None, lazy=False, res=25):
     """
     """
     qt.create_app()
-    av = MainWindow._get_or_create(title=title, lazy=lazy)
+    av = MainWindow._get_or_create(title=title, lazy=lazy, res=res)
     av.show()
     return av
 

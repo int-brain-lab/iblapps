@@ -23,10 +23,10 @@ VAL_2_PROV = {v: k for k, v in PROV_2_VAL.items()}
 
 
 class ProbeModel:
-    def __init__(self, one=None, ba=None, lazy=False):
+    def __init__(self, one=None, ba=None, lazy=False, res=25):
 
         self.one = one or ONE()
-        self.ba = ba or AllenAtlas(25)
+        self.ba = ba or AllenAtlas(res_um=res)
         self.traj = {'Planned': {},
                      'Micro-manipulator': {},
                      'Histology track': {},
@@ -232,7 +232,7 @@ class ProbeModel:
         if depths is None:
             depths = SITES_COORDINATES[:, 1]
         if traj['provenance'] == 'Planned' or traj['provenance'] == 'Micro-manipulator':
-            ins = atlas.Insertion.from_dict(traj)
+            ins = atlas.Insertion.from_dict(traj, brain_atlas=self.ba)
             # Deepest coordinate first
             xyz = np.c_[ins.tip, ins.entry].T
             xyz_channels = histology.interpolate_along_track(xyz, (depths +
@@ -386,8 +386,8 @@ class ProbeModel:
             return full_coverage, np.mean(xyz, 0)
 
 
-def coverage_with_insertions(csv_file, second_pass_volume):
-    pr = ProbeModel()
+def coverage_with_insertions(csv_file, second_pass_volume, res=25):
+    pr = ProbeModel(res=res)
     pr.initialise()
     pr.compute_best_for_provenance(provenance='Histology track')
     first_pass_coverage = pr.report_coverage(provenance='Best', dist=354)
