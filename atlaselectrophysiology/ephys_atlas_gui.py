@@ -39,19 +39,20 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         return av
 
     def __init__(self, offline=False, probe_id=None, one=None, histology=True,
-                 spike_collection=None):
+                 spike_collection=None, remote=False):
         super(MainWindow, self).__init__()
 
         self.init_variables()
         self.init_layout(self, offline=offline)
         self.configure = True
+        one_mode = 'remote' if remote else 'auto'
         if not offline and probe_id is None:
-            self.loaddata = LoadData()
+            self.loaddata = LoadData(mode=one_mode)
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
         elif not offline and probe_id is not None:
             self.loaddata = LoadData(probe_id=probe_id, one=one, load_histology=histology,
-                                     spike_collection=spike_collection)
+                                     spike_collection=spike_collection, mode=one_mode)
             self.current_shank_idx = 0
             _, self.histology_exists = self.loaddata.get_info(0)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
@@ -2112,11 +2113,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Offline vs online mode')
     parser.add_argument('-o', '--offline', default=False, required=False, help='Offline mode')
+    parser.add_argument('-r', '--remote', default=False, required=False,  action='store_true', help='Remote mode')
     parser.add_argument('-i', '--insertion', default=None, required=False, help='Insertion mode')
     args = parser.parse_args()
 
     app = QtWidgets.QApplication([])
-    mainapp = MainWindow(offline=args.offline, probe_id=args.insertion)
+    mainapp = MainWindow(offline=args.offline, probe_id=args.insertion, remote=args.remote)
     # mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()
