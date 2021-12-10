@@ -9,7 +9,7 @@ import numpy as np
 import pyqtgraph as pg
 
 
-def viewephys(data, fs, channels, br, title='ephys'):
+def viewephys(data, fs, channels=None, br=None, title='ephys'):
     """
 
     :param data: [nc, ns]
@@ -26,8 +26,15 @@ def viewephys(data, fs, channels, br, title='ephys'):
     # image = br.rgb[channels['ibr'][ih]].astype(np.uint8)
     # image = np.tile(image[:, np.newaxis, :], (1, width, 1))
     # image = np.tile(image[np.newaxis, :, :], (width, 1, 1))
-    image = br.rgb[channels['ibr']].astype(np.uint8)
-    image = image[np.newaxis, :, :]
+    from ibllib.ephys.neuropixel import trace_header
+    if channels is None:
+        channels = trace_header(version = 1)
+        eqc = viewseis(data.T, si=1 / fs * 1e3, h=channels, title=title, taxis=0)
+        return eqc
+    else:
+        image = br.rgb[channels['ibr']].astype(np.uint8)
+        image = image[np.newaxis, :, :]
+
 
     eqc = viewseis(data.T, si=1 / fs * 1e3, h=channels, title=title, taxis=0)
     imitem = pg.ImageItem(image)
