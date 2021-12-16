@@ -35,9 +35,9 @@ class TestsAlignmentQcGUI(unittest.TestCase):
         cls.alignments = data['alignments'].tolist()
         cls.cluster_chns = data['cluster_chns']
         register_track(cls.probe_id, picks=cls.xyz_picks, one=one, overwrite=True,
-                       channels=False)
+                       channels=False, brain_atlas=brain_atlas)
         register_track(cls.probe_id2, picks=cls.xyz_picks, one=one, overwrite=True,
-                       channels=False)
+                       channels=False, brain_atlas=brain_atlas)
 
     def setUp(self) -> None:
         self.resolved_key = '2020-09-14T15:44:56_nate'
