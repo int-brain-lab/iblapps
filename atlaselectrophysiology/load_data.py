@@ -16,9 +16,6 @@ import ibllib.qc.critical_reasons as usrpmt
 logger = logging.getLogger('ibllib')
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
 
 class LoadData:
     def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None,
