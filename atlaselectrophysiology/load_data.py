@@ -435,7 +435,7 @@ class LoadData:
             # Create new trajectory and overwrite previous one
             histology.register_aligned_track(self.probe_id, xyz_channels,
                                              chn_coords=self.chn_coords, one=self.one,
-                                             overwrite=True, channels=channels)
+                                             overwrite=True, channels=channels, brain_atlas=self.brain_atlas)
         else:
             channel_upload = False
 
