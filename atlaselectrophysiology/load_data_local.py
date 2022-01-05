@@ -255,11 +255,11 @@ class LoadDataLocal:
         channel_dict = {}
         for i in np.arange(brain_regions.id.size):
             channel = {
-                'x': brain_regions.xyz[i, 0] * 1e6,
-                'y': brain_regions.xyz[i, 1] * 1e6,
-                'z': brain_regions.xyz[i, 2] * 1e6,
-                'axial': brain_regions.axial[i],
-                'lateral': brain_regions.lateral[i],
+                'x': np.float64(brain_regions.xyz[i, 0] * 1e6),
+                'y': np.float64(brain_regions.xyz[i, 1] * 1e6),
+                'z': np.float64(brain_regions.xyz[i, 2] * 1e6),
+                'axial': np.float64(brain_regions.axial[i]),
+                'lateral': np.float64(brain_regions.lateral[i]),
                 'brain_region_id': int(brain_regions.id[i]),
                 'brain_region': brain_regions.acronym[i]
             }
