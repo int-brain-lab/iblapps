@@ -1,17 +1,16 @@
-from PyQt5 import QtWidgets, QtCore, QtGui, uic
-
-from easyqc.gui import viewseis
-from iblapps import qt
 from pathlib import Path
 
 import numpy as np
-
+from PyQt5 import QtWidgets, QtCore, QtGui, uic
 import pyqtgraph as pg
+
+from iblapps import qt
+from iblutil.numerical import ismember
+from easyqc.gui import viewseis
 
 
 def viewephys(data, fs, channels=None, br=None, title='ephys'):
     """
-
     :param data: [nc, ns]
     :param fs:
     :param channels:
@@ -27,12 +26,13 @@ def viewephys(data, fs, channels=None, br=None, title='ephys'):
     # image = np.tile(image[:, np.newaxis, :], (1, width, 1))
     # image = np.tile(image[np.newaxis, :, :], (width, 1, 1))
     from ibllib.ephys.neuropixel import trace_header
-    if channels is None:
+    if channels is None or br is None:
         channels = trace_header(version = 1)
         eqc = viewseis(data.T, si=1 / fs * 1e3, h=channels, title=title, taxis=0)
         return eqc
     else:
-        image = br.rgb[channels['ibr']].astype(np.uint8)
+        _, ir = ismember(channels['atlas_id'], br.id)
+        image = br.rgb[ir].astype(np.uint8)
         image = image[np.newaxis, :, :]
 
 
