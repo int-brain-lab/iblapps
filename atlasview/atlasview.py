@@ -264,7 +264,7 @@ class ControllerTopView(PgImageController):
     def __init__(self, qmain: TopView, res: int = 25, volume='image', brainmap='Allen'):
         super(ControllerTopView, self).__init__(qmain)
         self.volume = volume
-        self.atlas = AllenAtlas(res, brainmap=brainmap)
+        self.atlas = AllenAtlas(res)
         self.fig_top = self.qwidget = qmain
         # Setup Coronal slice: width: ml, height: dv, depth: ap
         self.fig_coronal = SliceView(qmain, waxis=0, haxis=2, daxis=1)
@@ -292,6 +292,7 @@ class ControllerTopView(PgImageController):
         fig.ctrl.slice_coord = coord
 
     def set_top(self):
+        self.atlas.compute_surface()
         img = self.atlas.top.transpose()
         img[np.isnan(img)] = np.nanmin(img)  # img has dims ml, ap
         dw, dh = (self.atlas.bc.dxyz[0], self.atlas.bc.dxyz[1])
