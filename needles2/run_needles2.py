@@ -1139,6 +1139,7 @@ class TopController(BaseController):
         self.scatter_layers = []
 
     def set_top(self):
+        self.atlas.compute_surface()
         img = self.atlas.top.transpose()
         img[np.isnan(img)] = np.nanmin(img)  # img has dims ml, ap
         dw, dh = (self.atlas.bc.dxyz[0], self.atlas.bc.dxyz[1])
