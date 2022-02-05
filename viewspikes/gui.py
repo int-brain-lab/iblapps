@@ -6,11 +6,16 @@ import scipy.signal
 from PyQt5 import QtWidgets, QtCore, QtGui, uic
 import pyqtgraph as pg
 from brainbox.processing import bincount2D
-import qt
-from iblutil.numerical import ismember
+
 from easyqc.gui import viewseis
+import one.alf.io as alfio
+from one.alf.files import get_session_path
+from iblutil.numerical import ismember
 from ibllib.io import spikeglx
 from ibllib.dsp import voltage
+
+import qt
+from brainbox.io.one import SpikeSortingLoader
 
 T_BIN = .007  # time bin size in secs
 D_BIN = 10  # depth bin size in um
@@ -27,6 +32,17 @@ SNS_PALETTE = [(0.12156862745098039, 0.4666666666666667, 0.7058823529411765),
     (0.09019607843137255, 0.7450980392156863, 0.8117647058823529)]
 
 YMAX = 4000
+
+
+def view_raster(bin_file):
+    bin_file = Path(bin_file)
+    pname = bin_file.parent.name
+    session_path = get_session_path(bin_file)
+    ssl = SpikeSortingLoader(session_path=session_path, pname=pname)
+    spikes, clusters, channels = ssl.load_spike_sorting(dataset_types=['spikes.samples'])
+    trials = alfio.load_object(ssl.session_path.joinpath('alf'), 'trials')
+    return RasterView(bin_file, spikes, clusters, trials=trials)
+
 
 class RasterView(QtWidgets.QMainWindow):
     def __init__(self, bin_file, spikes, clusters, channels=None, trials=None, *args, **kwargs):
