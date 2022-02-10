@@ -51,7 +51,7 @@ def download_histology_data(subject, lab):
         path_to_image = Path(CACHE_DIR, file)
         if not path_to_image.exists():
             url = (baseurl + '/' + file)
-            http_download_file(url, cache_dir=CACHE_DIR,
+            http_download_file(url, target_dir=CACHE_DIR,
                                username=par.HTTP_DATA_SERVER_LOGIN,
                                password=par.HTTP_DATA_SERVER_PWD)
 
