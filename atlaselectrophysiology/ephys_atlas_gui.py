@@ -1273,6 +1273,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
             self.img_stim_data = self.plotdata.get_passive_events()
 
+            if not self.offline:
+                self.img_raw_data = self.plotdata.get_raw_data_image(self.loaddata.probe_id, one=self.loaddata.one)
+            else:
+                self.img_raw_data = {}
+
             if self.histology_exists:
                 self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
             else:
@@ -2113,7 +2118,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Offline vs online mode')
     parser.add_argument('-o', '--offline', default=False, required=False, help='Offline mode')
-    parser.add_argument('-r', '--remote', default=False, required=False,  action='store_true', help='Remote mode')
+    parser.add_argument('-r', '--remote', default=False, required=False, action='store_true', help='Remote mode')
     parser.add_argument('-i', '--insertion', default=None, required=False, help='Insertion mode')
     args = parser.parse_args()
 

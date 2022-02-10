@@ -105,6 +105,14 @@ class Setup():
         img_options.addAction(scatter_amp)
         self.img_options_group.addAction(scatter_amp)
 
+        raw_type = list(self.img_raw_data.keys())
+        for raw in raw_type:
+            img = QtWidgets.QAction(raw, self, checkable=True, checked=False)
+            img.triggered.connect(lambda checked, item=raw: self.plot_image(
+                                  self.img_raw_data[item]))
+            img_options.addAction(img)
+            self.img_options_group.addAction(img)
+
         stim_type = list(self.img_stim_data.keys())
         for stim in stim_type:
             img = QtWidgets.QAction(stim, self, checkable=True, checked=False)

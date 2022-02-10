@@ -3,8 +3,10 @@ from pathlib import Path
 import numpy as np
 import one.alf as alf
 from brainbox.processing import bincount2D
+from brainbox.io.spikeglx import stream
 from brainbox.population.decode import xcorr
 from brainbox.task import passive
+from ibllib.dsp import voltage
 import scipy
 from PyQt5 import QtGui
 
@@ -471,6 +473,38 @@ class PlotData:
         }
 
         return data_img, data_probe
+
+    # only for IBL sorry
+    def get_raw_data_image(self, pid, t0=(1000, 2000, 3000), one=None):
+
+        def gain2level(gain):
+            return 10 ** (gain / 20) * 4 * np.array([-1, 1])
+        data_img = dict()
+        for t in t0:
+
+            sr, t = stream(pid, t, one=one)
+            raw = sr[:, :-sr.nsync].T
+            channel_labels, channel_features = voltage.detect_bad_channels(raw, sr.fs)
+            raw = voltage.destripe(raw, fs=sr.fs, channel_labels=channel_labels)
+            raw_image = raw[:, int((450 / 1e3) * sr.fs):int((500 / 1e3) * sr.fs)].T
+            x_range = np.array([0, raw_image.shape[0] - 1]) / sr.fs * 1e3
+            levels = gain2level(-90)
+            xscale = (x_range[1] - x_range[0]) / raw_image.shape[0]
+            yscale = (self.chn_max - self.chn_min) / raw_image.shape[1]
+
+            data_raw = {
+                'img': raw_image,
+                'scale': np.array([xscale, yscale]),
+                'levels': levels,
+                'offset': np.array([0, 0]),
+                'cmap': 'bone',
+                'xrange': x_range,
+                'xaxis': 'Time (ms)',
+                'title': 'Power (uV)'
+            }
+            data_img[f'Raw data t={t}'] = data_raw
+
+        return data_img
 
     def get_lfp_spectrum_data(self):
         freq_bands = np.vstack(([0, 4], [4, 10], [10, 30], [30, 80], [80, 200]))
