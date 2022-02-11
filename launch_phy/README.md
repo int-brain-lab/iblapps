@@ -29,9 +29,6 @@ Manual curation comprises three different steps
     hand corner of the main window)
     * A new column, with the heading **notes** should have been created in the Cluster View window
 
-3)  **Merging clusters**
-    * Clusters can be merged by selecting the two or more clusters in Cluster View and using `Edit-> Merge` or by pressing G
-
 Make sure you hit the save button frequently during manual curation so your results are saved and can be
 recovered in case Phy freezes or crashes!
 
@@ -49,18 +46,3 @@ or:
 `python <path/to/populate_cluster_table.py> -s subject -e eid -p probe_name`
 e.g. `python int-brain-lab\iblapps\launch_phy\populate_cluster_table.py -e a3df91c8-52a6-4afa-957b-3479a7d0897c -p probe00`
 
-## Upload merge results to google drive
-When clusters are merged in Phy, the merge results are saved by updating the indices of clusters in the
-`spikes.clusters.npy` data set. For the time being (until versioning is implemented in the data architecture) we will
-save the results of merging on google drive.
-
-The files that need to be uploaded are,
-- `spikes.clusters.npy`
-- `merge_info.csv`(this is created after running `populate_cluster_table.py`)
-
-These should be uploaded [here](https://drive.google.com/drive/u/1/folders/1_KDshAIblNiFNDQD37ZtoFks8b4VDWgg),
-within a folder using the following naming convention,
-
-subject_date_session_probe_user
-
-e.g `KS022_2019-12-10_001_probe00_mayo`

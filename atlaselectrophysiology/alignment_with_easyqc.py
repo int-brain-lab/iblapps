@@ -1,7 +1,7 @@
 from easyqc.gui import viewseis
 from ibllib.dsp import voltage
 from ibllib.ephys import neuropixel
-from viewspikes.data import stream, get_ks2
+from viewspikes.data import stream
 from viewspikes.plots import overlay_spikes
 import scipy
 from PyQt5 import QtCore, QtGui
@@ -34,6 +34,10 @@ class AlignmentWindow(alignment_window.MainWindow):
         self.lines_features = []
         self.lines_tracks = []
         self.points = []
+
+        self.plotdata.channels = Bunch()
+        self.plotdata.channels['localCoordinates'] = self.plotdata.chn_coords_all
+        self.plotdata.channels['rawInd'] = self.plotdata.chn_ind_all
 
     def on_mouse_double_clicked(self, event):
         if not self.offline:
@@ -136,12 +140,11 @@ class AlignmentWindow(alignment_window.MainWindow):
         sos = scipy.signal.butter(3, 300 / self.ap.fs / 2, btype='highpass', output='sos')
         butt = scipy.signal.sosfiltfilt(sos, raw)
         destripe = voltage.destripe(raw, fs=self.ap.fs)
-        ks2 = get_ks2(raw, dsets, self.loaddata.one)
+
         self.eqc['butterworth'] = viewseis(butt.T, si=1 / self.ap.fs, h=h, t0=t0, title='butt',
                                            taxis=0)
         self.eqc['destripe'] = viewseis(destripe.T, si=1 / self.ap.fs, h=h, t0=t0, title='destr',
                                         taxis=0)
-        self.eqc['ks2'] = viewseis(ks2.T, si=1 / self.ap.fs, h=h, t0=t0, title='ks2', taxis=0)
 
         overlay_spikes(self.eqc['butterworth'], self.plotdata.spikes, self.plotdata.clusters,
                        self.plotdata.channels)
@@ -227,10 +230,19 @@ class TrialWindow(trial_window.MainWindow):
 def load_extra_data(probe_id, one=None, spike_collection=None):
     one = one or ONE()
     eid, probe = one.pid2eid(probe_id)
-    if spike_collection:
+    if spike_collection == '':
+        collection = f'alf/{probe}'
+    elif spike_collection:
         collection = f'alf/{probe}/{spike_collection}'
     else:
-        collection = f'alf/{probe}'
+        # Pykilosort is default, if not present look for normal kilosort
+        # Find all collections
+        all_collections = one.list_collections(eid)
+
+        if f'alf/{probe}/pykilosort' in all_collections:
+            collection = f'alf/{probe}/pykilosort'
+        else:
+            collection = f'alf/{probe}'
 
     _ = one.load_object(eid, obj='spikes', collection=collection,
                         attribute='samples')

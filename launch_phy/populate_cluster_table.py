@@ -1,8 +1,9 @@
 from launch_phy import cluster_table
-import alf.io
+from one import alf
 import pandas as pd
 from datetime import datetime
-from oneibl.one import ONE
+from one.api import ONE
+from one import params
 from ibllib.misc import print_progress
 import sys
 from pathlib import Path
@@ -17,8 +18,16 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
     if eid is None:
         eid = one.search(subject=subj, date=date, number=sess_no)[0]
 
-    sess_path = one.path_from_eid(eid)
-    alf_path = sess_path.joinpath('alf', probe_label)
+    sess_path = one.eid2path(eid)
+
+    cols = one.list_collections(eid)
+    if f'alf/{probe_label}/pykilosort' in cols:
+        collection = f'alf/{probe_label}/pykilosort'
+    else:
+        collection = f'alf/{probe_label}'
+
+
+    alf_path = sess_path.joinpath(collection)
 
     cluster_path = Path(alf_path, 'spikes.clusters.npy')
     template_path = Path(alf_path, 'spikes.templates.npy')
@@ -93,7 +102,7 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
         print('No merges detected, continuing...')
 
     # Now populate datajoint with cluster labels
-    user = one._par.ALYX_LOGIN
+    user = params.get().ALYX_LOGIN
     current_date = datetime.now().replace(microsecond=0)
 
     try:

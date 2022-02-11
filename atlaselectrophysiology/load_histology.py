@@ -51,7 +51,7 @@ def download_histology_data(subject, lab):
         path_to_image = Path(CACHE_DIR, file)
         if not path_to_image.exists():
             url = (baseurl + '/' + file)
-            http_download_file(url, cache_dir=CACHE_DIR,
+            http_download_file(url, target_dir=CACHE_DIR,
                                username=par.HTTP_DATA_SERVER_LOGIN,
                                password=par.HTTP_DATA_SERVER_PWD)
 
@@ -65,7 +65,7 @@ def download_histology_data(subject, lab):
 
 
 def tif2nrrd(path_to_image):
-    path_to_nrrd = Path(path_to_image.parent, path_to_image.parts[-1][:-3] + 'nrrd')
+    path_to_nrrd = Path(path_to_image).with_suffix('.nrrd')
     if not path_to_nrrd.exists():
         reader = sitk.ImageFileReader()
         reader.SetImageIO("TIFFImageIO")

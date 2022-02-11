@@ -1,3 +1,10 @@
+import os
+import platform
+
+if platform.system() == 'Darwin':
+    if platform.release().split('.')[0] == '20':
+        os.environ["QT_MAC_WANTS_LAYER"] = "1"
+
 from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import pyqtgraph.exporters
@@ -11,7 +18,6 @@ import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
-import os
 import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
 
@@ -33,19 +39,20 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         return av
 
     def __init__(self, offline=False, probe_id=None, one=None, histology=True,
-                 spike_collection=None):
+                 spike_collection=None, remote=False):
         super(MainWindow, self).__init__()
 
         self.init_variables()
         self.init_layout(self, offline=offline)
         self.configure = True
+        one_mode = 'remote' if remote else 'auto'
         if not offline and probe_id is None:
-            self.loaddata = LoadData()
+            self.loaddata = LoadData(mode=one_mode)
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
         elif not offline and probe_id is not None:
             self.loaddata = LoadData(probe_id=probe_id, one=one, load_histology=histology,
-                                     spike_collection=spike_collection)
+                                     spike_collection=spike_collection, mode=one_mode)
             self.current_shank_idx = 0
             _, self.histology_exists = self.loaddata.get_info(0)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
@@ -1266,6 +1273,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
             self.img_stim_data = self.plotdata.get_passive_events()
 
+            if not self.offline:
+                self.img_raw_data = self.plotdata.get_raw_data_image(self.loaddata.probe_id, one=self.loaddata.one)
+            else:
+                self.img_raw_data = {}
+
             if self.histology_exists:
                 self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
             else:
@@ -2106,11 +2118,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Offline vs online mode')
     parser.add_argument('-o', '--offline', default=False, required=False, help='Offline mode')
+    parser.add_argument('-r', '--remote', default=False, required=False, action='store_true', help='Remote mode')
     parser.add_argument('-i', '--insertion', default=None, required=False, help='Insertion mode')
     args = parser.parse_args()
 
     app = QtWidgets.QApplication([])
-    mainapp = MainWindow(offline=args.offline, probe_id=args.insertion)
+    mainapp = MainWindow(offline=args.offline, probe_id=args.insertion, remote=args.remote)
     # mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()

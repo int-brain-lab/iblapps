@@ -36,13 +36,13 @@ class MainWindow(QtWidgets.QMainWindow):
             av.setWindowTitle(title)
         return av
 
-    def __init__(self, lazy=False):
+    def __init__(self, lazy=False, res=25):
         super(MainWindow, self).__init__()
         uic.loadUi(Path(__file__).parent.joinpath('mainUI.ui'), self)
 
-        self.atlas = AllenAtlas(25)
-        one = ONE(mode='local')
-        self.dist = 250
+        self.atlas = AllenAtlas(res_um=res)
+        one = ONE()
+        self.dist = 354
 
         # Configure the Menu bar
         menu_bar = QtWidgets.QMenuBar(self)
@@ -51,7 +51,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Add menu bar for mappings
         self.map_menu = menu_bar.addMenu('Mappings')
-        self.map_group = QtGui.QActionGroup(self.map_menu)
+        self.map_group = QtWidgets.QActionGroup(self.map_menu)
         # Only allow one to plot to be selected at any one time
         self.map_group.setExclusive(True)
         self.add_menu_bar(self.map_menu, self.map_group, list(self.atlas.regions.mappings.keys()),
@@ -59,7 +59,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Add menu bar for base image
         self.img_menu = menu_bar.addMenu('Images')
-        self.img_group = QtGui.QActionGroup(self.img_menu)
+        self.img_group = QtWidgets.QActionGroup(self.img_menu)
         self.img_group.setExclusive(True)
         images = ['Image', 'Annotation']
         self.add_menu_bar(self.img_menu, self.img_group, images, callback=self.change_image,
@@ -67,17 +67,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Add menu bar for coverage
         self.coverage_menu = menu_bar.addMenu('Coverage')
-        self.coverage_group = QtGui.QActionGroup(self.coverage_menu)
+        self.coverage_group = QtWidgets.QActionGroup(self.coverage_menu)
         self.coverage_group.setExclusive(True)
         # coverages = ['Coverage cosine', 'Coverage grid 500', 'Coverage grid 250',
         #              'Coverage grid 100', 'Coverage 354', 'Coverage 250', 'Coverage 120']
         coverages = ['Coverage 354', 'Coverage 250', 'Coverage 120']
         self.add_menu_bar(self.coverage_menu, self.coverage_group, coverages,
-                          callback=self.add_coverage, default='Coverage 250')
+                          callback=self.add_coverage, default='Coverage 354')
 
         # Add menubar for insertions
         self.insertion_menu = menu_bar.addMenu('Insertions')
-        self.insertion_group = QtGui.QActionGroup(self.insertion_menu)
+        self.insertion_group = QtWidgets.QActionGroup(self.insertion_menu)
         self.insertion_group.setExclusive(True)
         insertions = ['Resolved', 'Ephys aligned histology track', 'Histology track',
                       'Histology track (best)', 'Micro-manipulator', 'Micro-manipulator (best)',
@@ -112,19 +112,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.region_placeholder.setLayout(layout)
 
         if not lazy:
-            self.intialise()
+            self.initialise()
 
-    def intialise(self):
+    def initialise(self, second_pass_map=None):
         self.add_insertions()
         self.add_coverage()
-        self.missing_coverage()
+        self.missing_coverage(second_pass_map=second_pass_map)
         self.coverage_increase()
         self.layers.initialise_table()
 
-    def missing_coverage(self):
+    def missing_coverage(self, second_pass_map=None):
         # get the coverage volume layer from the coverage
         cov = self.coronal.ctrl.get_image_layer('coverage').slice_kwargs['region_values']
-        self.second_pass = self.load_second_pass_volume()
+        self.second_pass = self.load_second_pass_volume(second_pass_map=second_pass_map)
         self.second_pass_missing = np.copy(self.second_pass)
         self.second_pass_missing[cov >= 1] = np.nan
         self.ixyz_second = np.where(~np.isnan(self.second_pass.flatten()))[0]
@@ -170,6 +170,7 @@ class MainWindow(QtWidgets.QMainWindow):
             cov, bc = self.probe_model.grid_coverage(all_channels, bin_size)
         else:
             self.dist = int(coverage_choice[-3:])
+            # self.dist = 354
             cov = self.probe_model.report_coverage(self.provenance, self.dist)
             bc = None
 
@@ -187,6 +188,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # when add button pressed
         # get out the pandas df
         df = self.coverage.ctrl.model.to_df()
+        # Add the insertions twice
+        self.table.ctrl.model.insertRow(df)
         self.table.ctrl.model.insertRow(df)
 
         self.get_coverage_from_table()
@@ -326,9 +329,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def add_menu_bar(self, menu, group, items, callback=None, default=None):
         for item in items:
             if item == default:
-                _item = QtGui.QAction(item, self, checkable=True, checked=True)
+                _item = QtWidgets.QAction(item, self, checkable=True, checked=True)
             else:
-                _item = QtGui.QAction(item, self, checkable=True, checked=False)
+                _item = QtWidgets.QAction(item, self, checkable=True, checked=False)
             if callback:
                 _item.triggered.connect(callback)
             menu.addAction(_item)
@@ -447,32 +450,36 @@ class MainWindow(QtWidgets.QMainWindow):
         self.top.ctrl.set_scatter_layer('first_pass', x=self.first_pass_map.x.values / 1e6,
                                         y=self.first_pass_map.y.values / 1e6)
 
-    def load_second_pass_volume(self):
+    def load_second_pass_volume(self, second_pass_map=None):
 
-        flat_ind = np.arange(self.probe_model.ba.image.shape[0] *
-                             self.probe_model.ba.image.shape[1] *
-                             self.probe_model.ba.image.shape[2])
-        ixyz = np.unravel_index(flat_ind,
-                                shape=(self.probe_model.ba.image.shape[0],
+        if second_pass_map:
+            reg_volume2 = np.load(second_pass_map)
+            reg_volume2[reg_volume2 == 0] = np.nan
+        else:
+            flat_ind = np.arange(self.probe_model.ba.image.shape[0] *
+                                 self.probe_model.ba.image.shape[1] *
+                                 self.probe_model.ba.image.shape[2])
+            ixyz = np.unravel_index(flat_ind,
+                                    shape=(self.probe_model.ba.image.shape[0],
+                                           self.probe_model.ba.image.shape[1],
+                                           self.probe_model.ba.image.shape[2]))
+            ixyz = (np.c_[ixyz[1], ixyz[0], ixyz[2]])
+            xyz = self.probe_model.ba.bc.i2xyz(ixyz.astype(np.float))
+
+            ra = self.probe_model.ba.label.flatten().astype(np.float64)
+            flat = np.zeros_like(ra)
+
+            # because
+            rh = int((np.max(ra) + 1) / 2)
+            t = np.bitwise_and(ra >= rh, xyz[:, 1] < 3800 / 1e6)
+            # t = np.where(ra >= rh)
+            flat[t] = 1
+            flat[ra == 0] = 0
+
+            reg_volume2 = flat.reshape(self.probe_model.ba.image.shape[0],
                                        self.probe_model.ba.image.shape[1],
-                                       self.probe_model.ba.image.shape[2]))
-        ixyz = (np.c_[ixyz[1], ixyz[0], ixyz[2]])
-        xyz = self.probe_model.ba.bc.i2xyz(ixyz.astype(np.float))
-
-        ra = self.probe_model.ba.label.flatten().astype(np.float64)
-        flat = np.zeros_like(ra)
-
-        # because
-        rh = int((np.max(ra) + 1) / 2)
-        t = np.bitwise_and(ra >= rh, xyz[:, 1] < 3800 / 1e6)
-        # t = np.where(ra >= rh)
-        flat[t] = 1
-        flat[ra == 0] = 0
-
-        reg_volume2 = flat.reshape(self.probe_model.ba.image.shape[0],
-                                   self.probe_model.ba.image.shape[1],
-                                   self.probe_model.ba.image.shape[2]).astype(np.float32)
-        reg_volume2[reg_volume2 == 0] = np.nan
+                                       self.probe_model.ba.image.shape[2]).astype(np.float32)
+            reg_volume2[reg_volume2 == 0] = np.nan
 
         return reg_volume2
 
@@ -481,8 +488,8 @@ class MainWindow(QtWidgets.QMainWindow):
         layer = None
         layer_planned = self.coronal.ctrl.get_image_layer('planned_insertions')
         if layer_planned is not None:
-            layer = (copy.deepcopy(layer_planned.slice_kwargs['region_values']) * 2)
-            # layer = (layer_planned.slice_kwargs['region_values'])
+            layer = (copy.deepcopy(layer_planned.slice_kwargs['region_values']))
+
         layer_active = self.coronal.ctrl.get_image_layer('selected_insertion')
         if layer_active is not None:
             if layer is not None:
@@ -525,7 +532,7 @@ class LayersView(QtWidgets.QWidget):
     def initialise_table(self):
         for layer in self.qmain.coronal.ctrl.image_layers:
             if not layer.name in self.ignore_layers:
-                item = QtGui.QListWidgetItem()
+                item = QtWidgets.QListWidgetItem()
                 item.setText(layer.name)
                 item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
                 item.setCheckState(QtCore.Qt.Checked)
@@ -553,7 +560,7 @@ class LayersView(QtWidgets.QWidget):
                 return
 
         # Otherwise add to the list
-        item = QtGui.QListWidgetItem()
+        item = QtWidgets.QListWidgetItem()
         item.setText(name)
         item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
         item.setCheckState(QtCore.Qt.Checked)
@@ -857,12 +864,12 @@ class CoverageModel:
         self.data[target]['max'] = minmax[1]
 
     def get_traj(self):
-        traj = {'x': int(self.data['x']['value']),
-                'y': int(self.data['y']['value']),
+        traj = {'x': float(self.data['x']['value']),
+                'y': float(self.data['y']['value']),
                 'z': 0.0,
-                'phi': self.data['p']['value'],
-                'theta': self.data['t']['value'],
-                'depth': int(self.data['d']['value']),
+                'phi': float(self.data['p']['value']),
+                'theta': float(self.data['t']['value']),
+                'depth': float(self.data['d']['value']),
                 'provenance': 'Planned'}
 
         return traj
@@ -1132,6 +1139,7 @@ class TopController(BaseController):
         self.scatter_layers = []
 
     def set_top(self):
+        self.atlas.compute_surface()
         img = self.atlas.top.transpose()
         img[np.isnan(img)] = np.nanmin(img)  # img has dims ml, ap
         dw, dh = (self.atlas.bc.dxyz[0], self.atlas.bc.dxyz[1])
@@ -1280,11 +1288,11 @@ class ScatterLayer:
     scatter_kwargs: dict = field(default_factory=lambda: {'x': None, 'y': None})
 
 
-def view(title=None, lazy=False):
+def view(title=None, lazy=False, res=25):
     """
     """
     qt.create_app()
-    av = MainWindow._get_or_create(title=title, lazy=lazy)
+    av = MainWindow._get_or_create(title=title, lazy=lazy, res=res)
     av.show()
     return av
 

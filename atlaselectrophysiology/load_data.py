@@ -19,8 +19,8 @@ ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 class LoadData:
     def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None,
-                 load_histology=True, spike_collection=None):
-        self.one = one or ONE(base_url=ONE_BASE_URL)
+                 load_histology=True, spike_collection=None, mode='auto'):
+        self.one = one or ONE(base_url=ONE_BASE_URL, mode=mode)
         self.brain_atlas = brain_atlas or atlas.AllenAtlas(25)
         self.download_hist = load_histology  # whether or not to look for the histology files
         self.spike_collection = spike_collection
@@ -435,7 +435,7 @@ class LoadData:
             # Create new trajectory and overwrite previous one
             histology.register_aligned_track(self.probe_id, xyz_channels,
                                              chn_coords=self.chn_coords, one=self.one,
-                                             overwrite=True, channels=channels)
+                                             overwrite=True, channels=channels, brain_atlas=self.brain_atlas)
         else:
             channel_upload = False
 

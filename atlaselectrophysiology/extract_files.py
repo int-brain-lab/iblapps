@@ -82,8 +82,8 @@ def extract_rmsmap(fbin, out_folder=None, spectra=True):
         out_folder = Path(fbin).parent
     else:
         out_folder = Path(out_folder)
-    alf_object_time = f'_iblqc_ephysTimeRms{sglx.type.upper()}'
-    alf_object_freq = f'_iblqc_ephysSpectralDensity{sglx.type.upper()}'
+    alf_object_time = f'ephysTimeRms{sglx.type.upper()}'
+    alf_object_freq = f'ephysSpectralDensity{sglx.type.upper()}'
 
     # crunch numbers
     rms = rmsmap(fbin, spectra=spectra)
@@ -91,11 +91,12 @@ def extract_rmsmap(fbin, out_folder=None, spectra=True):
     if not out_folder.exists():
         out_folder.mkdir()
     tdict = {'rms': rms['TRMS'].astype(np.single), 'timestamps': rms['tscale'].astype(np.single)}
-    alfio.save_object_npy(out_folder, object=alf_object_time, dico=tdict)
+    alfio.save_object_npy(out_folder, object=alf_object_time, dico=tdict, namespace='iblqc')
     if spectra:
         fdict = {'power': rms['spectral_density'].astype(np.single),
                  'freqs': rms['fscale'].astype(np.single)}
-        alfio.save_object_npy(out_folder, object=alf_object_freq, dico=fdict)
+        alfio.save_object_npy(
+            out_folder, object=alf_object_freq, dico=fdict, namespace='iblqc')
 
 
 def _sample2v(ap_file):

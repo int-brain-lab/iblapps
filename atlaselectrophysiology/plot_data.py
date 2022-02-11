@@ -3,8 +3,10 @@ from pathlib import Path
 import numpy as np
 import one.alf as alf
 from brainbox.processing import bincount2D
+from brainbox.io.spikeglx import stream
 from brainbox.population.decode import xcorr
 from brainbox.task import passive
+from ibllib.dsp import voltage
 import scipy
 from PyQt5 import QtGui
 
@@ -23,8 +25,9 @@ class PlotData:
         self.ephys_path = ephys_path
         self.alf_path = alf_path
 
-        self.chn_coords_all = np.load(Path(self.probe_path, 'channels.localCoordinates.npy'))
-        self.chn_ind_all = np.load(Path(self.probe_path, 'channels.rawInd.npy'))
+        channels = alf.io.load_object(self.probe_path, 'channels')
+        self.chn_coords_all = channels['localCoordinates']
+        self.chn_ind_all = channels['rawInd'].astype(int)
 
         self.chn_min = np.min(self.chn_coords_all[:, 1])
         self.chn_max = np.max(self.chn_coords_all[:, 1])
@@ -71,7 +74,8 @@ class PlotData:
             self.cluster_data_status = True
             self.compute_timescales()
 
-        except Exception:
+        except Exception as err:
+            print(err)
             print('cluster data was not found, some plots will not display')
             self.cluster_data_status = False
 
@@ -295,9 +299,11 @@ class PlotData:
         else:
             T_BIN = 0.05
             D_BIN = 5
+            chn_min = np.min(np.r_[self.chn_min, self.spikes['depths'][self.spike_idx][self.kp_idx]])
+            chn_max = np.max(np.r_[self.chn_max, self.spikes['depths'][self.spike_idx][self.kp_idx]])
             n, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
                                           self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                          T_BIN, D_BIN, ylim=[self.chn_min, self.chn_max])
+                                          T_BIN, D_BIN, ylim=[chn_min, chn_max])
             img = n.T / T_BIN
             xscale = (times[-1] - times[0]) / img.shape[0]
             yscale = (depths[-1] - depths[0]) / img.shape[1]
@@ -323,14 +329,16 @@ class PlotData:
         else:
             T_BIN = np.max(self.spikes['times'])
             D_BIN = 10
+            chn_min = np.min(np.r_[self.chn_min, self.spikes['depths'][self.spike_idx][self.kp_idx]])
+            chn_max = np.max(np.r_[self.chn_max, self.spikes['depths'][self.spike_idx][self.kp_idx]])
             nspikes, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
                                                 self.spikes['depths'][self.spike_idx][self.kp_idx],
                                                 T_BIN, D_BIN,
-                                                ylim=[self.chn_min, self.chn_max])
+                                                ylim=[chn_min, chn_max])
 
             amp, times, depths = bincount2D(self.spikes['amps'][self.spike_idx][self.kp_idx],
                                             self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                            T_BIN, D_BIN, ylim=[self.chn_min, self.chn_max],
+                                            T_BIN, D_BIN, ylim=[chn_min, chn_max],
                                             weights=self.spikes['amps'][self.spike_idx]
                                             [self.kp_idx])
             mean_fr = nspikes[:, 0] / T_BIN
@@ -363,9 +371,11 @@ class PlotData:
         else:
             T_BIN = 0.05
             D_BIN = 40
+            chn_min = np.min(np.r_[self.chn_min, self.spikes['depths'][self.spike_idx][self.kp_idx]])
+            chn_max = np.max(np.r_[self.chn_max, self.spikes['depths'][self.spike_idx][self.kp_idx]])
             R, times, depths = bincount2D(self.spikes['times'][self.spike_idx][self.kp_idx],
                                           self.spikes['depths'][self.spike_idx][self.kp_idx],
-                                          T_BIN, D_BIN, ylim=[self.chn_min, self.chn_max])
+                                          T_BIN, D_BIN, ylim=[chn_min, chn_max])
             corr = np.corrcoef(R)
             corr[np.isnan(corr)] = 0
             scale = (np.max(depths) - np.min(depths)) / corr.shape[0]
@@ -463,6 +473,38 @@ class PlotData:
         }
 
         return data_img, data_probe
+
+    # only for IBL sorry
+    def get_raw_data_image(self, pid, t0=(1000, 2000, 3000), one=None):
+
+        def gain2level(gain):
+            return 10 ** (gain / 20) * 4 * np.array([-1, 1])
+        data_img = dict()
+        for t in t0:
+
+            sr, t = stream(pid, t, one=one)
+            raw = sr[:, :-sr.nsync].T
+            channel_labels, channel_features = voltage.detect_bad_channels(raw, sr.fs)
+            raw = voltage.destripe(raw, fs=sr.fs, channel_labels=channel_labels)
+            raw_image = raw[:, int((450 / 1e3) * sr.fs):int((500 / 1e3) * sr.fs)].T
+            x_range = np.array([0, raw_image.shape[0] - 1]) / sr.fs * 1e3
+            levels = gain2level(-90)
+            xscale = (x_range[1] - x_range[0]) / raw_image.shape[0]
+            yscale = (self.chn_max - self.chn_min) / raw_image.shape[1]
+
+            data_raw = {
+                'img': raw_image,
+                'scale': np.array([xscale, yscale]),
+                'levels': levels,
+                'offset': np.array([0, 0]),
+                'cmap': 'bone',
+                'xrange': x_range,
+                'xaxis': 'Time (ms)',
+                'title': 'Power (uV)'
+            }
+            data_img[f'Raw data t={t}'] = data_raw
+
+        return data_img
 
     def get_lfp_spectrum_data(self):
         freq_bands = np.vstack(([0, 4], [4, 10], [10, 30], [30, 80], [80, 200]))
