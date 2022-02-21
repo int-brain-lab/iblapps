@@ -41,6 +41,7 @@ class MainWindow(QtWidgets.QMainWindow):
         uic.loadUi(Path(__file__).parent.joinpath('mainUI.ui'), self)
 
         self.atlas = AllenAtlas(res_um=res)
+        self.atlas.compute_surface()
         one = ONE()
         self.dist = 354
 
