@@ -27,6 +27,7 @@ class ProbeModel:
 
         self.one = one or ONE()
         self.ba = ba or AllenAtlas(res_um=res)
+        self.ba.compute_surface()
         self.traj = {'Planned': {},
                      'Micro-manipulator': {},
                      'Histology track': {},
