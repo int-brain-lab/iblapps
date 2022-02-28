@@ -388,7 +388,7 @@ class LoadData:
 
             files = download_histology_data('MB059', 'hausserlab')
             if files is not None:
-                hist_path_cb = files[0]
+                hist_path_cb = files[1]
 
         if hist_path_rd:
             hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd)
