@@ -58,6 +58,7 @@ class PlotData:
         # See if spike data is available
         try:
             self.spikes = alf.io.load_object(self.probe_path, 'spikes')
+            self.max_spike_time = np.max(self.spikes['times'])
             self.spike_data_status = True
         except Exception:
             print('spike data was not found, some plots will not display')
@@ -480,7 +481,10 @@ class PlotData:
         def gain2level(gain):
             return 10 ** (gain / 20) * 4 * np.array([-1, 1])
         data_img = dict()
-        for t in t0:
+
+        times = [t for t in t0 if t < self.max_spike_time]
+
+        for t in times:
 
             sr, t = stream(pid, t, one=one)
             raw = sr[:, :-sr.nsync].T
