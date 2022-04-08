@@ -12,6 +12,10 @@ or:
 `python <path/to/phy_launcher.py> -s subject -e eid -p probe_name`
 e.g. `python int-brain-lab\iblapps\launch_phy\phy_launcher.py -e a3df91c8-52a6-4afa-957b-3479a7d0897c -p probe00`
 
+
+or:
+`python phys_launcher.py -pid 2aea57ac-d3d0-4a09-b6fa-0aa9d58d1e11`
+
 Quality metrics will be computed within phy and displayed automatically.
 Description of metrics can be found here: https://docs.google.com/document/d/1ba_krsfm4epiAd0zbQ8hdvDN908P9VZOpTxkkH3P_ZY/edit#
 

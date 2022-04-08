@@ -44,7 +44,10 @@ def launch_phy(probe_name=None, eid=None, pid=None, subj=None, date=None, sess_n
         'clusters.amps',
         'clusters.channels']
 
-    ssl = SpikeSortingLoader(pid=pid, one=one, atlas=ba)
+    if pid is None:
+        ssl = SpikeSortingLoader(eid=eid, pname=probe_name, one=one, atlas=ba)
+    else:
+        ssl = SpikeSortingLoader(pid=pid, one=one, atlas=ba)
     ssl.download_spike_sorting(dataset_types=datasets)
     ssl.download_spike_sorting_object('templates')
     ssl.download_spike_sorting_object('spikes_subset')
