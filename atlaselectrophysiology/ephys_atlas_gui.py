@@ -1699,7 +1699,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if upload == QtWidgets.QMessageBox.Yes:
             upload_channels = self.loaddata.upload_data(self.xyz_channels)
             self.loaddata.update_alignments(self.features[self.idx], self.track[self.idx])
-            self.prev_alignments = self.loaddata.get_previous_alignments()
+            self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
             self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
             self.loaddata.get_starting_alignment(0)
             resolved = self.loaddata.update_qc()
@@ -1738,7 +1738,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if upload == QtWidgets.QMessageBox.Yes:
             self.loaddata.upload_data(self.features[self.idx], self.track[self.idx],
                                       self.xyz_channels)
-            self.prev_alignments = self.loaddata.get_previous_alignments()
+            self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
             self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
             self.loaddata.get_starting_alignment(0)
             QtWidgets.QMessageBox.information(self, 'Status', "Channels locations saved")
