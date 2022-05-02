@@ -71,10 +71,10 @@ class ProbeModel:
 
         django_base = ['probe_insertion__session__project__name__icontains,'
                        'ibl_neuropixel_brainwide_01']
-        django = ['probe_insertion__session__qc__lt,50',
-                  '~probe_insertion__json__qc,CRITICAL',
-                  'probe_insertion__json__extended_qc__tracing_exists,True',
-                  'probe_insertion__session__extended_qc__behavior,1']
+        #django = ['probe_insertion__session__qc__lt,50',
+        #          '~probe_insertion__json__qc,CRITICAL',
+        #          'probe_insertion__json__extended_qc__tracing_exists,True',
+        #          'probe_insertion__session__extended_qc__behavior,1']
 
 
         django_str = ','.join(django_base + django)
@@ -328,6 +328,10 @@ class ProbeModel:
             # this is the axis that has the biggest deviation. Almost always z
             axis = np.argmax(np.abs(np.diff(top_bottom, axis=0)))
             if axis != 2:
+                if pl_voxels is not None:
+                    per2.append(np.nan)
+                    per1.append(np.nan)
+                    per0.append(np.nan)
                 continue
             # sample the active track path along this axis
             tbi = ba.bc.xyz2i(top_bottom)
