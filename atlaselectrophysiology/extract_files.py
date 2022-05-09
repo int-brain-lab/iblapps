@@ -1,6 +1,6 @@
-from ibllib.io import spikeglx
+import spikeglx
 import numpy as np
-import ibllib.dsp as dsp
+from neurodsp import fourier, utils
 from scipy import signal
 from ibllib.misc import print_progress
 from pathlib import Path
@@ -32,20 +32,20 @@ def rmsmap(fbin, spectra=True):
         sglx.open()
     rms_win_length_samples = 2 ** np.ceil(np.log2(sglx.fs * RMS_WIN_LENGTH_SECS))
     # the window generator will generates window indices
-    wingen = dsp.WindowGenerator(ns=sglx.ns, nswin=rms_win_length_samples, overlap=0)
+    wingen = utils.WindowGenerator(ns=sglx.ns, nswin=rms_win_length_samples, overlap=0)
     # pre-allocate output dictionary of numpy arrays
     win = {'TRMS': np.zeros((wingen.nwin, sglx.nc)),
            'nsamples': np.zeros((wingen.nwin,)),
-           'fscale': dsp.fscale(WELCH_WIN_LENGTH_SAMPLES, 1 / sglx.fs, one_sided=True),
+           'fscale': fourier.fscale(WELCH_WIN_LENGTH_SAMPLES, 1 / sglx.fs, one_sided=True),
            'tscale': wingen.tscale(fs=sglx.fs)}
     win['spectral_density'] = np.zeros((len(win['fscale']), sglx.nc))
     # loop through the whole session
     for first, last in wingen.firstlast:
         D = sglx.read_samples(first_sample=first, last_sample=last)[0].transpose()
         # remove low frequency noise below 1 Hz
-        D = dsp.hp(D, 1 / sglx.fs, [0, 1])
+        D = fourier.hp(D, 1 / sglx.fs, [0, 1])
         iw = wingen.iw
-        win['TRMS'][iw, :] = dsp.rms(D)
+        win['TRMS'][iw, :] = utils.rms(D)
         win['nsamples'][iw] = D.shape[1]
         if spectra:
             # the last window may be smaller than what is needed for welch

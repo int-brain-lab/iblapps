@@ -11,8 +11,8 @@ from easyqc.gui import viewseis
 import one.alf.io as alfio
 from one.alf.files import get_session_path
 from iblutil.numerical import ismember
-from ibllib.io import spikeglx
-from ibllib.dsp import voltage
+import spikeglx
+from neurodsp import voltage
 
 import qt
 from brainbox.io.one import SpikeSortingLoader

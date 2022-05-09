@@ -1,6 +1,6 @@
 from pathlib import Path
-from oneibl.one import ONE
-import alf.io
+from one.api import ONE
+import one.alf.io as alfio
 from brainbox.core import Bunch
 import qt
 import numpy as np
@@ -113,9 +113,9 @@ def load_data(eid, probe, one=None):
     session_path = one.path_from_eid(eid).joinpath('alf')
     probe_path = session_path.joinpath(probe)
     data = Bunch()
-    data['trials'] = alf.io.load_object(session_path, 'trials', namespace='ibl')
-    data['spikes'] = alf.io.load_object(probe_path, 'spikes')
-    data['clusters'] = alf.io.load_object(probe_path, 'clusters')
+    data['trials'] = alfio.load_object(session_path, 'trials', namespace='ibl')
+    data['spikes'] = alfio.load_object(probe_path, 'spikes')
+    data['clusters'] = alfio.load_object(probe_path, 'clusters')
 
     return data
 

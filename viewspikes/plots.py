@@ -5,7 +5,7 @@ import scipy.signal
 import pyqtgraph as pg
 
 import ibllib.atlas as atlas
-from ibllib.ephys.neuropixel import SITES_COORDINATES
+from neuropixel import SITES_COORDINATES
 from ibllib.pipes.ephys_alignment import EphysAlignment
 from ibllib.plots import wiggle, color_cycle
 

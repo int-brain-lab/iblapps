@@ -8,9 +8,9 @@ from iblutil.numerical import ismember
 
 from ibllib.pipes import histology
 from ibllib.atlas import AllenAtlas, atlas
-from ibllib.ephys.neuropixel import TIP_SIZE_UM, SITES_COORDINATES
+from neuropixel import TIP_SIZE_UM, SITES_COORDINATES
 from ibllib.pipes.ephys_alignment import EphysAlignment
-from ibllib.dsp import fcn_cosine
+from neurodsp.utils import fcn_cosine
 
 PROV_2_VAL = {
     'Resolved': 90,

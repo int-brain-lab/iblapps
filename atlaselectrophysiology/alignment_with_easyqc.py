@@ -1,6 +1,6 @@
 from easyqc.gui import viewseis
-from ibllib.dsp import voltage
-from ibllib.ephys import neuropixel
+from neurodsp import voltage
+import neuropixel
 from viewspikes.data import stream
 from viewspikes.plots import overlay_spikes
 import scipy

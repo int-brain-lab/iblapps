@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
-from ibllib.ephys.neuropixel import SITES_COORDINATES
+from neuropixel import SITES_COORDINATES
 import ibllib.atlas as atlas
 from ibllib.qc.alignment_qc import AlignmentQC
 from one.api import ONE

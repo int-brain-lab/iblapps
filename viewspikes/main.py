@@ -3,10 +3,10 @@ from pathlib import Path
 import scipy.signal
 import numpy as np
 
-from ibllib.io import spikeglx
-from ibllib.dsp import voltage
-from ibllib.ephys import neuropixel
-from oneibl.one import ONE
+import spikeglx
+from neurodsp import voltage
+import neuropixel
+from one.api import ONE
 from easyqc.gui import viewseis
 
 from viewspikes.plots import plot_insertion, show_psd, overlay_spikes
