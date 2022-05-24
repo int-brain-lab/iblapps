@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, develop, ci_and_pypi ] # TODO: remove additional branch when deploying to production
+  pull_request:
+    branches: [ master, develop ]
+
+jobs:
+  build:
+    name: build (${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        python-version: ["3.8", "3.9"]
+    steps:
+    - name: Clone repo
+      uses: actions/checkout@v3
+      with:
+        ref: ci_and_pypi  # TODO: remove when deploying to master
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install deps
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install flake8 pytest
+        pip install -r requirements.txt
+        pip install -e .
+    # TODO: enable flake8 and tests when we have a better handle on what is important
+#    - name: Flake8
+#      run: |
+#        python -m flake8
+#    - name: Tests
+#      run: |
+#        cd tests
+#        python -m unittest discover

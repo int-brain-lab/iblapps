@@ -1,5 +1,5 @@
 easyqc
 ibllib
+PyQt5
 pyqtgraph
 simpleITK
-PyQt5
