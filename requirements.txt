@@ -1,4 +1,5 @@
 easyqc
+flake8
 ibllib
 PyQt5
 pyqtgraph
