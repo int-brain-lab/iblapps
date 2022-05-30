@@ -6,7 +6,7 @@ from brainbox.processing import bincount2D
 from brainbox.io.spikeglx import stream
 from brainbox.population.decode import xcorr
 from brainbox.task import passive
-from ibllib.dsp import voltage
+from neurodsp import voltage
 import scipy
 from PyQt5 import QtGui
 
