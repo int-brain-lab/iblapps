@@ -378,24 +378,29 @@ class ProbeModel:
             iok &= np.logical_and(0 <= ixyz[:, 2], ixyz[:, 2] < ba.bc.nz)
             ixyz = ixyz[iok, :]
 
-
-            # get the minimum distance to the trajectory, to which is applied the cosine taper
-            xyz = np.c_[
-                ba.bc.xscale[ixyz[:, 0]], ba.bc.yscale[ixyz[:, 1]], ba.bc.zscale[ixyz[:, 2]]]
-            sites_bounds = crawl_up_from_tip(
-                ins, (np.array([ACTIVE_LENGTH_UM, 0]) + TIP_SIZE_UM) / 1e6)
-            mdist = ins.trajectory.mindist(xyz, bounds=sites_bounds)  # distance of the computed volume to the probe to apply the cosine taper based on distance
-            coverage = 1 - fcn_cosine(np.array(dist_fcn) / 1e6)(mdist)  # we just use a cosine taper of 1 um
-            # MAX_DIST_UM: radius around (MAX_DIST + one ot make taper work, but then filter): 500 um grid in 1st pass map (500um apart)
-
+            # Get the minimum distance of each of the considered voxels to the insertion
+            # Translate voxel indices into distance from origin in atlas space
+            xyz = np.c_[ba.bc.xscale[ixyz[:, 0]], ba.bc.yscale[ixyz[:, 1]], ba.bc.zscale[ixyz[:, 2]]]
+            # This is the active region that we want to calculate the distance to (here without MAX_DIST_UM)
+            sites_bounds = crawl_up_from_tip(ins, (np.array([ACTIVE_LENGTH_UM, 0]) + TIP_SIZE_UM) / 1e6)
+            # Calculate the minimum distance of each voxel to the active region
+            mdist = ins.trajectory.mindist(xyz, bounds=sites_bounds)
+            # Calculate the coverage using a coside taper.
+            # Anything below a distance of dist_fcn[0] will be 1
+            # Anything above a distance of dist_fcn[1] will be 0
+            # Anything between dist_fcn[0] and dist_fcn[1] will slowly decrease from 1 to 0 with cosine taper
+            coverage = 1 - fcn_cosine(np.array(dist_fcn) / 1e6)(mdist)
+            # Here we are removing the effect of the cosine taper. By setting everything in between dist_fcn[0] and
+            # dist_fcn[1] to zero (if limit=True) or to one (if limit=False). Should consider removing taper instead?
             if limit:
                 coverage[coverage != 1] = 0
             else:
                 coverage[coverage > 0] = 1
-            # remap to the coverage volume
+            # The flat coverage values to the volume
             flat_ind = ba._lookup_inds(ixyz)
             full_coverage[flat_ind] += (coverage * factor)
 
+            # If a mask in which coverage should be calculated is given, restrict to this mask (Why not earlier?)
             if pl_voxels is not None:
                 n_pl_voxels = pl_voxels.shape[0]
                 fp_voxels_2 = np.where(full_coverage[pl_voxels] >= 2)[0].shape[0]
@@ -407,7 +412,7 @@ class ProbeModel:
                 per0.append((fp_voxels_0 / n_pl_voxels) * 100)
 
         full_coverage = full_coverage.reshape(ba.image.shape)
-        # full_coverage[ba.label == 0] = np.nan
+        full_coverage[ba.label == 0] = np.nan
 
         if pl_voxels is not None:
             return full_coverage, per0, per1, per2
