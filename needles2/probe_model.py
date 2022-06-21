@@ -23,7 +23,7 @@ VAL_2_PROV = {v: k for k, v in PROV_2_VAL.items()}
 
 
 class ProbeModel:
-    def __init__(self, one=None, ba=None, lazy=False, res=25):
+    def __init__(self, one=None, ba=None, lazy=False, res=25, verbose=False):
 
         self.one = one or ONE()
         self.ba = ba or AllenAtlas(res_um=res)
@@ -39,6 +39,7 @@ class ProbeModel:
         self.cvol_flat = None
         self.initialised = False
         self.mirror = False
+        self.verbose = verbose
 
         if not lazy:
             self.initialise()
@@ -99,7 +100,8 @@ class ProbeModel:
         self.traj[prov_dict]['x'] = np.array(x)
         self.traj[prov_dict]['y'] = np.array(y)
         end = time.time()
-        print(end-start)
+        if self.verbose is True:
+            print(end-start)
 
     def get_insertions_with_xyz(self):
         start = time.time()
@@ -276,54 +278,76 @@ class ProbeModel:
                                                                       mapping=mapping)
         return region, region_label, region_colour
 
-
     def report_coverage(self, provenance, dist):
         coverage, _ = self.compute_coverage(self.traj[provenance]['traj'],
                                             dist_fcn=[dist, dist + 1])
         coverage[coverage > 2] = 2
         return coverage
 
-
     def compute_coverage(self, trajs, dist_fcn=[50, 100], limit=True, coverage=None, pl_voxels=None, factor=1):
         """
         Computes a coverage volume from
         :param trajs: dictionary of trajectories from Alyx rest endpoint (one.alyx.rest...)
+        :param dist_fcn: list of two values in um. dist_fcn[1]*np.sqrt(2) is the distance around the trajectory which will
+                         be marked as covered by the probe. Then coverage will decrease with a cosine taper
+                         between dist_fcn[0] and dist_fcn[1].
+                         However, if limit is set to True, all coverage < 1 will be set to 0
         :param ba: ibllib.atlas.BrainAtlas instance
         :return: 3D np.array the same size as the volume provided in the brain atlas
         """
-        # in um. Coverage = 1 below the first value, 0 after the second, cosine taper in between
-        ACTIVE_LENGTH_UM = 3.84 * 1e3
-        MAX_DIST_UM = dist_fcn[1]  # max distance around the probe to be searched for
         ba = self.ba
+        ACTIVE_LENGTH_UM = 3.84 * 1e3  # This is the length of the NP1 probe with electrodes
+        MAX_DIST_UM = dist_fcn[1]  # max distance around the probe to be searched for
+        # Note: with a max_dist of 354, the considered radius comes out to 354 * np.sqrt(2) = 500 um
 
-        def crawl_up_from_tip(ins, d):
-            return (ins.entry - ins.tip) * (d[:, np.newaxis] /
-                                            np.linalg.norm(ins.entry - ins.tip)) + ins.tip
+        # Covered_length_um are two values which indicate on the path from tip to entry of a given insertion
+        # where the region that is considered to be covered by this insertion begins and ends in micro meter
+        # Note that the second value is negative, because the covered regions extends beyond the tip of the probe
+        covered_length_um = TIP_SIZE_UM + np.array([ACTIVE_LENGTH_UM + MAX_DIST_UM * np.sqrt(2),
+                                                    -MAX_DIST_UM * np.sqrt(2)])
+
+        # Horizontal slice of voxels to be considered around each trajectory is only dependent on MAX_DIST_UM
+        # and the voxel resolution, so can be defined here. It will be a square slice of x_radius*2+1 by y_radius*2+1
+        x_radius = int(np.floor(MAX_DIST_UM * np.sqrt(2) / 1e6 / np.abs(ba.bc.dxyz[0]) / 2))
+        y_radius = int(np.floor(MAX_DIST_UM * np.sqrt(2) / 1e6 / np.abs(ba.bc.dxyz[1]) / 2))
+        nx = x_radius * 2 + 1
+        ny = y_radius * 2 + 1
+
+        def crawl_up_from_tip(ins, covered_length):
+            straight_trajectory = ins.entry - ins.tip  # Straight line from entry to tip of the probe
+            # scale generic covered region to the length of the trajectory
+            covered_length_scaled = covered_length[:, np.newaxis] / np.linalg.norm(straight_trajectory)
+            # starting from tip crawl scaled covered region
+            covered_region = ins.tip + (straight_trajectory * covered_length_scaled)
+            return covered_region
+
+        # Coverage that we start from, is either given or instantiated with all zeros.
+        # Values outside the brain are set to nan
         if coverage is None:
             full_coverage = np.zeros(ba.image.shape, dtype=np.float32)
         else:
             full_coverage = copy.deepcopy(coverage)
-
         full_coverage[ba.label == 0] = np.nan
         full_coverage = full_coverage.flatten()
-
+        # There are lists to collect the updated coverage with 0, 1 and 2 probes after each trajectory
         per2 = []
         per1 = []
         per0 = []
 
         for p in np.arange(len(trajs)):
-            if len(trajs) > 20:
+            if len(trajs) > 20 and self.verbose is True:
                 if p % 20 == 0:
                     print(p / len(trajs))
+            # Get one trajectory from the list and create an insertion in the brain atlas
+            # x and y coordinates of entry are translated to the atlas voxel space
+            # z is locked to surface of the brain at these x,y coordinates (disregarding actual z value of trajectory)
             traj = trajs[p]
             ins = atlas.Insertion.from_dict(traj, brain_atlas=ba)
 
-            # those are the top and bottom coordinates of the active part of the shank extended
-            # to maxdist
-            d = (np.array([ACTIVE_LENGTH_UM + MAX_DIST_UM * np.sqrt(2),
-                           -MAX_DIST_UM * np.sqrt(2)]) + TIP_SIZE_UM)
-            top_bottom = crawl_up_from_tip(ins, d / 1e6)
-            # this is the axis that has the biggest deviation. Almost always z
+            # Translate the top and bottom of the region considered covered from abstract insertion to current insertion
+            # Unit of atlas is m so divide um by 1e6
+            top_bottom = crawl_up_from_tip(ins, covered_length_um / 1e6)
+            # Check that z is the axis with the biggest deviation, don't use probes that are more shallow than deep (?)
             axis = np.argmax(np.abs(np.diff(top_bottom, axis=0)))
             if axis != 2:
                 if pl_voxels is not None:
@@ -331,37 +355,39 @@ class ProbeModel:
                     per1.append(np.nan)
                     per0.append(np.nan)
                 continue
-            # sample the active track path along this axis
+            # To sample the active track path along the longest axis, first get top and bottom voxel
             tbi = ba.bc.xyz2i(top_bottom)
-            nz = tbi[1, axis] - tbi[0, axis] + 1
-            ishank = np.round(np.array(
-                [np.linspace(tbi[0, i], tbi[1, i], nz) for i in np.arange(3)]).T).astype(
-                np.int32)
-            # creates a flattened "column" of candidate volume indices around the track
-            # around each sample get an horizontal square slice of nx *2 +1 and ny *2 +1 samples
-            # flatten the corresponding xyz indices and  compute the min distance to the track only
-            # for those
-            nx = int(
-                np.floor(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[0]) * np.sqrt(2) / 2)) * 2 + 1
-            ny = int(
-                np.floor(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[1]) * np.sqrt(2) / 2)) * 2 + 1
+            # Number of voxels along the longest axis between top and bottom
+            nz = abs(tbi[1, axis] - tbi[0, axis] + 1)
+            # Create a set of nz voxels that track the path between top and bottom by equally spacing between the
+            # x, y and z coordinates and then rounding
+            ishank = np.round(
+                np.array([np.linspace(tbi[0, i], tbi[1, i], nz) for i in np.arange(3)]).T).astype(np.int32)
+            # Around each of the voxels along this shank, get a horizontal slice of voxels to consider
+            # nx and ny are defined outside the loop as they don't depend on the trajectory
+            # Instead of a set of slices, flatten these voxels to consider,  ixyz is of size (n_voxels, 3)
             ixyz = np.stack([v.flatten() for v in np.meshgrid(
                 np.arange(-nx, nx + 1), np.arange(-ny, ny + 1), np.arange(nz))]).T
+            # To each voxel, add the x and y coordinates of the respective center voxel (defined by z coordinate)
             ixyz[:, 0] = ishank[ixyz[:, 2], 0] + ixyz[:, 0]
             ixyz[:, 1] = ishank[ixyz[:, 2], 1] + ixyz[:, 1]
             ixyz[:, 2] = ishank[ixyz[:, 2], 2]
-            # if any, remove indices that lie outside of the volume bounds
+            # If any, remove indices that lie outside of the volume bounds
             iok = np.logical_and(0 <= ixyz[:, 0], ixyz[:, 0] < ba.bc.nx)
             iok &= np.logical_and(0 <= ixyz[:, 1], ixyz[:, 1] < ba.bc.ny)
             iok &= np.logical_and(0 <= ixyz[:, 2], ixyz[:, 2] < ba.bc.nz)
             ixyz = ixyz[iok, :]
+
+
             # get the minimum distance to the trajectory, to which is applied the cosine taper
             xyz = np.c_[
                 ba.bc.xscale[ixyz[:, 0]], ba.bc.yscale[ixyz[:, 1]], ba.bc.zscale[ixyz[:, 2]]]
             sites_bounds = crawl_up_from_tip(
                 ins, (np.array([ACTIVE_LENGTH_UM, 0]) + TIP_SIZE_UM) / 1e6)
-            mdist = ins.trajectory.mindist(xyz, bounds=sites_bounds)
-            coverage = 1 - fcn_cosine(np.array(dist_fcn) / 1e6)(mdist)
+            mdist = ins.trajectory.mindist(xyz, bounds=sites_bounds)  # distance of the computed volume to the probe to apply the cosine taper based on distance
+            coverage = 1 - fcn_cosine(np.array(dist_fcn) / 1e6)(mdist)  # we just use a cosine taper of 1 um
+            # MAX_DIST_UM: radius around (MAX_DIST + one ot make taper work, but then filter): 500 um grid in 1st pass map (500um apart)
+
             if limit:
                 coverage[coverage != 1] = 0
             else:
