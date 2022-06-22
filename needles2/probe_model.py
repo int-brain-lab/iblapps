@@ -298,20 +298,22 @@ class ProbeModel:
         ba = self.ba
         ACTIVE_LENGTH_UM = 3.84 * 1e3  # This is the length of the NP1 probe with electrodes
         MAX_DIST_UM = dist_fcn[1]  # max distance around the probe to be searched for
-        # Note: with a max_dist of 354, the considered radius comes out to 354 * np.sqrt(2) = 500 um
 
         # Covered_length_um are two values which indicate on the path from tip to entry of a given insertion
         # where the region that is considered to be covered by this insertion begins and ends in micro meter
         # Note that the second value is negative, because the covered regions extends beyond the tip of the probe
+        # We multiply by sqrt(2) to translate the radius given by dist_fcn[1] into the side length of a square
+        # that is contained in the circle with radius dist_fcn[1]
         covered_length_um = TIP_SIZE_UM + np.array([ACTIVE_LENGTH_UM + MAX_DIST_UM * np.sqrt(2),
                                                     -MAX_DIST_UM * np.sqrt(2)])
 
         # Horizontal slice of voxels to be considered around each trajectory is only dependent on MAX_DIST_UM
-        # and the voxel resolution, so can be defined here. It will be a square slice of x_radius*2+1 by y_radius*2+1
-        x_radius = int(np.floor(MAX_DIST_UM * np.sqrt(2) / 1e6 / np.abs(ba.bc.dxyz[0]) / 2))
-        y_radius = int(np.floor(MAX_DIST_UM * np.sqrt(2) / 1e6 / np.abs(ba.bc.dxyz[1]) / 2))
-        nx = x_radius * 2 + 1
-        ny = y_radius * 2 + 1
+        # and the voxel resolution, so can be defined here. It will be a square slice of x_len*2+1 by y_len*2+1
+        # Here we multiply by sqrt(2) and then divide by 2 to get half the side length of the square first
+        x_len = int(np.floor(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[0]) * np.sqrt(2) / 2))
+        y_len = int(np.floor(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[1]) * np.sqrt(2) / 2))
+        nx = x_len * 2 + 1
+        ny = y_len * 2 + 1
 
         def crawl_up_from_tip(ins, covered_length):
             straight_trajectory = ins.entry - ins.tip  # Straight line from entry to tip of the probe
@@ -365,7 +367,7 @@ class ProbeModel:
                 np.array([np.linspace(tbi[0, i], tbi[1, i], nz) for i in np.arange(3)]).T).astype(np.int32)
             # Around each of the voxels along this shank, get a horizontal slice of voxels to consider
             # nx and ny are defined outside the loop as they don't depend on the trajectory
-            # Instead of a set of slices, flatten these voxels to consider,  ixyz is of size (n_voxels, 3)
+            # Instead of a set of slices, flatten these voxels to consider, ixyz is of size (n_voxels, 3)
             ixyz = np.stack([v.flatten() for v in np.meshgrid(
                 np.arange(-nx, nx + 1), np.arange(-ny, ny + 1), np.arange(nz))]).T
             # To each voxel, add the x and y coordinates of the respective center voxel (defined by z coordinate)
