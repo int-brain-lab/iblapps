@@ -284,17 +284,38 @@ class ProbeModel:
         coverage[coverage > 2] = 2
         return coverage
 
-    def compute_coverage(self, trajs, dist_fcn=[50, 100], limit=True, coverage=None, pl_voxels=None, factor=1):
+    def compute_coverage(self, trajs, dist_fcn=[50, 100], limit=True, coverage=None, pl_voxels=None, factor=1,
+                         entire_voxel=True):
         """
-        Computes a coverage volume from
-        :param trajs: dictionary of trajectories from Alyx rest endpoint (one.alyx.rest...)
-        :param dist_fcn: list of two values in um. dist_fcn[1]*np.sqrt(2) is the distance around the trajectory which will
-                         be marked as covered by the probe. Then coverage will decrease with a cosine taper
-                         between dist_fcn[0] and dist_fcn[1].
-                         However, if limit is set to True, all coverage < 1 will be set to 0
-        :param ba: ibllib.atlas.BrainAtlas instance
-        :return: 3D np.array the same size as the volume provided in the brain atlas
+        Computes coverage of the brain atlas associated with the probe model given a set of trajectories.
+
+        Parameters
+        ----------
+        trajs: list of dictionary of trajectories from Alyx rest endpoint
+        dist_fcn: list of two values in micro meter, the first one marks the distance to the probe, below which
+                  voxels will be marked covered (=1). Coverage will then decrease with a cosine taper until the
+                  second value, after which coverage will be 0.
+        limit: boolean, if True, the effect of the cosine taper will be negated, i.e. all coverage values below 1
+               will be set to 0.
+        coverage: np.array of the same size as the brain atlas image associated with the probe insertion.
+                  If given, the coverage computed by this function will be added to this input.
+        pl_voxels: np.array with flat indices into the brain atlas image volume. If given, only these voxels are
+                   considered for the computation of coverage percentages. Note that the coverage itself is always
+                   computed for the entire volume
+        factor: Number by which to multiply coverage of each trajectory, e.g. to count trajectories twice
+        entire_voxel: boolean, if True, consider every voxel as covered, that is touched by the radius if dist_fcn[0]
+                      around the probe. If False, only consider those as covered where the center of the voxel falls in
+                      this radius.
+
+        Returns
+        3D np.array the same size as the brain atlas with coverage values for every voxel in the brain
+
+        If pl_voxels is given:
+        Three lists of values indicating the percent coverage of these voxels after adding each trajectory (increases
+        incrementally). The first list indicates percent covered by 0 probes, second list percent covered by 1 probe,
+        and the third list percent covered by 2 probes.
         """
+
         ba = self.ba
         ACTIVE_LENGTH_UM = 3.84 * 1e3  # This is the length of the NP1 probe with electrodes
         MAX_DIST_UM = dist_fcn[1]  # max distance around the probe to be searched for
@@ -308,12 +329,10 @@ class ProbeModel:
                                                     -MAX_DIST_UM * np.sqrt(2)])
 
         # Horizontal slice of voxels to be considered around each trajectory is only dependent on MAX_DIST_UM
-        # and the voxel resolution, so can be defined here. It will be a square slice of x_len*2+1 by y_len*2+1
-        # Here we multiply by sqrt(2) and then divide by 2 to get half the side length of the square first
-        x_len = int(np.floor(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[0]) * np.sqrt(2) / 2))
-        y_len = int(np.floor(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[1]) * np.sqrt(2) / 2))
-        nx = x_len * 2 + 1
-        ny = y_len * 2 + 1
+        # and the voxel resolution, so can be defined here. We translate max dist in voxels and add 1 for safety
+        # Unit of atlas is m so divide um by 1e6
+        nx = int(np.ceil(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[0]))) + 1
+        ny = int(np.ceil(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[1]))) + 1
 
         def crawl_up_from_tip(ins, covered_length):
             straight_trajectory = ins.entry - ins.tip  # Straight line from entry to tip of the probe
@@ -323,8 +342,7 @@ class ProbeModel:
             covered_region = ins.tip + (straight_trajectory * covered_length_scaled)
             return covered_region
 
-        # Coverage that we start from, is either given or instantiated with all zeros.
-        # Values outside the brain are set to nan
+        # Coverage that we start from, is either given or instantiated with all zeros. Values outside brain set to nan
         if coverage is None:
             full_coverage = np.zeros(ba.image.shape, dtype=np.float32)
         else:
@@ -345,36 +363,49 @@ class ProbeModel:
             # z is locked to surface of the brain at these x,y coordinates (disregarding actual z value of trajectory)
             traj = trajs[p]
             ins = atlas.Insertion.from_dict(traj, brain_atlas=ba)
-
-            # Translate the top and bottom of the region considered covered from abstract insertion to current insertion
-            # Unit of atlas is m so divide um by 1e6
-            top_bottom = crawl_up_from_tip(ins, covered_length_um / 1e6)
-            # Check that z is the axis with the biggest deviation, don't use probes that are more shallow than deep (?)
-            axis = np.argmax(np.abs(np.diff(top_bottom, axis=0)))
-            if axis != 2:
+            # Don't use probes that have same entry and tip, something is wrong
+            set_nan = False
+            if np.linalg.norm(ins.entry - ins.tip) == 0:
+                print(f"Insertion entry and tip are identical for insertion {traj['probe_insertion']}. "
+                      "Skipping for coverage computation.")
+                set_nan = True
+            else:
+                # Translate the top and bottom of the region considered covered from abstract to current insertion
+                # Unit of atlas is m so divide um by 1e6
+                top_bottom = crawl_up_from_tip(ins, covered_length_um / 1e6)
+                # Check that z is the axis with the biggest deviation, don't use probes that are more shallow than deep
+                axis = np.argmax(np.abs(np.diff(top_bottom, axis=0)))
+                if axis != 2:
+                    print(f"Z is not the longest axis for insertion {traj['probe_insertion']}. "
+                          "Skipping for coverage computation.")
+                    set_nan = True
+            # Skip insertions with length zero or where z is not the longest axis
+            if set_nan is True:
                 if pl_voxels is not None:
                     per2.append(np.nan)
                     per1.append(np.nan)
                     per0.append(np.nan)
                 continue
             # To sample the active track path along the longest axis, first get top and bottom voxel
-            tbi = ba.bc.xyz2i(top_bottom)
+            # If these lay outside of the atlas volume, clip to the nearest voxel in the volume
+            tbi = ba.bc.xyz2i(top_bottom, mode='clip')
             # Number of voxels along the longest axis between top and bottom
-            nz = abs(tbi[1, axis] - tbi[0, axis] + 1)
+            nz = tbi[1, axis] - tbi[0, axis] + 1
             # Create a set of nz voxels that track the path between top and bottom by equally spacing between the
             # x, y and z coordinates and then rounding
             ishank = np.round(
                 np.array([np.linspace(tbi[0, i], tbi[1, i], nz) for i in np.arange(3)]).T).astype(np.int32)
             # Around each of the voxels along this shank, get a horizontal slice of voxels to consider
             # nx and ny are defined outside the loop as they don't depend on the trajectory
-            # Instead of a set of slices, flatten these voxels to consider, ixyz is of size (n_voxels, 3)
+            # Instead of a set of slices, flatten these voxels. ixyz is of size (n_voxels, 3)
             ixyz = np.stack([v.flatten() for v in np.meshgrid(
                 np.arange(-nx, nx + 1), np.arange(-ny, ny + 1), np.arange(nz))]).T
-            # To each voxel, add the x and y coordinates of the respective center voxel (defined by z coordinate)
+            # Add the x and y coordinates of the respective slice center voxel (defined by z coordinate)
+            # So that the slice actually is at the right spot in the volume
             ixyz[:, 0] = ishank[ixyz[:, 2], 0] + ixyz[:, 0]
             ixyz[:, 1] = ishank[ixyz[:, 2], 1] + ixyz[:, 1]
             ixyz[:, 2] = ishank[ixyz[:, 2], 2]
-            # If any, remove indices that lie outside of the volume bounds
+            # If any, remove indices that lie outside the volume bounds
             iok = np.logical_and(0 <= ixyz[:, 0], ixyz[:, 0] < ba.bc.nx)
             iok &= np.logical_and(0 <= ixyz[:, 1], ixyz[:, 1] < ba.bc.ny)
             iok &= np.logical_and(0 <= ixyz[:, 2], ixyz[:, 2] < ba.bc.nz)
@@ -383,26 +414,33 @@ class ProbeModel:
             # Get the minimum distance of each of the considered voxels to the insertion
             # Translate voxel indices into distance from origin in atlas space
             xyz = np.c_[ba.bc.xscale[ixyz[:, 0]], ba.bc.yscale[ixyz[:, 1]], ba.bc.zscale[ixyz[:, 2]]]
-            # This is the active region that we want to calculate the distance to (here without MAX_DIST_UM)
+            # This is the active region that we want to calculate the distance TO (here without MAX_DIST_UM)
             sites_bounds = crawl_up_from_tip(ins, (np.array([ACTIVE_LENGTH_UM, 0]) + TIP_SIZE_UM) / 1e6)
-            # Calculate the minimum distance of each voxel to the active region
+            # Calculate the minimum distance of each voxel in the search voxels to the active region
             mdist = ins.trajectory.mindist(xyz, bounds=sites_bounds)
-            # Calculate the coverage using a coside taper.
-            # Anything below a distance of dist_fcn[0] will be 1
-            # Anything above a distance of dist_fcn[1] will be 0
-            # Anything between dist_fcn[0] and dist_fcn[1] will slowly decrease from 1 to 0 with cosine taper
-            coverage = 1 - fcn_cosine(np.array(dist_fcn) / 1e6)(mdist)
-            # Here we are removing the effect of the cosine taper. By setting everything in between dist_fcn[0] and
-            # dist_fcn[1] to zero (if limit=True) or to one (if limit=False). Should consider removing taper instead?
-            if limit:
-                coverage[coverage != 1] = 0
+
+            # Now we calculate the actual coverage
+            # mdist gives us for each voxel in the search volume the distance of the CENTER of that voxel to the probe
+            # If we want to include voxels where only part of the voxel, but not the center, falls into the radius
+            # we consider covered, we need to increase the radius by the distance of a voxel's center to its corners
+            # which is given by (sqrt(3) * side_length / 2).
+            if entire_voxel is True:
+                dist_adjusted = np.array(dist_fcn) / 1e6 + (np.abs(ba.bc.dxyz).max() * np.sqrt(3) / 2)
             else:
-                coverage[coverage > 0] = 1
-            # The flat coverage values to the volume
+                dist_adjusted = np.array(dist_fcn) / 1e6
+            # We then compute coverage using a cosine taper
+            # Anything below the minimum distance will be 1
+            # Anything above the maximum distance will be 0
+            # Anything between minimum and maximum distance will slowly decrease from 1 to 0 with cosine taper
+            coverage = 1 - fcn_cosine(dist_adjusted)(mdist)
+            # If limit is set to True, remove effect of cosine taper and set everything under 1 to 0
+            if limit:
+                coverage[coverage < 1] = 0
+            # Translate the flat coverage values to the volume
             flat_ind = ba._lookup_inds(ixyz)
             full_coverage[flat_ind] += (coverage * factor)
 
-            # If a mask in which coverage should be calculated is given, restrict to this mask (Why not earlier?)
+            # If a mask in which coverage should be calculated is given, restrict to this mask
             if pl_voxels is not None:
                 n_pl_voxels = pl_voxels.shape[0]
                 fp_voxels_2 = np.where(full_coverage[pl_voxels] >= 2)[0].shape[0]
