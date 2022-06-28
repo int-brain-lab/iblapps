@@ -310,13 +310,17 @@ class ProbeModel:
         per2 = []
         per1 = []
         per0 = []
-
+        print('got this far')
         for p in np.arange(len(trajs)):
+            print(p)
             if len(trajs) > 20:
                 if p % 20 == 0:
                     print(p / len(trajs))
             traj = trajs[p]
+            print('getting ins')
+            print(traj)
             ins = atlas.Insertion.from_dict(traj, brain_atlas=ba)
+            print('failed in is')
 
             # those are the top and bottom coordinates of the active part of the shank extended
             # to maxdist
@@ -337,6 +341,7 @@ class ProbeModel:
             ishank = np.round(np.array(
                 [np.linspace(tbi[0, i], tbi[1, i], nz) for i in np.arange(3)]).T).astype(
                 np.int32)
+            print('failed')
             # creates a flattened "column" of candidate volume indices around the track
             # around each sample get an horizontal square slice of nx *2 +1 and ny *2 +1 samples
             # flatten the corresponding xyz indices and  compute the min distance to the track only
@@ -355,6 +360,7 @@ class ProbeModel:
             iok &= np.logical_and(0 <= ixyz[:, 1], ixyz[:, 1] < ba.bc.ny)
             iok &= np.logical_and(0 <= ixyz[:, 2], ixyz[:, 2] < ba.bc.nz)
             ixyz = ixyz[iok, :]
+            print('failed eee')
             # get the minimum distance to the trajectory, to which is applied the cosine taper
             xyz = np.c_[
                 ba.bc.xscale[ixyz[:, 0]], ba.bc.yscale[ixyz[:, 1]], ba.bc.zscale[ixyz[:, 2]]]

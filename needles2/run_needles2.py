@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from PyQt5 import QtWidgets, QtGui, QtCore,  uic
+from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import QTransform
 import pyqtgraph as pg
 import matplotlib
@@ -188,37 +189,49 @@ class MainWindow(QtWidgets.QMainWindow):
     def coverage_added(self):
         # when add button pressed
         # get out the pandas df
-        df = self.coverage.ctrl.model.to_df()
+        #df = self.coverage.ctrl.model.to_df()
+        df = self.coverage.ctrl.model.get_traj()
         # Add the insertions twice
-        self.table.ctrl.model.insertRow(df)
-        self.table.ctrl.model.insertRow(df)
+        print('i got this far')
+        self.table.on_insert_row(df)
+        # self.table.on_insert_row(df) #TODO instead multiply by factor of two
 
         self.get_coverage_from_table()
 
-        self.table.tableview.selectionModel().blockSignals(True)
-        self.table.tableview.clearSelection()
-        self.table.tableview.selectionModel().blockSignals(False)
+        #self.table.tableview.selectionModel().blockSignals(True)
+        #self.table.tableview.clearSelection()
+        #self.table.tableview.selectionModel().blockSignals(False)
 
     def get_coverage_from_table(self):
 
         if self.table.ctrl.model.rowCount() > 0:
+            print(0)
+            print(self.table.ctrl.model.to_dict())
+            print(1)
             cov, _ = self.probe_model.compute_coverage(self.table.ctrl.model.to_dict(),
                                                        dist_fcn=[self.dist, self.dist + 1])
+            print(2)
             self.add_volume_layer(cov, name='planned_insertions', cmap='Purples', levels=(0, 1))
+            print(3)
             self.top.ctrl.set_scatter_layer('planned_insertions',
-                                            x=self.table.ctrl.model.arraydata.x.values / 1e6,
-                                            y=self.table.ctrl.model.arraydata.y.values / 1e6)
+                                            x=self.table.ctrl.model._data.x.values / 1e6,
+                                            y=self.table.ctrl.model._data.y.values / 1e6)
 
         else:
             self.remove_volume_layer('planned_insertions')
             self.top.ctrl.set_scatter_layer('planned_insertions')
-
+        print(4)
         self.remove_volume_layer('selected_insertion')
+        print(5)
         self.top.ctrl.set_scatter_layer('active_insertion')
+        print(6)
         self.top.ctrl.set_scatter_layer('selected_insertion')
+        print(7)
         self._refresh()
+        print(8)
         self.layers.update_table('planned_insertions')
-        self.coverage_increase()
+        print(9)
+        #self.coverage_increase()
 
 
     def add_trajectory(self, x, y):
@@ -311,9 +324,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.table.tableview.selectionModel().blockSignals(False)
 
     def on_planned_insertion_clicked(self, scatter, point):
-        idx = np.argwhere(self.table.ctrl.model.arraydata.x.values/1e6 ==
+        idx = np.argwhere(self.table.ctrl.model._data.x.values/1e6 ==
                           point[0].pos().x())[0][0]
-        traj = self.table.ctrl.model.arraydata.iloc[idx].to_dict()
+        traj = self.table.ctrl.model._data.iloc[idx].to_dict()
 
         self.do_this_thing(traj)
 
@@ -708,17 +721,21 @@ class InsertionTableView(QtWidgets.QWidget):
             self.ctrl.model.removeRow(row)
             self.qmain.get_coverage_from_table()
 
+    def on_insert_row(self, df):
+        self.ctrl.model.insertRows(self.ctrl.model.rowCount(), 1, QModelIndex(), df)
+
     def row_selected(self):
         if len(self.tableview.selectedIndexes()) == self.ctrl.model.columnCount():
             row = self.tableview.selectedIndexes()[0].row()
-            traj = self.ctrl.model.arraydata.iloc[row].to_dict()
+            traj = self.ctrl.model._data.iloc[row].to_dict()
             self.qmain.do_this_thing(traj)
 
     def initialise_data(self, data):
-        self.ctrl.model.setDataFrame(data)
+        self.ctrl.model._data = data
         self.qmain.get_coverage_from_table()
 
     def data_changed(self):
+        print('IN DATA CHANGED')
         self.qmain.get_coverage_from_table()
 
 
@@ -731,80 +748,60 @@ class InsertionTableController:
 class InsertionTableModel(QtCore.QAbstractTableModel):
     def __init__(self, data=None):
         super(InsertionTableModel, self).__init__()
+        if data is None:
+            data = pd.DataFrame()
+        self._data = data
 
-        self.arraydata = data
+    def rowCount(self, parent=None):
+        return self._data.shape[0]
 
-    def setDataFrame(self, data):
-        self.beginResetModel()
-        self.arraydata = data.copy()
-        self.endResetModel()
+    def columnCount(self, parent=None):
+        return self._data.shape[1]
 
-    def rowCount(self, parent=QtCore.QModelIndex()):
-        if parent.isValid():
-            return 0
-        return len(self.arraydata.index)
-
-    def columnCount(self, parent=QtCore.QModelIndex()):
-        if parent.isValid():
-            return 0
-        return self.arraydata.columns.size
-
-    def data(self, index, role):
-        if (not index.isValid() or not (0 <= index.row() < self.rowCount() and
-                                        0 <= index.column() < self.columnCount())):
-            return QtCore.QVariant()
-        row = self.arraydata.index[index.row()]
-        col = self.arraydata.columns[index.column()]
-
-        val = self.arraydata.iloc[row][col]
-        if role == QtCore.Qt.DisplayRole:
-            return str(val)
-        else:
-            return QtCore.QVariant()
-
-    def headerData(self, x, orientation, role):
-        if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
-            return self.arraydata.columns[x]
-        if orientation == QtCore.Qt.Vertical and role == QtCore.Qt.DisplayRole:
-            return self.arraydata.index[x]
-        return None
+    def data(self, index, role=Qt.DisplayRole):
+        if index.isValid():
+            if role == Qt.DisplayRole or role == Qt.EditRole:
+                value = self._data.iloc[index.row(), index.column()]
+                return str(value)
 
     def setData(self, index, value, role):
-        if not index.isValid():
-            return False
-        if role != QtCore.Qt.EditRole:
-            return False
-        row = index.row()
-        if row < 0 or row >= len(self.arraydata.values):
-            return False
-        column = index.column()
-        if column < 0 or column >= self.arraydata.columns.size:
-            return False
+        print('SET DATA')
+        if role == Qt.EditRole:
+            self._data.iloc[index.row(), index.column()] = int(value)
+            self.dataChanged.emit(index, index)
+            return True
+        return False
 
-        self.arraydata.iloc[row, column] = int(value)
-        self.dataChanged.emit(index, index)
+    def headerData(self, col, orientation, role):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self._data.columns[col]
+        if orientation == Qt.Vertical and role == Qt.DisplayRole:
+            return self._data.index[col]
+
+    def insertRows(self, position, rows, QModelIndex, data=None):
+        print('now i am heref')
+        self.beginInsertRows(QModelIndex, position, position+rows-1)
+        for i in range(rows):
+            self._data = pd.concat([self._data, pd.DataFrame.from_dict([data])])
+        self._data.reset_index(drop=True, inplace=True)
+        self.endInsertRows()
+        self.layoutChanged.emit()
+        return True
+
+    def removeRows(self, position, rows, QModelIndex):
+        self.beginRemoveRows(QModelIndex, position, position+rows-1)
+        for i in range(rows):
+            self._data.drop(position + i, inplace=True)
+        self._data.reset_index(drop=True, inplace=True)
+        self.endRemoveRows()
+        self.layoutChanged.emit()
         return True
 
     def flags(self, index):
-        return QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
-
-    def insertRow(self, data):
-        self.beginInsertRows(QtCore.QModelIndex(), self.rowCount(), self.rowCount())
-        self.arraydata = self.arraydata.append(data, ignore_index=True)
-        self.endInsertRows()
-        return True
-
-    def removeRow(self, position):
-
-        self.beginRemoveRows(QtCore.QModelIndex(), position, position)
-        self.arraydata = self.arraydata.drop([position])
-        self.arraydata = self.arraydata.reset_index(drop=True)
-        self.endRemoveRows()
-
-        return True
+        return Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable
 
     def to_dict(self):
-        return self.arraydata.to_dict(orient='records')
+        return self._data.to_dict(orient='records')
 
 
 class CoverageController:
