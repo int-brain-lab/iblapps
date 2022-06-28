@@ -97,6 +97,7 @@ class PlotData:
             self.lfp_data_status = False
 
         try:
+            print(self.alf_path)
             rf_map_times = alf.io.load_object(self.alf_path, object='passiveRFM',
                                               namespace='ibl')
             # This needs to go into brainbox!!
@@ -115,29 +116,32 @@ class PlotData:
             else:
                 print('rfmap data was not found, some plots will not display')
                 self.rfmap_data_status = False
-        except Exception:
+        except Exception as err:
+            print(err)
             print('rfmp data was not found, some plots will not display')
             self.rfmap_data_status = False
 
         try:
             self.aud_stim = alf.io.load_object(self.alf_path, object='passiveStims',
-                                               namespace='ibl')['table']
+                                               namespace='ibl')
             if len(self.aud_stim) > 0:
                 self.passive_data_status = True
-        except Exception:
+        except Exception as err:
+            print(err)
             print('passive stim data was not found, some plots will not display')
             self.passive_data_status = False
 
         try:
             gabor = alf.io.load_object(self.alf_path, object='passiveGabor',
-                                       namespace='ibl')['table']
+                                       namespace='ibl')
             self.vis_stim = dict()
             self.vis_stim['leftGabor'] = gabor['start'][(gabor['position'] == 35) &
                                                         (gabor['contrast'] > 0.1)]
             self.vis_stim['rightGabor'] = gabor['start'][(gabor['position'] == -35) &
                                                          (gabor['contrast'] > 0.1)]
             self.gabor_data_status = True
-        except Exception:
+        except Exception as err:
+            print(err)
             print('passive gabor data was not found, some plots will not display')
             self.gabor_data_status = False
 
