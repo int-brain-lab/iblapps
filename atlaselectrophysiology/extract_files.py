@@ -1,12 +1,14 @@
-from ibllib.io import spikeglx
-import numpy as np
-import ibllib.dsp as dsp
-from scipy import signal
-from ibllib.misc import print_progress
 from pathlib import Path
-import one.alf.io as alfio
 import logging
+
+from tqdm import tqdm
+import spikeglx
+import numpy as np
+from neurodsp import fourier, utils
+from scipy import signal
+import one.alf.io as alfio
 import ibllib.ephys.ephysqc as ephysqc
+
 from phylib.io import alf
 
 _logger = logging.getLogger('ibllib')
@@ -32,33 +34,35 @@ def rmsmap(fbin, spectra=True):
         sglx.open()
     rms_win_length_samples = 2 ** np.ceil(np.log2(sglx.fs * RMS_WIN_LENGTH_SECS))
     # the window generator will generates window indices
-    wingen = dsp.WindowGenerator(ns=sglx.ns, nswin=rms_win_length_samples, overlap=0)
+    wingen = utils.WindowGenerator(ns=sglx.ns, nswin=rms_win_length_samples, overlap=0)
     # pre-allocate output dictionary of numpy arrays
     win = {'TRMS': np.zeros((wingen.nwin, sglx.nc)),
            'nsamples': np.zeros((wingen.nwin,)),
-           'fscale': dsp.fscale(WELCH_WIN_LENGTH_SAMPLES, 1 / sglx.fs, one_sided=True),
+           'fscale': fourier.fscale(WELCH_WIN_LENGTH_SAMPLES, 1 / sglx.fs, one_sided=True),
            'tscale': wingen.tscale(fs=sglx.fs)}
     win['spectral_density'] = np.zeros((len(win['fscale']), sglx.nc))
     # loop through the whole session
-    for first, last in wingen.firstlast:
-        D = sglx.read_samples(first_sample=first, last_sample=last)[0].transpose()
-        # remove low frequency noise below 1 Hz
-        D = dsp.hp(D, 1 / sglx.fs, [0, 1])
-        iw = wingen.iw
-        win['TRMS'][iw, :] = dsp.rms(D)
-        win['nsamples'][iw] = D.shape[1]
-        if spectra:
-            # the last window may be smaller than what is needed for welch
-            if last - first < WELCH_WIN_LENGTH_SAMPLES:
-                continue
-            # compute a smoothed spectrum using welch method
-            _, w = signal.welch(D, fs=sglx.fs, window='hanning', nperseg=WELCH_WIN_LENGTH_SAMPLES,
-                                detrend='constant', return_onesided=True, scaling='density',
-                                axis=-1)
-            win['spectral_density'] += w.T
-        # print at least every 20 windows
-        if (iw % min(20, max(int(np.floor(wingen.nwin / 75)), 1))) == 0:
-            print_progress(iw, wingen.nwin)
+    with tqdm(total=wingen.firstlast) as pbar:
+        for first, last in wingen.firstlast:
+            D = sglx.read_samples(first_sample=first, last_sample=last)[0].transpose()
+            # remove low frequency noise below 1 Hz
+            D = fourier.hp(D, 1 / sglx.fs, [0, 1])
+            iw = wingen.iw
+            win['TRMS'][iw, :] = utils.rms(D)
+            win['nsamples'][iw] = D.shape[1]
+            if spectra:
+                # the last window may be smaller than what is needed for welch
+                if last - first < WELCH_WIN_LENGTH_SAMPLES:
+                    continue
+                # compute a smoothed spectrum using welch method
+                _, w = signal.welch(
+                    D, fs=sglx.fs, window='hanning', nperseg=WELCH_WIN_LENGTH_SAMPLES,
+                    detrend='constant', return_onesided=True, scaling='density', axis=-1
+                )
+                win['spectral_density'] += w.T
+            # print at least every 20 windows
+            if (iw % min(20, max(int(np.floor(wingen.nwin / 75)), 1))) == 0:
+                pbar.update(iw)
 
     sglx.close()
     return win

@@ -6,9 +6,9 @@ from easyqc.gui import viewseis
 
 import one.alf.io as alfio
 from one.api import ONE
-from ibllib.io import spikeglx
-from ibllib.ephys import neuropixel
-from ibllib.dsp import voltage
+import spikeglx
+import neuropixel
+from neurodsp import voltage
 from brainbox.plot import driftmap
 
 from needles2 import run_needles2

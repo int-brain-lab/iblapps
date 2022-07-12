@@ -9,13 +9,12 @@ from phylib import add_default_handler
 from one.api import ONE
 from brainbox.metrics.single_units import quick_unit_metrics
 from pathlib import Path
+from brainbox.io.one import SpikeSortingLoader
 
 
-def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=None):
+def launch_phy(probe_name=None, eid=None, pid=None, subj=None, date=None, sess_no=None, one=None):
     """
     Launch phy given an eid and probe name.
-
-    TODO calculate metrics and save as .tsvs to include in GUI when launching?
     """
 
     # This is a first draft, no error handling and a draft dataset list.
@@ -23,72 +22,59 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
     # Load data from probe #
     # -------------------- #
 
-    if one is None:
-        one = ONE()
+    from one.api import ONE
+    from ibllib.atlas import AllenAtlas
+    from brainbox.io.one import SpikeSortingLoader
+    from ibllib.io import spikeglx
+    one = ONE()
+    ba = AllenAtlas()
 
-    dtypes = [
-        'spikes.times.npy',
-        'spikes.clusters.npy',
-        'spikes.amps.npy',
-        'spikes.templates.npy',
-        'spikes.samples.npy',
-        'spikes.depths.npy',
-        'templates.waveforms.npy',
-        'templates.waveformsChannels.npy',
-        'clusters.uuids.csv',
-        'clusters.metrics.pqt',
-        'clusters.waveforms.npy',
-        'clusters.waveformsChannels.npy',
-        'clusters.depths.npy',
-        'clusters.amps.npy',
-        'clusters.channels.npy',
-        'channels.rawInd.npy',
-        'channels.localCoordinates.npy',
-        # 'ephysData.raw.ap'
-        '_phy_spikes_subset.waveforms.npy',
-        '_phy_spikes_subset.spikes.npy',
-        '_phy_spikes_subset.channels.npy'
-    ]
+    datasets = [
+        'spikes.times',
+        'spikes.clusters',
+        'spikes.amps',
+        'spikes.templates',
+        'spikes.samples',
+        'spikes.depths',
+        'clusters.uuids',
+        'clusters.metrics',
+        'clusters.waveforms',
+        'clusters.waveformsChannels',
+        'clusters.depths',
+        'clusters.amps',
+        'clusters.channels']
 
-    cols = one.list_collections(eid)
-    if f'alf/{probe_name}/pykilosort' in cols:
-        collection = f'alf/{probe_name}/pykilosort'
-        collections = [collection] * len(dtypes)
+    if pid is None:
+        ssl = SpikeSortingLoader(eid=eid, pname=probe_name, one=one, atlas=ba)
     else:
-        collection = f'alf/{probe_name}'
-        collections = [collection] * len(dtypes)
+        ssl = SpikeSortingLoader(pid=pid, one=one, atlas=ba)
+    ssl.download_spike_sorting(dataset_types=datasets)
+    ssl.download_spike_sorting_object('templates')
+    ssl.download_spike_sorting_object('spikes_subset')
 
-    if eid is None:
-        eid = one.search(subject=subj, date=date, number=sess_no)[0]
+    alf_dir = ssl.session_path.joinpath(ssl.collection)
 
-    _ = one.load_datasets(eid, datasets=dtypes, collections=collections, download_only=True,
-                          assert_present=False)
+    if not alf_dir.joinpath('clusters.metrics.pqt').exists():
+        spikes, clusters, channels = ssl.load_spike_sorting()
+        ssl.merge_clusters(spikes, clusters, channels, cache_dir=alf_dir)
 
-    ses_path = one.eid2path(eid)
-    alf_probe_dir = ses_path.joinpath(collection)
-    ephys_file_dir = ses_path.joinpath('raw_ephys_data', probe_name)
-    raw_files = glob.glob(os.path.join(ephys_file_dir, '*ap.*bin'))
-    raw_file = [raw_files[0]] if raw_files else None
+    raw_file = next(ssl.session_path.joinpath('raw_ephys_folder', ssl.pname).glob('*.ap.*bin'), None)
 
-    cluster_metrics_path = alf_probe_dir.joinpath('clusters.metrics.pqt')
-    if not cluster_metrics_path.exists():
-        print('computing metrics this may take a bit of time')
-        spikes = one.load_object(eid, 'spikes', collection=collection,
-                                 attribute=['depths', 'time', 'amps', 'clusters'])
-        clusters = one.load_object(eid, 'clusters', collection=collection, attribute=['channels'])
-
-        r = quick_unit_metrics(spikes.clusters, spikes.times, spikes.amps, spikes.depths,
-                               cluster_ids=np.arange(clusters.channels.size))
-        r = pd.DataFrame(r)
-        r.to_parquet(cluster_metrics_path)
+    if raw_file is not None:
+        sr = spikeglx.Reader(raw_file)
+        sample_rate = sr.fs
+        n_channel_dat = sr.nc - sr.nsync
+    else:
+        sample_rate = 30000
+        n_channel_dat = 384
 
     # Launch phy #
     # -------------------- #
     add_default_handler('DEBUG', logging.getLogger("phy"))
     add_default_handler('DEBUG', logging.getLogger("phylib"))
     create_app()
-    controller = TemplateController(dat_path=raw_file, dir_path=alf_probe_dir, dtype=np.int16,
-                                    n_channels_dat=384, sample_rate=3e4,
+    controller = TemplateController(dat_path=raw_file, dir_path=alf_dir, dtype=np.int16,
+                                    n_channels_dat=n_channel_dat, sample_rate=sample_rate,
                                     plugins=['IBLMetricsPlugin'],
                                     plugin_dirs=[Path(__file__).resolve().parent / 'plugins'])
     gui = controller.create_gui()
@@ -99,6 +85,10 @@ def launch_phy(probe_name, eid=None, subj=None, date=None, sess_no=None, one=Non
 
 
 if __name__ == '__main__':
+    """
+    `python int-brain-lab\iblapps\launch_phy\phy_launcher.py -e a3df91c8-52a6-4afa-957b-3479a7d0897c -p probe00`
+    `python int-brain-lab\iblapps\launch_phy\phy_launcher.py -pid c07d13ed-e387-4457-8e33-1d16aed3fd92`
+    """
     from argparse import ArgumentParser
     import numpy as np
 
@@ -111,19 +101,22 @@ if __name__ == '__main__':
                         help='Session Number', type=int)
     parser.add_argument('-e', '--eid', default=False, required=False,
                         help='Session eid')
-    parser.add_argument('-p', '--probe_label', default=False, required=True,
+    parser.add_argument('-p', '--probe_label', default=False, required=False,
                         help='Probe Label')
+    parser.add_argument('-pid', '--pid', default=False, required=False,
+                        help='Probe ID')
 
     args = parser.parse_args()
-
     if args.eid:
-        launch_phy(str(args.probe_label), eid=str(args.eid))
+        launch_phy(probe_name=str(args.probe_label), eid=str(args.eid))
+    elif args.pid:
+        launch_phy(pid=str(args.pid))
     else:
         if not np.all(np.array([args.subject, args.date, args.session_no],
                                dtype=object)):
             print('Must give Subject, Date and Session number')
         else:
-            launch_phy(str(args.probe_label), subj=str(args.subject),
+            launch_phy(probe_name=str(args.probe_label), subj=str(args.subject),
                        date=str(args.date), sess_no=args.session_no)
     # launch_phy('probe00', subj='KS022',
             # date='2019-12-10', sess_no=1)

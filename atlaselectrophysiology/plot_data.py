@@ -6,7 +6,7 @@ from brainbox.processing import bincount2D
 from brainbox.io.spikeglx import stream
 from brainbox.population.decode import xcorr
 from brainbox.task import passive
-from ibllib.dsp import voltage
+from neurodsp import voltage
 import scipy
 from PyQt5 import QtGui
 
@@ -58,6 +58,7 @@ class PlotData:
         # See if spike data is available
         try:
             self.spikes = alf.io.load_object(self.probe_path, 'spikes')
+            self.max_spike_time = np.max(self.spikes['times'])
             self.spike_data_status = True
         except Exception:
             print('spike data was not found, some plots will not display')
@@ -96,6 +97,7 @@ class PlotData:
             self.lfp_data_status = False
 
         try:
+            print(self.alf_path)
             rf_map_times = alf.io.load_object(self.alf_path, object='passiveRFM',
                                               namespace='ibl')
             # This needs to go into brainbox!!
@@ -114,29 +116,32 @@ class PlotData:
             else:
                 print('rfmap data was not found, some plots will not display')
                 self.rfmap_data_status = False
-        except Exception:
+        except Exception as err:
+            print(err)
             print('rfmp data was not found, some plots will not display')
             self.rfmap_data_status = False
 
         try:
             self.aud_stim = alf.io.load_object(self.alf_path, object='passiveStims',
-                                               namespace='ibl')['table']
+                                               namespace='ibl')
             if len(self.aud_stim) > 0:
                 self.passive_data_status = True
-        except Exception:
+        except Exception as err:
+            print(err)
             print('passive stim data was not found, some plots will not display')
             self.passive_data_status = False
 
         try:
             gabor = alf.io.load_object(self.alf_path, object='passiveGabor',
-                                       namespace='ibl')['table']
+                                       namespace='ibl')
             self.vis_stim = dict()
             self.vis_stim['leftGabor'] = gabor['start'][(gabor['position'] == 35) &
                                                         (gabor['contrast'] > 0.1)]
             self.vis_stim['rightGabor'] = gabor['start'][(gabor['position'] == -35) &
                                                          (gabor['contrast'] > 0.1)]
             self.gabor_data_status = True
-        except Exception:
+        except Exception as err:
+            print(err)
             print('passive gabor data was not found, some plots will not display')
             self.gabor_data_status = False
 
@@ -480,7 +485,10 @@ class PlotData:
         def gain2level(gain):
             return 10 ** (gain / 20) * 4 * np.array([-1, 1])
         data_img = dict()
-        for t in t0:
+
+        times = [t for t in t0 if t < self.max_spike_time]
+
+        for t in times:
 
             sr, t = stream(pid, t, one=one)
             raw = sr[:, :-sr.nsync].T

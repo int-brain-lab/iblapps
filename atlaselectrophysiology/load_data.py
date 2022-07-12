@@ -2,7 +2,7 @@ import logging
 import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
-from ibllib.ephys.neuropixel import SITES_COORDINATES
+from neuropixel import SITES_COORDINATES
 import ibllib.atlas as atlas
 from ibllib.qc.alignment_qc import AlignmentQC
 from one.api import ONE
@@ -358,6 +358,7 @@ class LoadData:
 
         hist_path_rd = None
         hist_path_gr = None
+        hist_path_cb = None
         # First see if the histology file exists before attempting to connect with FlatIron and
         # download
         if self.download_hist:
@@ -385,6 +386,10 @@ class LoadData:
                     hist_path_gr = files[0]
                     hist_path_rd = files[1]
 
+            files = download_histology_data('MB059', 'hausserlab')
+            if files is not None:
+                hist_path_cb = files[1]
+
         if hist_path_rd:
             hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd)
             hist_slice_rd = hist_atlas_rd.image[index[:, 0], :, index[:, 2]]
@@ -401,9 +406,18 @@ class LoadData:
             print('Could not find green histology image for this subject')
             hist_slice_gr = np.copy(ccf_slice)
 
+        if hist_path_cb:
+            hist_atlas_cb = atlas.AllenAtlas(hist_path=hist_path_cb)
+            hist_slice_cb = hist_atlas_cb.image[index[:, 0], :, index[:, 2]]
+            hist_slice_cb = np.swapaxes(hist_slice_cb, 0, 1)
+        else:
+            print('Could not find example cerebellar histology image')
+            hist_slice_cb = np.copy(ccf_slice)
+
         slice_data = {
             'hist_rd': hist_slice_rd,
             'hist_gr': hist_slice_gr,
+            'hist_cb': hist_slice_cb,
             'ccf': ccf_slice,
             'label': label_slice,
             'scale': np.array([(width[-1] - width[0]) / ccf_slice.shape[0],
