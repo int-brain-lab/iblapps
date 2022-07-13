@@ -1,10 +1,12 @@
-from PyQt5 import QtCore, QtGui, QtWidgets
+from random import randrange
+
+import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.exporters
-import numpy as np
-from random import randrange
-from atlaselectrophysiology.AdaptedAxisItem import replace_axis
+from PyQt5 import QtCore, QtGui, QtWidgets
 from ibllib.qc.critical_reasons import REASONS_INS_CRIT_GUI
+
+from AdaptedAxisItem import replace_axis
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')

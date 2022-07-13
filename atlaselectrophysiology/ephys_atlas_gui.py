@@ -1,25 +1,26 @@
 import os
 import platform
+from pathlib import Path
+from random import randrange
+
+import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
+import numpy as np
+import pyqtgraph as pg
+import pyqtgraph.exporters
+from PyQt5 import QtWidgets, QtCore, QtGui
+from ibllib.pipes.ephys_alignment import EphysAlignment
+
+import ColorBar as cb
+import ephys_gui_setup as ephys_gui
+import plot_data as pd
+import qt
+from create_overview_plots import make_overview_plot
+from load_data import LoadData
+from load_data_local import LoadDataLocal
 
 if platform.system() == 'Darwin':
     if platform.release().split('.')[0] == '20':
         os.environ["QT_MAC_WANTS_LAYER"] = "1"
-
-from PyQt5 import QtWidgets, QtCore, QtGui
-import pyqtgraph as pg
-import pyqtgraph.exporters
-import numpy as np
-from random import randrange
-from atlaselectrophysiology.load_data import LoadData
-from atlaselectrophysiology.load_data_local import LoadDataLocal
-from ibllib.pipes.ephys_alignment import EphysAlignment
-import atlaselectrophysiology.plot_data as pd
-import atlaselectrophysiology.ColorBar as cb
-import atlaselectrophysiology.ephys_gui_setup as ephys_gui
-from atlaselectrophysiology.create_overview_plots import make_overview_plot
-from pathlib import Path
-import qt
-import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
 
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):

@@ -1,15 +1,16 @@
-import numpy as np
-from datetime import datetime
-import ibllib.atlas as atlas
-from pathlib import Path
-import one.alf.io as alfio
 import glob
 import json
-from one.api import ONE
-from atlaselectrophysiology.load_histology import tif2nrrd
+import ssl  # temporarily add this in for neuropixel course until figured out fix to problem on win32
+from datetime import datetime
+from pathlib import Path
 
-# temporarily add this in for neuropixel course until figured out fix to problem on win32
-import ssl
+import ibllib.atlas as atlas
+import numpy as np
+import one.alf.io as alfio
+from one.api import ONE
+
+from load_histology import tif2nrrd
+
 ssl._create_default_https_context = ssl._create_unverified_context
 
 

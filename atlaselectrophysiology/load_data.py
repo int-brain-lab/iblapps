@@ -1,17 +1,19 @@
-import logging
-import numpy as np
-from datetime import datetime
-import ibllib.pipes.histology as histology
-from neuropixel import SITES_COORDINATES
-import ibllib.atlas as atlas
-from ibllib.qc.alignment_qc import AlignmentQC
-from one.api import ONE
-from pathlib import Path
-import one.alf as alf
-from one import params
 import glob
-from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
+import logging
+from datetime import datetime
+from pathlib import Path
+
+import ibllib.atlas as atlas
+import ibllib.pipes.histology as histology
 import ibllib.qc.critical_reasons as usrpmt
+import numpy as np
+import one.alf as alf
+from ibllib.qc.alignment_qc import AlignmentQC
+from neuropixel import SITES_COORDINATES
+from one import params
+from one.api import ONE
+
+from load_histology import download_histology_data, tif2nrrd
 
 logger = logging.getLogger('ibllib')
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
