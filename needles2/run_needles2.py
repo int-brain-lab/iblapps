@@ -103,6 +103,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table = InsertionTableView(self)
         self.layers = LayersView(self)
         self.change_mapping()
+        self.ixyz_second = None
 
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.coverage)
@@ -506,7 +507,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 layer = copy.deepcopy(layer_covered.slice_kwargs['region_values'])
 
         self.layer_val = layer
-        if layer is not None:
+        if layer is not None and self.ixyz_second is not None:
             la = layer.flatten()
             # percentage of the second volume that is covered,
             # so we need to add the coverage to the main coverage
@@ -1086,11 +1087,17 @@ class BaseController:
                          bc=None, levels=None):
         # If there is a layer with the same name remove it
         self.remove_image_layer(name)
-        colormap = matplotlib.cm.get_cmap(cmap)
-        colormap._init()
-        # The last one is [0, 0, 0, 0] so remove this
-        lut = (colormap._lut * 255).view(np.ndarray)[:-1]
-        lut = np.insert(lut, 0, [0, 0, 0, 0], axis=0)
+        if type(cmap) == str:
+            colormap = matplotlib.cm.get_cmap(cmap)
+            colormap._init()
+            # The last one is [0, 0, 0, 0] so remove this
+            lut = (colormap._lut * 255).view(np.ndarray)[:-1]
+            lut = np.insert(lut, 0, [0, 0, 0, 0], axis=0)
+        else:
+            colormap = cmap
+            colormap._init()
+            lut = (colormap._lut * 255).view(np.ndarray)[:-1]
+            lut = np.insert(lut, 0, [0, 0, 0, 0], axis=0)
         if levels is None:
             levels = (0, np.nanmax(volume))
         self.add_image_layer(name=name, pg_kwargs={'lut': lut, 'opacity': opacity, 'levels': levels},
