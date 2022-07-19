@@ -1,13 +1,15 @@
-from launch_phy import cluster_table
-from one import alf
-import pandas as pd
-from datetime import datetime
-from one.api import ONE
-from one import params
-from ibllib.misc import print_progress
 import sys
 from pathlib import Path
 import uuid
+from datetime import datetime
+
+from tqdm import tqdm
+from one import alf
+import pandas as pd
+from one.api import ONE
+from one import params
+
+from launch_phy import cluster_table
 
 
 def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
@@ -143,14 +145,12 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
         print('Populating dj with ' + str(idx_new.size) + ' new labels')
     else:
         print('No new labels to add')
-    for iIter, (iClust, iLabel, iNote) in enumerate(
-            zip(cluster_uuid, cluster_label, cluster_note)):
+    for iClust, iLabel, iNote in zip(tqdm(cluster_uuid), cluster_label, cluster_note):
         cluster.insert1(dict(cluster_uuid=iClust, user_name=user,
                              label_time=current_date,
                              cluster_label=iLabel,
                              cluster_note=iNote),
                         allow_direct_insert=True)
-        print_progress(iIter, cluster_uuid.size, '', '')
 
     # Next look through clusters already on datajoint and check if any labels have
     # been changed
@@ -166,15 +166,13 @@ def populate_dj_with_phy(probe_label, eid=None, subj=None, date=None,
         print('Replacing label of ' + str(idx_change.size) + ' clusters')
     else:
         print('No labels to change')
-    for iIter, (iClust, iLabel, iNote) in enumerate(
-            zip(cluster_uuid, cluster_label, cluster_note)):
+    for iClust, iLabel, iNote in zip(tqdm(cluster_uuid), cluster_label, cluster_note):
         prev_clust = cluster & {'user_name': user} & {'cluster_uuid': iClust}
         cluster.insert1(dict(*prev_clust.proj(),
                              label_time=current_date,
                              cluster_label=iLabel,
                              cluster_note=iNote),
                         allow_direct_insert=True, replace=True)
-        print_progress(iIter, cluster_uuid.size, '', '')
 
     print('Upload to datajoint complete')
 
