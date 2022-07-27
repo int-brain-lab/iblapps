@@ -52,6 +52,10 @@ class PlotData:
             self.chn_coords = self.chn_coords_all
             self.chn_ind = self.chn_ind_all
 
+        chn_sort = np.argsort(self.chn_coords[:, 1])
+        self.chn_coords = self.chn_coords[chn_sort]
+        self.chn_ind = self.chn_ind[chn_sort]
+
         self.N_BNK = len(np.unique(self.chn_coords[:, 0]))
         self.idx_full = np.where(np.isin(self.chn_full, self.chn_coords[:, 1]))[0]
 
@@ -686,7 +690,7 @@ class PlotData:
             bnk_idx = np.where(self.chn_coords[:, 0] == x)[0]
 
             bnk_ycoords = self.chn_coords[bnk_idx, 1]
-            bnk_diff = np.min(np.diff(bnk_ycoords))
+            bnk_diff = np.min(np.abs(np.diff(bnk_ycoords)))
 
             # NP1.0 checkerboard
             if bnk_diff != self.chn_diff:
