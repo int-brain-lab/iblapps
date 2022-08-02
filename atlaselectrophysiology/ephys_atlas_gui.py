@@ -16,6 +16,7 @@ from ibllib.pipes.ephys_alignment import EphysAlignment
 import atlaselectrophysiology.plot_data as pd
 import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
+from atlaselectrophysiology.subject_scaling import ScalingWindow
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
 import qt
@@ -126,6 +127,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.cluster_popups = []
         self.label_popup = []
         self.popup_status = True
+        self.subj_win = None
 
         self.hist_data = {
             'region': [0] * (self.max_idx + 1),
@@ -1902,6 +1904,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.activateWindow()
 
         return clust_no
+
+    def display_subject_scaling(self):
+        if self.subj_win is not None:
+            self.subj_win.close()
+
+        self.subj_win = ScalingWindow(self.loaddata.probe_id, self.loaddata.subj, self.loaddata.one, self.loaddata.brain_atlas)
 
     def on_mouse_double_clicked(self, event):
         """
