@@ -1913,7 +1913,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.subj_win = ScalingWindow(self.loaddata.probe_id, self.loaddata.subj, self.loaddata.one, self.loaddata.brain_atlas)
 
     def display_region_features(self):
-        self.region_win = RegionFeatureWindow(np.unique(np.array(self.ephysalign.region_id).ravel()), self.loaddata.brain_atlas)
+        self.region_win = RegionFeatureWindow(self.loaddata.one.cache_dir, np.unique(np.array(self.ephysalign.region_id).ravel()),
+                                              self.loaddata.brain_atlas)
         self.region_win.show()
 
     def on_mouse_double_clicked(self, event):

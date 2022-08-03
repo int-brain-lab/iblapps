@@ -9,6 +9,7 @@ from ibllib.pipes.ephys_alignment import EphysAlignment
 from atlaselectrophysiology.AdaptedAxisItem import replace_axis
 from ephysfeatures.qrangeslider import QRangeSlider
 import copy
+from pathlib import Path
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -31,7 +32,7 @@ PLOT_TYPES = {'psd_delta': {'plot_type': 'probe', 'cmap': 'viridis'},
 
 class RegionFeatureWindow(QtWidgets.QMainWindow):
 
-    def __init__(self, region_ids=None, ba=None, size=(1600, 800)):
+    def __init__(self, cache_dir, region_ids=None, ba=None, size=(1600, 800)):
         super(RegionFeatureWindow, self).__init__()
 
         # Initialise page counter
@@ -43,7 +44,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
 
         self.ba = ba or AllenAtlas()
         br = self.ba.regions
-        self.data = pd.read_parquet(r'C:\Users\Mayo\Downloads\channels_voltage_features.pqt')
+        self.data = pd.read_parquet(Path(cache_dir).joinpath('histology', 'channels_voltage_features.pqt'))
         self.data = self.data.reset_index()  # sorry
         self.data['rms_ap'] *= 1e6
         self.data['rms_lf'] *= 1e6
@@ -597,7 +598,9 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
 
 
 if __name__ == '__main__':
+    from one.api import ONE
+    one = ONE()
     app = QtWidgets.QApplication(sys.argv)
-    window = RegionFeatureWindow()
+    window = RegionFeatureWindow(one.cache_dir)
     window.show()
     app.exec_()
