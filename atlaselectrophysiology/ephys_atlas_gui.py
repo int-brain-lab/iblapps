@@ -17,6 +17,7 @@ import atlaselectrophysiology.plot_data as pd
 import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 from atlaselectrophysiology.subject_scaling import ScalingWindow
+from ephysfeatures.features_across_region import RegionFeatureWindow
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
 import qt
@@ -1910,6 +1911,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.subj_win.close()
 
         self.subj_win = ScalingWindow(self.loaddata.probe_id, self.loaddata.subj, self.loaddata.one, self.loaddata.brain_atlas)
+
+    def display_region_features(self):
+        self.region_win = RegionFeatureWindow(np.unique(np.array(self.ephysalign.region_id).ravel()), self.loaddata.brain_atlas)
+        self.region_win.show()
 
     def on_mouse_double_clicked(self, event):
         """
