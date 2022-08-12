@@ -1,7 +1,6 @@
-from pathlib import Path
 from one.api import ONE
 import one.alf.io as alfio
-from brainbox.core import Bunch
+from iblutil.util import Bunch
 import qt
 import numpy as np
 import pyqtgraph as pg

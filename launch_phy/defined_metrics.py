@@ -17,6 +17,7 @@ from phylib.stats import correlograms
 import scipy.stats as stats
 import scipy.ndimage.filters as filters
 from ibllib.io import spikeglx
+from iblutil.util import Bunch
 
 
 def FP_RP(ts):
@@ -201,8 +202,8 @@ def unit_stability(units_b, units=None, feat_names=['amps'], dist='norm', test='
     unit_list = list(units_b[feat_names[0]].keys())  # get new `unit_list` after removing units
 
     # Initialize `p_vals` and `variances`.
-    p_vals_b = bb.core.Bunch()
-    cv_b = bb.core.Bunch()
+    p_vals_b = Bunch()
+    cv_b = Bunch()
 
     # Set the test as a lambda function (in future, more tests can be added to this dict)
     tests = \
@@ -216,8 +217,8 @@ def unit_stability(units_b, units=None, feat_names=['amps'], dist='norm', test='
     # `variances_feat`. After iterating through all units, add these bunches as keys to their
     # respective parent bunches, `p_vals` and `variances`.
     for feat in feat_names:
-        p_vals_feat = bb.core.Bunch((unit, 0) for unit in unit_list)
-        cv_feat = bb.core.Bunch((unit, 0) for unit in unit_list)
+        p_vals_feat = Bunch((unit, 0) for unit in unit_list)
+        cv_feat = Bunch((unit, 0) for unit in unit_list)
         for unit in unit_list:
             # If we're missing units/features, create a NaN placeholder and skip them:
             if len(units_b['times'][str(unit)]) == 0:
