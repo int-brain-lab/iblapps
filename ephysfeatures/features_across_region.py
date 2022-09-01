@@ -38,6 +38,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
     def __init__(self, one, region_ids=None, ba=None, download=True, size=(1600, 800)):
         super(RegionFeatureWindow, self).__init__()
 
+        self.one = one
         # Initialise page counter
         self.page_num = 0
         self.page_idx = 0
@@ -48,9 +49,9 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         self.ba = ba or AllenAtlas()
         br = self.ba.regions
 
-        table_path = one.cache_dir.joinpath('bwm_features')
+        table_path = self.one.cache_dir.joinpath('bwm_features')
         if download:
-            s3, bucket_name = aws.get_s3_from_alyx(alyx=one.alyx)
+            s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
             aws.s3_download_folder("aggregates/bwm", table_path, s3=s3, bucket_name=bucket_name)
 
         channels = pd.read_parquet(table_path.joinpath('channels.pqt'))
@@ -607,7 +608,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
             d = df.iloc[0]
             info = {'pid': pid,
                     'eid': d.eid,
-                    'session': '/'.join(one.eid2path(d.eid).parts[-3:]),
+                    'session': '/'.join(self.one.eid2path(d.eid).parts[-3:]),
                     'probe': d.pname,
                     'histology': d.histology}
 
