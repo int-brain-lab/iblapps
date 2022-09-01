@@ -9,7 +9,8 @@ from ibllib.pipes.ephys_alignment import EphysAlignment
 from atlaselectrophysiology.AdaptedAxisItem import replace_axis
 from ephysfeatures.qrangeslider import QRangeSlider
 import copy
-from pathlib import Path
+from one.remote import aws
+from one.api import ONE
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -27,12 +28,14 @@ PLOT_TYPES = {'psd_delta': {'plot_type': 'probe', 'cmap': 'viridis'},
               'rms_ap': {'plot_type': 'probe', 'cmap': 'plasma'},
               'rms_lf': {'plot_type': 'probe', 'cmap': 'inferno'},
               'spike_rate': {'plot_type': 'probe', 'cmap': 'hot'},
+              'amps': {'plot_type': 'line', 'xlabel': 'Amplitude'},
+              'spike_rate_line': {'plot_type': 'line', 'xlabel': 'Firing Rate'}
               }
 
 
 class RegionFeatureWindow(QtWidgets.QMainWindow):
 
-    def __init__(self, cache_dir, region_ids=None, ba=None, size=(1600, 800)):
+    def __init__(self, one, region_ids=None, ba=None, download=True, size=(1600, 800)):
         super(RegionFeatureWindow, self).__init__()
 
         # Initialise page counter
@@ -44,10 +47,30 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
 
         self.ba = ba or AllenAtlas()
         br = self.ba.regions
-        self.data = pd.read_parquet(Path(cache_dir).joinpath('histology', 'channels_voltage_features.pqt'))
-        self.data = self.data.reset_index()  # sorry
-        self.data['rms_ap'] *= 1e6
-        self.data['rms_lf'] *= 1e6
+
+        table_path = one.cache_dir.joinpath('bwm_features')
+        if download:
+            s3, bucket_name = aws.get_s3_from_alyx(alyx=one.alyx)
+            aws.s3_download_folder("aggregates/bwm", table_path, s3=s3, bucket_name=bucket_name)
+
+        channels = pd.read_parquet(table_path.joinpath('channels.pqt'))
+        probes = pd.read_parquet(table_path.joinpath('probes.pqt'))
+        features = pd.read_parquet(table_path.joinpath('raw_ephys_features.pqt'))
+
+        df_voltage = pd.merge(features, channels, left_index=True, right_index=True)
+        df_voltage = df_voltage.reset_index()
+        data = pd.merge(df_voltage, probes, left_on='pid', right_index=True)
+        data['rms_ap'] *= 1e6
+        data['rms_lf'] *= 1e6
+
+        depths = pd.read_parquet(table_path.joinpath('depths.pqt'))
+        depths = depths.reset_index()
+        depths = depths.rename(columns={'spike_rate': 'spike_rate_line'})
+
+        self.data = pd.merge(data, depths, left_on=['pid', 'axial_um'], right_on=['pid', 'depths'], how='outer')
+        self.data.loc[self.data['histology'] == 'alf', 'histology'] = 'resolved'
+
+        del data, depths, channels, probes, features, df_voltage
 
         # Initialise region combobox
         if region_ids is not None:
@@ -149,7 +172,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
             fig_hist = pg.PlotItem()
             fig_hist.setContentsMargins(0, 0, 0, 0)
             fig_hist.setMouseEnabled(x=False)
-            self.set_axis(fig_hist, 'bottom', pen='w', label='blank')
+            self.set_axis(fig_hist, 'bottom', pen=None, label='')
             replace_axis(fig_hist)
             ax_hist = self.set_axis(fig_hist, 'left', pen='k')
             ax_hist.setWidth(0)
@@ -179,6 +202,19 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
             fig_layout.layout.setRowStretchFactor(1, 10)
             plot_layout.addWidget(fig_area)
 
+        # Widget that contains info about the insertion displayed
+        info_widget = QtWidgets.QWidget()
+        info_layout = QtWidgets.QHBoxLayout()
+        info_widget.setLayout(info_layout)
+        self.info_labels = []
+        for i in range(self.step):
+            label = QtWidgets.QTextEdit()
+            label.setReadOnly(True)
+            label.setLineWrapMode(QtWidgets.QTextEdit.WidgetWidth)
+            # label = QtWidgets.QLabel()
+            # label.setWordWrap(True)
+            info_layout.addWidget(label)
+            self.info_labels.append(label)
 
         # Widget for updating colorbar or axis of plots
         scale_widget = QtWidgets.QWidget()
@@ -213,8 +249,12 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
 
         main_layout.addWidget(options_widget)
         main_layout.addWidget(plot_widget)
+        main_layout.addWidget(info_widget)
         main_layout.addWidget(scale_widget)
+        main_layout.setStretch(0, 1)
         main_layout.setStretch(1, 10)
+        main_layout.setStretch(2, 1)
+        main_layout.setStretch(3, 1)
 
 
     def set_axis(self, fig, ax, show=True, label=None, pen='k', ticks=True):
@@ -249,7 +289,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         self.page_idx = 0
         self.update_page_label()
 
-        self.region_data = self.get_region_data(self.pids)
+        self.region_data, self.probe_info = self.get_region_data(self.pids)
         self.offset_data = self.get_offset_data()
         self.get_feature_data(self.plot_name, self.plot_type)
 
@@ -292,7 +332,6 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
             self.update_page_label()
             self.plot_all()
 
-
     def init_slider(self):
 
         min_val = int(self.max_levels[0])
@@ -313,7 +352,8 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
 
         self.clear_plots()
         self.plot_features()
-        self.plot_regions(self.region_data)
+        self.plot_regions()
+        self.set_info()
 
     def clear_plots(self):
         for fig_hist, fig_feat, fig_cbar in zip(self.plots_hist, self.plots_feat, self.plots_cbar):
@@ -321,7 +361,6 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
             fig_feat.clear()
             fig_cbar.clear()
             self.set_axis(fig_cbar, 'top', pen='w')
-
 
     def get_idx(self):
         if self.page_idx == self.page_num:
@@ -331,11 +370,21 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
 
         return pid_idx
 
-    def plot_regions(self, data):
+    def set_info(self):
+        pid_idx = self.get_idx()
+        data = [dat for i, dat in enumerate(self.probe_info) if i in pid_idx]
+
+        for iD, dat in enumerate(data):
+            lab = self.info_labels[iD]
+            lab.setText(f'{dat["session"]}\n'
+                        f'{dat["probe"]}\n'
+                        f'{dat["pid"]}')
+
+    def plot_regions(self):
 
         pid_idx = self.get_idx()
 
-        data = [dat for i, dat in enumerate(data) if i in pid_idx]
+        data = [dat for i, dat in enumerate(self.region_data) if i in pid_idx]
         offsets = [off for i, off in enumerate(self.offset_data) if i in pid_idx]
 
         for iD, dat in enumerate(data):
@@ -383,7 +432,6 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
                 axis.setTicks([])
                 axis.setPen(None)
 
-
     def plot_features(self):
 
         plot_data = self.feature_data[self.plot_name]
@@ -405,23 +453,38 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
                 self.plot_probe(fig_probe, fig_cbar, dat, offset)
             elif self.plot_type == 'line':
                 fig_line = self.plots_feat[iD]
-                self.plot_line(fig_line, dat, offset)
+                fig_cbar = self.plots_cbar[iD]
+                self.plot_line(fig_line, fig_cbar, dat, offset)
 
-    def plot_line(self, fig_line, data, offset):
+        if iD < self.step - 1:
+            for fig in self.plots_feat[iD + 1:]:
+                self.set_axis(fig, 'bottom', pen=None)
+
+
+    def plot_line(self, fig_line, fig_cbar, data, offset):
 
         fig_line.clear()
+        fig_cbar.clear()
         line = pg.PlotCurveItem()
         line.setData(x=data['x'], y=data['y'] - offset)
         line.setPen(self.kpen_solid)
         fig_line.addItem(line)
         levels = self.levels if self.normalise else data['xrange']
+        self.set_axis(fig_line, 'bottom', pen='k', label=data['xaxis'])
         fig_line.setXRange(min=levels[0], max=levels[1], padding=0)
+
         if self.align_button.isChecked():
             fig_line.setYRange(min=-1000, max=1000)
         else:
             fig_line.setYRange(min=0, max=3840)
 
-        self.set_axis(fig_line, 'bottom', label=data['xaxis'])
+        ax = fig_cbar.getAxis('top')
+        ax.setPen(None)
+        ax.setTextPen('k')
+        ax.setStyle(stopAxisAtTick=((False, False)))
+        ax.setTicks([])
+        ax.setLabel(data['title'])
+        ax.setHeight(30)
 
     def plot_probe(self, fig_probe, fig_cbar, data, offset):
 
@@ -449,7 +512,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         cbar = color_bar.makeColourBar(20, 5, fig_cbar, min=levels[0],
                                        max=levels[1], label=data['title'], lim=True)
         fig_cbar.addItem(cbar)
-        self.set_axis(fig_probe, 'bottom', pen='w', label='blank')
+        self.set_axis(fig_probe, 'bottom', pen=None, label='')
 
     def get_feature_data(self, plot_name, plot_type):
 
@@ -469,7 +532,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
 
             df = self.data[self.data['pid'] == pid]
             data = df[plot_name].values
-            depths = df['depth_line'].values
+            depths = df['depths'].values
 
             if ip == 0:
                 max_level = np.nanmax(data)
@@ -481,8 +544,9 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
             data_dict = {
                 'x': data,
                 'y': depths,
-                'xrange': np.array([0, np.max(data)]),
-                'xaxis': PLOT_TYPES[plot_name]['xlabel']
+                'xrange': np.array([0, np.nanmax(data)]),
+                'xaxis': PLOT_TYPES[plot_name]['xlabel'],
+                'title': df.iloc[0].histology.upper()
             }
             all_data.append(data_dict)
 
@@ -499,7 +563,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
             BNK_SIZE = 10
             N_BNK = 4
             probe_img, probe_scale, probe_offset = self.arrange_channels2banks(data, chn_coords)
-            probe_levels = np.quantile(data, [0.1, 0.9])
+            probe_levels = np.nanquantile(data, [0.1, 0.9])
             if ip == 0:
                 max_level = probe_levels[1]
                 min_level = probe_levels[0]
@@ -514,7 +578,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
                 'levels': probe_levels,
                 'cmap': PLOT_TYPES[plot_name]['cmap'],
                 'xrange': np.array([0 * BNK_SIZE, (N_BNK) * BNK_SIZE]),
-                'title': f"{pid}"
+                'title': df.iloc[0].histology.upper()
             }
 
             all_data.append(data_dict)
@@ -524,6 +588,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
     def get_region_data(self, pids):
 
         region_data = []
+        probe_info = []
 
         for pid in pids:
 
@@ -539,9 +604,17 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
                     'region_id': region_id
                     }
 
-            region_data.append(data)
+            d = df.iloc[0]
+            info = {'pid': pid,
+                    'eid': d.eid,
+                    'session': '/'.join(one.eid2path(d.eid).parts[-3:]),
+                    'probe': d.pname,
+                    'histology': d.histology}
 
-        return region_data
+            region_data.append(data)
+            probe_info.append(info)
+
+        return region_data, probe_info
 
     def get_offset_data(self):
         offset_data = []
@@ -598,9 +671,8 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
 
 
 if __name__ == '__main__':
-    from one.api import ONE
     one = ONE()
     app = QtWidgets.QApplication(sys.argv)
-    window = RegionFeatureWindow(one.cache_dir)
+    window = RegionFeatureWindow(one)
     window.show()
     app.exec_()

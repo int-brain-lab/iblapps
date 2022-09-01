@@ -6,6 +6,7 @@ from neuropixel import trace_header
 import ibllib.atlas as atlas
 from ibllib.qc.alignment_qc import AlignmentQC
 from one.api import ONE
+from one.remote import aws
 from pathlib import Path
 import one.alf as alf
 from one import params
@@ -59,6 +60,11 @@ class LoadData:
         self.resolved = None
         self.alyx_str = None
         self.sr = None
+
+        # Download bwm aggregate tables for for ephys feature gui
+        table_path = self.one.cache_dir.joinpath('bwm_features')
+        s3, bucket_name = aws.get_s3_from_alyx(alyx=one.alyx)
+        aws.s3_download_folder("aggregates/bwm", table_path, s3=s3, bucket_name=bucket_name)
 
         if probe_id is not None:
             self.sess = self.one.alyx.rest('insertions', 'list', id=probe_id)
