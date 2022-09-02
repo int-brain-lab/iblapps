@@ -70,8 +70,11 @@ class ScalingWindow(QtWidgets.QMainWindow):
 
         for ins in insertions:
             info_label = QtWidgets.QLabel()
+            resolved = ins['json']['extended_qc']['alignment_resolved']
+            resolved_status = 'RESOLVED' if resolved else 'ALIGNED'
+
             info_label.setText(f'{ins["session_info"]["subject"]}/{ins["session_info"]["start_time"][:10]}'
-                               f'/00{ins["session_info"]["number"]} \n {ins["name"]}')
+                               f'/00{ins["session_info"]["number"]} \n {ins["name"]} \n {resolved_status}')
             info_layout.addWidget(info_label)
 
         plot_widget = QtWidgets.QWidget()
