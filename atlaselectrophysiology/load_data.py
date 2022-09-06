@@ -23,6 +23,7 @@ class LoadData:
                  load_histology=True, spike_collection=None, mode='auto'):
         self.one = one or ONE(base_url=ONE_BASE_URL, mode=mode)
         self.brain_atlas = brain_atlas or atlas.AllenAtlas(25)
+        self.franklin_atlas = atlas.FranklinPaxinosAtlas()
         self.download_hist = load_histology  # whether or not to look for the histology files
         self.spike_collection = spike_collection
 

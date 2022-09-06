@@ -344,6 +344,11 @@ class Setup():
         toggle_histology_option.setShortcut('Shift+N')
         toggle_histology_option.triggered.connect(self.toggle_histology_button_pressed)
 
+        # Option to change histology regions from Allen to Franklin Paxinos
+        toggle_histology_map_option = QtWidgets.QAction('Change Histology Map', self)
+        toggle_histology_map_option.setShortcut('Shift+M')
+        toggle_histology_map_option.triggered.connect(self.toggle_histology_map_button_pressed)
+
         # Shortcuts for cluster popup window
         popup_minimise = QtWidgets.QAction('Minimise/Show Cluster Popup', self)
         popup_minimise.setShortcut('Alt+M')
@@ -370,6 +375,7 @@ class Setup():
         display_options.addAction(toggle_lines_option)
         display_options.addAction(toggle_channels_option)
         display_options.addAction(toggle_histology_option)
+        display_options.addAction(toggle_histology_map_option)
         display_options.addAction(popup_minimise)
         display_options.addAction(popup_close)
         display_options.addAction(save_plots)

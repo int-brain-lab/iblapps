@@ -22,6 +22,7 @@ from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
 import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
+import time
 
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
@@ -130,12 +131,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.popup_status = True
         self.subj_win = None
 
-        # self.hist_data = {
-        #     'region': [0] * (self.max_idx + 1),
-        #     'axis_label': [0] * (self.max_idx + 1),
-        #     'colour': []
-        # }
-        #
         self.hist_data = {
             'region': [],
             'axis_label': [],
@@ -148,11 +143,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             'colour': []
         }
 
-        # self.scale_data = {
-        #     'region': [0] * (self.max_idx + 1),
-        #     'scale': [0] * (self.max_idx + 1)
-        # }
-
         self.scale_data = {
             'region': [],
             'scale': []
@@ -164,6 +154,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.hist_nearby_parent_x = None
         self.hist_nearby_parent_y = None
         self.hist_nearby_parent_col = None
+        self.hist_mapping = 'Allen'
 
         self.track = [0] * (self.max_idx + 1)
         self.features = [0] * (self.max_idx + 1)
@@ -603,7 +594,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         fig.clear()
         self.hist_regions = np.empty((0, 1))
         axis = fig.getAxis(ax)
-        #axis.setTicks([self.hist_data['axis_label'][self.idx]])
         axis.setTicks([self.hist_data['axis_label']])
         axis.setZValue(10)
         self.set_axis(self.fig_hist, 'bottom', pen='w', label='blank')
@@ -627,24 +617,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         bound = pg.InfiniteLine(pos=self.hist_data['region'][-1][1], angle=0,
                                 pen='w')
 
-        # # Plot each histology region
-        # for ir, reg in enumerate(self.hist_data['region'][self.idx]):
-        #     colour = QtGui.QColor(*self.hist_data['colour'][ir])
-        #     region = pg.LinearRegionItem(values=(reg[0], reg[1]),
-        #                                  orientation=pg.LinearRegionItem.Horizontal,
-        #                                  brush=colour, movable=False)
-        #     # Add a white line at the boundary between regions
-        #     bound = pg.InfiniteLine(pos=reg[0], angle=0, pen='w')
-        #     fig.addItem(region)
-        #     fig.addItem(bound)
-        #     # Need to keep track of each histology region for label pressed interaction
-        #     self.hist_regions = np.vstack([self.hist_regions, region])
-        #
-        # self.selected_region = self.hist_regions[-2]
-        #
-        # # Boundary for final region
-        # bound = pg.InfiniteLine(pos=self.hist_data['region'][self.idx][-1][1], angle=0,
-        #                         pen='w')
         fig.addItem(bound)
         # Add dotted lines to plot to indicate region along probe track where electrode
         # channels are distributed
@@ -787,12 +759,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         self.get_scaled_histology()
 
-        # self.hist_data['region'][self.idx], self.hist_data['axis_label'][self.idx] \
-        #     = self.ephysalign.scale_histology_regions(self.features[self.idx],
-        #                                               self.track[self.idx])
-        # self.scale_data['region'][self.idx], self.scale_data['scale'][self.idx] \
-        #     = self.ephysalign.get_scale_factor(self.hist_data['region'][self.idx])
-
     def scale_hist_data(self):
         """
         Scale brain regions along probe track
@@ -825,22 +791,33 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                                                            self.track[self.idx])
 
         self.get_scaled_histology()
-        # self.hist_data['region'][self.idx], self.hist_data['axis_label'][self.idx] \
-        #     = self.ephysalign.scale_histology_regions(self.features[self.idx],
-        #                                               self.track[self.idx])
-        # self.scale_data['region'][self.idx], self.scale_data['scale'][self.idx] \
-        #     = self.ephysalign.get_scale_factor(self.hist_data['region'][self.idx])
-
-        # to automatically have lines go to correct position
-        # self.loaddata.track2feature(line_track, self.idx)
 
     def get_scaled_histology(self):
-        self.hist_data['region'], self.hist_data['axis_label'] \
-            = self.ephysalign.scale_histology_regions(self.features[self.idx],
-                                                      self.track[self.idx])
-        self.scale_data['region'], self.scale_data['scale'] \
-            = self.ephysalign.get_scale_factor(self.hist_data['region'])
+        if self.hist_mapping == 'Allen':
+            self.hist_data['region'], self.hist_data['axis_label'] \
+                = self.ephysalign.scale_histology_regions(self.features[self.idx], self.track[self.idx])
+            self.hist_data['colour'] = self.ephysalign.region_colour
 
+            self.scale_data['region'], self.scale_data['scale'] \
+                = self.ephysalign.get_scale_factor(self.hist_data['region'])
+
+            self.hist_data_ref['region'], self.hist_data_ref['axis_label'] \
+                = self.ephysalign.scale_histology_regions(self.ephysalign.track_extent,
+                                                          self.ephysalign.track_extent)
+            self.hist_data_ref['colour'] = self.ephysalign.region_colour
+
+        elif self.hist_mapping == 'FP':
+            self.hist_data['region'], self.hist_data['axis_label'] \
+                = self.ephysalign.scale_histology_regions(self.features[self.idx], self.track[self.idx], region=self.region_fp,
+                                                          region_label=self.region_label_fp)
+            self.hist_data['colour'] = self.region_colour_fp
+            self.scale_data['region'], self.scale_data['scale'] \
+                = self.ephysalign.get_scale_factor(self.hist_data['region'], region_orig=self.region_fp)
+
+            self.hist_data_ref['region'], self.hist_data_ref['axis_label'] \
+                = self.ephysalign.scale_histology_regions(self.ephysalign.track_extent, self.ephysalign.track_extent,
+                                                          region=self.region_fp, region_label=self.region_label_fp)
+            self.hist_data_ref['colour'] = self.region_colour_fp
 
     def plot_scale_factor(self):
         """
@@ -854,27 +831,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         self.fig_scale.clear()
         self.scale_regions = np.empty((0, 1))
-        # self.scale_factor = self.scale_data['scale'][self.idx]
-        # scale_factor = self.scale_data['scale'][self.idx] - 0.5
         self.scale_factor = self.scale_data['scale']
         scale_factor = self.scale_data['scale'] - 0.5
         color_bar = cb.ColorBar('seismic')
         cbar = color_bar.makeColourBar(20, 5, self.fig_scale_cb, min=0.5, max=1.5,
                                        label='Scale Factor')
         colours = color_bar.map.mapToQColor(scale_factor)
-
-        # for ir, reg in enumerate(self.scale_data['region'][self.idx]):
-        #     region = pg.LinearRegionItem(values=(reg[0], reg[1]),
-        #                                  orientation=pg.LinearRegionItem.Horizontal,
-        #                                  brush=colours[ir], movable=False)
-        #     bound = pg.InfiniteLine(pos=reg[0], angle=0, pen=colours[ir])
-        #
-        #     self.fig_scale.addItem(region)
-        #     self.fig_scale.addItem(bound)
-        #     self.scale_regions = np.vstack([self.scale_regions, region])
-        #
-        # bound = pg.InfiniteLine(pos=self.scale_data['region'][self.idx][-1][1], angle=0,
-        #                         pen=colours[-1])
 
         for ir, reg in enumerate(self.scale_data['region']):
             region = pg.LinearRegionItem(values=(reg[0], reg[1]),
@@ -1282,13 +1244,16 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.init_variables()
 
         # Only run once
+        start = time.time()
         if not self.data_status:
             self.probe_path, ephys_path, alf_path, self.chn_depths, self.sess_notes = \
                 self.loaddata.get_data()
             if not self.probe_path:
                 return
+        print(f'Loading data {time.time() - start}')
 
         # Only get histology specific stuff if the histology tracing exists
+        start = time.time()
         if self.histology_exists:
             self.xyz_picks = self.loaddata.get_xyzpicks()
 
@@ -1301,46 +1266,48 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
                                                  brain_atlas=self.loaddata.brain_atlas)
 
+            self.region_fp, self.region_label_fp, self.region_colour_fp, _ \
+                = EphysAlignment.get_histology_regions(self.ephysalign.xyz_samples, self.ephysalign.sampling_trk,
+                                                       self.loaddata.franklin_atlas)
+
             self.features[self.idx], self.track[self.idx], self.xyz_track \
                 = self.ephysalign.get_track_and_feature()
 
             self.get_scaled_histology()
-            self.hist_data['colour'] = self.ephysalign.region_colour
-            # self.hist_data['region'][self.idx], self.hist_data['axis_label'][self.idx] \
-            #     = self.ephysalign.scale_histology_regions(self.features[self.idx],
-            #                                               self.track[self.idx])
-            # self.hist_data['colour'] = self.ephysalign.region_colour
-            # self.scale_data['region'][self.idx], self.scale_data['scale'][self.idx] \
-            #     = self.ephysalign.get_scale_factor(self.hist_data['region'][self.idx])
-
-            self.hist_data_ref['region'], self.hist_data_ref['axis_label'] \
-                = self.ephysalign.scale_histology_regions(self.ephysalign.track_extent,
-                                                          self.ephysalign.track_extent)
-            self.hist_data_ref['colour'] = self.ephysalign.region_colour
-
+        print(f'Loading histology {time.time() - start}')
         # If we have not loaded in the data before then we load eveything we need
         if not self.data_status:
+            start = time.time()
             self.plotdata = pd.PlotData(self.probe_path, ephys_path, alf_path,
                                         self.current_shank_idx)
+            print(f'Loading plots part 0 {time.time() - start}')
             self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
             self.scat_drift_data = self.plotdata.get_depth_data_scatter()
+            print(f'Loading plots part 0 {time.time() - start}')
             (self.scat_fr_data, self.scat_p2t_data,
              self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
+            print(f'Loading plots part 0 {time.time() - start}')
             self.img_corr_data = self.plotdata.get_correlation_data_img()
+            print(f'Loading plots part 0 {time.time() - start}')
             self.img_fr_data = self.plotdata.get_fr_img()
+            print(f'Loading plots part 0 {time.time() - start}')
             self.img_rms_APdata, self.probe_rms_APdata = self.plotdata.get_rms_data_img_probe('AP')
+            print(f'Loading plots part 0 {time.time() - start}')
             self.img_rms_LFPdata, self.probe_rms_LFPdata = self.plotdata.get_rms_data_img_probe(
                 'LF')
+            print(f'Loading plots part 1 {time.time() - start}')
             self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
+            print(f'Loading plots part 0 {time.time() - start}')
             self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
+            print(f'Loading plots part 0 {time.time() - start}')
             self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
             self.img_stim_data = self.plotdata.get_passive_events()
-
+            print(f'Loading plots part 0 {time.time() - start}')
             if not self.offline:
                 self.img_raw_data = self.plotdata.get_raw_data_image(self.loaddata.probe_id, one=self.loaddata.one)
             else:
                 self.img_raw_data = {}
-
+            print(f'Loading plots part 3 {time.time() - start}')
             if self.histology_exists:
                 self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
             else:
@@ -1349,6 +1316,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             self.data_status = True
             self.init_menubar()
+            print(f'Loading plots part 4 {time.time() - start}')
         else:
             self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
 
@@ -1410,6 +1378,18 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.plot_histology_nearby(self.fig_hist_ref)
         else:
             self.plot_histology_ref(self.fig_hist_ref)
+
+    def toggle_histology_map_button_pressed(self):
+
+        if self.hist_mapping == 'Allen':
+            self.hist_mapping = 'FP'
+        else:
+            self.hist_mapping = 'Allen'
+
+        self.get_scaled_histology()
+        self.plot_histology(self.fig_hist)
+        self.plot_histology_ref(self.fig_hist_ref)
+
 
     def filter_unit_pressed(self, type):
         self.plotdata.filter_units(type)
@@ -1740,13 +1720,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.features[self.idx] = np.copy(self.ephysalign.feature_init)
 
         self.get_scaled_histology()
-        self.hist_data['colour'] = self.ephysalign.region_colour
-        # self.hist_data['region'][self.idx], self.hist_data['axis_label'][self.idx] \
-        #     = self.ephysalign.scale_histology_regions(self.features[self.idx],
-        #                                               self.track[self.idx])
-        # self.hist_data['colour'] = self.ephysalign.region_colour
-        # self.scale_data['region'][self.idx], self.scale_data['scale'][self.idx] \
-        #     = self.ephysalign.get_scale_factor(self.hist_data['region'][self.idx])
+
         self.plot_histology(self.fig_hist)
         self.plot_scale_factor()
         if np.any(self.feature_prev):
