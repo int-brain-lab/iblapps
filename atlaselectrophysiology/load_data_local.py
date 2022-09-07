@@ -17,6 +17,7 @@ class LoadDataLocal:
     def __init__(self):
         ONE(silent=True, password='international')
         self.brain_atlas = atlas.AllenAtlas(25)
+        self.franklin_atlas = None
         self.folder_path = None
         self.chn_coords = None
         self.chn_coords_all = None
@@ -193,7 +194,7 @@ class LoadDataLocal:
             'offset': np.array([width[0], height[0]])
         }
 
-        return slice_data
+        return slice_data, None
 
     def get_region_description(self, region_idx):
         struct_idx = np.where(self.allen['id'] == region_idx)[0][0]

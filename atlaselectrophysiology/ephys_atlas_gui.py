@@ -1309,7 +1309,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 self.img_raw_data = {}
             print(f'Loading plots part 3 {time.time() - start}')
             if self.histology_exists:
-                self.slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
+                self.slice_data, self.fp_slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
             else:
                 # probably need to return an empty array of things
                 self.slice_data = {}

@@ -404,6 +404,7 @@ class LoadData:
             hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd)
             hist_slice_rd = hist_atlas_rd.image[index[:, 0], :, index[:, 2]]
             hist_slice_rd = np.swapaxes(hist_slice_rd, 0, 1)
+            del hist_atlas_rd
         else:
             print('Could not find red histology image for this subject')
             hist_slice_rd = np.copy(ccf_slice)
@@ -412,6 +413,7 @@ class LoadData:
             hist_atlas_gr = atlas.AllenAtlas(hist_path=hist_path_gr)
             hist_slice_gr = hist_atlas_gr.image[index[:, 0], :, index[:, 2]]
             hist_slice_gr = np.swapaxes(hist_slice_gr, 0, 1)
+            del hist_atlas_gr
         else:
             print('Could not find green histology image for this subject')
             hist_slice_gr = np.copy(ccf_slice)
@@ -420,6 +422,7 @@ class LoadData:
             hist_atlas_cb = atlas.AllenAtlas(hist_path=hist_path_cb)
             hist_slice_cb = hist_atlas_cb.image[index[:, 0], :, index[:, 2]]
             hist_slice_cb = np.swapaxes(hist_slice_cb, 0, 1)
+            del hist_atlas_cb
         else:
             print('Could not find example cerebellar histology image')
             hist_slice_cb = np.copy(ccf_slice)
@@ -435,7 +438,23 @@ class LoadData:
             'offset': np.array([width[0], height[0]])
         }
 
-        return slice_data
+        if self.franklin_atlas is not None:
+            index = self.franklin_atlas.bc.xyz2i(xyz_channels)[:, self.franklin_atlas.xyz2dims]
+            label_slice = self.franklin_atlas._label2rgb(self.franklin_atlas.label[index[:, 0], :, index[:, 2]])
+            label_slice = np.swapaxes(label_slice, 0, 1)
+            width = [self.franklin_atlas.bc.i2x(0), self.franklin_atlas.bc.i2x(456)]
+            height = [self.franklin_atlas.bc.i2z(index[0, 2]), self.franklin_atlas.bc.i2z(index[-1, 2])]
+
+            franklin_slice_data = {
+                'label': label_slice,
+                'scale': np.array([(width[-1] - width[0]) / ccf_slice.shape[0],
+                                   (height[-1] - height[0]) / ccf_slice.shape[1]]),
+                'offset': np.array([width[0], height[0]])
+            }
+        else:
+            franklin_slice_data = None
+
+        return slice_data, franklin_slice_data
 
     def get_region_description(self, region_idx):
         struct_idx = np.where(self.allen_id == region_idx)[0][0]
