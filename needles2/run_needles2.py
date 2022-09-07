@@ -4,13 +4,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from PyQt5 import QtWidgets, QtGui, QtCore,  uic
+from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import QTransform
 import pyqtgraph as pg
 import matplotlib
 
-from ibllib.atlas import AllenAtlas
-from ibllib.atlas.regions import BrainRegions
-from iblutil.numerical import ismember
+from ibllib.atlas import AllenAtlas, Insertion
+
 import qt
 
 from one.api import ONE
@@ -19,6 +19,7 @@ import copy
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
+
 
 class MainWindow(QtWidgets.QMainWindow):
 
@@ -103,6 +104,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table = InsertionTableView(self)
         self.layers = LayersView(self)
         self.change_mapping()
+        self.ixyz_second = None
+        self.cov_dict = {}
+        self.cov_count = np.zeros((self.probe_model.ba.image.shape[0] * self.probe_model.ba.image.shape[1] * self.probe_model.ba.image.shape[2]))
 
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.coverage)
@@ -176,6 +180,7 @@ class MainWindow(QtWidgets.QMainWindow):
             bc = None
 
         self.add_volume_layer(cov, 'coverage', bc=bc)
+        self.layers.update_table('coverage')
         self._refresh()
 
     def add_extra_coverage(self, traj, ins=None):
@@ -185,29 +190,67 @@ class MainWindow(QtWidgets.QMainWindow):
                                         y=[traj['y'] / 1e6])
         self.do_this_thing(traj, ins=ins)
 
+        self.table.tableview.selectionModel().blockSignals(True)
+        self.table.tableview.clearSelection()
+        self.table.ctrl.model.layoutChanged.emit()
+        self.table.tableview.selectionModel().blockSignals(False)
+
     def coverage_added(self):
         # when add button pressed
         # get out the pandas df
-        df = self.coverage.ctrl.model.to_df()
-        # Add the insertions twice
-        self.table.ctrl.model.insertRow(df)
-        self.table.ctrl.model.insertRow(df)
+        traj = self.coverage.ctrl.model.get_traj()
+        status = self.see_if_traj_is_legit(traj)
+        if status == 0:
+            # Add the insertions twice
+            self.table.on_insert_row(traj)
+            # self.table.on_insert_row(df) #TODO instead multiply by factor of two
+            self.get_coverage_from_table(traj, action='add')
 
-        self.get_coverage_from_table()
+    def get_efficient_coverage_from_table(self, traj=None, action='add', prev_key=None):
+        status = 0
+        if action == 'add':
+            key = f'x_{traj["x"]},y_{traj["y"]},z_{traj["z"]},d_{traj["depth"]},t_{traj["theta"]},p_{traj["phi"]}'
+            idx = self.probe_model.compute_coverage_dict([traj], dist_fcn=[self.dist, self.dist + 1])
+            self.cov_dict[key] = idx
+            self.cov_count[idx] += 1
 
-        self.table.tableview.selectionModel().blockSignals(True)
-        self.table.tableview.clearSelection()
-        self.table.tableview.selectionModel().blockSignals(False)
+        elif action == 'delete':
+            key = f'x_{traj["x"]},y_{traj["y"]},z_{traj["z"]},d_{traj["depth"]},t_{traj["theta"]},p_{traj["phi"]}'
+            idx = self.cov_dict[key]
+            self.cov_count[idx] -= 1
+        elif action == 'change':
+            idx = self.cov_dict[prev_key]
+            self.cov_count[idx] -= 1
+            key = f'x_{traj["x"]},y_{traj["y"]},z_{traj["z"]},d_{traj["depth"]},t_{traj["theta"]},p_{traj["phi"]}'
+            idx = self.probe_model.compute_coverage_dict([traj], dist_fcn=[self.dist, self.dist + 1])
+            self.cov_dict[key] = idx
+            self.cov_count[idx] += 1
+        else:
+            for traj in self.table.ctrl.model.to_dict():
+                key = f'x_{traj["x"]},y_{traj["y"]},z_{traj["z"]},d_{traj["depth"]},t_{traj["theta"]},p_{traj["phi"]}'
+                idx = self.probe_model.compute_coverage_dict([traj], dist_fcn=[self.dist, self.dist + 1])
+                self.cov_dict[key] = idx
+                self.cov_count[idx] += 1
 
-    def get_coverage_from_table(self):
+        cov = self.cov_count.reshape(self.probe_model.ba.image.shape).astype(np.float32)
+        cov[self.probe_model.ba.label == 0] = np.nan
+
+        return cov, status
+
+
+    def get_coverage_from_table(self, traj, action=None, prev_key=None):
 
         if self.table.ctrl.model.rowCount() > 0:
-            cov, _ = self.probe_model.compute_coverage(self.table.ctrl.model.to_dict(),
-                                                       dist_fcn=[self.dist, self.dist + 1])
+
+            cov, status = self.get_efficient_coverage_from_table(traj=traj, action=action, prev_key=prev_key)
+            # cov, _ = self.probe_model.compute_coverage(self.table.ctrl.model.to_dict(),
+            #                                            dist_fcn=[self.dist, self.dist + 1])
+            if status == -1:
+                return
             self.add_volume_layer(cov, name='planned_insertions', cmap='Purples', levels=(0, 1))
             self.top.ctrl.set_scatter_layer('planned_insertions',
-                                            x=self.table.ctrl.model.arraydata.x.values / 1e6,
-                                            y=self.table.ctrl.model.arraydata.y.values / 1e6)
+                                            x=self.table.ctrl.model._data.x.values / 1e6,
+                                            y=self.table.ctrl.model._data.y.values / 1e6)
 
         else:
             self.remove_volume_layer('planned_insertions')
@@ -235,6 +278,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                             levels=levels, bc=bc)
         self.horizontal.ctrl.add_volume_layer(volume, name=name, cmap=cmap, opacity=opacity,
                                               levels=levels, bc=bc)
+        self.layers.update_table(name)
 
     def remove_volume_layer(self, name):
         self.coronal.ctrl.remove_image_layer(name)
@@ -272,8 +316,14 @@ class MainWindow(QtWidgets.QMainWindow):
                                         y=self.probe_model.traj[self.provenance]['y']/1e6)
 
     def on_insertion_clicked(self, scatter, point):
-        idx = np.argwhere(self.probe_model.traj[self.provenance]['x']/1e6 ==
-                          point[0].pos().x())[0][0]
+        idx = np.where(self.probe_model.traj[self.provenance]['x']/1e6 ==
+                          point[0].pos().x())[0]
+        if len(idx) > 1:
+            idx_2 = np.where(self.probe_model.traj[self.provenance]['y']/1e6 == point[0].pos().y())[0]
+            idx = idx[idx_2[0]]
+        else:
+            idx = idx[0]
+
         traj = self.probe_model.traj[self.provenance]['traj'][idx]
 
         self.do_this_thing(traj)
@@ -286,15 +336,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.do_this_thing(traj)
 
 
-# TODO need to catch for dodgey coordinates that return rubbish
-
     def do_this_thing(self, traj, ins=None):
         self.top.ctrl.set_scatter_layer('selected_insertion', x=[traj['x'] / 1e6],
                                         y=[traj['y'] / 1e6])
 
+        traj['provenance'] = 'Planned'
 
         (region, region_lab, region_col) = self.probe_model.get_brain_regions(
             traj, ins=ins, mapping=self.get_mapping())
+
         self.probe.plot_region_along_probe(region, region_lab, region_col)
 
         cov, xyz_cnt = self.probe_model.compute_coverage([traj], limit=False,
@@ -305,26 +355,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.refresh_slices('horizontal', 'y', xyz_cnt[0])
         self.refresh_slices('sagittal', 'y', xyz_cnt[2])
         self._refresh()
-# TODO figure this out
-        # self.table.tableview.selectionModel().blockSignals(True)
-        # self.table.tableview.clearSelection()
-        # self.table.tableview.selectionModel().blockSignals(False)
 
     def on_planned_insertion_clicked(self, scatter, point):
-        idx = np.argwhere(self.table.ctrl.model.arraydata.x.values/1e6 ==
-                          point[0].pos().x())[0][0]
-        traj = self.table.ctrl.model.arraydata.iloc[idx].to_dict()
+        idx = np.where(self.table.ctrl.model._data.x.values/1e6 == point[0].pos().x())[0]
+        if len(idx) > 1:
+            idx_2 = np.where(self.table.ctrl.model._data.y.values[idx]/1e6 == point[0].pos().y())[0]
+            idx = idx[idx_2[0]]
+        else:
+            idx = idx[0]
+
+        traj = self.table.ctrl.model._data.iloc[idx].to_dict()
 
         self.do_this_thing(traj)
 
         # also highlight the table
-        # self.table.tableview.selectionModel().blockSignals(True)
-        # self.table.tableview.selectRow(idx)
-        # self.table.tableview.selectionModel().blockSignals(False)
+        self.table.tableview.selectionModel().blockSignals(True)
+        self.table.tableview.selectRow(idx)
+        self.table.ctrl.model.layoutChanged.emit()
+        self.table.tableview.selectionModel().blockSignals(False)
 
     def on_active_insertion_clicked(self, scatter, point):
         traj = self.coverage.ctrl.model.get_traj()
         self.do_this_thing(traj)
+
+        self.table.tableview.selectionModel().blockSignals(True)
+        self.table.tableview.clearSelection()
+        self.table.ctrl.model.layoutChanged.emit()
+        self.table.tableview.selectionModel().blockSignals(False)
 
 
     def add_menu_bar(self, menu, group, items, callback=None, default=None):
@@ -489,7 +546,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layer = None
         layer_planned = self.coronal.ctrl.get_image_layer('planned_insertions')
         if layer_planned is not None:
-            layer = (copy.deepcopy(layer_planned.slice_kwargs['region_values']))
+            layer = (copy.deepcopy(layer_planned.slice_kwargs['region_values']) * 2) # TODO check
 
         layer_active = self.coronal.ctrl.get_image_layer('selected_insertion')
         if layer_active is not None:
@@ -506,7 +563,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 layer = copy.deepcopy(layer_covered.slice_kwargs['region_values'])
 
         self.layer_val = layer
-        if layer is not None:
+        if layer is not None and self.ixyz_second is not None:
             la = layer.flatten()
             # percentage of the second volume that is covered,
             # so we need to add the coverage to the main coverage
@@ -520,7 +577,15 @@ class MainWindow(QtWidgets.QMainWindow):
                                                  f'1%: {np.round(per1, 2)} %, '
                                                  f'2%: {np.round(per2, 2)} % ')
 
+    def see_if_traj_is_legit(self, traj):
+        try:
+            ins = Insertion.from_dict(traj, brain_atlas=self.atlas)
+        except ValueError:
+            return -1
+        return 0
 
+
+# TO SHOW THE DIFFERENT LAYERS
 class LayersView(QtWidgets.QWidget):
     def __init__(self, qmain: MainWindow):
         self.qmain = qmain
@@ -673,9 +738,11 @@ class CoverageView(QtWidgets.QWidget):
         self.p_label.setText(f"{self.ctrl.model.data['p']['value']:.0f}")
 
     def update_view(self):
-        self.update_labels()
-        self.qmain.add_extra_coverage(self.ctrl.model.get_traj())
-        self.qmain.coverage_increase()
+        status = self.qmain.see_if_traj_is_legit(self.ctrl.model.get_traj())
+        if status == 0:
+            self.update_labels()
+            self.qmain.add_extra_coverage(self.ctrl.model.get_traj())
+            self.qmain.coverage_increase()
 
     def set_values(self):
         self.ctrl.set_value(int(self.x_label.text()), 'x')
@@ -684,127 +751,6 @@ class CoverageView(QtWidgets.QWidget):
         self.ctrl.set_value(int(self.t_label.text()), 't')
         self.ctrl.set_value(int(self.p_label.text()), 'p')
         self.update_view()
-
-
-class InsertionTableView(QtWidgets.QWidget):
-    def __init__(self, qmain: MainWindow):
-        super(InsertionTableView, self).__init__()
-        self.qmain = qmain
-        data = pd.DataFrame(columns=['x', 'y', 'z', 'phi', 'theta', 'depth', 'provenance'])
-        self.ctrl = InsertionTableController(self, data)
-
-        self.tableview = self.qmain.tableview
-        self.tableview.setModel(self.ctrl.model)
-
-        # self.delete_button = QtWidgets.QPushButton('-')
-        self.delete_button = self.qmain.delete_button
-        self.delete_button.clicked.connect(self.on_delete_pressed)
-        self.tableview.selectionModel().selectionChanged.connect(self.row_selected)
-        self.ctrl.model.dataChanged.connect(self.data_changed)
-
-    def on_delete_pressed(self):
-        if len(self.tableview.selectedIndexes()) == self.ctrl.model.columnCount():
-            row = self.tableview.selectedIndexes()[0].row()
-            self.ctrl.model.removeRow(row)
-            self.qmain.get_coverage_from_table()
-
-    def row_selected(self):
-        if len(self.tableview.selectedIndexes()) == self.ctrl.model.columnCount():
-            row = self.tableview.selectedIndexes()[0].row()
-            traj = self.ctrl.model.arraydata.iloc[row].to_dict()
-            self.qmain.do_this_thing(traj)
-
-    def initialise_data(self, data):
-        self.ctrl.model.setDataFrame(data)
-        self.qmain.get_coverage_from_table()
-
-    def data_changed(self):
-        self.qmain.get_coverage_from_table()
-
-
-class InsertionTableController:
-    def __init__(self, view: InsertionTableView, data):
-        self.view = view
-        self.model = InsertionTableModel(data)
-
-
-class InsertionTableModel(QtCore.QAbstractTableModel):
-    def __init__(self, data=None):
-        super(InsertionTableModel, self).__init__()
-
-        self.arraydata = data
-
-    def setDataFrame(self, data):
-        self.beginResetModel()
-        self.arraydata = data.copy()
-        self.endResetModel()
-
-    def rowCount(self, parent=QtCore.QModelIndex()):
-        if parent.isValid():
-            return 0
-        return len(self.arraydata.index)
-
-    def columnCount(self, parent=QtCore.QModelIndex()):
-        if parent.isValid():
-            return 0
-        return self.arraydata.columns.size
-
-    def data(self, index, role):
-        if (not index.isValid() or not (0 <= index.row() < self.rowCount() and
-                                        0 <= index.column() < self.columnCount())):
-            return QtCore.QVariant()
-        row = self.arraydata.index[index.row()]
-        col = self.arraydata.columns[index.column()]
-
-        val = self.arraydata.iloc[row][col]
-        if role == QtCore.Qt.DisplayRole:
-            return str(val)
-        else:
-            return QtCore.QVariant()
-
-    def headerData(self, x, orientation, role):
-        if orientation == QtCore.Qt.Horizontal and role == QtCore.Qt.DisplayRole:
-            return self.arraydata.columns[x]
-        if orientation == QtCore.Qt.Vertical and role == QtCore.Qt.DisplayRole:
-            return self.arraydata.index[x]
-        return None
-
-    def setData(self, index, value, role):
-        if not index.isValid():
-            return False
-        if role != QtCore.Qt.EditRole:
-            return False
-        row = index.row()
-        if row < 0 or row >= len(self.arraydata.values):
-            return False
-        column = index.column()
-        if column < 0 or column >= self.arraydata.columns.size:
-            return False
-
-        self.arraydata.iloc[row, column] = int(value)
-        self.dataChanged.emit(index, index)
-        return True
-
-    def flags(self, index):
-        return QtCore.Qt.ItemIsEditable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable
-
-    def insertRow(self, data):
-        self.beginInsertRows(QtCore.QModelIndex(), self.rowCount(), self.rowCount())
-        self.arraydata = self.arraydata.append(data, ignore_index=True)
-        self.endInsertRows()
-        return True
-
-    def removeRow(self, position):
-
-        self.beginRemoveRows(QtCore.QModelIndex(), position, position)
-        self.arraydata = self.arraydata.drop([position])
-        self.arraydata = self.arraydata.reset_index(drop=True)
-        self.endRemoveRows()
-
-        return True
-
-    def to_dict(self):
-        return self.arraydata.to_dict(orient='records')
 
 
 class CoverageController:
@@ -877,6 +823,128 @@ class CoverageModel:
 
     def to_df(self):
         return pd.DataFrame([self.get_traj()])
+
+
+
+class InsertionTableView(QtWidgets.QWidget):
+    def __init__(self, qmain: MainWindow):
+        super(InsertionTableView, self).__init__()
+        self.qmain = qmain
+
+        self.ctrl = InsertionTableController(self, None)
+
+        self.tableview = self.qmain.tableview
+        self.tableview.setModel(self.ctrl.model)
+
+        # self.delete_button = QtWidgets.QPushButton('-')
+        self.delete_button = self.qmain.delete_button
+        self.delete_button.clicked.connect(self.on_delete_pressed)
+        self.tableview.selectionModel().selectionChanged.connect(self.row_selected)
+        self.ctrl.model.dataChanged.connect(self.data_changed)
+
+    def on_delete_pressed(self):
+        if len(self.tableview.selectedIndexes()) == self.ctrl.model.columnCount():
+            row = self.tableview.selectedIndexes()[0].row()
+            traj = self.ctrl.model._data.iloc[row].to_dict()
+            self.ctrl.model.removeRow(row)
+            self.qmain.get_coverage_from_table(traj, action='delete')
+
+    def on_insert_row(self, df):
+        self.ctrl.model.insertRows(self.ctrl.model.rowCount(), 1, QModelIndex(), df)
+
+    def row_selected(self):
+        if len(self.tableview.selectedIndexes()) == self.ctrl.model.columnCount():
+            row = self.tableview.selectedIndexes()[0].row()
+            traj = self.ctrl.model._data.iloc[row].to_dict()
+            self.qmain.do_this_thing(traj)
+
+    def initialise_data(self, data):
+        self.ctrl.model._data = pd.concat([self.ctrl.model._data, data])
+        self.ctrl.model._data.reset_index(drop=True, inplace=True)
+        self.ctrl.model.layoutChanged.emit()
+        self.qmain.get_coverage_from_table(traj=None, action=None)
+
+    def data_changed(self, index):
+        traj = self.ctrl.model._data.iloc[index.row()].to_dict()
+        self.qmain.get_coverage_from_table(traj, action='change', prev_key=self.ctrl.model.prev_key)
+
+
+class InsertionTableController:
+    def __init__(self, view: InsertionTableView, data):
+        self.view = view
+        self.model = InsertionTableModel(self.view, data=data)
+
+
+class InsertionTableModel(QtCore.QAbstractTableModel):
+    def __init__(self, view: InsertionTableView, data=None):
+        super(InsertionTableModel, self).__init__()
+        if data is None:
+            data = pd.DataFrame()
+        self.view = view
+        self._data = data
+        self.prev_key = None
+
+    def rowCount(self, parent=None):
+        return self._data.shape[0]
+
+    def columnCount(self, parent=None):
+        return self._data.shape[1]
+
+    def data(self, index, role=Qt.DisplayRole):
+        if index.isValid():
+            if role == Qt.DisplayRole or role == Qt.EditRole:
+                value = self._data.iloc[index.row(), index.column()]
+                return str(value)
+
+    def setData(self, index, value, role):
+        try:
+            if role == Qt.EditRole:
+                traj = self._data.iloc[index.row()].to_dict()
+                key = self._data.columns[index.column()]
+                new_traj = copy.deepcopy(traj)
+                new_traj[key] = int(value)
+
+                status = self.view.qmain.see_if_traj_is_legit(new_traj)
+                if status != 0:
+                    return False
+
+                self.prev_key = f'x_{traj["x"]},y_{traj["y"]},z_{traj["z"]},d_{traj["depth"]},t_{traj["theta"]},p_{traj["phi"]}'
+                self._data.iloc[index.row(), index.column()] = int(value)
+                self.dataChanged.emit(index, index)
+                return True
+        except ValueError:
+            return False
+        return False
+
+    def headerData(self, col, orientation, role):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self._data.columns[col]
+        if orientation == Qt.Vertical and role == Qt.DisplayRole:
+            return self._data.index[col]
+
+    def insertRows(self, position, rows, QModelIndex, data=None):
+        self.beginInsertRows(QModelIndex, position, position+rows-1)
+        for i in range(rows):
+            self._data = pd.concat([self._data, pd.DataFrame.from_dict([data])])
+        self._data.reset_index(drop=True, inplace=True)
+        self.endInsertRows()
+        self.layoutChanged.emit()
+        return True
+
+    def removeRows(self, position, rows, QModelIndex):
+        self.beginRemoveRows(QModelIndex, position, position+rows-1)
+        for i in range(rows):
+            self._data.drop(position + i, inplace=True)
+        self._data.reset_index(drop=True, inplace=True)
+        self.endRemoveRows()
+        self.layoutChanged.emit()
+        return True
+
+    def flags(self, index):
+        return Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable
+
+    def to_dict(self):
+        return self._data.to_dict(orient='records')
 
 
 class ProbeView:
@@ -1086,11 +1154,17 @@ class BaseController:
                          bc=None, levels=None):
         # If there is a layer with the same name remove it
         self.remove_image_layer(name)
-        colormap = matplotlib.cm.get_cmap(cmap)
-        colormap._init()
-        # The last one is [0, 0, 0, 0] so remove this
-        lut = (colormap._lut * 255).view(np.ndarray)[:-1]
-        lut = np.insert(lut, 0, [0, 0, 0, 0], axis=0)
+        if type(cmap) == str:
+            colormap = matplotlib.cm.get_cmap(cmap)
+            colormap._init()
+            # The last one is [0, 0, 0, 0] so remove this
+            lut = (colormap._lut * 255).view(np.ndarray)[:-1]
+            lut = np.insert(lut, 0, [0, 0, 0, 0], axis=0)
+        else:
+            colormap = cmap
+            colormap._init()
+            lut = (colormap._lut * 255).view(np.ndarray)[:-1]
+            lut = np.insert(lut, 0, [0, 0, 0, 0], axis=0)
         if levels is None:
             levels = (0, np.nanmax(volume))
         self.add_image_layer(name=name, pg_kwargs={'lut': lut, 'opacity': opacity, 'levels': levels},

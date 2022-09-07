@@ -2,10 +2,11 @@ import logging
 import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
-from neuropixel import SITES_COORDINATES
+from neuropixel import trace_header
 import ibllib.atlas as atlas
 from ibllib.qc.alignment_qc import AlignmentQC
 from one.api import ONE
+from one.remote import aws
 from pathlib import Path
 import one.alf as alf
 from one import params
@@ -27,6 +28,9 @@ class LoadData:
 
         if testing:
             self.probe_id = probe_id
+            refch_3a = np.array([36, 75, 112, 151, 188, 227, 264, 303, 340, 379])
+            th = trace_header(version=1)
+            SITES_COORDINATES = np.delete(np.c_[th['x'], th['y']], refch_3a, axis=0)
             self.chn_coords = SITES_COORDINATES
             self.chn_depths = SITES_COORDINATES[:, 1]
             self.probe_collection = None
@@ -56,6 +60,11 @@ class LoadData:
         self.resolved = None
         self.alyx_str = None
         self.sr = None
+
+        # Download bwm aggregate tables for for ephys feature gui
+        table_path = self.one.cache_dir.joinpath('bwm_features')
+        s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
+        aws.s3_download_folder("aggregates/bwm", table_path, s3=s3, bucket_name=bucket_name)
 
         if probe_id is not None:
             self.sess = self.one.alyx.rest('insertions', 'list', id=probe_id)
