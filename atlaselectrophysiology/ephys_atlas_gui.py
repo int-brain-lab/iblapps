@@ -667,7 +667,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Plot each histology region
         for ir, reg in enumerate(self.hist_data_ref['region']):
-            colour = QtGui.QColor(*self.hist_data['colour'][ir])
+            colour = QtGui.QColor(*self.hist_data_ref['colour'][ir])
             region = pg.LinearRegionItem(values=(reg[0], reg[1]),
                                          orientation=pg.LinearRegionItem.Horizontal,
                                          brush=colour, movable=False)
@@ -1372,6 +1372,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.get_scaled_histology()
         self.plot_histology(self.fig_hist)
         self.plot_histology_ref(self.fig_hist_ref)
+        self.remove_lines_points()
+        self.add_lines_points()
 
 
     def filter_unit_pressed(self, type):
