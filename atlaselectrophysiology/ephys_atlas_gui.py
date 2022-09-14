@@ -2,7 +2,7 @@ import os
 import platform
 
 if platform.system() == 'Darwin':
-    if platform.release().split('.')[0] == '20':
+    if platform.release().split('.')[0] >= '20':
         os.environ["QT_MAC_WANTS_LAYER"] = "1"
 
 from PyQt5 import QtWidgets, QtCore, QtGui
@@ -1244,16 +1244,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.init_variables()
 
         # Only run once
-        start = time.time()
         if not self.data_status:
             self.probe_path, ephys_path, alf_path, self.chn_depths, self.sess_notes = \
                 self.loaddata.get_data()
             if not self.probe_path:
                 return
-        print(f'Loading data {time.time() - start}')
 
         # Only get histology specific stuff if the histology tracing exists
-        start = time.time()
         if self.histology_exists:
             self.xyz_picks = self.loaddata.get_xyzpicks()
 
@@ -1274,40 +1271,27 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 = self.ephysalign.get_track_and_feature()
 
             self.get_scaled_histology()
-        print(f'Loading histology {time.time() - start}')
         # If we have not loaded in the data before then we load eveything we need
         if not self.data_status:
-            start = time.time()
             self.plotdata = pd.PlotData(self.probe_path, ephys_path, alf_path,
                                         self.current_shank_idx)
-            print(f'Loading plots part 0 {time.time() - start}')
             self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
             self.scat_drift_data = self.plotdata.get_depth_data_scatter()
-            print(f'Loading plots part 0 {time.time() - start}')
             (self.scat_fr_data, self.scat_p2t_data,
              self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
-            print(f'Loading plots part 0 {time.time() - start}')
             self.img_corr_data = self.plotdata.get_correlation_data_img()
-            print(f'Loading plots part 0 {time.time() - start}')
             self.img_fr_data = self.plotdata.get_fr_img()
-            print(f'Loading plots part 0 {time.time() - start}')
             self.img_rms_APdata, self.probe_rms_APdata = self.plotdata.get_rms_data_img_probe('AP')
-            print(f'Loading plots part 0 {time.time() - start}')
             self.img_rms_LFPdata, self.probe_rms_LFPdata = self.plotdata.get_rms_data_img_probe(
                 'LF')
-            print(f'Loading plots part 1 {time.time() - start}')
             self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
-            print(f'Loading plots part 0 {time.time() - start}')
             self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
-            print(f'Loading plots part 0 {time.time() - start}')
             self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
             self.img_stim_data = self.plotdata.get_passive_events()
-            print(f'Loading plots part 0 {time.time() - start}')
             if not self.offline:
                 self.img_raw_data = self.plotdata.get_raw_data_image(self.loaddata.probe_id, one=self.loaddata.one)
             else:
                 self.img_raw_data = {}
-            print(f'Loading plots part 3 {time.time() - start}')
             if self.histology_exists:
                 self.slice_data, self.fp_slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
             else:
@@ -1316,7 +1300,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             self.data_status = True
             self.init_menubar()
-            print(f'Loading plots part 4 {time.time() - start}')
         else:
             self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
 
@@ -1786,7 +1769,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if upload == QtWidgets.QMessageBox.Yes:
             self.loaddata.upload_data(self.features[self.idx], self.track[self.idx],
                                       self.xyz_channels)
-            self.prev_alignments = self.loaddata.get_previous_alignments()
+            self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
             self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
             self.loaddata.get_starting_alignment(0)
             QtWidgets.QMessageBox.information(self, 'Status', "Channels locations saved")
