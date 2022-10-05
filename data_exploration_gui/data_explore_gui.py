@@ -1,3 +1,10 @@
+import os
+import platform
+
+if platform.system() == 'Darwin':
+    if platform.release().split('.')[0] >= '20':
+        os.environ["QT_MAC_WANTS_LAYER"] = "1"
+
 from PyQt5 import QtWidgets, QtCore
 
 import data_exploration_gui.cluster as clust
