@@ -363,8 +363,8 @@ class ProbeModel:
             # z is locked to surface of the brain at these x,y coordinates (disregarding actual z value of trajectory)
 
             # Compute x-y distance taking into account angle of probe
-            nx = NX / np.cos(traj['theta'] / 180 * np.pi)
-            ny = NY / np.cos(traj['theta'] / 180 * np.pi)
+            nx = int(np.ceil(NX / np.cos(traj['theta'] / 180 * np.pi))
+            ny = int(np.ceil(NY / np.cos(traj['theta'] / 180 * np.pi))
 
             # Reset probes that have depth negative ; warning
             if traj['depth'] < 0:
