@@ -331,8 +331,8 @@ class ProbeModel:
         # Horizontal slice of voxels to be considered around each trajectory is only dependent on MAX_DIST_UM
         # and the voxel resolution, so can be defined here. We translate max dist in voxels and add 1 for safety
         # Unit of atlas is m so divide um by 1e6
-        nx = int(np.ceil(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[0]))) + 1
-        ny = int(np.ceil(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[1]))) + 1
+        NX = int(np.ceil(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[0]))) + 1
+        NY = int(np.ceil(MAX_DIST_UM / 1e6 / np.abs(ba.bc.dxyz[1]))) + 1
 
         def crawl_up_from_tip(ins, covered_length):
             straight_trajectory = ins.entry - ins.tip  # Straight line from entry to tip of the probe
@@ -362,10 +362,15 @@ class ProbeModel:
             # x and y coordinates of entry are translated to the atlas voxel space
             # z is locked to surface of the brain at these x,y coordinates (disregarding actual z value of trajectory)
 
+            # Compute x-y distance taking into account angle of probe
+            nx = NX / np.cos(traj['theta'] / 180 * np.pi)
+            ny = NY / np.cos(traj['theta'] / 180 * np.pi)
+
             # Reset probes that have depth negative ; warning
             if traj['depth'] < 0:
                 traj['depth'] = -traj['depth']
-                print(f"Depth negative for {traj['probe_insertion']}, provenance {traj['provenance']}. "
+                print(f"Depth negative for {traj['probe_insertion']}, "
+                      f"provenance {traj['provenance']}. "
                       "Sign flip for coverage computation. Please change on Alyx.")
 
             ins = atlas.Insertion.from_dict(traj, brain_atlas=ba)
@@ -373,7 +378,8 @@ class ProbeModel:
             # Don't use probes that have same entry and tip, something is wrong
             set_nan = False
             if np.linalg.norm(ins.entry - ins.tip) == 0:
-                print(f"Insertion entry and tip are identical for insertion {traj['probe_insertion']}. "
+                print(f"Insertion entry and tip are identical for insertion {traj['probe_insertion']}, "
+                      f"provenance {traj['provenance']}. "
                       "Skipping for coverage computation.")
                 set_nan = True
             else:
