@@ -361,20 +361,22 @@ class ProbeModel:
             # Get one trajectory from the list and create an insertion in the brain atlas
             # x and y coordinates of entry are translated to the atlas voxel space
             # z is locked to surface of the brain at these x,y coordinates (disregarding actual z value of trajectory)
+
+            # Reset probes that have depth negative ; warning
+            if traj['depth'] < 0:
+                traj['depth'] = -traj['depth']
+                print(f"Depth negative for {traj['probe_insertion']}, provenance {traj['provenance']}. "
+                      "Sign flip for coverage computation. Please change on Alyx.")
+
             ins = atlas.Insertion.from_dict(traj, brain_atlas=ba)
 
             # Don't use probes that have same entry and tip, something is wrong
-            # Reset probes that have depth negative ; warning
             set_nan = False
             if np.linalg.norm(ins.entry - ins.tip) == 0:
                 print(f"Insertion entry and tip are identical for insertion {traj['probe_insertion']}. "
                       "Skipping for coverage computation.")
                 set_nan = True
             else:
-                if traj['depth'] < 0:
-                    traj['depth'] = -traj['depth']
-                    print(f"Depth negative for {traj['probe_insertion']}, provenance {traj['provenance']}. "
-                          "Sign flip for coverage computation. Please change on Alyx.")
                 # Translate the top and bottom of the region considered covered from abstract to current insertion
                 # Unit of atlas is m so divide um by 1e6
                 top_bottom = crawl_up_from_tip(ins, covered_length_um / 1e6)
