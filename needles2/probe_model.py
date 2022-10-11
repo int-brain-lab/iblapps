@@ -362,9 +362,13 @@ class ProbeModel:
             # x and y coordinates of entry are translated to the atlas voxel space
             # z is locked to surface of the brain at these x,y coordinates (disregarding actual z value of trajectory)
 
+            '''
             # Compute x-y distance taking into account angle of probe
             nx = int(np.ceil(NX / np.cos(traj['theta'] / 180 * np.pi)))
-            ny = int(np.ceil(NY / np.cos(traj['theta'] / 180 * np.pi)))
+            ny = int(np.ceil(NY / np.cos(traj['phi'] / 180 * np.pi)))
+            '''
+            nx = NX
+            ny = NY
 
             # Reset probes that have depth negative ; warning
             if traj['depth'] < 0:
