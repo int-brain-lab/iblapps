@@ -43,26 +43,27 @@ def rmsmap(fbin, spectra=True):
            'tscale': wingen.tscale(fs=sglx.fs)}
     win['spectral_density'] = np.zeros((len(win['fscale']), sglx.nc))
     # loop through the whole session
-    for first, last in wingen.firstlast:
-        D = sglx.read_samples(first_sample=first, last_sample=last)[0].transpose()
-        # remove low frequency noise below 1 Hz
-        D = fourier.hp(D, 1 / sglx.fs, [0, 1])
-        iw = wingen.iw
-        win['TRMS'][iw, :] = utils.rms(D)
-        win['nsamples'][iw] = D.shape[1]
-        if spectra:
-            # the last window may be smaller than what is needed for welch
-            if last - first < WELCH_WIN_LENGTH_SAMPLES:
-                continue
-            # compute a smoothed spectrum using welch method
-            _, w = signal.welch(
-                D, fs=sglx.fs, window='hann', nperseg=WELCH_WIN_LENGTH_SAMPLES,
-                detrend='constant', return_onesided=True, scaling='density', axis=-1
-            )
-            win['spectral_density'] += w.T
-        # print at least every 20 windows
-        if (iw % min(20, max(int(np.floor(wingen.nwin / 75)), 1))) == 0:
-            print_progress(iw, wingen.nwin)
+    with tqdm(total=wingen.nwin) as pbar:
+        for first, last in wingen.firstlast:
+            D = sglx.read_samples(first_sample=first, last_sample=last)[0].transpose()
+            # remove low frequency noise below 1 Hz
+            D = fourier.hp(D, 1 / sglx.fs, [0, 1])
+            iw = wingen.iw
+            win['TRMS'][iw, :] = utils.rms(D)
+            win['nsamples'][iw] = D.shape[1]
+            if spectra:
+                # the last window may be smaller than what is needed for welch
+                if last - first < WELCH_WIN_LENGTH_SAMPLES:
+                    continue
+                # compute a smoothed spectrum using welch method
+                _, w = signal.welch(
+                    D, fs=sglx.fs, window='hann', nperseg=WELCH_WIN_LENGTH_SAMPLES,
+                    detrend='constant', return_onesided=True, scaling='density', axis=-1
+                )
+                win['spectral_density'] += w.T
+            # print at least every 20 windows
+            if (iw % min(20, max(int(np.floor(wingen.nwin / 75)), 1))) == 0:
+                pbar.update(iw)
 
     sglx.close()
     return win
