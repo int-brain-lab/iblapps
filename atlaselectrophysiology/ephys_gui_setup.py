@@ -190,6 +190,11 @@ class Setup():
         slice_ccf.triggered.connect(lambda: self.plot_slice(self.slice_data, 'ccf'))
         slice_label = QtWidgets.QAction('Annotation', self, checkable=True, checked=False)
         slice_label.triggered.connect(lambda: self.plot_slice(self.slice_data, 'label'))
+
+        if self.fp_slice_data is not None:
+            fp_slice_label = QtWidgets.QAction('Annotation FP', self, checkable=True, checked=False)
+            fp_slice_label.triggered.connect(lambda: self.plot_slice(self.fp_slice_data, 'label'))
+
         if not self.offline:
             slice_hist_cb = QtWidgets.QAction('Histology cerebellar example', self, checkable=True, checked=False)
             slice_hist_cb.triggered.connect(lambda: self.plot_slice(self.slice_data, 'hist_cb'))
@@ -210,6 +215,10 @@ class Setup():
         self.slice_options_group.addAction(slice_ccf)
         slice_options.addAction(slice_label)
         self.slice_options_group.addAction(slice_label)
+        if self.fp_slice_data is not None:
+            slice_options.addAction(fp_slice_label)
+            self.slice_options_group.addAction(fp_slice_label)
+
         if not self.offline:
             slice_options.addAction(slice_hist_cb)
             self.slice_options_group.addAction(slice_hist_cb)
@@ -344,6 +353,11 @@ class Setup():
         toggle_histology_option.setShortcut('Shift+N')
         toggle_histology_option.triggered.connect(self.toggle_histology_button_pressed)
 
+        # Option to change histology regions from Allen to Franklin Paxinos
+        toggle_histology_map_option = QtWidgets.QAction('Change Histology Map', self)
+        toggle_histology_map_option.setShortcut('Shift+M')
+        toggle_histology_map_option.triggered.connect(self.toggle_histology_map_button_pressed)
+
         # Shortcuts for cluster popup window
         popup_minimise = QtWidgets.QAction('Minimise/Show Cluster Popup', self)
         popup_minimise.setShortcut('Alt+M')
@@ -370,6 +384,7 @@ class Setup():
         display_options.addAction(toggle_lines_option)
         display_options.addAction(toggle_channels_option)
         display_options.addAction(toggle_histology_option)
+        display_options.addAction(toggle_histology_map_option)
         display_options.addAction(popup_minimise)
         display_options.addAction(popup_close)
         display_options.addAction(save_plots)

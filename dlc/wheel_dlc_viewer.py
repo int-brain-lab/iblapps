@@ -272,6 +272,8 @@ class Viewer:
             else:
                 features = '|'.join(map(lambda s: s + '_.+', features))
                 return dlc.filter(regex=features, axis=1)
+        else:
+            return dlc
 
     def update_dlc_plot(self, frame_idx=0):
         """
