@@ -1297,6 +1297,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             else:
                 # probably need to return an empty array of things
                 self.slice_data = {}
+                self.fp_slice_data = None
 
             self.data_status = True
             self.init_menubar()
