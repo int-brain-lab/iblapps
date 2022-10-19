@@ -22,11 +22,14 @@ from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
 import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
-import time
 
 
-class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
+class SharedDataHolder:
+    slice_data = {}
+    fp_slice_data = None
 
+
+class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup, SharedDataHolder):
     @staticmethod
     def _instances():
         app = QtWidgets.QApplication.instance()
@@ -1293,11 +1296,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             else:
                 self.img_raw_data = {}
             if self.histology_exists:
-                self.slice_data, self.fp_slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
-            else:
-                # probably need to return an empty array of things
-                self.slice_data = {}
-                self.fp_slice_data = None
+                SharedDataHolder.slice_data, SharedDataHolder.fp_slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
 
             self.data_status = True
             self.init_menubar()

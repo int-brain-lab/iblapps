@@ -12,11 +12,14 @@ from atlaselectrophysiology.load_histology import tif2nrrd
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
+class LoadDataSharedDataHandler:
+    brain_atlas = None
 
-class LoadDataLocal:
+
+class LoadDataLocal(LoadDataSharedDataHandler):
     def __init__(self):
         ONE(silent=True, password='international')
-        self.brain_atlas = atlas.AllenAtlas(25)
+        LoadDataSharedDataHandler.brain_atlas = atlas.AllenAtlas(25)
         self.franklin_atlas = None
         self.folder_path = None
         self.chn_coords = None
