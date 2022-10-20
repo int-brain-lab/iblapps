@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import one.alf as alf
 from brainbox.processing import bincount2D
-from brainbox.io.spikeglx import stream
+from brainbox.io.spikeglx import Streamer
 from brainbox.population.decode import xcorr
 from brainbox.task import passive
 from neurodsp import voltage
@@ -488,15 +488,13 @@ class PlotData:
         def gain2level(gain):
             return 10 ** (gain / 20) * 4 * np.array([-1, 1])
         data_img = dict()
-
+        nsecs = 1  # number of seconds to display
         times = [t for t in t0 if t < self.max_spike_time]
-
+        sr = Streamer(pid, one=one, remove_cached=False)
         for t in times:
-
-            sr, t = stream(pid, t, one=one)
-            raw = sr[:, :-sr.nsync].T
+            raw = sr[int(t * sr.fs):int((t + nsecs) * sr.fs), :-sr.nsync].T
             channel_labels, channel_features = voltage.detect_bad_channels(raw, sr.fs)
-            raw = voltage.destripe(raw, fs=sr.fs, channel_labels=channel_labels)
+            raw = voltage.destripe(raw, fs=sr.fs, channel_labels=channel_labels, h=sr.geometry)
             raw_image = raw[:, int((450 / 1e3) * sr.fs):int((500 / 1e3) * sr.fs)].T
             x_range = np.array([0, raw_image.shape[0] - 1]) / sr.fs * 1e3
             levels = gain2level(-90)
