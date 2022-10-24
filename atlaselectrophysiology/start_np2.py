@@ -2,7 +2,7 @@
 # todo: cache the destriping somewhere
 # todo: propagate and split-4 buttons
 from one.api import ONE
-from iblapps.atlaselectrophysiology.ephys_atlas_gui import viewer
+from iblapps.atlaselectrophysiology.ephys_atlas_gui import viewer, MainWindow
 
 
 # 141bf1d0-ae0d-4d13-802a-fc61e7aa98ee probe00c {'subject': 'HB_004', 'start_time': '2022-09-02T15:21:21.646371', 'number': 10, 'lab': 'steinmetzlab', 'id': 'edce7eab-4f75-4c3a-8cd9-a797ec1bd45b', 'task_protocol': '_iblrig_tasks_ephysChoiceWorld6.6.2'}
@@ -20,6 +20,7 @@ guis = {}
 for sh in shanks:
     guis[sh['name']] = viewer(probe_id=sh['id'], one=None, histology=True, title=f'{sh["name"]}')
 
-
 assert len(set([id(g.slice_data) for g in guis.values()])) == 1
 assert len(set([id(g.loaddata.brain_atlas) for g in guis.values()])) == 1
+
+MainWindow.explode()

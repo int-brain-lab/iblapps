@@ -1,5 +1,6 @@
 import os
 import platform
+import math
 
 if platform.system() == 'Darwin':
     if platform.release().split('.')[0] >= '20':
@@ -43,6 +44,24 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup, SharedDataHolder):
             av = MainWindow(**kwargs)
             av.setWindowTitle(title)
         return av
+
+    @staticmethod
+    def explode():
+        """
+        set all the eqc instances at the same position/gain scales for flip comparisons
+        If explodes is set to True, splits windows in groups of two side by side
+        """
+        mwnds = MainWindow._instances()
+        if len(mwnds) == 1:
+            return
+        from PyQt5 import QtWidgets
+        app = QtWidgets.QApplication.instance()
+        sz = app.primaryScreen().availableGeometry()
+        (x0, y0, w, h) = (sz.x(), sz.y(), int(sz.width() / 2), int(sz.height() / 2))
+        # sz = app.primaryScreen().size()
+        # (w, h) = (int(sz.width() / 2), int(sz.height() / 2))
+        for i, win in enumerate(mwnds):
+            win.setGeometry(w * (i % 2) + x0, h * (math.floor(i / 2)) + y0, w, h)
 
     def __init__(self, offline=False, probe_id=None, one=None, histology=True,
                  spike_collection=None, remote=False):
