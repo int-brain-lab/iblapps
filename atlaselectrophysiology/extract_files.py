@@ -8,7 +8,6 @@ from neurodsp import fourier, utils
 from scipy import signal
 import one.alf.io as alfio
 import ibllib.ephys.ephysqc as ephysqc
-from ibllib.misc import print_progress
 
 from phylib.io import alf
 
