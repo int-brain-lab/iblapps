@@ -52,7 +52,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         table_path = self.one.cache_dir.joinpath('bwm_features')
         if download:
             s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
-            aws.s3_download_folder("aggregates/bwm", table_path, s3=s3, bucket_name=bucket_name)
+            aws.s3_download_folder("aggregates/bwm/latest", table_path, s3=s3, bucket_name=bucket_name)
 
         channels = pd.read_parquet(table_path.joinpath('channels.pqt'))
         probes = pd.read_parquet(table_path.joinpath('probes.pqt'))

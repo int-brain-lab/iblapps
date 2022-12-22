@@ -121,9 +121,12 @@ def ks2_to_alf(ks_path, bin_path, out_path, bin_file=None, ampfactor=1, label=No
     :return:
     """
     m = ephysqc.phy_model_from_ks2_path(ks2_path=ks_path, bin_path=bin_path, bin_file=bin_file)
-    ephysqc.spike_sorting_metrics_ks2(ks_path, m, save=True, save_path=out_path)
     ac = alf.EphysAlfCreator(m)
     ac.convert(out_path, label=label, force=force, ampfactor=ampfactor)
+
+    # set depths to spike_depths to catch cases where it can't be computed from pc features (e.g in case of KS3)
+    m.depths = np.load(out_path.joinpath('spikes.depths.npy'))
+    ephysqc.spike_sorting_metrics_ks2(ks_path, m, save=True, save_path=out_path)
 
 
 def extract_data(ks_path, ephys_path, out_path):
