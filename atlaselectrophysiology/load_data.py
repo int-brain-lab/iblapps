@@ -66,7 +66,7 @@ class LoadData:
         # Download bwm aggregate tables for for ephys feature gui
         table_path = self.one.cache_dir.joinpath('bwm_features')
         s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
-        aws.s3_download_folder("aggregates/bwm", table_path, s3=s3, bucket_name=bucket_name)
+        aws.s3_download_folder("aggregates/bwm/latest", table_path, s3=s3, bucket_name=bucket_name)
 
         if probe_id is not None:
             self.sess = self.one.alyx.rest('insertions', 'list', id=probe_id)

@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import one.alf as alf
 from brainbox.processing import bincount2D
-from brainbox.io.spikeglx import stream
+from brainbox.io.spikeglx import Streamer
 from brainbox.population.decode import xcorr
 from brainbox.task import passive
 from neurodsp import voltage
@@ -430,13 +430,13 @@ class PlotData:
         self.chn_depth_eq[np.where(chn_count == 2)] += 1
 
         def avg_chn_depth(a):
-            return(np.mean([a[self.chn_depth], a[self.chn_depth_eq]], axis=0))
+            return (np.mean([a[self.chn_depth], a[self.chn_depth_eq]], axis=0))
 
         def get_median(a):
-            return(np.median(a))
+            return (np.median(a))
 
         def median_subtract(a):
-            return(a - np.median(a))
+            return (a - np.median(a))
         img = np.apply_along_axis(avg_chn_depth, 1, _rms * 1e6)
         median = np.mean(np.apply_along_axis(get_median, 1, img))
         # Medium subtract to remove bands, but add back average median so values make sense
@@ -493,8 +493,10 @@ class PlotData:
 
         for t in times:
 
-            sr, t = stream(pid, t, one=one)
-            raw = sr[:, :-sr.nsync].T
+            sr = Streamer(pid=pid, one=one, remove_cached=False, typ='ap')
+            s0 = t * sr.fs
+            tsel = slice(int(s0), int(s0) + int(1 * sr.fs))
+            raw = sr[tsel, :-sr.nsync].T
             channel_labels, channel_features = voltage.detect_bad_channels(raw, sr.fs)
             raw = voltage.destripe(raw, fs=sr.fs, channel_labels=channel_labels)
             raw_image = raw[:, int((450 / 1e3) * sr.fs):int((500 / 1e3) * sr.fs)].T
@@ -540,7 +542,7 @@ class PlotData:
             self.chn_depth_eq[np.where(chn_count == 2)] += 1
 
             def avg_chn_depth(a):
-                return(np.mean([a[self.chn_depth], a[self.chn_depth_eq]], axis=0))
+                return (np.mean([a[self.chn_depth], a[self.chn_depth_eq]], axis=0))
 
             img = np.apply_along_axis(avg_chn_depth, 1, _lfp_dB)
             img_full = np.full((img.shape[0], self.chn_full.shape[0]), np.nan)
