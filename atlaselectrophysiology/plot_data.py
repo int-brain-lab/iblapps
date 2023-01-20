@@ -320,7 +320,7 @@ class PlotData:
                 'img': img,
                 'scale': np.array([xscale, yscale]),
                 'levels': np.quantile(np.mean(img, axis=0), [0, 1]),
-                'offset': np.array([0, 0]),
+                'offset': np.array([0, self.chn_min]),
                 'xrange': np.array([times[0], times[-1]]),
                 'xaxis': 'Time (s)',
                 'cmap': 'binary',
@@ -391,7 +391,7 @@ class PlotData:
                 'img': corr,
                 'scale': np.array([scale, scale]),
                 'levels': np.array([np.min(corr), np.max(corr)]),
-                'offset': np.array([0, 0]),
+                'offset': np.array([self.chn_min, self.chn_min]),
                 'xrange': np.array([self.chn_min, self.chn_max]),
                 'cmap': 'viridis',
                 'title': 'Correlation',
@@ -458,7 +458,7 @@ class PlotData:
             'img': img_full,
             'scale': np.array([xscale, yscale]),
             'levels': levels,
-            'offset': np.array([0, 0]),
+            'offset': np.array([0, self.chn_min]),
             'cmap': cmap,
             'xrange': np.array([rms_times[0], rms_times[-1]]),
             'xaxis': xaxis,
@@ -509,7 +509,7 @@ class PlotData:
                 'img': raw_image,
                 'scale': np.array([xscale, yscale]),
                 'levels': levels,
-                'offset': np.array([0, 0]),
+                'offset': np.array([0, self.chn_min]),
                 'cmap': 'bone',
                 'xrange': x_range,
                 'xaxis': 'Time (ms)',
@@ -556,7 +556,7 @@ class PlotData:
                 'img': img_full,
                 'scale': np.array([xscale, yscale]),
                 'levels': levels,
-                'offset': np.array([0, 0]),
+                'offset': np.array([0, self.chn_min]),
                 'cmap': 'viridis',
                 'xrange': np.array([freq_range[0], freq_range[-1]]),
                 'xaxis': 'Frequency (Hz)',
@@ -616,7 +616,7 @@ class PlotData:
                     'img': [img[sub].T],
                     'scale': [np.array([xscale, yscale])],
                     'levels': levels,
-                    'offset': [np.array([0, 0])],
+                    'offset': [np.array([0, self.chn_min])],
                     'cmap': 'viridis',
                     'xrange': np.array([0, 15]),
                     'xaxis': 'Position',
@@ -662,7 +662,7 @@ class PlotData:
                 'img': z_score.T,
                 'scale': np.array([xscale, yscale]),
                 'levels': levels,
-                'offset': np.array([-1 * pre_stim, 0]),
+                'offset': np.array([-1 * pre_stim, self.chn_min]),
                 'cmap': 'bwr',
                 'xrange': [-1 * pre_stim, post_stim],
                 'xaxis': 'Time from Stim Onset (s)',
@@ -720,7 +720,7 @@ class PlotData:
                 _bnk_yscale = ((self.chn_max -
                                 self.chn_min) / _bnk_data.shape[1])
                 _bnk_xscale = BNK_SIZE / _bnk_data.shape[0]
-                _bnk_yoffset = 0
+                _bnk_yoffset = self.chn_min
                 _bnk_xoffset = BNK_SIZE * iX
 
             bnk_data.append(_bnk_data)
