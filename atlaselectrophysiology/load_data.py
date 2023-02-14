@@ -255,51 +255,29 @@ class LoadData:
                 self.probe_collection = f'alf/{self.probe_label}'
                 probe_path = Path(self.sess_path, 'alf', self.probe_label)
 
+        data = {}
         try:
-            _ = self.one.load_object(self.eid, 'spikes', collection=self.probe_collection,
-                                     attribute=['depths', 'amps', 'times', 'clusters'],
-                                     download_only=True)
+            data['spikes'] = self.one.load_object(self.eid, 'spikes', collection=self.probe_collection,
+                                                  attribute=['depths', 'amps', 'times', 'clusters'])
+            data['spikes']['exists'] = True
 
-            _ = self.one.load_object(self.eid, 'clusters', collection=self.probe_collection,
-                                     attribute=['metrics', 'peakToTrough', 'waveforms',
-                                                'channels'],
-                                     download_only=True)
+            data['clusters'] = self.one.load_object(self.eid, 'clusters', collection=self.probe_collection,
+                                                    attribute=['metrics', 'peakToTrough', 'waveforms', 'channels'])
+            data['clusters']['exists'] = True
 
-            _ = self.one.load_object(self.eid, 'channels', collection=self.probe_collection,
-                                     attribute=['rawInd', 'localCoordinates'], download_only=True)
+            data['channels'] = self.one.load_object(self.eid, 'channels', collection=self.probe_collection,
+                                                    attribute=['rawInd', 'localCoordinates'])
+            data['channels']['exists'] = True
+
         except alf.exceptions.ALFObjectNotFound:
             logger.error(f'Could not load spike sorting for probe insertion {self.probe_id}, GUI'
                          f' will not work')
-            return [None] * 5
+            return [None] * 4
 
-        dtypes_raw = [
-            '_iblqc_ephysTimeRmsAP.rms.npy',
-            '_iblqc_ephysTimeRmsAP.timestamps.npy',
-            '_iblqc_ephysSpectralDensityAP.freqs.npy',
-            '_iblqc_ephysSpectralDensityAP.power.npy',
-            '_iblqc_ephysTimeRmsLF.rms.npy',
-            '_iblqc_ephysTimeRmsLF.timestamps.npy',
-            '_iblqc_ephysSpectralDensityLF.freqs.npy',
-            '_iblqc_ephysSpectralDensityLF.power.npy',
-        ]
-
-        collection_raw = [f'raw_ephys_data/{self.probe_label}'] * len(dtypes_raw)
-
-        dtypes_alf = [
-            '_ibl_passiveGabor.table.csv',
-            '_ibl_passivePeriods.intervalsTable.csv',
-            '_ibl_passiveRFM.times.npy',
-            '_ibl_passiveStims.table.csv']
-
-        collection_alf = ['alf'] * len(dtypes_alf)
-
-        dtypes_passive = [
-            '_iblrig_RFMapStim.raw.bin']
-
-        collection_passive = ['raw_passive_data'] * len(dtypes_passive)
-
-        dtypes = dtypes_raw + dtypes_alf + dtypes_passive
-        collections = collection_raw + collection_alf + collection_passive
+        data['rms_AP'] = self.get_rms_data(band='AP')
+        data['rms_LF'] = self.get_rms_data(band='LF')
+        data['psd_lf'] = self.get_psd_data(band='LF')
+        data['rf_map'], data['pass_stim'], data['gabor'] = self.get_passive_data()
 
         print(self.subj)
         print(self.probe_label)
@@ -307,15 +285,9 @@ class LoadData:
         print(self.eid)
         print(self.probe_collection)
 
-        _ = self.one.load_datasets(self.eid, datasets=dtypes, collections=collections,
-                                   download_only=True, assert_present=False)
-
-        ephys_path = Path(self.sess_path, 'raw_ephys_data', self.probe_label)
-        alf_path = Path(self.sess_path, 'alf')
-
-        self.chn_coords = np.load(Path(probe_path, 'channels.localCoordinates.npy'))
+        self.chn_coords = data['channels']['localCoordinates']
         self.chn_depths = self.chn_coords[:, 1]
-        self.cluster_chns = np.load(Path(probe_path, 'clusters.channels.npy'))
+        self.cluster_chns = data['clusters']['channels']
 
         sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
         sess_notes = None
@@ -326,7 +298,89 @@ class LoadData:
         if not sess_notes:
             sess_notes = 'No notes for this session'
 
-        return probe_path, ephys_path, alf_path, self.chn_depths, sess_notes
+        return probe_path, self.chn_depths, sess_notes, data
+
+    def get_passive_data(self):
+
+        # Load in RFMAP data
+        try:
+            rf_data = self.one.load_object(self.eid, 'passiveRFM', collection='alf')
+            frame_path = self.one.load_dataset(self.eid, '_iblrig_RFMapStim.raw.bin', collection='raw_passive_data',
+                                               download_only=True)
+            frames = np.fromfile(frame_path, dtype="uint8")
+            rf_data['frames'] = np.transpose(np.reshape(frames, [15, 15, -1], order="F"), [2, 1, 0])
+            rf_data['exists'] = True
+        except Exception:
+            logger.warning('rfmap data was not found, some plots will not display')
+            rf_data = {}
+            rf_data['exists'] = False
+
+        # Load in passive stim data
+        try:
+            stim_data = self.one.load_object(self.eid, 'passiveStims', collection='alf')
+            stim_data['exists'] = True
+        except alf.exceptions.ALFObjectNotFound:
+            logger.warning('passive stim data was not found, some plots will not display')
+            stim_data = {}
+            stim_data['exists'] = False
+
+        try:
+            gabor = alf.io.load_object(self.eid, 'passiveGabor', collection='alf')
+            vis_stim = {}
+            vis_stim['leftGabor'] = gabor['start'][(gabor['position'] == 35) & (gabor['contrast'] > 0.1)]
+            vis_stim['rightGabor'] = gabor['start'][(gabor['position'] == -35) & (gabor['contrast'] > 0.1)]
+            vis_stim['exists'] = True
+        except Exception:
+            logger.warning('passive gabor data was not found, some plots will not display')
+            vis_stim = {}
+            vis_stim['exists'] = False
+
+        return rf_data, stim_data, vis_stim
+
+    def get_rms_data(self, band='AP'):
+
+        try:
+            data = self.one.load_object(self.eid, f'ephysTimeRms{band}', collection=f'raw_ephys_data/{self.probe_label}')
+            if len(data) != 2:
+                data = {}
+                data['exists'] = False
+            else:
+                if 'amps' in data.keys():
+                    data['rms'] = data.pop['amps']
+
+                if 'timestamps' not in data.keys():
+                    data['timestamps'] = np.array([0, data['rms'].shape[0]])
+                    data['xaxis'] = 'Time samples'
+                else:
+                    data['xaxis'] = 'Time (s)'
+
+                data['exists'] = True
+
+        except alf.exceptions.ALFObjectNotFound:
+            logger.warning(f'rms {band} data was not found, some plots will not display')
+            data = {}
+            data['exists'] = False
+
+        return data
+
+    def get_psd_data(self, band='LF'):
+
+        try:
+            data = self.one.load_object(self.eid, f'ephysSpectralDensity{band}', collection=f'raw_ephys_data/{self.probe_label}')
+            if len(data) != 2:
+                data = {}
+                data['exists'] = False
+            else:
+                if 'amps' in data.keys():
+                    data['power'] = data.pop['amps']
+
+                data['exists'] = True
+        except alf.exceptions.ALFObjectNotFound:
+            logger.warning('lfp data was not found, some plots will not display')
+            data = {}
+            data['exists'] = False
+
+        return data
 
     def get_allen_csv(self):
         """
