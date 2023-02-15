@@ -4,7 +4,8 @@ import pyqtgraph.exporters
 import numpy as np
 from random import randrange
 from atlaselectrophysiology.AdaptedAxisItem import replace_axis
-from ibllib.qc.critical_reasons import REASONS_INS_CRIT_GUI
+from ibllib.qc.critical_reasons import CriticalInsertionNote
+
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -431,7 +432,6 @@ class Setup():
         # # Initialise with Allen mapping
         # self.mapping_init = allen_mapping
 
-
     def init_interaction_features(self):
         """
         Create all interaction widgets that will be added to the GUI
@@ -550,7 +550,7 @@ class Setup():
             self.desc_layout = QtWidgets.QVBoxLayout()
             self.desc_layout.setSpacing(5)
             self.desc_buttons.setExclusive(False)
-            options = REASONS_INS_CRIT_GUI
+            options = CriticalInsertionNote.descriptions_gui
             for i, val in enumerate(options):
 
                 button = QtWidgets.QCheckBox(val)
