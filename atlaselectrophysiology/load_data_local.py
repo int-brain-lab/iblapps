@@ -1,8 +1,10 @@
+import logging
 import numpy as np
 from datetime import datetime
 import ibllib.atlas as atlas
 from pathlib import Path
 import one.alf.io as alfio
+from one import alf
 import glob
 import json
 from one.api import ONE
@@ -11,6 +13,7 @@ from atlaselectrophysiology.load_histology import tif2nrrd
 # temporarily add this in for neuropixel course until figured out fix to problem on win32
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
+logger = logging.getLogger('ibllib')
 
 
 class LoadDataLocal:
@@ -87,9 +90,6 @@ class LoadDataLocal:
         return shank_list
 
     def get_data(self):
-        # Define alf_path and ephys_path (a bit redundant but so it is compatible with plot data)
-        alf_path = self.folder_path
-        ephys_path = self.folder_path
 
         chn_x = np.unique(self.chn_coords_all[:, 0])
         if self.n_shanks > 1:
@@ -105,6 +105,23 @@ class LoadDataLocal:
 
         chn_depths = self.chn_coords[:, 1]
 
+        data = {}
+        values = ['spikes', 'clusters', 'channels', 'rms_AP', 'rms_LF', 'psd_lf']
+        objects = ['spikes', 'clusters', 'channels', 'ephysTimeRmsAP', 'ephysTimeRmsLF', 'ephysSpectralDensityLF']
+        for v, o in zip(values, objects):
+            try:
+                data[v] = alfio.load_object(self.folder_path, o)
+                data[v]['exists'] = True
+                if 'rms' in v:
+                    data[v]['xaxis'] = 'Time (s)'
+            except alf.exceptions.ALFObjectNotFound:
+                logger.warning(f'{v} data was not found, some plots will not display')
+                data[v] = {'exists': False}
+
+        data['rf_map'] = {'exists': False}
+        data['pass_stim'] = {'exists': False}
+        data['gabor'] = {'exists': False}
+
         # Read in notes for this experiment see if file exists in directory
         if self.folder_path.joinpath('session_notes.txt').exists():
             with open(self.folder_path.joinpath('session_notes.txt'), "r") as f:
@@ -112,7 +129,7 @@ class LoadDataLocal:
         else:
             sess_notes = 'No notes for this session'
 
-        return alf_path, ephys_path, alf_path, chn_depths, sess_notes
+        return self.folder_path, chn_depths, sess_notes, data
 
     def get_allen_csv(self):
         allen_path = Path(Path(atlas.__file__).parent, 'allen_structure_tree.csv')

@@ -22,7 +22,6 @@ from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
 import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
-import time
 
 
 class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
@@ -1245,7 +1244,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Only run once
         if not self.data_status:
-            self.probe_path, ephys_path, alf_path, self.chn_depths, self.sess_notes = \
+            self.probe_path, self.chn_depths, self.sess_notes, data = \
                 self.loaddata.get_data()
             if not self.probe_path:
                 return
@@ -1273,7 +1272,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.get_scaled_histology()
         # If we have not loaded in the data before then we load eveything we need
         if not self.data_status:
-            self.plotdata = pd.PlotData(self.probe_path, ephys_path, alf_path,
+            self.plotdata = pd.PlotData(self.probe_path, data,
                                         self.current_shank_idx)
             self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
             self.scat_drift_data = self.plotdata.get_depth_data_scatter()
@@ -1375,7 +1374,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_histology_ref(self.fig_hist_ref)
         self.remove_lines_points()
         self.add_lines_points()
-
 
     def filter_unit_pressed(self, type):
         self.plotdata.filter_units(type)

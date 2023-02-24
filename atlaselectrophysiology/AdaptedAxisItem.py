@@ -152,9 +152,9 @@ class AdaptedAxisItem(pg.AxisItem):
                 raise TypeError("Line Alpha should be of type None, float or int")
 
             for v in ticks:
-                ## determine actual position to draw this tick
+                # determine actual position to draw this tick
                 x = (v * xScale) - offset
-                if x < xMin or x > xMax:  ## last check to make sure no out-of-bounds ticks are drawn
+                if x < xMin or x > xMax:  # last check to make sure no out-of-bounds ticks are drawn
                     tickPositions[i].append(None)
                     continue
                 tickPositions[i].append(x)
@@ -190,7 +190,7 @@ class AdaptedAxisItem(pg.AxisItem):
                 span[1].setX(stop)
         axisSpec = (self.pen(), span[0], span[1])
 
-        textOffset = self.style['tickTextOffset'][axis]  ## spacing between axis and text
+        textOffset = self.style['tickTextOffset'][axis]  # spacing between axis and text
         # if self.style['autoExpandTextSpace'] is True:
         # textWidth = self.textWidth
         # textHeight = self.textHeight
@@ -201,7 +201,7 @@ class AdaptedAxisItem(pg.AxisItem):
         textSize2 = 0
         lastTextSize2 = 0
         textRects = []
-        textSpecs = []  ## list of draw
+        textSpecs = []  # list of draw
 
         # If values are hidden, return early
         if not self.style['showValues']:
@@ -249,10 +249,10 @@ class AdaptedAxisItem(pg.AxisItem):
                 textSize = 0
                 textSize2 = 0
 
-            if i > 0:  ## always draw top level
-                ## If the strings are too crowded, stop drawing text now.
-                ## We use three different crowding limits based on the number
-                ## of texts drawn so far.
+            if i > 0:  # always draw top level
+                # If the strings are too crowded, stop drawing text now.
+                # We use three different crowding limits based on the number
+                # of texts drawn so far.
                 textFillRatio = float(textSize) / lengthInPixels
                 finished = False
                 for nTexts, limit in self.style['textFillLimits']:
@@ -269,7 +269,7 @@ class AdaptedAxisItem(pg.AxisItem):
             # Determine exactly where tick text should be drawn
             for j in range(len(strings)):
                 vstr = strings[j]
-                if vstr is None:  ## this tick was ignored because it is out of bounds
+                if vstr is None:  # this tick was ignored because it is out of bounds
                     continue
                 x = tickPositions[i][j]
                 # textRect = p.boundingRect(QtCore.QRectF(0, 0, 100, 100), QtCore.Qt.AlignmentFlag.AlignCenter, vstr)
