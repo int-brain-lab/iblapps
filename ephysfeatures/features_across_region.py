@@ -11,6 +11,9 @@ from ephysfeatures.qrangeslider import QRangeSlider
 import copy
 from one.remote import aws
 from one.api import ONE
+import oursin as urchin
+from matplotlib.colors import Normalize, rgb2hex
+from matplotlib import cm
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -37,6 +40,9 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
 
     def __init__(self, one, region_ids=None, ba=None, download=True, size=(1600, 800)):
         super(RegionFeatureWindow, self).__init__()
+
+        urchin.setup()
+
 
         self.one = one
         # Initialise page counter
@@ -103,8 +109,16 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         self.plot_name = 'psd_delta'
         self.plot_type = PLOT_TYPES[self.plot_name]['plot_type']
         self.feature_data = {}
+        self.unity_data = {}
+        self.acro = None
 
         self.kpen_solid = pg.mkPen(color='k', style=QtCore.Qt.SolidLine, width=2)
+
+        self.urchin_setup = False
+
+        # urchin.ccf.set_visibility({'grey': True})
+        # urchin.ccf.set_material({'grey': 'transparent-unlit'})
+        # urchin.ccf.set_alpha({'grey': 1})
 
     def layout(self, size):
 
@@ -279,6 +293,12 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         return axis
 
     def on_region_chosen(self, idx):
+        if not self.urchin_setup:
+            urchin.ccf.set_visibility({'grey': True})
+            urchin.ccf.set_material({'grey': 'transparent-unlit'})
+            urchin.ccf.set_alpha({'grey': 1})
+            self.urchin_setup = True
+
         self.chosen_id = self.region_ids[idx]
         data = self.data[self.data['atlas_id'] == self.chosen_id]
 
@@ -290,11 +310,22 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         self.page_idx = 0
         self.update_page_label()
 
+        self.clear_unity()
+
         self.region_data, self.probe_info = self.get_region_data(self.pids)
         self.offset_data = self.get_offset_data()
         self.get_feature_data(self.plot_name, self.plot_type)
 
+        self.highlight_region()
         self.plot_all()
+
+    def highlight_region(self):
+        if self.acro:
+            urchin.ccf.set_visibility({self.acro: False})
+        self.acro = self.ba.regions.id2acronym(self.chosen_id)[0]
+        urchin.ccf.set_visibility({self.acro: True})
+        urchin.ccf.set_material({self.acro: 'transparent-unlit'})
+        urchin.ccf.set_alpha({self.acro: 0.7})
 
     def on_plot_chosen(self, idx):
         item = self.plot_list.item(idx)
@@ -302,7 +333,6 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         self.plot_type = PLOT_TYPES[self.plot_name]['plot_type']
 
         self.get_feature_data(self.plot_name, self.plot_type)
-
         self.plot_all()
 
     def on_normalise_plots(self):
@@ -311,7 +341,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         self.plot_features()
 
     def on_align_plots(self):
-        self.plot_all()
+        self.plot_all(unity=False)
 
     def on_slider_moved(self):
         if self.normalise:
@@ -325,13 +355,13 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         if self.page_idx < self.page_num:
             self.page_idx += 1
             self.update_page_label()
-            self.plot_all()
+            self.plot_all(unity=False)
 
     def on_prev_pressed(self):
         if self.page_idx > 0:
             self.page_idx -= 1
             self.update_page_label()
-            self.plot_all()
+            self.plot_all(unity=False)
 
     def init_slider(self):
 
@@ -349,19 +379,23 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
     def update_page_label(self):
         self.page_label.setText(f'{int(self.page_idx) + 1}/{int(self.page_num) + 1}')
 
-    def plot_all(self):
+    def plot_all(self, unity=True):
 
-        self.clear_plots()
+        self.clear_plots(unity=unity)
         self.plot_features()
         self.plot_regions()
         self.set_info()
+        if unity:
+            self.plot_unity()
 
-    def clear_plots(self):
+    def clear_plots(self, unity=True):
         for fig_hist, fig_feat, fig_cbar in zip(self.plots_hist, self.plots_feat, self.plots_cbar):
             fig_hist.clear()
             fig_feat.clear()
             fig_cbar.clear()
             self.set_axis(fig_cbar, 'top', pen='w')
+        if unity:
+            self.clear_unity()
 
     def get_idx(self):
         if self.page_idx == self.page_num:
@@ -432,6 +466,24 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
                 axis = fig.getAxis('left')
                 axis.setTicks([])
                 axis.setPen(None)
+
+    def plot_unity(self):
+        for pid in self.unity_data.keys():
+            urchin.neurons.create(self.unity_data[pid]['create'])
+            urchin.neurons.set_size(self.unity_data[pid]['size'])
+            urchin.neurons.set_color(self.unity_data[pid]['color'])
+            urchin.neurons.set_position(self.unity_data[pid]['pos'])
+            urchin.neurons.set_shape(self.unity_data[pid]['shape'])
+            urchin.neurons.set_material(self.unity_data[pid]['material'])
+
+    def set_colour(self):
+        for pid in self.unity_data.key():
+            df = self.data[self.data['pid'] == pid]
+            data = df[self.plot_type].values
+            c_levels = np.nanquantile(data, [0.1, 0.9])
+            self.unity_data[pid]['color'] = self.data_to_colors(data, PLOT_TYPES[self.plot_type]['cmap'],
+                                                                self.levels[0], self.levels[1])
+            urchin.neurons.set_color(self.unity_data[pid]['color'])
 
     def plot_features(self):
 
@@ -521,6 +573,8 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
             data, levels = self.get_probe_data(plot_name, self.pids)
         elif plot_type == 'line':
             data, levels = self.get_line_data(plot_name, self.pids)
+
+        self.unity_data = self.get_unity_data(plot_name, self.pids)
         self.feature_data[plot_name] = {'data': data, 'levels': levels}
 
         self.max_levels = self.feature_data[plot_name]['levels']
@@ -585,6 +639,58 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
             all_data.append(data_dict)
 
         return all_data, [min_level, max_level]
+
+    def data_to_colors(self, data, cmap, vmin, vmax):
+
+        cmap = cm.ScalarMappable(norm=Normalize(vmin, vmax), cmap=cm.get_cmap(cmap))
+        cvals = cmap.to_rgba(data)
+        chex = [rgb2hex(c) for c in cvals]
+
+        return chex
+
+    def clear_unity(self):
+        for pid in self.unity_data.keys():
+            urchin.neurons.delete(self.unity_data[pid]['create'])
+
+    def get_unity_data(self, plot_name, pids):
+
+        unity_data = {}
+        for pid in pids:
+            df = self.data[self.data['pid'] == pid]
+            df = df.groupby('axial_um')
+            data = df[plot_name].mean().values
+            c_levels = np.nanquantile(data, [0.1, 0.9])
+            data = self.data_to_colors(data, PLOT_TYPES[plot_name]['cmap'], c_levels[0], c_levels[1])
+
+            xyz = np.c_[df['x'].mean().values, df['y'].mean().values, df['z'].mean().values]
+            mlapdv = self.ba.xyz2ccf(xyz, mode='clip')
+
+            shape = {}
+            color = {}
+            size = {}
+            pos = {}
+            material = {}
+            create = []
+            for i, loc in enumerate(mlapdv):
+                key = f'{pid[0:3]}{i}'
+                create.append(key)
+                color[key] = data[i]
+                size[key] = 0.1
+                pos[key] = list(loc)
+                shape[key] = 'cube'
+                material[key] = 'unlit'
+
+            features = {}
+            features['shape'] = shape
+            features['color'] = color
+            features['size'] = size
+            features['pos'] = pos
+            features['create'] = create
+            features['material'] = material
+
+            unity_data[pid] = features
+
+        return unity_data
 
     def get_region_data(self, pids):
 

@@ -17,7 +17,7 @@ import atlaselectrophysiology.plot_data as pd
 import atlaselectrophysiology.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 from atlaselectrophysiology.subject_scaling import ScalingWindow
-from ephysfeatures.features_across_region import RegionFeatureWindow
+#from ephysfeatures.features_across_region import RegionFeatureWindow
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
 import qt
