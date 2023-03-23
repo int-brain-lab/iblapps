@@ -1900,9 +1900,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         autocorr_plot.setYRange(min=0, max=1.05 * np.max(autocorr))
         self.set_axis(autocorr_plot, 'bottom', label='T (ms)')
         self.set_axis(autocorr_plot, 'left', label='Number of spikes')
-        plot = pg.BarGraphItem()
-        plot.setOpts(x=self.plotdata.t_autocorr, height=autocorr, width=0.24,
-                     brush=self.bar_colour)
+        plot = pg.BarGraphItem(x=self.plotdata.t_autocorr, height=autocorr, width=0.24,
+                               brush=self.bar_colour)
         autocorr_plot.addItem(plot)
 
         template_wf = self.plotdata.get_template_wf(clust_idx)
