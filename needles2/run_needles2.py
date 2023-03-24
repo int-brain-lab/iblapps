@@ -101,7 +101,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.coverage = CoverageView(self)
         self.probe_model = ProbeModel(one=one, ba=self.atlas, lazy=lazy)
         self.region = RegionView(self, self.atlas)
-        self.table = InsertionTableView(self)
+        #self.table = InsertionTableView(self)
+        self.tables = []
+        self.table_names = []
+        #self.selected_table = 0
         self.layers = LayersView(self)
         self.change_mapping()
         self.ixyz_second = None
@@ -119,12 +122,45 @@ class MainWindow(QtWidgets.QMainWindow):
         if not lazy:
             self.initialise()
 
+    def add_table(self, name, data=None, c_scatter='m', c_vol='Greens'):
+
+        new_view = QtWidgets.QTableView()
+        if len(self.tables) == 0:
+            table = InsertionTableView(self, name, self.tableview)
+        else:
+            for t in self.tables:
+                t['table'].tableview = t['view']
+                t['table'].tableview.setModel(t['table'].ctrl.model)
+            table = InsertionTableView(self, name, self.tableview)
+        self.tables.append({'table': table, 'view': new_view, 'cov_dict': {},
+                            'cov_count': np.zeros((self.probe_model.ba.image.shape[0] * self.probe_model.ba.image.shape[1] *
+                                                   self.probe_model.ba.image.shape[2])), 'color': c_vol})
+        self.table_names.append(name)
+        self.selected_table = name
+
+        self.top.ctrl.add_scatter_layer(name, pen=c_scatter, brush=c_scatter, callback=self.on_planned_insertion_clicked)
+        if data is not None:
+            table.initialise_data(data)
+
+    def change_table(self):
+        for t in self.tables:
+            if t['table'].name == self.selected_table:
+                t['table'].tableview = self.tableview
+                t['table'].tableview.setModel(t['table'].ctrl.model)
+            else:
+                t['table'].tableview = t['view']
+                t['table'].tableview.setModel(t['table'].ctrl.model)
+
+    def get_selected_table(self):
+        for table in self.tables:
+            if table['table'].name == self.selected_table:
+                return table
+
     def initialise(self, second_pass_map=None):
         self.add_insertions()
         self.add_coverage()
         self.missing_coverage(second_pass_map=second_pass_map)
         self.coverage_increase()
-        self.layers.initialise_table()
 
     def missing_coverage(self, second_pass_map=None):
         # get the coverage volume layer from the coverage
@@ -135,7 +171,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ixyz_second = np.where(~np.isnan(self.second_pass.flatten()))[0]
         self.ixyz_second_missing = np.where(~np.isnan(self.second_pass_missing.flatten()))[0]
         self.add_volume_layer(self.second_pass_missing, name='missing', cmap='Reds', levels=(0, 1))
-
 
     def change_mapping(self):
         data = np.unique(self.atlas.regions.name[self.atlas._get_mapping(
@@ -180,20 +215,23 @@ class MainWindow(QtWidgets.QMainWindow):
             bc = None
 
         self.add_volume_layer(cov, 'coverage', bc=bc)
-        self.layers.update_table('coverage')
+        # self.layers.update_table('coverage')
         self._refresh()
 
     def add_extra_coverage(self, traj, ins=None):
         # This had an ins option, need to look into that ra
         # when double clicked
+        t = self.get_selected_table()
         self.top.ctrl.set_scatter_layer('active_insertion', x=[traj['x'] / 1e6],
                                         y=[traj['y'] / 1e6])
         self.do_this_thing(traj, ins=ins)
 
-        self.table.tableview.selectionModel().blockSignals(True)
-        self.table.tableview.clearSelection()
-        self.table.ctrl.model.layoutChanged.emit()
-        self.table.tableview.selectionModel().blockSignals(False)
+        if t is not None:
+            table = t['table']
+            table.tableview.selectionModel().blockSignals(True)
+            table.tableview.clearSelection()
+            table.ctrl.model.layoutChanged.emit()
+            table.tableview.selectionModel().blockSignals(False)
 
     def coverage_added(self):
         # when add button pressed
@@ -201,66 +239,85 @@ class MainWindow(QtWidgets.QMainWindow):
         traj = self.coverage.ctrl.model.get_traj()
         status = self.see_if_traj_is_legit(traj)
         if status == 0:
+            t = self.get_selected_table()
+            if t is None:
+                self.add_table('extra_insertions')
+
+            table = self.get_selected_table()['table']
             # Add the insertions twice
-            self.table.on_insert_row(traj)
+            table.on_insert_row(traj)
             # self.table.on_insert_row(df) #TODO instead multiply by factor of two
             self.get_coverage_from_table(traj, action='add')
 
-    def get_efficient_coverage_from_table(self, traj=None, action='add', prev_key=None):
+    def get_efficient_coverage_from_table(self, traj=None, action='add', prev_key=None, t=None):
+
+        table = t['table']
+
         status = 0
         if action == 'add':
             key = f'x_{traj["x"]},y_{traj["y"]},z_{traj["z"]},d_{traj["depth"]},t_{traj["theta"]},p_{traj["phi"]}'
             idx = self.probe_model.compute_coverage_dict([traj], dist_fcn=[self.dist, self.dist + 1])
-            self.cov_dict[key] = idx
-            self.cov_count[idx] += 1
+            t['cov_dict'][key] = idx
+            t['cov_count'][idx] += 1
 
         elif action == 'delete':
             key = f'x_{traj["x"]},y_{traj["y"]},z_{traj["z"]},d_{traj["depth"]},t_{traj["theta"]},p_{traj["phi"]}'
-            idx = self.cov_dict[key]
-            self.cov_count[idx] -= 1
+            idx = t['cov_dict'][key]
+            t['cov_count'][idx] -= 1
         elif action == 'change':
-            idx = self.cov_dict[prev_key]
-            self.cov_count[idx] -= 1
+            idx = t['cov_dict'][prev_key]
+            t['cov_count'][idx] -= 1
             key = f'x_{traj["x"]},y_{traj["y"]},z_{traj["z"]},d_{traj["depth"]},t_{traj["theta"]},p_{traj["phi"]}'
             idx = self.probe_model.compute_coverage_dict([traj], dist_fcn=[self.dist, self.dist + 1])
-            self.cov_dict[key] = idx
-            self.cov_count[idx] += 1
+            t['cov_dict'][key] = idx
+            t['cov_count'][idx] += 1
         else:
-            for traj in self.table.ctrl.model.to_dict():
+            for traj in table.ctrl.model.to_dict():
                 key = f'x_{traj["x"]},y_{traj["y"]},z_{traj["z"]},d_{traj["depth"]},t_{traj["theta"]},p_{traj["phi"]}'
                 idx = self.probe_model.compute_coverage_dict([traj], dist_fcn=[self.dist, self.dist + 1])
-                self.cov_dict[key] = idx
-                self.cov_count[idx] += 1
+                t['cov_dict'][key] = idx
+                t['cov_count'][idx] += 1
 
-        cov = self.cov_count.reshape(self.probe_model.ba.image.shape).astype(np.float32)
+        cov = t['cov_count'].reshape(self.probe_model.ba.image.shape).astype(np.float32)
         cov[self.probe_model.ba.label == 0] = np.nan
 
         return cov, status
 
-
     def get_coverage_from_table(self, traj, action=None, prev_key=None):
 
-        if self.table.ctrl.model.rowCount() > 0:
+        t = self.get_selected_table()
+        table = t['table']
 
-            cov, status = self.get_efficient_coverage_from_table(traj=traj, action=action, prev_key=prev_key)
+        if table.ctrl.model.rowCount() > 0:
+            cov, status = self.get_efficient_coverage_from_table(traj=traj, action=action, prev_key=prev_key, t=t)
             # cov, _ = self.probe_model.compute_coverage(self.table.ctrl.model.to_dict(),
             #                                            dist_fcn=[self.dist, self.dist + 1])
             if status == -1:
                 return
-            self.add_volume_layer(cov, name='planned_insertions', cmap='Purples', levels=(0, 1))
-            self.top.ctrl.set_scatter_layer('planned_insertions',
-                                            x=self.table.ctrl.model._data.x.values / 1e6,
-                                            y=self.table.ctrl.model._data.y.values / 1e6)
+            self.add_volume_layer(cov, name=table.name, cmap=t['color'], levels=(0, 1))
+            self.top.ctrl.set_scatter_layer(table.name,
+                                            x=table.ctrl.model._data.x.values / 1e6,
+                                            y=table.ctrl.model._data.y.values / 1e6)
 
         else:
-            self.remove_volume_layer('planned_insertions')
-            self.top.ctrl.set_scatter_layer('planned_insertions')
+            self.remove_volume_layer(table.name)
+            self.top.ctrl.remove_scatter_layer(table.name)
+            for i, t in enumerate(self.table_names):
+                if table.name == t:
+                    idx = i
+            self.tables.pop(idx)
+            self.table_names.pop(idx)
+            if len(self.table_names) > 0:
+                self.selected_table = self.table_names[0]
+            else:
+                self.selected_table = None
+            self.layers.remove_layer(table.name)
 
         self.remove_volume_layer('selected_insertion')
         self.top.ctrl.set_scatter_layer('active_insertion')
         self.top.ctrl.set_scatter_layer('selected_insertion')
         self._refresh()
-        self.layers.update_table('planned_insertions')
+        self.layers.update_table(table.name)
         self.coverage_increase()
 
 
@@ -318,8 +375,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_insertion_clicked(self, scatter, point):
         idx = np.where(self.probe_model.traj[self.provenance]['x']/1e6 ==
                           point[0].pos().x())[0]
-        if len(idx) > 1:
+        if len(idx) == 0:
+            return
+        elif len(idx) > 1:
             idx_2 = np.where(self.probe_model.traj[self.provenance]['y']/1e6 == point[0].pos().y())[0]
+            if len(idx_2) == 0:
+                return
             idx = idx[idx_2[0]]
         else:
             idx = idx[0]
@@ -357,31 +418,38 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh()
 
     def on_planned_insertion_clicked(self, scatter, point):
-        idx = np.where(self.table.ctrl.model._data.x.values/1e6 == point[0].pos().x())[0]
-        if len(idx) > 1:
-            idx_2 = np.where(self.table.ctrl.model._data.y.values[idx]/1e6 == point[0].pos().y())[0]
+
+        table = self.get_selected_table()['table']
+        idx = np.where(table.ctrl.model._data.x.values/1e6 == point[0].pos().x())[0]
+        if len(idx) == 0:
+            return
+        elif len(idx) > 1:
+            idx_2 = np.where(table.ctrl.model._data.y.values[idx]/1e6 == point[0].pos().y())[0]
+            if len(idx_2) == 0:
+                return
             idx = idx[idx_2[0]]
         else:
             idx = idx[0]
 
-        traj = self.table.ctrl.model._data.iloc[idx].to_dict()
+        traj = table.ctrl.model._data.iloc[idx].to_dict()
 
         self.do_this_thing(traj)
 
         # also highlight the table
-        self.table.tableview.selectionModel().blockSignals(True)
-        self.table.tableview.selectRow(idx)
-        self.table.ctrl.model.layoutChanged.emit()
-        self.table.tableview.selectionModel().blockSignals(False)
+        table.tableview.selectionModel().blockSignals(True)
+        table.tableview.selectRow(idx)
+        table.ctrl.model.layoutChanged.emit()
+        table.tableview.selectionModel().blockSignals(False)
 
     def on_active_insertion_clicked(self, scatter, point):
+        table = self.get_selected_table()['table']
         traj = self.coverage.ctrl.model.get_traj()
         self.do_this_thing(traj)
 
-        self.table.tableview.selectionModel().blockSignals(True)
-        self.table.tableview.clearSelection()
-        self.table.ctrl.model.layoutChanged.emit()
-        self.table.tableview.selectionModel().blockSignals(False)
+        table.tableview.selectionModel().blockSignals(True)
+        table.tableview.clearSelection()
+        table.ctrl.model.layoutChanged.emit()
+        table.tableview.selectionModel().blockSignals(False)
 
 
     def add_menu_bar(self, menu, group, items, callback=None, default=None):
@@ -413,41 +481,41 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def refresh_highlighted_region(self, region, mlapdv):
         if (region is None) or (region['acronym'][0] == 'void'):
-            self._reset_region('non_locked')
+            # self._reset_region('non_locked')
             self.region.update_labels(mlapdv[0], mlapdv[1], mlapdv[2], None)
         else:
-            self._refresh_non_locked_region(region['id'][0])
+            # self._refresh_non_locked_region(region['id'][0])
             self.region.update_labels(mlapdv[0], mlapdv[1], mlapdv[2], region)
 
-    def refresh_locked_region(self, region):
-        region_values = np.zeros_like(self.atlas.regions.id)
-        self._change_region_value('non_locked', region_values)
+    # def refresh_locked_region(self, region):
+    #     region_values = np.zeros_like(self.atlas.regions.id)
+    #     self._change_region_value('non_locked', region_values)
+    #
+    #     region_idx = np.where(self.atlas.regions.id == region)[0]
+    #     region_values[region_idx] = 100
+    #     self._change_region_value('locked', region_values)
+    #     self._refresh()
+    #     self.region.update_selected_region(region)
 
-        region_idx = np.where(self.atlas.regions.id == region)[0]
-        region_values[region_idx] = 100
-        self._change_region_value('locked', region_values)
-        self._refresh()
-        self.region.update_selected_region(region)
+    # def _reset_region(self, name):
+    #     region_values = np.zeros_like(self.atlas.regions.id)
+    #     self._change_region_value(name, region_values)
+    #     self._refresh()
 
-    def _reset_region(self, name):
-        region_values = np.zeros_like(self.atlas.regions.id)
-        self._change_region_value(name, region_values)
-        self._refresh()
+    # def _refresh_non_locked_region(self, region):
+    #     region_values = np.zeros_like(self.atlas.regions.id)
+    #     region_idx = np.where(self.atlas.regions.id == region)[0]
+    #     region_values[region_idx] = 100
+    #     self._change_region_value('non_locked', region_values)
+    #     self._refresh()
 
-    def _refresh_non_locked_region(self, region):
-        region_values = np.zeros_like(self.atlas.regions.id)
-        region_idx = np.where(self.atlas.regions.id == region)[0]
-        region_values[region_idx] = 100
-        self._change_region_value('non_locked', region_values)
-        self._refresh()
-
-    def _change_region_value(self, name, values):
-        image = self.coronal.ctrl.get_image_layer(name=name)
-        image.slice_kwargs['region_values'] = values
-        image = self.sagittal.ctrl.get_image_layer(name=name)
-        image.slice_kwargs['region_values'] = values
-        image = self.horizontal.ctrl.get_image_layer(name=name)
-        image.slice_kwargs['region_values'] = values
+    # def _change_region_value(self, name, values):
+    #     image = self.coronal.ctrl.get_image_layer(name=name)
+    #     image.slice_kwargs['region_values'] = values
+    #     image = self.sagittal.ctrl.get_image_layer(name=name)
+    #     image.slice_kwargs['region_values'] = values
+    #     image = self.horizontal.ctrl.get_image_layer(name=name)
+    #     image.slice_kwargs['region_values'] = values
 
     def refresh_slices(self, slice, orientation, value, move_top=True):
         if slice == 'coronal' and orientation == 'x':
@@ -544,9 +612,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def coverage_increase(self):
 
         layer = None
-        layer_planned = self.coronal.ctrl.get_image_layer('planned_insertions')
-        if layer_planned is not None:
-            layer = (copy.deepcopy(layer_planned.slice_kwargs['region_values']) * 2) # TODO check
+        for t in self.table_names:
+            layer_planned = self.coronal.ctrl.get_image_layer(t)
+            if layer is not None:
+                layer += (copy.deepcopy(layer_planned.slice_kwargs['region_values']) * 2) # TODO check
+            else:
+                layer = (copy.deepcopy(layer_planned.slice_kwargs['region_values']) * 2)
 
         layer_active = self.coronal.ctrl.get_image_layer('selected_insertion')
         if layer_active is not None:
@@ -605,21 +676,25 @@ class LayersView(QtWidgets.QWidget):
                 self.layer_list.addItem(item)
 
     def layer_clicked(self, item):
+
+        if item.text() in self.qmain.table_names:
+            if self.qmain.selected_table != item.text():
+                self.qmain.selected_table = item.text()
+                self.qmain.change_table()
+
         if item.checkState() == QtCore.Qt.Checked:
             self.qmain.toggle_volume_layer(item.text(), True)
             self.qmain.top.ctrl.toggle_scatter_layer(item.text(), True)
         else:
             self.qmain.toggle_volume_layer(item.text(), False)
             self.qmain.top.ctrl.toggle_scatter_layer(item.text(), False)
-    # need to add layers
-    # if they are not ticked then you keep them unticked
+
 
     def update_table(self, name):
         # Check if it already on the list
         for x in range(self.layer_list.count()):
             _item = self.layer_list.item(x)
             if _item.text() == name:
-
                 if _item.checkState() != QtCore.Qt.Checked:
                     _item.setCheckState(QtCore.Qt.Checked)
                     self.qmain.top.ctrl.toggle_scatter_layer(_item.text(), True)
@@ -631,6 +706,13 @@ class LayersView(QtWidgets.QWidget):
         item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
         item.setCheckState(QtCore.Qt.Checked)
         self.layer_list.addItem(item)
+
+    def remove_layer(self, name):
+        for x in range(self.layer_list.count()):
+            _item = self.layer_list.item(x)
+            if _item.text() == name:
+                self.layer_list.removeItemWidget(_item)
+
 
 
 class RegionView(QtWidgets.QWidget):
@@ -647,7 +729,7 @@ class RegionView(QtWidgets.QWidget):
         self.region_comboBox.setCompleter(region_completer)
         self.region_comboBox.setModel(self.region_list)
         self.region_comboBox.completer().setModel(self.region_list)
-        self.region_comboBox.activated.connect(self.on_region_selected)
+        # self.region_comboBox.activated.connect(self.on_region_selected)
 
     def populate_combobox(self, data):
         self.region_list.clear()
@@ -827,13 +909,13 @@ class CoverageModel:
 
 
 class InsertionTableView(QtWidgets.QWidget):
-    def __init__(self, qmain: MainWindow):
+    def __init__(self, qmain: MainWindow, name: str, view: QtWidgets.QTableView):
         super(InsertionTableView, self).__init__()
+        self.name = name
         self.qmain = qmain
-
         self.ctrl = InsertionTableController(self, None)
 
-        self.tableview = self.qmain.tableview
+        self.tableview = view
         self.tableview.setModel(self.ctrl.model)
 
         # self.delete_button = QtWidgets.QPushButton('-')
@@ -998,10 +1080,10 @@ class TopView:
         # selected insertion
         self.ctrl.add_scatter_layer('coverage', pen='y', brush='y',
                                     callback=self.qmain.on_insertion_clicked)
-
-        # planned
-        self.ctrl.add_scatter_layer('planned_insertions', pen='m', brush='m',
-                                    callback=self.qmain.on_planned_insertion_clicked)
+        #
+        # # planned
+        # self.ctrl.add_scatter_layer('planned_insertions', pen='m', brush='m',
+        #                             callback=self.qmain.on_planned_insertion_clicked)
 
         # coverage
         self.ctrl.add_scatter_layer('active_insertion', pen='r', brush='r',
@@ -1044,13 +1126,13 @@ class SliceView:
 
         self.ctrl.add_image_layer(slice_kwargs={'volume': 'image', 'mode': 'clip'},
                                   pg_kwargs={'opacity': 0.8})
-        self.ctrl.add_mask_layer(name='locked', cmap='Blues')
-        self.ctrl.add_mask_layer(name='non_locked', cmap='Greens')
+        # self.ctrl.add_mask_layer(name='locked', cmap='Blues')
+        # self.ctrl.add_mask_layer(name='non_locked', cmap='Greens')
 
         # connect signals and slots
         s = self.fig_slice.scene()
         self.proxy = pg.SignalProxy(s.sigMouseMoved, rateLimit=60, slot=self.mouseMoveEvent)
-        s.sigMouseClicked.connect(self.mouseClick)
+        #s.sigMouseClicked.connect(self.mouseClick)
 
         line_kwargs = {'movable': True, 'pen': pg.mkPen((0, 125, 0), width=1)}
         self.line_x = pg.InfiniteLine(angle=90, pos=0, **line_kwargs)
@@ -1064,14 +1146,14 @@ class SliceView:
         value = line.value()
         self.qmain.refresh_slices(self.slice, orientation, value)
 
-    def mouseClick(self, event):
-        if event.double():
-            self.qmain._reset_region('locked')
-        else:
-            qpoint = self.ctrl.image_layers[0].image_item.mapFromScene(event.scenePos())
-            iw, ih, w, h, v, region, _ = self.ctrl.cursor2xyamp(qpoint)
-            if region and region['acronym'][0] != 'void':
-                self.qmain.refresh_locked_region(region['id'][0])
+    # def mouseClick(self, event):
+    #     if event.double():
+    #         self.qmain._reset_region('locked')
+    #     else:
+    #         qpoint = self.ctrl.image_layers[0].image_item.mapFromScene(event.scenePos())
+    #         iw, ih, w, h, v, region, _ = self.ctrl.cursor2xyamp(qpoint)
+    #         if region and region['acronym'][0] != 'void':
+    #             self.qmain.refresh_locked_region(region['id'][0])
 
     def mouseMoveEvent(self, scenepos):
         if isinstance(scenepos, tuple):
@@ -1266,7 +1348,7 @@ class TopController(BaseController):
     def remove_scatter_layer(self, name):
         sc_idx = np.where([sc.name == name for sc in self.scatter_layers])[0]
         if len(sc_idx) != 0:
-            sc = self.image_layers.pop(sc_idx[0])
+            sc = self.scatter_layers.pop(sc_idx[0])
             self.fig.removeItem(sc.scatter_item)
 
     def toggle_scatter_layer(self, name, checked=True):
@@ -1276,7 +1358,6 @@ class TopController(BaseController):
                 self.fig.addItem(layer.scatter_item)
             else:
                 self.fig.removeItem(layer.scatter_item)
-
 
 
 class SliceController(BaseController):
