@@ -142,6 +142,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if data is not None:
             table.initialise_data(data)
 
+    def save_table(self, name, save_path):
+        for t in self.tables:
+            if t['table'].name == name:
+                table = t['table']
+
+        table.ctrl.model._data.to_csv(save_path)
+
     def change_table(self):
         for t in self.tables:
             if t['table'].name == self.selected_table:
@@ -676,7 +683,6 @@ class LayersView(QtWidgets.QWidget):
                 self.layer_list.addItem(item)
 
     def layer_clicked(self, item):
-
         if item.text() in self.qmain.table_names:
             if self.qmain.selected_table != item.text():
                 self.qmain.selected_table = item.text()
@@ -1280,7 +1286,8 @@ class BaseController:
     def toggle_image_layer(self, name, checked=True):
         layer = self.get_image_layer(name=name)
         if checked:
-            self.fig.addItem(layer.image_item)
+            if layer.image_item not in self.fig.items():
+                self.fig.addItem(layer.image_item)
         else:
             self.fig.removeItem(layer.image_item)
 
@@ -1355,7 +1362,8 @@ class TopController(BaseController):
         layer = self.get_scatter_layer(name=name)
         if layer:
             if checked:
-                self.fig.addItem(layer.scatter_item)
+                if layer.scatter_item not in self.fig.items():
+                    self.fig.addItem(layer.scatter_item)
             else:
                 self.fig.removeItem(layer.scatter_item)
 
