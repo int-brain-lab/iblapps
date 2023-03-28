@@ -154,6 +154,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if t['table'].name == self.selected_table:
                 t['table'].tableview = self.tableview
                 t['table'].tableview.setModel(t['table'].ctrl.model)
+                t['table'].tableview.selectionModel().selectionChanged.connect(t['table'].row_selected)
             else:
                 t['table'].tableview = t['view']
                 t['table'].tableview.setModel(t['table'].ctrl.model)
@@ -941,10 +942,13 @@ class InsertionTableView(QtWidgets.QWidget):
         self.ctrl.model.insertRows(self.ctrl.model.rowCount(), 1, QModelIndex(), df)
 
     def row_selected(self):
+        print('here')
         if len(self.tableview.selectedIndexes()) == self.ctrl.model.columnCount():
+            print('here two')
             row = self.tableview.selectedIndexes()[0].row()
             traj = self.ctrl.model._data.iloc[row].to_dict()
             self.qmain.do_this_thing(traj)
+            print('finish')
 
     def initialise_data(self, data):
         self.ctrl.model._data = pd.concat([self.ctrl.model._data, data])
