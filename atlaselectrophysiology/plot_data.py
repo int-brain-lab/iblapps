@@ -408,6 +408,10 @@ class PlotData:
             else:
                 h = neuropixel.trace_header(sr.major_version, nshank=np.unique(th['shank']).size)
 
+            idx = np.isin(h['ind'], th['ind'])
+            for k in h.keys():
+                h[k] = h[k][idx]
+
             s0 = t * sr.fs
             tsel = slice(int(s0), int(s0) + int(1 * sr.fs))
             raw = sr[tsel, :-sr.nsync].T

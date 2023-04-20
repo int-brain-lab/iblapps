@@ -11,8 +11,6 @@ def download_histology_data(subject, lab):
 
     if lab == 'hoferlab':
         lab_temp = 'mrsicflogellab'
-    elif lab == 'churchlandlab_ucla':
-        lab_temp = 'churchlandlab'
     else:
         lab_temp = lab
 
@@ -34,9 +32,23 @@ def download_histology_data(subject, lab):
             r = requests.get(baseurl, auth=(par.HTTP_DATA_SERVER_LOGIN, par.HTTP_DATA_SERVER_PWD))
             r.raise_for_status()
         except Exception as err:
-            print(err)
-            path_to_nrrd = None
-            return path_to_nrrd
+            if lab_temp == 'churchlandlab_ucla':
+                try:
+                    lab_temp = 'churchlandlab'
+                    FLAT_IRON_HIST_REL_PATH = Path('histology', lab_temp, subject,
+                                                   'downsampledStacks_25', 'sample2ARA')
+                    baseurl = (par.HTTP_DATA_SERVER + '/' + '/'.join(FLAT_IRON_HIST_REL_PATH.parts))
+                    r = requests.get(baseurl, auth=(par.HTTP_DATA_SERVER_LOGIN, par.HTTP_DATA_SERVER_PWD))
+                    r.raise_for_status()
+                except Exception as err:
+                    print(err)
+                    path_to_nrrd = None
+                    return path_to_nrrd
+            else:
+                print(err)
+                path_to_nrrd = None
+                return path_to_nrrd
+
 
     tif_files = []
     for line in r.text.splitlines():
