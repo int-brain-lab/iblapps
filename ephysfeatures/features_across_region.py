@@ -1,17 +1,21 @@
+import copy
+from pathlib import Path
+import sys
+
 import pyqtgraph as pg
 from PyQt5 import QtCore, QtGui, QtWidgets
-import sys
 import pandas as pd
 import numpy as np
+
 from ibllib.atlas import AllenAtlas
 import atlaselectrophysiology.ColorBar as cb
 from ibllib.pipes.ephys_alignment import EphysAlignment
 from atlaselectrophysiology.AdaptedAxisItem import replace_axis
 from ephysfeatures.qrangeslider import QRangeSlider
-import copy
 from one.remote import aws
 from one.api import ONE
 from pathlib import Path
+
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -77,16 +81,36 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         self.data = pd.merge(data, depths, left_on=['pid', 'axial_um'], right_on=['pid', 'depths'], how='outer')
         self.data.loc[self.data['histology'] == 'alf', 'histology'] = 'resolved'
 
-        del data, depths, channels, probes, features, df_voltage
-
         # Initialise region combobox
         if region_ids is not None:
             self.region_ids = region_ids
         else:
-            self.region_ids = self.data.atlas_id.unique()
-        acronyms = br.id2acronym(self.region_ids)
+            # self.region_ids = self.data.atlas_id.unique()
 
-        for id, acro in enumerate(acronyms):
+            # Get the unique region IDs appearing in the data as int64
+            ids = np.sort(data.atlas_id.dropna().astype(np.int64).unique())
+            # Find the region indices within the BrainAtlas, to keep the atlas order.
+            indata = np.isin(br.id, ids)
+            self.region_ids = br.id[indata]
+
+        del data, depths, channels, probes, features, df_voltage
+
+        acronyms = br.id2acronym(self.region_ids)
+        level = br.level[indata]
+
+        # Show hierarchy
+        acro_h = [((' ' * level) + acro) for (level, acro) in zip(level, acronyms)]
+
+        # NOTE: this does not work well as is because of the hierarchy spaces at the beginning
+        # of the strings. You can't type "FRP" but need to type "      FRP" which is impractical!
+
+        # # Completion.
+        # completer = QtWidgets.QCompleter(acro_h, self)
+        # completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        # completer.setCompletionMode(QtWidgets.QCompleter.PopupCompletion)
+        # self.region_combobox.setCompleter(completer)
+
+        for id, acro in enumerate(acro_h):
             item = QtGui.QStandardItem(id)
             item.setText(acro)
             item.setEditable(False)
@@ -126,6 +150,13 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         options_widget.setLayout(options_layout)
 
         region_combobox = QtWidgets.QComboBox()
+
+        # NOTE: uncomment if users may want to type the acronym with autocompletion
+        # but that does not work well at the moment because of the spaces prefix (to show
+        # hierarchical information).
+        # region_combobox.setEditable(True)
+
+        self.region_combobox = region_combobox
         self.region_list = QtGui.QStandardItemModel()
         region_combobox.setModel(self.region_list)
         region_combobox.activated.connect(self.on_region_chosen)
