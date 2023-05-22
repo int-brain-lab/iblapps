@@ -57,8 +57,8 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
             base_path = Path("aggregates/atlas")  # TODO THIS FOLDER DOES NOT CONTAIN PROBES
             file_list = ['channels.pqt', 'probes.pqt', 'raw_ephys_features.pqt']
             for file_name in file_list:
-                aws.s3_download_folder(base_path.joinpath(file_name), table_path.joinpath(file_name),
-                                       s3=s3, bucket_name=bucket_name)
+                aws.s3_download_file(base_path.joinpath(file_name), table_path.joinpath(file_name),
+                                     s3=s3, bucket_name=bucket_name)
 
         channels = pd.read_parquet(table_path.joinpath('channels.pqt'))
         probes = pd.read_parquet(table_path.joinpath('probes.pqt'))
