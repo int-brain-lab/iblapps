@@ -54,7 +54,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         if download:
             s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
             # Download file
-            base_path = Path("aggregates/atlas")
+            base_path = Path("aggregates/atlas")  # TODO THIS FOLDER DOES NOT CONTAIN PROBES
             file_list = ['channels.pqt', 'probes.pqt', 'raw_ephys_features.pqt']
             for file_name in file_list:
                 aws.s3_download_folder(base_path.joinpath(file_name), table_path.joinpath(file_name),
