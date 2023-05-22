@@ -54,7 +54,7 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         self.ba = ba or AllenAtlas()
         br = self.ba.regions
 
-        table_path = self.one.cache_dir.joinpath('bwm_features')
+        table_path = self.one.cache_dir.joinpath('bwm_features')  #TODO NOTE THIS FOLDER DOES NOT EXIST ON S3
         if download:
             s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
             # Download file
