@@ -11,6 +11,7 @@ from ephysfeatures.qrangeslider import QRangeSlider
 import copy
 from one.remote import aws
 from one.api import ONE
+from pathlib import Path
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -52,7 +53,12 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         table_path = self.one.cache_dir.joinpath('bwm_features')
         if download:
             s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
-            aws.s3_download_folder("aggregates/bwm/latest", table_path, s3=s3, bucket_name=bucket_name)
+            # Download file
+            base_path = Path("aggregates/atlas")
+            file_list = ['channels.pqt', 'probes.pqt', 'raw_ephys_features.pqt']
+            for file_name in file_list:
+                aws.s3_download_folder(base_path.joinpath(file_name), table_path.joinpath(file_name),
+                                       s3=s3, bucket_name=bucket_name)
 
         channels = pd.read_parquet(table_path.joinpath('channels.pqt'))
         probes = pd.read_parquet(table_path.joinpath('probes.pqt'))
