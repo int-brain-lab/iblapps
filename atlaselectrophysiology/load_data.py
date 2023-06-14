@@ -582,7 +582,7 @@ class LoadData:
         if ephys_qc.upper() == 'CRITICAL':
             usrpmt.main_gui(eid=self.probe_id, reasons_selected=ephys_desc, one=self.one)
 
-    def update_qc(self, upload_alyx=True, upload_flatiron=True):
+    def update_qc(self, upload_alyx=True, upload_flatiron=False):
         # if resolved just update the alignment_number
         align_qc = AlignmentQC(self.probe_id, one=self.one, brain_atlas=self.brain_atlas,
                                collection=self.probe_collection)
