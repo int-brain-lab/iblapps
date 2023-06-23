@@ -1057,7 +1057,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             {'img': image data for each channel bank, list of np.array((1,ny)), list
              'scale': scaling to apply to each image, list of np.array([xscale,yscale]), list
              'offset': offset to apply to each image, list of np.array([xoffset,yoffset]), list
-             'level': colourbar extremes np.array([min val, max val]), float
+             'levels': colourbar extremes np.array([min val, max val]), float
              'cmap': colourmap to use, string
              'xrange': range to display of x axis, np.array([min range, max range]), float
              'title': description to place on colorbar, string
@@ -1111,7 +1111,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         param data: dictionary of data to plot
             {'img': image data, np.array((nx,ny)), float
              'scale': scaling to apply to each axis, np.array([xscale,yscale]), float
-             'level': colourbar extremes np.array([min val, max val]), float
+             'levels': colourbar extremes np.array([min val, max val]), float
+             'offset': offset to apply to each image, np.array([xoffset,yoffset]), float
              'cmap': colourmap to use, string
              'xrange': range to display of x axis, np.array([min range, max range]), float
              'xaxis': label for xaxis, string
