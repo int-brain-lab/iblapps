@@ -355,6 +355,7 @@ class ProbeModel:
         per0 = []
 
         for p, traj in enumerate(trajs):
+            print(f'Trajectory: {traj["id"]}, provenance: {traj["provenance"]}, PID: {traj["probe_insertion"]}')
             if len(trajs) > 20 and self.verbose is True:
                 if p % 20 == 0:
                     print(p / len(trajs))
