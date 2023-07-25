@@ -261,7 +261,7 @@ class ControllerTopView(PgImageController):
     """
     TopView ControllerTopView
     """
-    def __init__(self, qmain: TopView, res: int = 25, volume='image', brainmap='Allen'):
+    def __init__(self, qmain: TopView, res: int = 25, volume='image'):
         super(ControllerTopView, self).__init__(qmain)
         self.volume = volume
         self.atlas = AllenAtlas(res)
@@ -363,9 +363,20 @@ class ImageLayer:
 
 
 def view(res=25, title=None, brainmap='Allen'):
-    """
-    """
+    """ application entry point """
     qt.create_app()
     av = TopView._get_or_create(title=title, res=res, brainmap=brainmap)
     av.show()
     return av
+
+
+def main():
+    """ application entry point """
+    app = QtWidgets.QApplication([])
+    w = TopView()
+    w.show()
+    app.exec_()
+
+
+if __name__ == "__main__":
+    main()
