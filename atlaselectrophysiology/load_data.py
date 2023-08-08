@@ -127,6 +127,14 @@ class LoadData:
             if hist_traj[0]['x'] is not None:
                 histology_exists = True
                 self.traj_id = hist_traj[0]['id']
+        else:
+            # See if there is a histology track associated with the chronic insertion
+            chronic = self.sess[idx]['chronic_insertion']
+            if chronic is not None:
+                hist_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=chronic,
+                                               provenance='Histology track')
+                histology_exists = True
+                self.traj_id = hist_traj[0]['id']
 
         return self.get_previous_alignments(), histology_exists
 
