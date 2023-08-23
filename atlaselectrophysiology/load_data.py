@@ -131,7 +131,7 @@ class LoadData:
             # See if there is a histology track associated with the chronic insertion
             chronic = self.sess[idx]['chronic_insertion']
             if chronic is not None:
-                hist_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=chronic,
+                hist_traj = self.one.alyx.rest('trajectories', 'list', chronic_insertion=chronic,
                                                provenance='Histology track')
                 histology_exists = True
                 self.traj_id = hist_traj[0]['id']
