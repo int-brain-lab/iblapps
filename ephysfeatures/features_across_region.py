@@ -32,9 +32,7 @@ PLOT_TYPES = {'psd_delta': {'plot_type': 'probe', 'cmap': 'viridis'},
               'psd_gamma': {'plot_type': 'probe', 'cmap': 'viridis'},
               'rms_ap': {'plot_type': 'probe', 'cmap': 'plasma'},
               'rms_lf': {'plot_type': 'probe', 'cmap': 'inferno'},
-              'spike_rate': {'plot_type': 'probe', 'cmap': 'hot'},
-              'amps': {'plot_type': 'line', 'xlabel': 'Amplitude'},
-              'spike_rate_line': {'plot_type': 'line', 'xlabel': 'Firing Rate'}
+              'spike_count': {'plot_type': 'probe', 'cmap': 'hot'},
               }
 
 
@@ -54,11 +52,11 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         self.ba = ba or AllenAtlas()
         br = self.ba.regions
 
-        table_path = self.one.cache_dir.joinpath('bwm_features')  #TODO NOTE THIS FOLDER DOES NOT EXIST ON S3
+        table_path = self.one.cache_dir.joinpath('bwm_features')
         if download:
             s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
             # Download file
-            base_path = Path("aggregates/atlas")  # TODO THIS FOLDER DOES NOT CONTAIN PROBES
+            base_path = Path("aggregates/atlas/latest")  # TODO THIS FOLDER DOES NOT CONTAIN PROBES
             file_list = ['channels.pqt', 'probes.pqt', 'raw_ephys_features.pqt']
             for file_name in file_list:
                 aws.s3_download_file(base_path.joinpath(file_name), table_path.joinpath(file_name),
@@ -67,23 +65,20 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
         channels = pd.read_parquet(table_path.joinpath('channels.pqt'))
         probes = pd.read_parquet(table_path.joinpath('probes.pqt'))
         features = pd.read_parquet(table_path.joinpath('raw_ephys_features.pqt'))
+        channels = channels.drop(columns='histology')
 
         df_voltage = pd.merge(features, channels, left_index=True, right_index=True)
         df_voltage = df_voltage.reset_index()
         data = pd.merge(df_voltage, probes, left_on='pid', right_index=True)
         data['rms_ap'] *= 1e6
         data['rms_lf'] *= 1e6
-
-        depths = pd.read_parquet(table_path.joinpath('depths.pqt'))
-        depths = depths.reset_index()
-        depths = depths.rename(columns={'spike_rate': 'spike_rate_line'})
-
-        self.data = pd.merge(data, depths, left_on=['pid', 'axial_um'], right_on=['pid', 'depths'], how='outer')
+        self.data = data
         self.data.loc[self.data['histology'] == 'alf', 'histology'] = 'resolved'
 
         # Initialise region combobox
         if region_ids is not None:
             self.region_ids = region_ids
+            acro_h = br.id2acronym(self.region_ids)
         else:
             # self.region_ids = self.data.atlas_id.unique()
 
@@ -93,13 +88,14 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
             indata = np.isin(br.id, ids)
             self.region_ids = br.id[indata]
 
-        del data, depths, channels, probes, features, df_voltage
+            acronyms = br.id2acronym(self.region_ids)
+            level = br.level[indata]
 
-        acronyms = br.id2acronym(self.region_ids)
-        level = br.level[indata]
+            # Show hierarchy
+            acro_h = [((' ' * level) + acro) for (level, acro) in zip(level, acronyms)]
 
-        # Show hierarchy
-        acro_h = [((' ' * level) + acro) for (level, acro) in zip(level, acronyms)]
+        # del data, depths, channels, probes, features, df_voltage
+        del data, channels, probes, features, df_voltage
 
         # NOTE: this does not work well as is because of the hierarchy spaces at the beginning
         # of the strings. You can't type "FRP" but need to type "      FRP" which is impractical!
@@ -643,6 +639,9 @@ class RegionFeatureWindow(QtWidgets.QMainWindow):
                     }
 
             d = df.iloc[0]
+            if d.eid is None:
+                d.eid, name = self.one.pid2eid(d.pid)
+
             info = {'pid': pid,
                     'eid': d.eid,
                     'session': '/'.join(self.one.eid2path(d.eid).parts[-3:]),
