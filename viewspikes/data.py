@@ -1,7 +1,7 @@
 from pathlib import Path
 import shutil
 
-from ibllib.io import spikeglx
+from brainbox.io import spikeglx
 from one.webclient import dataset_record_to_url
 
 import numpy as np
