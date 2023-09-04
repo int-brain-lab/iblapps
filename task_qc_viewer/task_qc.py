@@ -76,8 +76,7 @@ class QcFrame(TaskQC):
         else:
             assert session.extractor and session.metrics, 'Please run QC before passing to QcFrame'
             super().__init__(session.eid or session.session_path, one=session.one, log=session.log)
-            for attr in ('criteria', 'criteria', '_outcome',
-                         'extractor', 'metrics', 'passed', 'fcns_value2status'):
+            for attr in ('criteria', 'criteria', '_outcome', 'extractor', 'metrics', 'passed'):
                 setattr(self, attr, getattr(session, attr))
         self.n_trials = self.extractor.data['intervals'].shape[0]
         self.wheel_data = {'re_pos': self.extractor.data.pop('wheel_position'),
