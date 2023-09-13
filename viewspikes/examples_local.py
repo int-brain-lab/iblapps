@@ -89,7 +89,7 @@ dtypes = ['spikes.amps', 'spikes.clusters', 'spikes.times',
  'clusters.channels',
  'clusters.mlapdv']
 
-from ibllib.atlas import atlas
+from iblatlas.atlas import atlas
 from ibllib.pipes import histology
 from ibllib.ephys import neuropixel
 

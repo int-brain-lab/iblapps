@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
 from neuropixel import trace_header
-import ibllib.atlas as atlas
+import iblatlas.atlas as atlas
 from ibllib.qc.alignment_qc import AlignmentQC
 from one.api import ONE
 from one.remote import aws

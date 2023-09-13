@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 from datetime import datetime
-import ibllib.atlas as atlas
+import iblatlas.atlas as atlas
 from pathlib import Path
 import one.alf.io as alfio
 from one import alf
