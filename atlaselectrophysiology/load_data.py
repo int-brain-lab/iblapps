@@ -263,6 +263,15 @@ class LoadData:
 
             data['clusters'] = self.one.load_object(self.eid, 'clusters', collection=self.probe_collection,
                                                     attribute=['metrics', 'peakToTrough', 'waveforms', 'channels'])
+            
+            # filter out low spike units
+            min_firing_rate = 50. / 3600.
+            include_cond = data['clusters'].metrics["firing_rate"] > min_firing_rate
+            data['clusters'].metrics = data['clusters'].metrics[include_cond]
+            include_idx = include_cond.to_numpy()
+            for k, v in data['clusters'].items():
+                data['clusters'][k] = v[include_idx]
+            
             data['clusters']['exists'] = True
 
             data['channels'] = self.one.load_object(self.eid, 'channels', collection=self.probe_collection,
