@@ -458,7 +458,7 @@ class SpikeSortFigures:
     Class for keeping track of image layers.
     :param image_item
     :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None, 'opacity': 1.0}
-    :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+    :param slice_kwargs: iblatlas.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
     :param
     """
     name: str = field(default='base')
@@ -473,7 +473,7 @@ class SpikeSortRawData:
     Class for keeping track of image layers.
     :param image_item
     :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None, 'opacity': 1.0}
-    :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+    :param slice_kwargs: iblatlas.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
     :param
     """
     name: str = field(default='base')
@@ -488,7 +488,7 @@ class SpikeSortPlotData:
     Class for keeping track of image layers.
     :param image_item
     :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None, 'opacity': 1.0}
-    :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+    :param slice_kwargs: iblatlas.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
     :param
     """
     name: str = field(default='base')
