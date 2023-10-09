@@ -3,8 +3,10 @@ import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
 from neuropixel import trace_header
-import ibllib.atlas as atlas
+import iblatlas.atlas as atlas
 from ibllib.qc.alignment_qc import AlignmentQC
+from iblutil.numerical import ismember
+from iblutil.util import Bunch
 from one.api import ONE
 from one.remote import aws
 from pathlib import Path
@@ -259,15 +261,28 @@ class LoadData:
         try:
             data['spikes'] = self.one.load_object(self.eid, 'spikes', collection=self.probe_collection,
                                                   attribute=['depths', 'amps', 'times', 'clusters'])
-            data['spikes']['exists'] = True
 
             data['clusters'] = self.one.load_object(self.eid, 'clusters', collection=self.probe_collection,
                                                     attribute=['metrics', 'peakToTrough', 'waveforms', 'channels'])
+
+            # Remove low firing rate clusters
+            min_firing_rate = 50. / 3600.
+            clu_idx = data['clusters'].metrics.firing_rate > min_firing_rate
+            data['clusters'] = Bunch({k: v[clu_idx] for k, v in data['clusters'].items()})
+            spike_idx, ib = ismember(data['spikes'].clusters, data['clusters'].metrics.index)
+            data['clusters'].metrics.reset_index(drop=True, inplace=True)
+            data['spikes'] = Bunch({k: v[spike_idx] for k, v in data['spikes'].items()})
+            data['spikes'].clusters = data['clusters'].metrics.index[ib].astype(np.int32)
+
+            data['spikes']['exists'] = True
             data['clusters']['exists'] = True
 
             data['channels'] = self.one.load_object(self.eid, 'channels', collection=self.probe_collection,
                                                     attribute=['rawInd', 'localCoordinates'])
             data['channels']['exists'] = True
+
+            # Set low firing rate clusters to bad
+
 
         except alf.exceptions.ALFObjectNotFound:
             logger.error(f'Could not load spike sorting for probe insertion {self.probe_id}, GUI'

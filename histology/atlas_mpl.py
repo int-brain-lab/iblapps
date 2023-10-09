@@ -5,7 +5,7 @@ from PyQt5 import QtCore, QtWidgets, uic
 
 from iblapps import qt
 from iblapps.qt_matplotlib import BaseMplCanvas
-import ibllib.atlas as atlas
+import iblatlas.atlas as atlas
 
 # Make sure that we are using QT5
 matplotlib.use('Qt5Agg')

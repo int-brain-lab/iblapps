@@ -1,6 +1,6 @@
 from matplotlib import cm
 import numpy as np
-from brainbox.processing import bincount2D
+from iblutil.numerical import bincount2D
 from brainbox.io.spikeglx import Streamer
 from brainbox.population.decode import xcorr
 from brainbox.task import passive
@@ -596,7 +596,7 @@ class PlotData:
         autocorr = xcorr(self.data['spikes']['times'][idx], self.data['spikes']['clusters'][idx],
                          AUTOCORR_BIN_SIZE, AUTOCORR_WIN_SIZE)
 
-        return autocorr[0, 0, :], self.clust_id[clust_idx]
+        return autocorr[0, 0, :], self.data['clusters'].metrics.cluster_id[self.clust_id[clust_idx]]
 
     def get_template_wf(self, clust_idx):
         template_wf = (self.data['clusters']['waveforms'][self.clust_id[clust_idx], :, 0])

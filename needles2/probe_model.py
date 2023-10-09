@@ -1,5 +1,6 @@
 import time
 import copy
+import re
 import numpy as np
 import pandas as pd
 from scipy.signal import fftconvolve
@@ -7,7 +8,8 @@ from one.api import ONE
 from iblutil.numerical import ismember
 
 from ibllib.pipes import histology
-from ibllib.atlas import AllenAtlas, atlas
+from iblatlas.atlas import AllenAtlas
+from iblatlas import atlas
 from neuropixel import TIP_SIZE_UM, trace_header
 from ibllib.pipes.ephys_alignment import EphysAlignment
 from neurodsp.utils import fcn_cosine
@@ -317,7 +319,8 @@ class ProbeModel:
         """
 
         ba = self.ba
-        ACTIVE_LENGTH_UM = 3.84 * 1e3  # This is the length of the NP1 probe with electrodes
+        ACTIVE_LENGTH_UM_1shank = 3.84 * 1e3  # This is the length of the NP1 probe with electrodes
+        ACTIVE_LENGTH_UM_4shank = 705  # This is the length of the NP2 4 shank probe with electrodes
         MAX_DIST_UM = dist_fcn[1]  # max distance around the probe to be searched for
 
         # Covered_length_um are two values which indicate on the path from tip to entry of a given insertion
@@ -325,8 +328,11 @@ class ProbeModel:
         # Note that the second value is negative, because the covered regions extends beyond the tip of the probe
         # We multiply by sqrt(2) to translate the radius given by dist_fcn[1] into the side length of a square
         # that is contained in the circle with radius dist_fcn[1]
-        covered_length_um = TIP_SIZE_UM + np.array([ACTIVE_LENGTH_UM + MAX_DIST_UM * np.sqrt(2),
-                                                    -MAX_DIST_UM * np.sqrt(2)])
+        covered_length_um_1shank = TIP_SIZE_UM + np.array([ACTIVE_LENGTH_UM_1shank + MAX_DIST_UM * np.sqrt(2),
+                                                           -MAX_DIST_UM * np.sqrt(2)])
+        covered_length_um_4shank = TIP_SIZE_UM + np.array([ACTIVE_LENGTH_UM_4shank + MAX_DIST_UM * np.sqrt(2),
+                                                           -MAX_DIST_UM * np.sqrt(2)])
+
 
         # Horizontal slice of voxels to be considered around each trajectory is only dependent on MAX_DIST_UM
         # and the voxel resolution, so can be defined here. We translate max dist in voxels and add 1 for safety
@@ -361,6 +367,19 @@ class ProbeModel:
             if len(trajs) > 20 and self.verbose is True:
                 if p % 20 == 0:
                     print(p / len(trajs))
+
+            # Here we find out if this is trajectory is from a 1shank or 4shank probe
+            # In an ideal world we would read in the metadata and find this out, but that would require
+            # downloading this dataset for all trajectories. Instead we go based on naming convention. We know
+            # probes with the label probe00a, probe00b etc. are 4 shank probes that have been split.
+            pname = traj['probe_name']
+            if len(re.findall("[a-d]", pname[-1])) == 1:
+                covered_length_um = covered_length_um_4shank
+                ACTIVE_LENGTH_UM = ACTIVE_LENGTH_UM_4shank
+            else:
+                covered_length_um = covered_length_um_1shank
+                ACTIVE_LENGTH_UM = ACTIVE_LENGTH_UM_1shank
+
             # Get one trajectory from the list and create an insertion in the brain atlas
             # x and y coordinates of entry are translated to the atlas voxel space
             # z is locked to surface of the brain at these x,y coordinates (disregarding actual z value of trajectory)
@@ -513,7 +532,8 @@ class ProbeModel:
         """
 
         ba = self.ba
-        ACTIVE_LENGTH_UM = 3.84 * 1e3  # This is the length of the NP1 probe with electrodes
+        ACTIVE_LENGTH_UM_1shank = 3.84 * 1e3  # This is the length of the NP1 probe with electrodes
+        ACTIVE_LENGTH_UM_4shank = 705  # This is the length of the NP2 4 shank probe with electrodes
         MAX_DIST_UM = dist_fcn[1]  # max distance around the probe to be searched for
 
         # Covered_length_um are two values which indicate on the path from tip to entry of a given insertion
@@ -521,8 +541,10 @@ class ProbeModel:
         # Note that the second value is negative, because the covered regions extends beyond the tip of the probe
         # We multiply by sqrt(2) to translate the radius given by dist_fcn[1] into the side length of a square
         # that is contained in the circle with radius dist_fcn[1]
-        covered_length_um = TIP_SIZE_UM + np.array([ACTIVE_LENGTH_UM + MAX_DIST_UM * np.sqrt(2),
-                                                    -MAX_DIST_UM * np.sqrt(2)])
+        covered_length_um_1shank = TIP_SIZE_UM + np.array([ACTIVE_LENGTH_UM_1shank + MAX_DIST_UM * np.sqrt(2),
+                                                           -MAX_DIST_UM * np.sqrt(2)])
+        covered_length_um_4shank = TIP_SIZE_UM + np.array([ACTIVE_LENGTH_UM_4shank + MAX_DIST_UM * np.sqrt(2),
+                                                           -MAX_DIST_UM * np.sqrt(2)])
 
         # Horizontal slice of voxels to be considered around each trajectory is only dependent on MAX_DIST_UM
         # and the voxel resolution, so can be defined here. We translate max dist in voxels and add 1 for safety
@@ -542,10 +564,25 @@ class ProbeModel:
             if len(trajs) > 20 and self.verbose is True:
                 if p % 20 == 0:
                     print(p / len(trajs))
-            # Get one trajectory from the list and create an insertion in the brain atlas
+
+            # Get one trajectory from the list and
+            traj = trajs[p]
+
+            # Here we find out if this is trajectory is from a 1shank or 4shank probe
+            # In an ideal world we would read in the metadata and find this out, but that would require
+            # downloading this dataset for all trajectories. Instead we go based on naming convention. We know
+            # probes with the label probe00a, probe00b etc. are 4 shank probes that have been split.
+            pname = traj['probe_name']
+            if len(re.findall("[a-d]", pname[-1])) == 1:
+                covered_length_um = covered_length_um_4shank
+                ACTIVE_LENGTH_UM = ACTIVE_LENGTH_UM_4shank
+            else:
+                covered_length_um = covered_length_um_1shank
+                ACTIVE_LENGTH_UM = ACTIVE_LENGTH_UM_1shank
+
+            # Create an insertion in the brain atlas
             # x and y coordinates of entry are translated to the atlas voxel space
             # z is locked to surface of the brain at these x,y coordinates (disregarding actual z value of trajectory)
-            traj = trajs[p]
             ins = atlas.Insertion.from_dict(traj, brain_atlas=ba)
             # Don't use probes that have same entry and tip, something is wrong
             set_nan = False

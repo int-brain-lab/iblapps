@@ -7,7 +7,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import pandas as pd
 import numpy as np
 
-from ibllib.atlas import AllenAtlas
+from iblatlas.atlas import AllenAtlas
 import atlaselectrophysiology.ColorBar as cb
 from ibllib.pipes.ephys_alignment import EphysAlignment
 from atlaselectrophysiology.AdaptedAxisItem import replace_axis

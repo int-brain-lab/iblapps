@@ -6,7 +6,7 @@ from inspect import getmembers, isfunction
 import numpy as np
 
 from one.api import ONE
-from ibllib.atlas import AllenAtlas
+from iblatlas.atlas import AllenAtlas
 from atlaselectrophysiology.load_data import LoadData
 from ibllib.pipes.ephys_alignment import EphysAlignment
 from ibllib.pipes.misc import create_alyx_probe_insertions

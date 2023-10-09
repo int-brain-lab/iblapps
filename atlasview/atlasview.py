@@ -2,7 +2,7 @@
 TopView is the main Widget with the related ControllerTopView Class
 There are several SliceView windows (sagittal, coronal, possibly tilted etc...) that each have
 a SliceController object
-The underlying data model object is an ibllib.atlas.AllenAtlas object
+The underlying data model object is an iblatlas.atlas.AllenAtlas object
 
     TopView(QMainWindow)
     ControllerTopView(PgImageController)
@@ -20,7 +20,7 @@ from PyQt5.QtGui import QTransform
 import pyqtgraph as pg
 import matplotlib
 
-from ibllib.atlas import AllenAtlas
+from iblatlas.atlas import AllenAtlas
 import qt
 
 
@@ -85,7 +85,7 @@ class TopView(QtWidgets.QMainWindow):
         """
         :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None,
         'opacity': 1.0}
-        :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+        :param slice_kwargs: iblatlas.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
         :return:
         """
         self.ctrl.fig_sagittal.add_image_layer(**kwargs)
@@ -160,7 +160,7 @@ class SliceView(QtWidgets.QWidget):
         """
         :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None,
         'opacity': 1.0}
-        :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+        :param slice_kwargs: iblatlas.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
         :return:
         """
         il = ImageLayer(**kwargs)
@@ -354,7 +354,7 @@ class ImageLayer:
     Class for keeping track of image layers.
     :param image_item
     :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None, 'opacity': 1.0}
-    :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+    :param slice_kwargs: iblatlas.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
     :param
     """
     image_item: pg.ImageItem = field(default_factory=pg.ImageItem)

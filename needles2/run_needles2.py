@@ -9,7 +9,7 @@ from PyQt5.QtGui import QTransform
 import pyqtgraph as pg
 import matplotlib
 
-from ibllib.atlas import AllenAtlas, Insertion
+from iblatlas.atlas import AllenAtlas, Insertion
 
 import qt
 
@@ -1219,7 +1219,7 @@ class BaseController:
         :param name: name of the image item to keep track of layers
         :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None,
         'opacity': 1.0}
-        :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+        :param slice_kwargs: iblatlas.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
         :return:
         """
         il = ImageLayer(**kwargs)
@@ -1342,7 +1342,7 @@ class TopController(BaseController):
         :param name: name of the image item to keep track of layers
         :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None,
         'opacity': 1.0}
-        :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+        :param slice_kwargs: iblatlas.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
         :return:
         """
         sc = ScatterLayer(**kwargs)
@@ -1429,7 +1429,7 @@ class ImageLayer:
     Class for keeping track of image layers.
     :param image_item
     :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None, 'opacity': 1.0}
-    :param slice_kwargs: ibllib.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
+    :param slice_kwargs: iblatlas.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
     :param
     """
     name: str = field(default='base')

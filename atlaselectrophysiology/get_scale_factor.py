@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import ibllib.atlas as atlas
+import iblatlas.atlas as atlas
 
 
 # Instantiate brain atlas and one
