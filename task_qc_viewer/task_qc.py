@@ -145,8 +145,10 @@ class QcFrame(TaskQC):
         bnc2 = self.extractor.audio_ttls
         trial_data = self.extractor.data
 
-        plots.squares(bnc1['times'], bnc1['polarities'] * 0.4 + 1, ax=axes, color='k')
-        plots.squares(bnc2['times'], bnc2['polarities'] * 0.4 + 2, ax=axes, color='k')
+        if bnc1['times'].size:
+            plots.squares(bnc1['times'], bnc1['polarities'] * 0.4 + 1, ax=axes, color='k')
+        if bnc2['times'].size:
+            plots.squares(bnc2['times'], bnc2['polarities'] * 0.4 + 2, ax=axes, color='k')
         linestyle = linestyle or random.choices(('-', '--', '-.', ':'), k=len(trial_events))
 
         if self.extractor.bpod_ttls is not None:
