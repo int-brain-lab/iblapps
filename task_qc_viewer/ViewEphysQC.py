@@ -160,9 +160,12 @@ class GraphWindow(QtWidgets.QWidget):
         if self.wheel:
             idx = np.searchsorted(self.wheel['re_ts'], np.array([start - dt / 10,
                                                                  finish + dt / 10]))
-            max_val = np.max(self.wheel['re_pos'][idx[0]:idx[1]])
-            min_val = np.min(self.wheel['re_pos'][idx[0]:idx[1]])
-            self.wplot.canvas.ax2.set_ylim(min_val - 1, max_val + 1)
+            period = self.wheel['re_pos'][idx[0]:idx[1]]
+            if period.size == 0:
+                _logger.warning('No wheel data during trial #%i', ind.row())
+            else:
+                min_val, max_val = np.min(period), np.max(period)
+                self.wplot.canvas.ax2.set_ylim(min_val - 1, max_val + 1)
             self.wplot.canvas.ax2.set_xlim(start - dt / 10, finish + dt / 10)
         self.wplot.canvas.ax.set_xlim(start - dt / 10, finish + dt / 10)
 
