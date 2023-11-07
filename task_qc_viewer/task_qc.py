@@ -164,8 +164,8 @@ class QcFrame(TaskQC):
             plots.vertical_lines(trial_data[event], label=event, color=c, linestyle=l, **plot_args)
 
         axes.legend(loc='upper left', fontsize='xx-small', bbox_to_anchor=(1, 0.5))
-        axes.set_yticklabels(ylabels)
         axes.set_yticks(list(range(plot_args['ymax'] + 1)))
+        axes.set_yticklabels(ylabels)
         axes.set_ylim([0, plot_args['ymax']])
 
         if wheel_axes:
