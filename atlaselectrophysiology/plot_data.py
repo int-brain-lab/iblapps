@@ -408,10 +408,6 @@ class PlotData:
             else:
                 h = neuropixel.trace_header(sr.major_version, nshank=np.unique(th['shank']).size)
 
-            idx = np.isin(h['ind'], th['ind'])
-            for k in h.keys():
-                h[k] = h[k][idx]
-
             s0 = t * sr.fs
             tsel = slice(int(s0), int(s0) + int(1 * sr.fs))
             raw = sr[tsel, :-sr.nsync].T
@@ -513,21 +509,24 @@ class PlotData:
             (rf_map_times, rf_map_pos,
              rf_stim_frames) = passive.get_on_off_times_and_positions(self.data['rf_map'])
 
+            chn_min = np.min(np.r_[self.chn_min, self.data['spikes']['depths'][self.spike_idx][self.kp_idx]])
+            chn_max = np.max(np.r_[self.chn_max, self.data['spikes']['depths'][self.spike_idx][self.kp_idx]])
+
             rf_map, _ = \
                 passive.get_rf_map_over_depth(rf_map_times, rf_map_pos, rf_stim_frames,
                                               self.data['spikes']['times'][self.spike_idx][self.kp_idx],
                                               self.data['spikes']['depths'][self.spike_idx][self.kp_idx],
-                                              d_bin=160)
+                                              d_bin=160, y_lim=[chn_min, chn_max])
             rfs_svd = passive.get_svd_map(rf_map)
             img = dict()
             img['on'] = np.vstack(rfs_svd['on'])
             img['off'] = np.vstack(rfs_svd['off'])
-            yscale = ((np.max(self.chn_coords[:, 1]) - np.min(
-                self.chn_coords[:, 1])) / img['on'].shape[0])
+            yscale = ((self.chn_max - self.chn_min) / img['on'].shape[0])
+
             xscale = 1
             levels = np.quantile(np.c_[img['on'], img['off']], [0, 1])
 
-            depths = np.linspace(0, 3840, len(rfs_svd['on']) + 1)
+            depths = np.linspace(self.chn_min, self.chn_max, len(rfs_svd['on']) + 1)
 
             sub_type = ['on', 'off']
             for sub in sub_type:
@@ -561,6 +560,9 @@ class PlotData:
             stims = {stim_type: self.data['pass_stim'][stim_type] for stim_type in stim_types[0:3]}
             stims.update(self.data['gabor'])
 
+        chn_min = np.min(np.r_[self.chn_min, self.data['spikes']['depths'][self.spike_idx][self.kp_idx]])
+        chn_max = np.max(np.r_[self.chn_max, self.data['spikes']['depths'][self.spike_idx][self.kp_idx]])
+
         base_stim = 1
         pre_stim = 0.4
         post_stim = 1
@@ -568,12 +570,11 @@ class PlotData:
                                                         [self.kp_idx], self.data['spikes']['depths']
                                                         [self.spike_idx][self.kp_idx],
                                                         pre_stim=pre_stim, post_stim=post_stim,
-                                                        base_stim=base_stim)
+                                                        base_stim=base_stim, y_lim=[chn_min, chn_max])
 
         for stim_type, z_score in stim_events.items():
             xscale = (post_stim + pre_stim) / z_score.shape[1]
-            yscale = ((np.max(self.chn_coords[:, 1]) - np.min(
-                self.chn_coords[:, 1])) / z_score.shape[0])
+            yscale = ((self.chn_max - self.chn_min) / z_score.shape[0])
 
             levels = [-10, 10]
 
