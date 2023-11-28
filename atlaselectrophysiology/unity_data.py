@@ -54,7 +54,8 @@ class UnityData:
 
             for i, loc in enumerate(mlapdv):
                 colours.append(cols[i])
-                positions.append(list(loc))
+                # convert to ap ml dv order
+                positions.append([loc[1], loc[0], loc[2]])
 
         return positions, colours
 

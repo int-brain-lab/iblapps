@@ -173,6 +173,12 @@ class PlotData:
 
         data = {'rms LFP': {'data': rms_avg, 'levels': levels, 'cmap': 'inferno'}}
 
+        if self.data['rms_AP']['exists']:
+            rms_avg = (np.mean(self.data[f'rms_AP']['rms'], axis=0)[self.chn_ind]) * 1e6
+            levels = np.quantile(rms_avg, [0.1, 0.9])
+
+            data = {'rms AP': {'data': rms_avg, 'levels': levels, 'cmap': 'plasma'}}
+
         for freq in freq_bands:
             freq_idx = np.where((self.data['psd_lf']['freqs'] >= freq[0]) & (self.data['psd_lf']['freqs'] < freq[1]))[0]
             lfp_avg = np.mean(self.data['psd_lf']['power'][freq_idx], axis=0)[self.chn_ind]
