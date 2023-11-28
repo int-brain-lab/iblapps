@@ -41,13 +41,21 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         return av
 
     def __init__(self, offline=False, probe_id=None, one=None, histology=True,
-                 spike_collection=None, remote=False):
+                 spike_collection=None, remote=False, unity=False):
         super(MainWindow, self).__init__()
 
         self.init_variables()
         self.init_layout(self, offline=offline)
         self.configure = True
         one_mode = 'remote' if remote else 'auto'
+
+        if unity:
+            from atlaselectrophysiology.unity_data import UnityData
+            self.unitydata = UnityData()
+            self.unity = True
+        else:
+            self.unity = False
+
         if not offline and probe_id is None:
             self.loaddata = LoadData(mode=one_mode)
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
@@ -1163,6 +1171,20 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.data_plot = image
             self.xrange = data['xrange']
 
+    def plot_unity(self, plot_type):
+        if plot_type == 'probe':
+            feature = self.probe_options_group.checkedAction().text()
+            points = 'channels'
+        else:
+            feature = self.img_options_group.checkedAction().text()
+            print(feature)
+            if 'Cluster' not in feature:
+                return
+            points = 'clusters'
+
+        self.unitydata.add_data(self.unity_data, points, feature, self.loaddata.brain_atlas)
+
+
     """
     Interaction functions
     """
@@ -1247,6 +1269,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if not self.data_status:
             self.probe_path, self.chn_depths, self.sess_notes, data = \
                 self.loaddata.get_data()
+            self.cluster_channels = data['clusters']['channels']
             if not self.probe_path:
                 return
 
@@ -1270,7 +1293,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.features[self.idx], self.track[self.idx], self.xyz_track \
                 = self.ephysalign.get_track_and_feature()
 
+            self.xyz_channels = self.ephysalign.get_channel_locations(self.features[self.idx], self.track[self.idx])
+
             self.get_scaled_histology()
+
         # If we have not loaded in the data before then we load eveything we need
         if not self.data_status:
             self.plotdata = pd.PlotData(self.probe_path, data,
@@ -1298,6 +1324,21 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 # probably need to return an empty array of things
                 self.slice_data = {}
                 self.fp_slice_data = None
+
+            if self.unity:
+                self.unity_data = {}
+                other_shanks = self.loaddata.get_other_shanks()
+                for shank in other_shanks:
+                    shank_data = self.prepare_shank_data(shank)
+                    if shank_data is not None:
+                        self.unity_data[shank['name']] = {'channels': shank_data[0], 'clusters': shank_data[1]}
+
+                self.unity_data[self.loaddata.probe_label] = {
+                    'channels': self.plotdata.get_channel_data(),
+                    'clusters': self.plotdata.get_cluster_data()
+                }
+
+                self.set_unity_xyz()
 
             self.data_status = True
             self.init_menubar()
@@ -1328,9 +1369,44 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_fit()
         self.plot_slice(self.slice_data, 'hist_rd')
 
+        # # Initialise unity plots
+        # if self.unity:
+        #     self.unitydata.add_data(self.unity_data, 'rms_LF', self.loaddata.brain_atlas)
+
         # Only configure the view the first time the GUI is launched
         self.set_view(view=1, configure=self.configure)
         self.configure = False
+
+    def prepare_shank_data(self, shank):
+        shank_picks, shank_feature, shank_track = self.loaddata.get_alignment_for_insertion(shank)
+        if shank_picks is None:
+            return None
+        shank_data, shank_path = self.loaddata.get_probe_data(shank['name'])
+        shank_align = EphysAlignment(shank_picks, shank_data['channels']['localCoordinates'][:, 1],
+                                     track_prev=shank_track,
+                                     feature_prev=shank_feature,
+                                     brain_atlas=self.loaddata.brain_atlas)
+
+        shank_plot = pd.PlotData(shank_path, shank_data, 0)
+        chn_data = shank_plot.get_channel_data()
+        clust_data = shank_plot.get_cluster_data()
+
+        shank_channels = shank_align.get_channel_locations(shank_align.feature_init, shank_align.track_init)
+
+        chn_data['x'] = shank_channels[:, 0]
+        chn_data['y'] = shank_channels[:, 1]
+        chn_data['z'] = shank_channels[:, 2]
+
+        clust_data['x'] = chn_data['x'][shank_data['clusters']['channels']]
+        clust_data['y'] = chn_data['y'][shank_data['clusters']['channels']]
+        clust_data['z'] = chn_data['z'][shank_data['clusters']['channels']]
+
+        return chn_data, clust_data
+
+    def set_unity_xyz(self):
+        for i, a in enumerate(['x', 'y', 'z']):
+            self.unity_data[self.loaddata.probe_label]['channels'][a] = self.xyz_channels[:, i]
+            self.unity_data[self.loaddata.probe_label]['clusters'][a] = self.xyz_channels[:, i][self.cluster_channels]
 
     def compute_nearby_boundaries(self):
 
@@ -2157,10 +2233,11 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--offline', default=False, required=False, help='Offline mode')
     parser.add_argument('-r', '--remote', default=False, required=False, action='store_true', help='Remote mode')
     parser.add_argument('-i', '--insertion', default=None, required=False, help='Insertion mode')
+    parser.add_argument('-u', '--unity', default=False, required=False, help='Unity mode')
     args = parser.parse_args()
 
     app = QtWidgets.QApplication([])
-    mainapp = MainWindow(offline=args.offline, probe_id=args.insertion, remote=args.remote)
+    mainapp = MainWindow(offline=args.offline, probe_id=args.insertion, remote=args.remote, unity=args.unity)
     # mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()

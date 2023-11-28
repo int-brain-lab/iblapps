@@ -143,6 +143,45 @@ class PlotData:
 
             return data_scatter
 
+    def get_cluster_data(self):
+
+        (clu,
+         spike_depths,
+         spike_amps,
+         n_spikes) = self.compute_spike_average((self.data['spikes']['clusters'][self.spike_idx]
+        [self.kp_idx]), (self.data['spikes']['depths']
+        [self.spike_idx][self.kp_idx]),
+                                                (self.data['spikes']['amps'][self.spike_idx]
+                                                [self.kp_idx]))
+        fr = n_spikes / np.max(self.data['spikes']['times'])
+        p2t = self.data['clusters']['peakToTrough'][clu]
+
+        data = {
+            'Cluster FR vs Depth vs Amp': {'data': spike_amps, 'levels': np.quantile(spike_amps, [0, 1]),
+                                           'cmap': 'magma'},
+            'Cluster Amp vs Depth vs FR': {'data': fr, 'levels': np.quantile(fr, [0, 1]), 'cmap': 'hot'},
+            'Cluster Amp vs Depth vs Duration': {'data': p2t, 'levels': [-1.5, 1.5], 'cmap': 'RdYlGn'},
+        }
+
+        return data
+
+    def get_channel_data(self):
+        freq_bands = np.vstack(([0, 4], [4, 10], [10, 30], [30, 80], [80, 200]))
+
+        rms_avg = (np.mean(self.data[f'rms_LF']['rms'], axis=0)[self.chn_ind]) * 1e6
+        levels = np.quantile(rms_avg, [0.1, 0.9])
+
+        data = {'rms LFP': {'data': rms_avg, 'levels': levels, 'cmap': 'inferno'}}
+
+        for freq in freq_bands:
+            freq_idx = np.where((self.data['psd_lf']['freqs'] >= freq[0]) & (self.data['psd_lf']['freqs'] < freq[1]))[0]
+            lfp_avg = np.mean(self.data['psd_lf']['power'][freq_idx], axis=0)[self.chn_ind]
+            lfp_avg_dB = 10 * np.log10(lfp_avg)
+            levels = np.quantile(lfp_avg_dB, [0.1, 0.9])
+            data[f"{freq[0]} - {freq[1]} Hz"] = {'data': lfp_avg_dB, 'levels': levels, 'cmap': 'viridis'}
+
+        return data
+
     def get_fr_p2t_data_scatter(self):
         if not self.data['spikes']['exists']:
             data_fr_scatter = None

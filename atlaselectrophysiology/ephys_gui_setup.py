@@ -122,6 +122,10 @@ class Setup():
             img_options.addAction(img)
             self.img_options_group.addAction(img)
 
+        # If unity add a callback from the image options group to update the unity plots
+        if self.unity:
+            self.img_options_group.triggered.connect(lambda: self.plot_unity('image'))
+
         # LINE PLOTS MENU BAR
         # Define all 1D line plot options
         line_fr = QtWidgets.QAction('Firing Rate', self, checkable=True, checked=True)
@@ -180,6 +184,10 @@ class Setup():
                                     self.probe_rfmap[item], bounds=self.rfmap_boundaries))
             probe_options.addAction(probe)
             self.probe_options_group.addAction(probe)
+
+        # If unity add a callback from the probe options group to update the unity plots
+        if self.unity:
+            self.probe_options_group.triggered.connect(lambda: self.plot_unity('probe'))
 
         # SLICE PLOTS MENU BAR
         # Define all coronal slice plot options

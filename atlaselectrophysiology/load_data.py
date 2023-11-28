@@ -65,7 +65,7 @@ class LoadData:
         self.alyx_str = None
         self.sr = None
 
-        # Download bwm aggregate tables for for ephys feature gui
+        # Download bwm aggregate tables for ephys feature gui
         table_path = self.one.cache_dir.joinpath('bwm_features')
         s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
         aws.s3_download_folder("aggregates/bwm/latest", table_path, s3=s3, bucket_name=bucket_name)
@@ -154,6 +154,27 @@ class LoadData:
 
         return self.prev_align
 
+    def get_alignment_for_insertion(self, ins):
+
+        xyz_picks = ins['json'].get('xyz_picks', None)
+        if not xyz_picks:
+            return None * 3
+
+        xyz_picks = np.array(xyz_picks) / 1e6
+
+        align_stored = ins['json'].get('extended_qc', {}).get('alignment_stored', None)
+        if align_stored:
+            # Needs to be either histology or ephys aligned track
+            traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=ins['id'],
+                                      provenance='Ephys aligned histology track')[0]
+            feature = traj['json'][align_stored][0]
+            track = traj['json'][align_stored][1]
+        else:
+            feature = None
+            track = None
+
+        return xyz_picks, feature, track
+
     def get_starting_alignment(self, idx):
         """
         Finds all sessions for a particular subject that have a histology track trajectory
@@ -223,39 +244,25 @@ class LoadData:
 
         return close_sessions, close_dist, close_dist_mlap
 
-    def get_data(self):
-        """
-        Load/ Download all data and info associated with session
-        :return alf_path: path to folder containing alf format files
-        :type: Path
-        :return ephys_path: path to folder containing ephys files
-        :type: Path
-        :return chn_depths: depths of electrode channel on probe relative to tip
-        :type: np.array(384,1)
-        :return sess_notes: user notes associated with session
-        :type: str
-        """
+    def get_probe_data(self, probe_label):
 
-        self.sess_path = self.one.eid2path(self.eid)
-
-        # THIS IS STUPID
         if self.spike_collection == '':
-            self.probe_collection = f'alf/{self.probe_label}'
-            probe_path = Path(self.sess_path, 'alf', self.probe_label)
+            self.probe_collection = f'alf/{probe_label}'
+            probe_path = Path(self.sess_path, 'alf', probe_label)
         elif self.spike_collection:
-            self.probe_collection = f'alf/{self.probe_label}/{self.spike_collection}'
-            probe_path = Path(self.sess_path, 'alf', self.probe_label, self.spike_collection)
+            self.probe_collection = f'alf/{probe_label}/{self.spike_collection}'
+            probe_path = Path(self.sess_path, 'alf', probe_label, self.spike_collection)
         else:
             # Pykilosort is default, if not present look for normal kilosort
             # Find all collections
             all_collections = self.one.list_collections(self.eid)
 
-            if f'alf/{self.probe_label}/pykilosort' in all_collections:
-                self.probe_collection = f'alf/{self.probe_label}/pykilosort'
-                probe_path = Path(self.sess_path, 'alf', self.probe_label, 'pykilosort')
+            if f'alf/{probe_label}/pykilosort' in all_collections:
+                self.probe_collection = f'alf/{probe_label}/pykilosort'
+                probe_path = Path(self.sess_path, 'alf', probe_label, 'pykilosort')
             else:
-                self.probe_collection = f'alf/{self.probe_label}'
-                probe_path = Path(self.sess_path, 'alf', self.probe_label)
+                self.probe_collection = f'alf/{probe_label}'
+                probe_path = Path(self.sess_path, 'alf', probe_label)
 
         data = {}
         try:
@@ -281,9 +288,6 @@ class LoadData:
                                                     attribute=['rawInd', 'localCoordinates'])
             data['channels']['exists'] = True
 
-            # Set low firing rate clusters to bad
-
-
         except alf.exceptions.ALFObjectNotFound:
             logger.error(f'Could not load spike sorting for probe insertion {self.probe_id}, GUI'
                          f' will not work')
@@ -292,6 +296,27 @@ class LoadData:
         data['rms_AP'] = self.get_rms_data(band='AP')
         data['rms_LF'] = self.get_rms_data(band='LF')
         data['psd_lf'] = self.get_psd_data(band='LF')
+
+        return data, probe_path
+
+
+    def get_data(self):
+        """
+        Load/ Download all data and info associated with session
+        :return alf_path: path to folder containing alf format files
+        :type: Path
+        :return ephys_path: path to folder containing ephys files
+        :type: Path
+        :return chn_depths: depths of electrode channel on probe relative to tip
+        :type: np.array(384,1)
+        :return sess_notes: user notes associated with session
+        :type: str
+        """
+
+        self.sess_path = self.one.eid2path(self.eid)
+
+        data, probe_path = self.get_probe_data(self.probe_label)
+
         data['rf_map'], data['pass_stim'], data['gabor'] = self.get_passive_data()
 
         print(self.subj)
@@ -314,6 +339,15 @@ class LoadData:
             sess_notes = 'No notes for this session'
 
         return probe_path, self.chn_depths, sess_notes, data
+
+    def get_other_shanks(self):
+
+        insertions = self.one.alyx.rest('insertions', 'list', session=self.eid)
+        insertions = [ins for ins in insertions if self.probe_label[:7] in ins['name'] and
+                      self.probe_label != ins['name']]
+
+        return insertions
+
 
     def get_passive_data(self):
 
