@@ -168,6 +168,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         self.nearby = None
 
+        # keep track of unity display
+        self.unity_plot = None
+
     def set_axis(self, fig, ax, show=True, label=None, pen='k', ticks=True):
         """
         Show/hide and configure axis of figure
@@ -1171,18 +1174,19 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.data_plot = image
             self.xrange = data['xrange']
 
-    def plot_unity(self, plot_type):
+    def plot_unity(self, plot_type=None):
+        plot_type = plot_type or self.unity_plot
         if plot_type == 'probe':
             feature = self.probe_options_group.checkedAction().text()
             points = 'channels'
         else:
             feature = self.img_options_group.checkedAction().text()
-            print(feature)
             if 'Cluster' not in feature:
                 return
             points = 'clusters'
 
         self.unitydata.add_data(self.unity_data, points, feature, self.loaddata.brain_atlas)
+        self.unity_plot = plot_type
 
 
     """
@@ -1369,9 +1373,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_fit()
         self.plot_slice(self.slice_data, 'hist_rd')
 
-        # # Initialise unity plots
-        # if self.unity:
-        #     self.unitydata.add_data(self.unity_data, 'rms_LF', self.loaddata.brain_atlas)
+        # Initialise unity plot
+        if self.unity:
+            self.set_unity_xyz()
+            self.plot_unity('probe')
 
         # Only configure the view the first time the GUI is launched
         self.set_view(view=1, configure=self.configure)
@@ -1503,6 +1508,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_scale_factor()
         self.plot_fit()
         self.plot_channels()
+        if self.unity:
+            self.set_unity_xyz()
+            self.plot_unity()
         self.remove_lines_points()
         self.add_lines_points()
         self.update_lines_points()
@@ -1541,6 +1549,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_scale_factor()
         self.plot_fit()
         self.plot_channels()
+        if self.unity:
+            self.set_unity_xyz()
+            self.plot_unity()
         self.remove_lines_points()
         self.add_lines_points()
         self.update_lines_points()
@@ -1721,6 +1732,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.add_lines_points()
             self.plot_fit()
             self.plot_channels()
+            if self.unity:
+                self.set_unity_xyz()
+                self.plot_unity()
             self.update_string()
 
     def prev_button_pressed(self):
@@ -1748,6 +1762,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.add_lines_points()
             self.plot_fit()
             self.plot_channels()
+            if self.unity:
+                self.set_unity_xyz()
+                self.plot_unity()
             self.update_string()
 
     def reset_button_pressed(self):

@@ -11,9 +11,9 @@ import time
 class UnityData:
     def __init__(self):
         urchin.setup()
-        time.sleep(5)
+        time.sleep(8)
         urchin.ccf25.load()
-        time.sleep(5)
+        time.sleep(8)
         self.add_root()
         self.particles = None
 
