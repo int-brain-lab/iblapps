@@ -407,6 +407,9 @@ class PlotData:
                 h = neuropixel.split_trace_header(h, shank=int(sr.meta.get('NP2.4_shank')))
             else:
                 h = neuropixel.trace_header(sr.major_version, nshank=np.unique(th['shank']).size)
+                idx = np.isin(h['ind'], th['ind'])
+                for k in h.keys():
+                    h[k] = h[k][idx]
 
             s0 = t * sr.fs
             tsel = slice(int(s0), int(s0) + int(1 * sr.fs))
