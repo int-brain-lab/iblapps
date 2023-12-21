@@ -427,6 +427,16 @@ class Setup():
             feature_info.triggered.connect(self.display_region_features)
             info_options.addAction(feature_info)
 
+        # UNITY MENU BAR
+        if self.unity:
+            unity_regions = QtWidgets.QAction('Show Regions', self, checkable=True, checked=True)
+            unity_regions.triggered.connect(self.toggle_unity_regions)
+
+            unity_options = menu_bar.addMenu('Urchin')
+            unity_options.addAction(unity_regions)
+
+
+
         # MAPPING MENU BAR
         # allen_mapping = QtWidgets.QAction('Allen', self, checkable=True, checked=True)
         # beryl_mapping = QtWidgets.QAction('Beryl', self, checkable=True, checked=False)
@@ -525,6 +535,26 @@ class Setup():
         self.interaction_layout1 = QtWidgets.QVBoxLayout()
         self.interaction_layout1.addLayout(hlayout1)
         self.interaction_layout1.addLayout(hlayout2)
+
+        if self.unity:
+            glayout3 = QtWidgets.QGridLayout()
+            glayout3.setVerticalSpacing(0)
+            self.min_label = QtWidgets.QLabel("0.1")
+            self.max_label = QtWidgets.QLabel("1")
+            self.max_label.setAlignment(QtCore.Qt.AlignRight)
+            self.unity_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+            self.unity_slider.setMinimum(1)
+            self.unity_slider.setMaximum(10)
+            self.unity_slider.setValue(5)
+            self.unity_slider.setTickPosition(QtWidgets.QSlider.TicksAbove)
+            self.unity_slider.setTickInterval(1)
+            self.unity_slider.sliderReleased.connect(self.on_point_size_changed)
+
+            glayout3.addWidget(self.unity_slider, 0, 0, 1, 10)
+            glayout3.addWidget(self.min_label, 1, 0, 1, 1)
+            glayout3.addWidget(self.max_label, 1, 9, 1, 1)
+            self.interaction_layout1.addLayout(glayout3)
+
         # Group 2
         self.interaction_layout2 = QtWidgets.QHBoxLayout()
         self.interaction_layout2.addWidget(self.reset_button)
@@ -543,6 +573,7 @@ class Setup():
             self.interaction_layout3.addWidget(self.shank_combobox, stretch=1)
             self.interaction_layout3.addWidget(self.align_combobox, stretch=2)
             self.interaction_layout3.addWidget(self.data_button, stretch=1)
+
 
         # Pop up dialog for qc results to datajoint, only for online mode
         if not self.offline:

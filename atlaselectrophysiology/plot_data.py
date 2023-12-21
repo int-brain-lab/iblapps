@@ -74,21 +74,25 @@ class PlotData:
         try:
             if type == 'all':
                 self.spike_idx = np.arange(self.data['spikes']['clusters'].size)
-
+                self.clust = np.arange(self.data['clusters'].metrics.shape[0])
             elif type == 'KS good':
                 clust = np.where(self.data['clusters'].metrics.ks2_label == 'good')
+                self.clust = clust[0]
                 self.spike_idx = np.where(np.isin(self.data['spikes']['clusters'], clust))[0]
 
             elif type == 'KS mua':
                 clust = np.where(self.data['clusters'].metrics.ks2_label == 'mua')
+                self.clust = clust[0]
                 self.spike_idx = np.where(np.isin(self.data['spikes']['clusters'], clust))[0]
 
             elif type == 'IBL good':
                 clust = np.where(self.data['clusters'].metrics.label == 1)
+                self.clust = clust[0]
                 self.spike_idx = np.where(np.isin(self.data['spikes']['clusters'], clust))[0]
         except Exception:
             print(f'{type} metrics not found will return all units instead')
             self.spike_idx = np.arange(self.data['spikes']['clusters'].size)
+            self.clust = np.arange(self.data['clusters'].metrics.size)
 
         # Filter for nans in depths and also in amps
         self.kp_idx = np.where(~np.isnan(self.data['spikes']['depths'][self.spike_idx]) &

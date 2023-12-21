@@ -44,17 +44,17 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                  spike_collection=None, remote=False, unity=False):
         super(MainWindow, self).__init__()
 
-        self.init_variables()
-        self.init_layout(self, offline=offline)
-        self.configure = True
-        one_mode = 'remote' if remote else 'auto'
-
         if unity:
             from atlaselectrophysiology.unity_data import UnityData
             self.unitydata = UnityData()
             self.unity = True
         else:
             self.unity = False
+
+        self.init_variables()
+        self.init_layout(self, offline=offline)
+        self.configure = True
+        one_mode = 'remote' if remote else 'auto'
 
         if not offline and probe_id is None:
             self.loaddata = LoadData(mode=one_mode)
@@ -170,6 +170,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # keep track of unity display
         self.unity_plot = None
+        self.unity_region_status = True
+        self.point_size = 0.05
+
+        # Filter by different types of units
+        self.filter_type = 'all'
 
     def set_axis(self, fig, ax, show=True, label=None, pen='k', ticks=True):
         """
@@ -1185,9 +1190,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                 return
             points = 'clusters'
 
-        self.unitydata.add_data(self.unity_data, points, feature, self.loaddata.brain_atlas)
+        self.unitydata.add_data(self.unity_data, points, feature, self.filter_type, self.point_size,
+                                self.loaddata.brain_atlas)
         self.unity_plot = plot_type
-
 
     """
     Interaction functions
@@ -1331,15 +1336,30 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
             if self.unity:
                 self.unity_data = {}
+                self.unitydata.toggle_regions(False)
+                self.unitydata.delete_text()
+                self.unitydata.init()
                 other_shanks = self.loaddata.get_other_shanks()
                 for shank in other_shanks:
                     shank_data = self.prepare_shank_data(shank)
                     if shank_data is not None:
-                        self.unity_data[shank['name']] = {'channels': shank_data[0], 'clusters': shank_data[1]}
+                        self.unity_data[shank['name']] = {'channels': shank_data[0], 'clusters': shank_data[1],
+                                                          'cluster_idx': shank_data[2]}
+
+                # Fill in for the selected shank
+                clust_idx = dict()
+                clust_idx['all'] = self.plotdata.clust
+
+                for filter_type in ['KS good', 'KS mua', 'IBL good']:
+                    self.plotdata.filter_units(filter_type)
+                    clust_idx[filter_type] = self.plotdata.clust
+
+                self.plotdata.filter_units('all')
 
                 self.unity_data[self.loaddata.probe_label] = {
                     'channels': self.plotdata.get_channel_data(),
-                    'clusters': self.plotdata.get_cluster_data()
+                    'clusters': self.plotdata.get_cluster_data(),
+                    'cluster_idx': clust_idx,
                 }
 
                 self.set_unity_xyz()
@@ -1375,6 +1395,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Initialise unity plot
         if self.unity:
+            self.unitydata.add_regions(np.unique(self.hist_data['axis_label'][:, 1]))
             self.set_unity_xyz()
             self.plot_unity('probe')
 
@@ -1406,12 +1427,19 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         clust_data['y'] = chn_data['y'][shank_data['clusters']['channels']]
         clust_data['z'] = chn_data['z'][shank_data['clusters']['channels']]
 
-        return chn_data, clust_data
+        clust_idx = dict()
+        clust_idx['all'] = shank_plot.clust
+
+        for filter_type in ['KS good', 'KS mua', 'IBL good']:
+            shank_plot.filter_units(filter_type)
+            clust_idx[filter_type] = shank_plot.clust
+
+        return chn_data, clust_data, clust_idx
 
     def set_unity_xyz(self):
         for i, a in enumerate(['x', 'y', 'z']):
             self.unity_data[self.loaddata.probe_label]['channels'][a] = self.xyz_channels[:, i]
-            self.unity_data[self.loaddata.probe_label]['clusters'][a] = self.xyz_channels[:, i][self.cluster_channels]
+            self.unity_data[self.loaddata.probe_label]['clusters'][a] = (self.xyz_channels[:, i][self.cluster_channels])
 
     def compute_nearby_boundaries(self):
 
@@ -1457,8 +1485,17 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.remove_lines_points()
         self.add_lines_points()
 
-    def filter_unit_pressed(self, type):
-        self.plotdata.filter_units(type)
+    def toggle_unity_regions(self):
+        self.unity_region_status = not self.unity_region_status
+        self.unitydata.toggle_regions(self.unity_region_status)
+
+    def on_point_size_changed(self):
+        self.point_size = self.unity_slider.value() / 100
+        self.unitydata.set_point_size(self.point_size)
+
+    def filter_unit_pressed(self, filter_type):
+        self.filter_type = filter_type
+        self.plotdata.filter_units(self.filter_type)
         self.scat_drift_data = self.plotdata.get_depth_data_scatter()
         (self.scat_fr_data, self.scat_p2t_data,
          self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
@@ -1473,6 +1510,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_image(self.img_fr_data)
         self.plot_probe(self.probe_rms_APdata)
         self.plot_line(self.line_fr_data)
+
+        if self.unity:
+            self.unity_plot = 'probe'
+            self.set_unity_xyz()
+            self.plot_unity()
 
     def fit_button_pressed(self):
         """
