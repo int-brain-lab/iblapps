@@ -595,7 +595,7 @@ class LoadData:
         self.alyx_str = ephys_qc.upper() + ': ' + ephys_desc_str
 
         if ephys_qc.upper() == 'CRITICAL':
-            usrpmt.main_gui(eid=self.probe_id, reasons_selected=ephys_desc, one=self.one)
+            usrpmt.main_gui(self.probe_id, reasons_selected=ephys_desc, alyx=self.one.alyx)
 
     def update_qc(self, upload_alyx=True, upload_flatiron=False):
         # if resolved just update the alignment_number
