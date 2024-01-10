@@ -1251,6 +1251,16 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def on_alignment_selected(self, idx):
         self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(idx)
 
+    def add_alignment_pressed(self):
+        file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
+        if file_path.name != 'prev_alignments.json':
+            print("Wrong file selected, must be of format prev_alignments.json")
+            return
+        else:
+            self.prev_alignments = self.loaddata.add_extra_alignments(file_path)
+            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
+
     def data_button_pressed(self):
         """
         Triggered when Get Data button pressed, uses subject and session info to find eid and

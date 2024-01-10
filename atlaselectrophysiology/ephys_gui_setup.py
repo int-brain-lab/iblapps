@@ -518,6 +518,11 @@ class Setup():
         self.shank_combobox.setModel(self.shank_list)
         self.shank_combobox.activated.connect(self.on_shank_selected)
 
+        # Plus button to select alignment file
+        self.align_extra = QtWidgets.QToolButton()
+        self.align_extra.setText('+')
+        self.align_extra.clicked.connect(self.add_alignment_pressed)
+
         # Button to get data to display in GUI
         self.data_button = QtWidgets.QPushButton('Get Data')
         self.data_button.clicked.connect(self.data_button_pressed)
@@ -566,12 +571,14 @@ class Setup():
             self.interaction_layout3.addWidget(self.subj_combobox, stretch=1)
             self.interaction_layout3.addWidget(self.sess_combobox, stretch=2)
             self.interaction_layout3.addWidget(self.align_combobox, stretch=2)
+            self.interaction_layout3.addWidget(self.align_extra, stretch=1)
             self.interaction_layout3.addWidget(self.data_button, stretch=1)
         else:
             self.interaction_layout3.addWidget(self.folder_line, stretch=2)
             self.interaction_layout3.addWidget(self.folder_button, stretch=1)
             self.interaction_layout3.addWidget(self.shank_combobox, stretch=1)
             self.interaction_layout3.addWidget(self.align_combobox, stretch=2)
+            self.interaction_layout3.addWidget(self.align_extra, stretch=1)
             self.interaction_layout3.addWidget(self.data_button, stretch=1)
 
 

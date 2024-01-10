@@ -13,6 +13,7 @@ from pathlib import Path
 import one.alf as alf
 from one import params
 import glob
+import json
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 import ibllib.qc.critical_reasons as usrpmt
 
@@ -64,6 +65,7 @@ class LoadData:
         self.resolved = None
         self.alyx_str = None
         self.sr = None
+        self.probe_path = None
 
         # Download bwm aggregate tables for ephys feature gui
         table_path = self.one.cache_dir.joinpath('bwm_features')
@@ -151,6 +153,29 @@ class LoadData:
         else:
             self.alignments = {}
             self.prev_align = ['original']
+
+        return self.prev_align
+
+    def add_extra_alignments(self, file_path):
+
+        with open(file_path, "r") as f:
+            extra_alignments = json.load(f)
+        self.extra_alignments = {}
+        # Add the username to the keys, required if combining and offline and online alignment
+        user = params.get().ALYX_LOGIN
+        for key, val in extra_alignments.items():
+            if len(key) == 19:
+                self.extra_alignments[key + '_' + user] = val
+            else:
+                self.extra_alignments[key] = val
+
+        if len(self.alignments) > 0:
+            self.alignments.update(self.extra_alignments)
+        else:
+            self.alignments = self.extra_alignments
+        self.prev_align = [*self.alignments.keys()]
+        self.prev_align = sorted(self.prev_align, reverse=True)
+        self.prev_align.append('original')
 
         return self.prev_align
 
@@ -315,7 +340,7 @@ class LoadData:
 
         self.sess_path = self.one.eid2path(self.eid)
 
-        data, probe_path = self.get_probe_data(self.probe_label)
+        data, self.probe_path = self.get_probe_data(self.probe_label)
 
         data['rf_map'], data['pass_stim'], data['gabor'] = self.get_passive_data()
 
@@ -338,7 +363,7 @@ class LoadData:
         if not sess_notes:
             sess_notes = 'No notes for this session'
 
-        return probe_path, self.chn_depths, sess_notes, data
+        return self.probe_path, self.chn_depths, sess_notes, data
 
     def get_other_shanks(self):
 
@@ -347,7 +372,6 @@ class LoadData:
                       self.probe_label != ins['name']]
 
         return insertions
-
 
     def get_passive_data(self):
 
@@ -603,10 +627,17 @@ class LoadData:
         old_user = [key for key in self.alignments.keys() if user in key]
         # Only delete duplicated if trajectory is not resolved
         if len(old_user) > 0 and not self.resolved:
-            self.alignments.pop(old_user[0])
+            for old in old_user:
+                self.alignments.pop(old)
 
         self.alignments.update(data)
+        self.write_alignments_to_disk(self.alignments)
         self.update_json(self.alignments)
+
+    def write_alignments_to_disk(self, data):
+        prev_align_filename = 'prev_alignments.json'
+        with open(self.probe_path.joinpath(prev_align_filename), "w") as f:
+            json.dump(data, f, indent=2, separators=(',', ': '))
 
     def update_json(self, json_data):
         # Get the new trajectory

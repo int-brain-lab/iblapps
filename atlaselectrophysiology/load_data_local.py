@@ -58,6 +58,21 @@ class LoadDataLocal:
 
         return self.prev_align
 
+    def add_extra_alignments(self, file_path):
+
+        with open(file_path, "r") as f:
+            self.extra_alignments = json.load(f)
+
+        if len(self.alignments) > 0:
+            self.alignments.update(self.extra_alignments)
+        else:
+            self.alignments = self.extra_alignments
+        self.prev_align = [*self.alignments.keys()]
+        self.prev_align = sorted(self.prev_align, reverse=True)
+        self.prev_align.append('original')
+
+        return self.prev_align
+
     def get_starting_alignment(self, idx):
         """
         Find out the starting alignmnet
