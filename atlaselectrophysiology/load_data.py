@@ -43,6 +43,10 @@ class LoadData:
             self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
             self.chn_coords = None
             self.chn_depths = None
+            # Download bwm aggregate tables for ephys feature gui
+            table_path = self.one.cache_dir.joinpath('bwm_features')
+            s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
+            aws.s3_download_folder("aggregates/bwm/latest", table_path, s3=s3, bucket_name=bucket_name)
 
         # Initialise all variables that get assigned
         self.sess_with_hist = None
@@ -67,10 +71,6 @@ class LoadData:
         self.sr = None
         self.probe_path = None
 
-        # Download bwm aggregate tables for ephys feature gui
-        table_path = self.one.cache_dir.joinpath('bwm_features')
-        s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
-        aws.s3_download_folder("aggregates/bwm/latest", table_path, s3=s3, bucket_name=bucket_name)
 
         if probe_id is not None:
             self.sess = self.one.alyx.rest('insertions', 'list', id=probe_id)
@@ -636,8 +636,9 @@ class LoadData:
 
     def write_alignments_to_disk(self, data):
         prev_align_filename = 'prev_alignments.json'
-        with open(self.probe_path.joinpath(prev_align_filename), "w") as f:
-            json.dump(data, f, indent=2, separators=(',', ': '))
+        if self.probe_path is not None:
+            with open(self.probe_path.joinpath(prev_align_filename), "w") as f:
+                json.dump(data, f, indent=2, separators=(',', ': '))
 
     def update_json(self, json_data):
         # Get the new trajectory

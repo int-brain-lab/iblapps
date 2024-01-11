@@ -11,10 +11,11 @@ from atlaselectrophysiology.load_data import LoadData
 from ibllib.pipes.ephys_alignment import EphysAlignment
 from ibllib.pipes.misc import create_alyx_probe_insertions
 from ibllib.pipes.histology import register_track
+from ibllib.tests import TEST_DB
 
 
 EPHYS_SESSION = 'b1c968ad-4874-468d-b2e4-5ffa9b9964e9'
-one = ONE(base_url='https://test.alyx.internationalbrainlab.org')
+one = ONE(**TEST_DB)
 brain_atlas = AllenAtlas(25)
 
 
