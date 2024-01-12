@@ -600,7 +600,12 @@ class PlotData:
         autocorr = xcorr(self.data['spikes']['times'][idx], self.data['spikes']['clusters'][idx],
                          AUTOCORR_BIN_SIZE, AUTOCORR_WIN_SIZE)
 
-        return autocorr[0, 0, :], self.data['clusters'].metrics.cluster_id[self.clust_id[clust_idx]]
+        if self.data['clusters'].get('metrics', {}).get('cluster_id', None) is None:
+            clust_id = self.clust_id[clust_idx]
+        else:
+            clust_id = self.data['clusters'].metrics.cluster_id[self.clust_id[clust_idx]]
+
+        return autocorr[0, 0, :], clust_id
 
     def get_template_wf(self, clust_idx):
         template_wf = (self.data['clusters']['waveforms'][self.clust_id[clust_idx], :, 0])
