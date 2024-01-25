@@ -261,7 +261,7 @@ class ControllerTopView(PgImageController):
     """
     TopView ControllerTopView
     """
-    def __init__(self, qmain: TopView, res: int = 25, volume='image'):
+    def __init__(self, qmain: TopView, res: int = 25, volume='image', **kwargs):
         super(ControllerTopView, self).__init__(qmain)
         self.volume = volume
         self.atlas = AllenAtlas(res)
