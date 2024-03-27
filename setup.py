@@ -8,5 +8,11 @@ setup(
     version='0.1',
     packages=find_packages(),
     include_package_data=True,
-    install_requires=require
+    install_requires=require,
+    entry_points={
+        'console_scripts': [
+            'atlas=atlasview.atlasview:main',
+            'align=atlaselectrophysiology.ephys_atlas_gui:main',
+        ]
+    },
 )

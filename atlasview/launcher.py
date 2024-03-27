@@ -6,7 +6,7 @@ av = atlasview.view()  # need to have an output argument here or the garbage col
 
 """ Roadmap
     - swap volumes combox (label RGB option / density)
-    - overlay brain regions with transparency
+    - overlay brain regions with transparencye
     - overlay volumes (for example coverage with transparency)
     - overlay plots: probes channels
     - tilted slices

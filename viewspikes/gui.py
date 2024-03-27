@@ -2,23 +2,19 @@ from pathlib import Path
 
 import numpy as np
 import scipy.signal
-
 from PyQt5 import QtWidgets, QtCore, QtGui, uic
 import pyqtgraph as pg
-from brainbox.processing import bincount2D
 
-from easyqc.gui import viewseis
-import one.alf.io as alfio
-from one.alf.files import get_session_path
-from iblutil.numerical import ismember
-import spikeglx
-from neurodsp import voltage
+from iblutil.numerical import bincount2D
+from viewephys.gui import viewephys
+import neurodsp
+from brainbox.io.one import EphysSessionLoader, SpikeSortingLoader
+from iblatlas.atlas import BrainRegions
 
-import qt
-from brainbox.io.one import SpikeSortingLoader
 
+regions = BrainRegions()
 T_BIN = .007  # time bin size in secs
-D_BIN = 10  # depth bin size in um
+D_BIN = 20  # depth bin size in um
 
 SNS_PALETTE = [(0.12156862745098039, 0.4666666666666667, 0.7058823529411765),
     (1.0, 0.4980392156862745, 0.054901960784313725),
@@ -34,23 +30,24 @@ SNS_PALETTE = [(0.12156862745098039, 0.4666666666666667, 0.7058823529411765),
 YMAX = 4000
 
 
-def view_raster(bin_file):
-    bin_file = Path(bin_file)
-    pname = bin_file.parent.name
-    session_path = get_session_path(bin_file)
-    ssl = SpikeSortingLoader(session_path=session_path, pname=pname)
+def view_raster(pid, one, stream=True):
+    ssl = SpikeSortingLoader(one=one, pid=pid)
+    sl = EphysSessionLoader(one=one, eid=ssl.eid)
+    sl.load_trials()
     spikes, clusters, channels = ssl.load_spike_sorting(dataset_types=['spikes.samples'])
-    trials = alfio.load_object(ssl.session_path.joinpath('alf'), 'trials')
-    return RasterView(bin_file, spikes, clusters, trials=trials)
+
+    return RasterView(ssl, spikes, clusters, channels, trials=sl.trials, stream=stream)
 
 
 class RasterView(QtWidgets.QMainWindow):
-    def __init__(self, bin_file, spikes, clusters, channels=None, trials=None, *args, **kwargs):
-        self.sr = spikeglx.Reader(bin_file)
+    def __init__(self, ssl, spikes, clusters, channels=None, trials=None, stream=True, *args, **kwargs):
+        self.ssl = ssl
         self.spikes = spikes
         self.clusters = clusters
         self.channels = channels
         self.trials = trials
+        # self.sr_lf = ssl.raw_electrophysiology(band='lf', stream=False) that would be cool to also have the LFP
+        self.sr = ssl.raw_electrophysiology(band='ap', stream=stream)
         self.eqcs = []
         super(RasterView, self).__init__(*args, **kwargs)
         # wave by Diana Militano from the Noun Projectp
@@ -68,7 +65,7 @@ class RasterView(QtWidgets.QMainWindow):
         iok = ~np.isnan(spikes.depths)
         self.raster, self.rtimes, self.depths = bincount2D(
             spikes.times[iok], spikes.depths[iok], T_BIN, D_BIN)
-        self.imageItem_raster.setImage(np.flip(self.raster.T))
+        self.imageItem_raster.setImage(self.raster.T)
         transform = [T_BIN, 0., 0., 0., D_BIN, 0.,  - .5, - .5, 1.]
         self.transform = np.array(transform).reshape((3, 3)).T
         self.imageItem_raster.setTransform(QtGui.QTransform(*transform))
@@ -82,13 +79,12 @@ class RasterView(QtWidgets.QMainWindow):
         # self.view.layers[label] = {'layer': new_scatter, 'type': 'scatter'}
         self.line_eqc = pg.PlotCurveItem()
         self.plotItem_raster.addItem(self.line_eqc)
-        # self.plotItem_raster.removeItem(new_curve)
         ################################################## plot trials
         if self.trials is not None:
             trial_times = dict(
-                goCue_times=trials['goCue_times'],
-                error_times=trials['feedback_times'][trials['feedbackType'] == -1],
-                reward_times=trials['feedback_times'][trials['feedbackType'] == 1])
+                goCue_times=trials['goCue_times'].values,
+                error_times=trials['feedback_times'][trials['feedbackType'] == -1].values,
+                reward_times=trials['feedback_times'][trials['feedbackType'] == 1].values)
             self.trial_lines = {}
             for i, k in enumerate(trial_times):
                 self.trial_lines[k] = pg.PlotCurveItem()
@@ -97,7 +93,6 @@ class RasterView(QtWidgets.QMainWindow):
                 y = np.tile(np.array([0, 1, 1, 0]), int(trial_times[k].shape[0] / 2 + 1))[
                     :trial_times[k].shape[0] * 2] * YMAX
                 self.trial_lines[k].setData(x=x.flatten(), y=y.flatten(), pen=pg.mkPen(np.array(SNS_PALETTE[i]) * 256))
-
         self.show()
 
     def mouseClick(self, event):
@@ -131,108 +126,26 @@ class RasterView(QtWidgets.QMainWindow):
 
     def show_ephys(self, t0, tlen=1):
 
-        first = int(t0 * self.sr.fs)
-        last = first + int(self.sr.fs * tlen)
-
-        raw = self.sr[first:last, : - self.sr.nsync].T
+        s0 = int(self.ssl.samples2times(t0, direction='reverse'))
+        s1 = s0 + int(self.sr.fs * tlen)
+        raw = self.sr[s0:s1, : - self.sr.nsync].T
 
         butter_kwargs = {'N': 3, 'Wn': 300 / self.sr.fs * 2, 'btype': 'highpass'}
+
         sos = scipy.signal.butter(**butter_kwargs, output='sos')
         butt = scipy.signal.sosfiltfilt(sos, raw)
-        destripe = voltage.destripe(raw, fs=self.sr.fs)
+        destripe = neurodsp.voltage.destripe(raw, fs=self.sr.fs)
 
-        self.eqc_raw = viewephys(butt, self.sr.fs, channels=None, br=None, title='butt', t0=t0, t_scalar=1)
-        self.eqc_des = viewephys(destripe, self.sr.fs, channels=None, br=None, title='destripe', t0=t0, t_scalar=1)
+        self.eqc_raw = viewephys(butt, self.sr.fs, channels=self.channels, br=regions, title='butt', t0=t0, t_scalar=1)
+        self.eqc_des = viewephys(destripe, self.sr.fs, channels=self.channels, br=regions, title='destripe', t0=t0, t_scalar=1)
 
         eqc_xrange = [t0 + tlen / 2 - 0.01, t0 + tlen / 2 + 0.01]
         self.eqc_des.viewBox_seismic.setXRange(*eqc_xrange)
         self.eqc_raw.viewBox_seismic.setXRange(*eqc_xrange)
 
-        # eqc2 = viewephys(butt - destripe, self.sr.fs, channels=None, br=None, title='diff')
-        # overlay spikes
-        tprobe = self.spikes.samples / self.sr.fs
-        slice_spikes = slice(np.searchsorted(tprobe, t0), np.searchsorted(tprobe, t0 + tlen))
-        t = tprobe[slice_spikes]
+        # we slice the spikes using the samples according to ephys time, but display in session times
+        slice_spikes = slice(np.searchsorted(self.spikes['samples'], s0), np.searchsorted(self.spikes['samples'], s1))
+        t = self.spikes['times'][slice_spikes]
         c = self.clusters.channels[self.spikes.clusters[slice_spikes]]
         self.eqc_raw.ctrl.add_scatter(t, c)
         self.eqc_des.ctrl.add_scatter(t, c)
-
-
-
-
-def viewephys(data, fs, channels=None, br=None, title='ephys', t0=0, t_scalar=1e3):
-    """
-    :param data: [nc, ns]
-    :param fs:
-    :param channels:
-    :param br:
-    :param title:
-    :return:
-    """
-    width = 40
-    height = 800
-    nc, ns = data.shape
-    # ih = np.linspace(0, nc - 1, height).astype(np.int32)
-    # image = br.rgb[channels['ibr'][ih]].astype(np.uint8)
-    # image = np.tile(image[:, np.newaxis, :], (1, width, 1))
-    # image = np.tile(image[np.newaxis, :, :], (width, 1, 1))
-    from ibllib.ephys.neuropixel import trace_header
-    if channels is None or br is None:
-        channels = trace_header(version = 1)
-        eqc = viewseis(data.T, si=1 / fs * t_scalar, h=channels, title=title, taxis=0, t0=t0)
-        return eqc
-    else:
-        _, ir = ismember(channels['atlas_id'], br.id)
-        image = br.rgb[ir].astype(np.uint8)
-        image = image[np.newaxis, :, :]
-
-
-    eqc = viewseis(data.T, si=1 / fs * t_scalar, h=channels, title=title, taxis=0)
-    imitem = pg.ImageItem(image)
-    eqc.plotItem_header_v.addItem(imitem)
-    transform = [1, 0, 0, 0, 1, 0, -0.5, 0, 1.]
-    imitem.setTransform(QtGui.QTransform(*transform))
-    eqc.plotItem_header_v.setLimits(xMin=-.5, xMax=.5)
-    # eqc.comboBox_header.setVisible(False)
-
-    return eqc
-
-
-COLOR_PLOTS = (pg.mkColor((31, 119, 180)),)
-
-
-def view2p(tiff_file, title=None):
-    qt.create_app()
-    v2p = View2p._get_or_create(title=title)
-    v2p.update_tiff(tiff_file)
-    v2p.show()
-    return v2p
-
-
-class View2p(QtWidgets.QMainWindow):
-    """
-    This is the view in the MVC approach
-    """
-    layers = None  # used for additional scatter layers
-
-    @staticmethod
-    def _instances():
-        app = QtWidgets.QApplication.instance()
-        return [w for w in app.topLevelWidgets() if isinstance(w, View2p)]
-
-    @staticmethod
-    def _get_or_create(title=None):
-        v2p = next(filter(lambda e: e.isVisible() and e.windowTitle() == title,
-                          View2p._instances()), None)
-        if v2p is None:
-            v2p = View2p()
-            v2p.setWindowTitle(title)
-        return v2p
-
-    def __init__(self, *args, **kwargs):
-        super(View2p, self).__init__(*args, **kwargs)
-        # wave by Diana Militano from the Noun Projectp
-        uic.loadUi(Path(__file__).parent.joinpath('view2p.ui'), self)
-
-    def update_tiff(self, tiff_file):
-        pass

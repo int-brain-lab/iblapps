@@ -43,7 +43,7 @@ class LoadData:
             self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
             self.chn_coords = None
             self.chn_depths = None
-            # Download bwm aggregate tables for ephys feature gui
+            # Download bwm aggregate tables for for ephys feature gui
             table_path = self.one.cache_dir.joinpath('bwm_features')
             s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
             aws.s3_download_folder("aggregates/bwm/latest", table_path, s3=s3, bucket_name=bucket_name)
@@ -70,7 +70,6 @@ class LoadData:
         self.alyx_str = None
         self.sr = None
         self.probe_path = None
-
 
         if probe_id is not None:
             self.sess = self.one.alyx.rest('insertions', 'list', id=probe_id)
@@ -644,7 +643,7 @@ class LoadData:
         # Get the new trajectory
         ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                         provenance='Ephys aligned histology track', no_cache=True)
-        patch_dict = {'json': json_data}
+        patch_dict = {'probe_insertion': self.probe_id, 'json': json_data}
         self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
                            data=patch_dict)
 
@@ -661,7 +660,7 @@ class LoadData:
         self.alyx_str = ephys_qc.upper() + ': ' + ephys_desc_str
 
         if ephys_qc.upper() == 'CRITICAL':
-            usrpmt.main_gui(eid=self.probe_id, reasons_selected=ephys_desc, one=self.one)
+            usrpmt.main_gui(self.probe_id, reasons_selected=ephys_desc, alyx=self.one.alyx)
 
     def update_qc(self, upload_alyx=True, upload_flatiron=False):
         # if resolved just update the alignment_number

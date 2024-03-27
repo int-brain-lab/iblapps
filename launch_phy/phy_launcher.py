@@ -26,7 +26,7 @@ def launch_phy(probe_name=None, eid=None, pid=None, subj=None, date=None, sess_n
     from iblatlas.atlas import AllenAtlas
     from brainbox.io.one import SpikeSortingLoader
     from ibllib.io import spikeglx
-    one = ONE()
+    one = one or ONE(base_url='https://openalyx.internationalbrainlab.org')
     ba = AllenAtlas()
 
     datasets = [
