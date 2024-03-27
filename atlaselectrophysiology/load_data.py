@@ -42,6 +42,10 @@ class LoadData:
             self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
             self.chn_coords = None
             self.chn_depths = None
+            # Download bwm aggregate tables for for ephys feature gui
+            table_path = self.one.cache_dir.joinpath('bwm_features')
+            s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
+            aws.s3_download_folder("aggregates/bwm/latest", table_path, s3=s3, bucket_name=bucket_name)
 
         # Initialise all variables that get assigned
         self.sess_with_hist = None
@@ -64,11 +68,6 @@ class LoadData:
         self.resolved = None
         self.alyx_str = None
         self.sr = None
-
-        # Download bwm aggregate tables for for ephys feature gui
-        table_path = self.one.cache_dir.joinpath('bwm_features')
-        s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
-        aws.s3_download_folder("aggregates/bwm/latest", table_path, s3=s3, bucket_name=bucket_name)
 
         if probe_id is not None:
             self.sess = self.one.alyx.rest('insertions', 'list', id=probe_id)
@@ -578,7 +577,7 @@ class LoadData:
         # Get the new trajectory
         ephys_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
                                         provenance='Ephys aligned histology track', no_cache=True)
-        patch_dict = {'json': json_data}
+        patch_dict = {'probe_insertion': self.probe_id, 'json': json_data}
         self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
                            data=patch_dict)
 
