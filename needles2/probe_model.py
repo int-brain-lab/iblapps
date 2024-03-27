@@ -72,7 +72,7 @@ class ProbeModel:
         if prov_dict is None:
             prov_dict = provenance
 
-        django_base = ['probe_insertion__session__project__name__icontains,'
+        django_base = ['probe_insertion__session__projects__name__icontains,'
                        'ibl_neuropixel_brainwide_01,probe_insertion__session__json__IS_MOCK,False',
                        'probe_insertion__session__qc__lt,50',
                        '~probe_insertion__json__qc,CRITICAL',
@@ -107,7 +107,7 @@ class ProbeModel:
 
     def get_insertions_with_xyz(self):
         start = time.time()
-        django_str = 'session__project__name__icontains,ibl_neuropixel_brainwide_01,' \
+        django_str = 'session__projects__name__icontains,ibl_neuropixel_brainwide_01,' \
                      'json__has_key,xyz_picks'
         self.ins['insertions'] = self.one.alyx.rest('insertions', 'list', django=django_str)
         self.ins['ids'] = np.array([ins['id'] for ins in self.ins['insertions']])
