@@ -261,10 +261,10 @@ class ControllerTopView(PgImageController):
     """
     TopView ControllerTopView
     """
-    def __init__(self, qmain: TopView, res: int = 25, volume='image', **kwargs):
+    def __init__(self, qmain: TopView, res: int = 25, volume='image', atlas=None, **kwargs):
         super(ControllerTopView, self).__init__(qmain)
         self.volume = volume
-        self.atlas = AllenAtlas(res)
+        self.atlas = AllenAtlas(res) if atlas is None else atlas
         self.fig_top = self.qwidget = qmain
         # Setup Coronal slice: width: ml, height: dv, depth: ap
         self.fig_coronal = SliceView(qmain, waxis=0, haxis=2, daxis=1)
@@ -362,10 +362,10 @@ class ImageLayer:
     slice_kwargs: dict = field(default_factory=lambda: {'volume': 'image', 'mode': 'clip'})
 
 
-def view(res=25, title=None, brainmap='Allen'):
+def view(res=25, title=None, atlas=None):
     """ application entry point """
     qt.create_app()
-    av = TopView._get_or_create(title=title, res=res, brainmap=brainmap)
+    av = TopView._get_or_create(title=title, res=res, atlas=atlas)
     av.show()
     return av
 
