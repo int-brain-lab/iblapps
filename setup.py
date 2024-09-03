@@ -12,7 +12,7 @@ setup(
     entry_points={
         'console_scripts': [
             'atlas=atlasview.atlasview:main',
-            'align=atlaselectrophysiology.ephys_atlas_gui:__main__',
+            'ephys-align=atlaselectrophysiology.ephys_atlas_gui:launch_offline',
         ]
     },
 )

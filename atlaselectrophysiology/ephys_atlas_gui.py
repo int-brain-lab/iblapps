@@ -2149,6 +2149,14 @@ def viewer(probe_id, one=None, histology=False, spike_collection=None, title=Non
     return av
 
 
+def launch_offline():
+
+    app_off = QtWidgets.QApplication([])
+    mainapp_off = MainWindow(offline=True)
+    mainapp_off.show()
+    app_off.exec_()
+
+
 if __name__ == '__main__':
 
     import argparse
