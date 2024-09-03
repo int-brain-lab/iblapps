@@ -12,7 +12,7 @@ from iblatlas.atlas import AllenAtlas
 from iblatlas import atlas
 from neuropixel import TIP_SIZE_UM, trace_header
 from ibllib.pipes.ephys_alignment import EphysAlignment
-from neurodsp.utils import fcn_cosine
+from ibldsp.utils import fcn_cosine
 
 PROV_2_VAL = {
     'Resolved': 90,

@@ -7,7 +7,7 @@ import pyqtgraph as pg
 
 from iblutil.numerical import bincount2D
 from viewephys.gui import viewephys
-import neurodsp
+import ibldsp
 from brainbox.io.one import EphysSessionLoader, SpikeSortingLoader
 from iblatlas.atlas import BrainRegions
 
@@ -134,7 +134,7 @@ class RasterView(QtWidgets.QMainWindow):
 
         sos = scipy.signal.butter(**butter_kwargs, output='sos')
         butt = scipy.signal.sosfiltfilt(sos, raw)
-        destripe = neurodsp.voltage.destripe(raw, fs=self.sr.fs)
+        destripe = ibldsp.voltage.destripe(raw, fs=self.sr.fs)
 
         self.eqc_raw = viewephys(butt, self.sr.fs, channels=self.channels, br=regions, title='butt', t0=t0, t_scalar=1)
         self.eqc_des = viewephys(destripe, self.sr.fs, channels=self.channels, br=regions, title='destripe', t0=t0, t_scalar=1)

@@ -15,7 +15,7 @@ import data_exploration_gui.misc as misc
 import data_exploration_gui.data_model as dat
 from data_exploration_gui import utils
 
-import qt
+from qt_helpers import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
 from one.api import ONE
 

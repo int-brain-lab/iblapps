@@ -3,8 +3,8 @@ import matplotlib
 import numpy as np
 from PyQt5 import QtCore, QtWidgets, uic
 
-from iblapps import qt
-from iblapps.qt_matplotlib import BaseMplCanvas
+from qt_helpers import qt
+from qt_helpers.qt_matplotlib import BaseMplCanvas
 import iblatlas.atlas as atlas
 
 # Make sure that we are using QT5

@@ -12,7 +12,7 @@ import data_exploration_gui.misc_class as misc
 from pathlib import Path
 import numpy as np
 
-import qt
+from qt_helpers import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
 
 
