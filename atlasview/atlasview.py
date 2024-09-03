@@ -21,7 +21,7 @@ import pyqtgraph as pg
 import matplotlib
 
 from iblatlas.atlas import AllenAtlas
-import qt
+from qt_helpers import qt
 
 
 class TopView(QtWidgets.QMainWindow):

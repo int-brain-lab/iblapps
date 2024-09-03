@@ -7,7 +7,7 @@ import matplotlib
 import pandas as pd
 # conda install -c conda-forge pyarrow
 import os
-from neurodsp.smooth import smooth_interpolate_savgol
+from ibldsp.smooth import smooth_interpolate_savgol
 from brainbox.io.one import SessionLoader
 from copy import deepcopy
 

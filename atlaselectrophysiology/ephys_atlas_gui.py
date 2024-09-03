@@ -20,7 +20,7 @@ from atlaselectrophysiology.subject_scaling import ScalingWindow
 from ephysfeatures.features_across_region import RegionFeatureWindow
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
-import qt
+from qt_helpers import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
 
 
@@ -2147,6 +2147,14 @@ def viewer(probe_id, one=None, histology=False, spike_collection=None, title=Non
                                    spike_collection=spike_collection, title=title)
     av.show()
     return av
+
+
+def launch_offline():
+
+    app_off = QtWidgets.QApplication([])
+    mainapp_off = MainWindow(offline=True)
+    mainapp_off.show()
+    app_off.exec_()
 
 
 if __name__ == '__main__':
