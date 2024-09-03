@@ -1,7 +1,7 @@
 from one.api import ONE
 import one.alf.io as alfio
 from iblutil.util import Bunch
-import qt
+from qt_helpers import qt
 import numpy as np
 import pyqtgraph as pg
 

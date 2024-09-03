@@ -7,7 +7,7 @@ import scipy
 from PyQt5 import QtCore, QtGui
 import numpy as np
 import pyqtgraph as pg
-import qt
+from qt_helpers import qt
 from one.api import ONE
 from iblutil.util import Bunch
 

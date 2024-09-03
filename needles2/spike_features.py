@@ -1,7 +1,7 @@
 from PyQt5 import QtWidgets, QtGui, QtCore
 import pyqtgraph as pg
 import pyqtgraph.exporters
-import qt
+from qt_helpers import qt
 import atlaselectrophysiology.ColorBar as cb
 
 from dataclasses import dataclass, field

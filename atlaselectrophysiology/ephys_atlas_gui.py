@@ -20,7 +20,7 @@ from atlaselectrophysiology.subject_scaling import ScalingWindow
 from ephysfeatures.features_across_region import RegionFeatureWindow
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
-import qt
+from qt_helpers import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
 
 

@@ -11,7 +11,7 @@ import matplotlib
 
 from iblatlas.atlas import AllenAtlas, Insertion
 
-import qt
+from qt_helpers import qt
 
 from one.api import ONE
 from needles2.probe_model import ProbeModel
