@@ -104,6 +104,12 @@ class MesoscopeGUI(QMainWindow):
         self.splitter.addWidget(self.folder_list)
 
         self.image_layout = QVBoxLayout()
+
+        self.slice_index_label = QLabel("Slice #0")
+        self.slice_index_label.setAlignment(Qt.AlignRight)
+        self.slice_index_label.setMaximumHeight(20)
+        self.image_layout.addWidget(self.slice_index_label)
+
         self.image_label = QLabel()
         self.image_label.installEventFilter(self) # for mouse wheel scroll
         self.image_label.setScaledContents(True)
@@ -329,6 +335,9 @@ class MesoscopeGUI(QMainWindow):
 
         self.pixmap = QPixmap.fromImage(qimg)
         self.image_label.setPixmap(self.pixmap)
+
+        self.slice_index_label.setText(
+            f"Slice #{self.current_stack_idx + 1} / {self.stack_count}")
 
         self.update_margins()
         for point_idx in range(3):
