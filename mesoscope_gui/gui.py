@@ -21,8 +21,6 @@ import numpy as np
 # Constants
 # -------------------------------------------------------------------------------------------------
 
-opacity_effect = QGraphicsOpacityEffect()
-opacity_effect.setOpacity(0.5)
 
 WIDTH = 1024
 HEIGHT = 768
@@ -34,7 +32,12 @@ RADIUS = 20
 # -------------------------------------------------------------------------------------------------
 
 def set_widget_opaque(widget, is_opaque):
-    widget.setGraphicsEffect(opacity_effect if not is_opaque else None)
+    if is_opaque:
+        widget.setGraphicsEffect(None)
+    else:
+        opacity_effect = QGraphicsOpacityEffect()
+        opacity_effect.setOpacity(0.5)
+        widget.setGraphicsEffect(opacity_effect if not is_opaque else None)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -61,7 +64,7 @@ class MesoscopeGUI(QMainWindow):
         self._init_point_widgets()
 
     def _clear_points_struct(self):
-        self.points = [{} for _ in range(3)]  # stack_idx, coords
+        self.points = [{} for idx in range(3)]  # point_idx, stack_idx, coords
 
     def _init_point_widgets(self):
         self.points_widgets = []
@@ -121,8 +124,10 @@ class MesoscopeGUI(QMainWindow):
 
         self.nav_layout = QHBoxLayout()
         self.prev_button = QPushButton('Previous')
+        self.prev_button.setEnabled(False)
         self.prev_button.clicked.connect(lambda: self.navigate(-1))
         self.next_button = QPushButton('Next')
+        self.next_button.setEnabled(False)
         self.next_button.clicked.connect(lambda: self.navigate(1))
         self.nav_layout.addWidget(self.prev_button)
         self.nav_layout.addWidget(self.next_button)
@@ -207,8 +212,8 @@ class MesoscopeGUI(QMainWindow):
         self.prev_button.setEnabled(self.current_folder_idx > 0)
         self.next_button.setEnabled(self.current_folder_idx < len(self.folder_paths) - 1)
 
-    def select_folder(self, folder_index):
-        self.current_folder_idx = folder_index
+    def select_folder(self, folder_idx):
+        self.current_folder_idx = folder_idx
         self.update_folder()
 
     def navigate(self, direction):
@@ -324,7 +329,10 @@ class MesoscopeGUI(QMainWindow):
 
         self.pixmap = QPixmap.fromImage(qimg)
         self.image_label.setPixmap(self.pixmap)
+
         self.update_margins()
+        for point_idx in range(3):
+            self.update_point_opacity(point_idx)
 
     # Adding points
     # ---------------------------------------------------------------------------------------------
@@ -338,6 +346,7 @@ class MesoscopeGUI(QMainWindow):
         self.points[point_idx]['coords'] = (xr, yr)
         self.points[point_idx]['stack_idx'] = stack_idx
         self.update_point_position(point_idx)
+        self.update_point_opacity(point_idx)
 
     def update_point_position(self, point_idx):
         xr, yr = self.points[point_idx].get('coords', (None, None))
@@ -345,6 +354,11 @@ class MesoscopeGUI(QMainWindow):
             return
         x, y = self.to_absolute(xr, yr)
         self.points_widgets[point_idx].move(x - RADIUS // 2, y - RADIUS // 2)
+
+    def update_point_opacity(self, point_idx):
+        stack_idx = self.points[point_idx].get('stack_idx', -1)
+        opacity = self.current_stack_idx == stack_idx
+        set_widget_opaque(self.points_widgets[point_idx], opacity)
 
     def add_point_at_click(self, event):
         x, y = event.pos().x(), event.pos().y()
@@ -362,6 +376,11 @@ class MesoscopeGUI(QMainWindow):
     def start_drag(self, event, point_label):
         self.drag_offset = event.pos()
         point_label.raise_()
+
+        # Set the point's stack idx to the current stack
+        point_idx = self.points_widgets.index(point_label)
+        self.points[point_idx]['stack_idx'] = self.current_stack_idx
+        self.update_point_opacity(point_idx)
 
     def drag_point(self, event, point_label):
         new_pos = point_label.pos() + event.pos() - self.drag_offset
@@ -399,13 +418,15 @@ class MesoscopeGUI(QMainWindow):
         # Update the points position on the image.
         for point_idx in range(3):
             self.update_point_position(point_idx)
+            self.update_point_opacity(point_idx)
 
     def save_points(self):
         if self.current_folder_idx >= len(self.folder_paths):
             return
-        print(self.points)
+        print("Saving points", self.points)
         with open(self.points_file, 'w') as f:
-            json.dump({'points': self.points}, f)
+            json.dump({'points': self.points}, f, indent=2)
+            f.write('\n')
 
     # Event handling
     # ---------------------------------------------------------------------------------------------
