@@ -145,7 +145,7 @@ class MesoscopeGUI(QMainWindow):
 
     def _add_point_widget(self, x, y, color, point_idx):
         point_label = QLabel(self.image_label)
-        r = 20
+        r = RADIUS
         point_label.setFixedSize(r, r)
 
         pixmap = QPixmap(r, r)
@@ -243,7 +243,6 @@ class MesoscopeGUI(QMainWindow):
         self.image_stack = np.floor(self.image_stack * 255).astype(np.uint8)
 
         self.scrollbar.setMaximum(self.stack_count - 1)
-        self.scrollbar.setValue(self.stack_count // 2)
 
     # Coordinate transforms
     # ---------------------------------------------------------------------------------------------
@@ -428,6 +427,8 @@ class MesoscopeGUI(QMainWindow):
         for point_idx in range(3):
             self.update_point_position(point_idx)
             self.update_point_opacity(point_idx)
+
+        self.scrollbar.setValue(self.points[0].get('stack_idx', self.stack_count // 2))
 
     def save_points(self):
         if self.current_folder_idx >= len(self.folder_paths):
