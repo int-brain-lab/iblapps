@@ -177,7 +177,9 @@ class MesoscopeGUI(QMainWindow):
             f_tree_view.setSelectionMode(QAbstractItemView.MultiSelection)
 
         if dialog.exec():
-            self.open(dialog.selectedFiles())
+            paths = dialog.selectedFiles()
+            paths = sorted(paths)
+            self.open(paths)
 
     def open(self, paths):
             self.folder_paths = self.find_image_folders(paths)
