@@ -8,9 +8,10 @@ import json
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QVBoxLayout, QHBoxLayout, QListWidget, QLabel,
-    QScrollBar, QPushButton, QWidget, QMenu, QAction, QSplitter, QGraphicsOpacityEffect)
+    QScrollBar, QPushButton, QWidget, QMenu, QAction, QSplitter, QListView, QAbstractItemView,
+    QTreeView, QGraphicsOpacityEffect)
 from PyQt5.QtCore import Qt, QPoint
-from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QKeySequence
 
 import imageio.v3 as iio
 import numpy as np
@@ -23,6 +24,8 @@ import numpy as np
 opacity_effect = QGraphicsOpacityEffect()
 opacity_effect.setOpacity(0.5)
 
+WIDTH = 1024
+HEIGHT = 768
 RADIUS = 20
 
 
@@ -41,7 +44,7 @@ def set_widget_opaque(widget, is_opaque):
 class MesoscopeGUI(QMainWindow):
 
     # Initialization
-    # -------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------
 
     def __init__(self):
         self.current_folder_idx = 0
@@ -51,12 +54,14 @@ class MesoscopeGUI(QMainWindow):
         self.current_stack_idx = 0
 
         self.pixmap = None
-
-        self.points = [{} for _ in range(3)]  # stack_idx, coords
+        self._clear_points_struct()
 
         super().__init__()
         self.init_ui()
         self._init_point_widgets()
+
+    def _clear_points_struct(self):
+        self.points = [{} for _ in range(3)]  # stack_idx, coords
 
     def _init_point_widgets(self):
         self.points_widgets = []
@@ -66,14 +71,21 @@ class MesoscopeGUI(QMainWindow):
             self._add_point_widget(x, y, color, point_idx)
 
     # UI
-    # -------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------
 
     def init_ui(self):
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu('File')
+
         open_action = QAction('Open', self)
+        open_action.setShortcut(QKeySequence.Open)
         open_action.triggered.connect(self.open_dialog)
         file_menu.addAction(open_action)
+
+        quit_action = QAction('Quit', self)
+        quit_action.setShortcut(QKeySequence.Quit)
+        quit_action.triggered.connect(self.close)
+        file_menu.addAction(quit_action)
 
         self.central_widget = QWidget()
         self.layout = QVBoxLayout(self.central_widget)
@@ -100,7 +112,6 @@ class MesoscopeGUI(QMainWindow):
         self.scrollbar = QScrollBar(Qt.Vertical)
         self.scrollbar.setMaximumWidth(20)
         self.scrollbar.valueChanged.connect(self.update_image)
-        # self.image_layout.addWidget(self.scrollbar)
 
         self.image_widget = QWidget()
         self.image_widget.setLayout(self.image_layout)
@@ -118,7 +129,7 @@ class MesoscopeGUI(QMainWindow):
         self.layout.addLayout(self.nav_layout)
 
         self.setWindowTitle('Mesoscope GUI')
-        self.resize(800, 600)
+        self.resize(WIDTH, HEIGHT)
         self.show()
 
     def _add_point_widget(self, x, y, color, point_idx):
@@ -146,13 +157,26 @@ class MesoscopeGUI(QMainWindow):
         self.points_widgets.append(point_label)
 
     # Folder opening
-    # -------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------
 
     def open_dialog(self):
         dialog = QFileDialog()
         dialog.setFileMode(QFileDialog.DirectoryOnly)
-        dialog.setOption(QFileDialog.ShowDirsOnly, True)
-        if dialog.exec_():
+        # dialog.setOption(QFileDialog.ShowDirsOnly, True)
+        # if dialog.exec_():
+        #     self.open(dialog.selectedFiles())
+
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        file_view = dialog.findChild(QListView, 'listView')
+
+        # to make it possible to select multiple directories:
+        if file_view:
+            file_view.setSelectionMode(QAbstractItemView.MultiSelection)
+        f_tree_view = dialog.findChild(QTreeView)
+        if f_tree_view:
+            f_tree_view.setSelectionMode(QAbstractItemView.MultiSelection)
+
+        if dialog.exec():
             self.open(dialog.selectedFiles())
 
     def open(self, paths):
@@ -176,6 +200,8 @@ class MesoscopeGUI(QMainWindow):
         self.current_stack_idx = 0
         self.load_image_stack()
         self.update_image()
+        self.load_points()
+
         self.prev_button.setEnabled(self.current_folder_idx > 0)
         self.next_button.setEnabled(self.current_folder_idx < len(self.folder_paths) - 1)
 
@@ -205,10 +231,9 @@ class MesoscopeGUI(QMainWindow):
 
         self.scrollbar.setMaximum(self.stack_count - 1)
         self.scrollbar.setValue(self.stack_count // 2)
-        self.load_points()
 
     # Coordinate transforms
-    # -------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------
 
     def to_relative(self, x, y):
         label_width, label_height = self.image_label.width(), self.image_label.height()
@@ -238,7 +263,7 @@ class MesoscopeGUI(QMainWindow):
         xr = (x - x_margin) / scaled_width
         yr = (y - y_margin) / scaled_height
 
-        return max(0, min(1, xr)), max(0, min(1, yr))  # Clamp values to [0, 1]
+        return xr, yr
 
     def to_absolute(self, xr, yr):
         label_width, label_height = self.image_label.width(), self.image_label.height()
@@ -300,7 +325,12 @@ class MesoscopeGUI(QMainWindow):
         self.update_margins()
 
     # Adding points
-    # -------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------
+
+    def clear_points(self):
+        self._clear_points_struct()
+        for widget, point in zip(self.points_widgets, self.points):
+            widget.move(-100, -100)
 
     def set_point_position(self, point_idx, xr, yr, stack_idx):
         self.points[point_idx]['coords'] = (xr, yr)
@@ -314,12 +344,6 @@ class MesoscopeGUI(QMainWindow):
         x, y = self.to_absolute(xr, yr)
         self.points_widgets[point_idx].move(x - RADIUS // 2, y - RADIUS // 2)
 
-    def clear_points(self):
-        for widget, point in zip(self.points_widgets, self.points):
-            widget.move(-100, -100)
-            point['coords'] = None
-            point['stack_idx'] = None
-
     def add_point_at_click(self, event):
         x, y = event.pos().x(), event.pos().y()
         point_idx = next((i for i, point in enumerate(self.points) if not point), None)
@@ -328,9 +352,10 @@ class MesoscopeGUI(QMainWindow):
         assert 0 <= point_idx and point_idx < 3
         xr, yr = self.to_relative(x, y)
         self.set_point_position(point_idx, xr, yr, self.current_stack_idx)
+        self.save_points()
 
     # Points drag and drop
-    # -------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------
 
     def start_drag(self, event, point_label):
         self.drag_offset = event.pos()
@@ -343,38 +368,45 @@ class MesoscopeGUI(QMainWindow):
     def end_drag(self, event, point_label, point_idx):
         r = RADIUS
         x, y = point_label.x() + r // 2, point_label.y() + r // 2
-
-        self.points[point_idx]['coords'] = self.to_relative(x, y)
-        # self.save_points()
+        xr, yr = self.to_relative(x, y)
+        if xr < 0 or xr > 1 or yr < 0 or yr > 1:
+            print(f"Deleting point {point_idx}")
+            self.points[point_idx] = {}
+        else:
+            self.points[point_idx]['coords'] = xr, yr
+        self.save_points()
 
     # Points file
-    # -------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------
 
     @property
     def points_file(self):
         return os.path.join(self.folder_paths[self.current_folder_idx], "referenceImage.points.json")
 
     def load_points(self):
+        self.clear_points()
+
         points_file = self.points_file
-        if not os.path.exists(points_file):
-            return
-        with open(points_file, 'r') as f:
-            data = json.load(f)
-        self.points = data['points']
+
+        # Update the points structure.
+        if os.path.exists(points_file):
+            with open(points_file, 'r') as f:
+                data = json.load(f)
+            self.points = data['points']
+
+        # Update the points position on the image.
+        for point_idx in range(3):
+            self.update_point_position(point_idx)
 
     def save_points(self):
         if self.current_folder_idx >= len(self.folder_paths):
             return
-
-        # DEBUG
         print(self.points)
-        return
-
-        with open(points_file, 'w') as f:
+        with open(self.points_file, 'w') as f:
             json.dump({'points': self.points}, f)
 
     # Event handling
-    # -------------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------------------------
 
     def on_resized(self, ev):
         self.update_margins()
