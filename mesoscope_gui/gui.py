@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
     QTreeView, QGraphicsOpacityEffect, QGraphicsBlurEffect)
 from PyQt5.QtCore import Qt, QPoint
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QKeySequence, QPen
+from superqt import QRangeSlider
 
 import imageio.v3 as iio
 import numpy as np
@@ -136,6 +137,7 @@ class MesoscopeGUI(QMainWindow):
 
         self.stack_count = 0
         self.current_stack_idx = 0
+        self.range_slider = None
 
         self.pixmap = None
         self.clear_points_struct()
@@ -187,6 +189,7 @@ class MesoscopeGUI(QMainWindow):
         self.splitter = QSplitter(Qt.Horizontal)
         self.layout.addWidget(self.splitter)
 
+        # Folder list
         self.folder_list = QListWidget()
         self.folder_list.setMaximumWidth(200)
         self.folder_list.currentRowChanged.connect(self.update_folder)
@@ -195,11 +198,21 @@ class MesoscopeGUI(QMainWindow):
 
         self.image_layout = QVBoxLayout()
 
+        # Slice label.
         self.slice_index_label = QLabel("Slice #0")
         self.slice_index_label.setAlignment(Qt.AlignRight)
         self.slice_index_label.setMaximumHeight(20)
         self.image_layout.addWidget(self.slice_index_label)
 
+        # Range slider.
+        self.range_slider = QRangeSlider(Qt.Orientation.Horizontal)
+        self.range_slider.setMaximumHeight(20)
+        self.range_slider.setValue((0, 100))
+        self.range_slider.valueChanged.connect(
+            lambda ev: (self.update_image(), self.save_points()))
+        self.image_layout.addWidget(self.range_slider)
+
+        # Points.
         self.image_label = QLabel()
         self.image_label.installEventFilter(self) # for mouse wheel scroll
         self.image_label.setScaledContents(True)
@@ -208,27 +221,33 @@ class MesoscopeGUI(QMainWindow):
         self.image_label.setMinimumSize(1, 1)
         self.image_layout.addWidget(self.image_label)
 
+        # Stack scrollbar.
         self.scrollbar = QScrollBar(Qt.Vertical)
         self.scrollbar.setMaximumWidth(20)
         self.scrollbar.valueChanged.connect(self.update_image)
 
+        # Image.
         self.image_widget = QWidget()
         self.image_widget.setLayout(self.image_layout)
         self.splitter.addWidget(self.image_widget)
 
         self.splitter.addWidget(self.scrollbar)
 
+        # Bottom buttons
         self.nav_layout = QHBoxLayout()
 
+        # Move to current depth button
         self.all_button = QPushButton('Move to current depth')
         self.all_button.clicked.connect(self.move_to_current_depth)
         self.nav_layout.addWidget(self.all_button)
 
+        # Previous button
         self.prev_button = QPushButton('Previous')
         self.prev_button.setEnabled(False)
         self.prev_button.clicked.connect(lambda: self.navigate(-1))
         self.nav_layout.addWidget(self.prev_button)
 
+        # Next button
         self.next_button = QPushButton('Next')
         self.next_button.setEnabled(False)
         self.next_button.clicked.connect(lambda: self.navigate(1))
@@ -286,9 +305,10 @@ class MesoscopeGUI(QMainWindow):
 
     def update_folder(self):
         self.current_stack_idx = 0
+        self.load_points()
+        # NOTE: load_points also loads the range values, which should come BEFORE image loading
         self.load_image_stack()
         self.update_image()
-        self.load_points()
 
         self.prev_button.setEnabled(self.current_folder_idx > 0)
         self.next_button.setEnabled(self.current_folder_idx < len(self.folder_paths) - 1)
@@ -309,15 +329,31 @@ class MesoscopeGUI(QMainWindow):
         self.image_stack = iio.imread(self.stack_path)  # shape: nstacks, h, w
         assert self.image_stack.ndim == 3
         self.stack_count = self.image_stack.shape[0]
-
-        self.image_stack = self.image_stack.astype(np.float32)
-        h = .01
-        q0, q1 = np.quantile(self.image_stack, [h, 1-h])
-        self.image_stack = (self.image_stack - q0) / (q1 - q0)
-        self.image_stack = np.clip(self.image_stack, 0, 1)
-        self.image_stack = np.floor(self.image_stack * 255).astype(np.uint8)
-
         self.scrollbar.setMaximum(self.stack_count - 1)
+        self.image_stack = self.image_stack.astype(np.float32)
+
+    def normalize_image(self, img):
+        h = .001
+        vmin, vmax = np.quantile(img, [h, 1-h])
+        d = vmax - vmin
+
+        v0, v1 = self.get_range()
+        v0 /= 99.0
+        v1 /= 99.0
+        vmin += d * v0
+        vmax -= d * (1.0 - v1)
+
+        img = (img - vmin) / (vmax - vmin)
+        img = np.clip(img, 0, 1)
+        img = np.floor(img * 255).astype(np.uint8)
+
+        return img
+
+    def get_range(self):
+        if self.range_slider is None:
+            return None, None
+        vmin, vmax = self.range_slider.value()
+        return vmin, vmax
 
     # Coordinate transforms
     # ---------------------------------------------------------------------------------------------
@@ -405,6 +441,8 @@ class MesoscopeGUI(QMainWindow):
         if self.current_stack_idx >= self.stack_count:
             return
         img = self.image_stack[self.current_stack_idx, ...]
+        img = self.normalize_image(img)
+
         qimg = QImage(img.data, img.shape[1], img.shape[0], img.strides[0], QImage.Format_Grayscale8)
 
         self.pixmap = QPixmap.fromImage(qimg)
@@ -430,7 +468,8 @@ class MesoscopeGUI(QMainWindow):
         if xr is None:
             return
         x, y = self.to_absolute(xr, yr)
-        self.points_widgets[idx].move(x, y)
+        if x is not None and y is not None:
+            self.points_widgets[idx].move(x, y)
 
     def update_point_filter(self, idx):
         w = self.points_widgets[idx].widget
@@ -481,8 +520,11 @@ class MesoscopeGUI(QMainWindow):
         for i in range(3):
             if i == idx:
                 continue
-            x_ = self.points[i]['coords'][0]
-            y_ = self.points[i]['coords'][1]
+            coords = self.points[i].get('coords', None)
+            if coords is None:
+                continue
+            x_ = coords[0]
+            y_ = coords[1]
             d = sqrt((x - x_) ** 2 + (y - y_) ** 2)
             if d <= MIN_DISTANCE:
                 print(f"Warning: points {idx} and {i} are too close ({d: .3f} <= {MIN_DISTANCE})")
@@ -521,6 +563,8 @@ class MesoscopeGUI(QMainWindow):
             with open(points_file, 'r') as f:
                 data = json.load(f)
             self.points = data['points']
+            vrange = data.get('range', (0, 99))
+            self.range_slider.setValue(tuple(vrange))
 
         # Update the points position on the image.
         for point_idx in range(3):
@@ -532,9 +576,9 @@ class MesoscopeGUI(QMainWindow):
     def save_points(self):
         if self.current_folder_idx >= len(self.folder_paths):
             return
-        print("Saving points", self.points)
+        # print("Saving points", self.points)
         with open(self.points_file, 'w') as f:
-            json.dump({'points': self.points}, f, indent=2)
+            json.dump({'points': self.points, 'range': self.get_range()}, f, indent=2)
             f.write('\n')
 
     # Event handling
