@@ -3,6 +3,7 @@
 # -------------------------------------------------------------------------------------------------
 
 import json
+from math import pow, sqrt, exp
 import os
 import os.path as op
 from pathlib import Path
@@ -11,7 +12,7 @@ import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QVBoxLayout, QHBoxLayout, QListWidget, QLabel,
     QScrollBar, QPushButton, QWidget, QMenu, QAction, QSplitter, QListView, QAbstractItemView,
-    QTreeView, QGraphicsOpacityEffect)
+    QTreeView, QGraphicsOpacityEffect, QGraphicsBlurEffect)
 from PyQt5.QtCore import Qt, QPoint
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QKeySequence, QPen
 
@@ -49,6 +50,15 @@ def set_widget_opaque(widget, is_opaque):
         opacity_effect = QGraphicsOpacityEffect()
         opacity_effect.setOpacity(0.5)
         widget.setGraphicsEffect(opacity_effect if not is_opaque else None)
+
+
+def set_blur(widget, blur_amount):
+    if blur_amount == 0:
+        widget.setGraphicsEffect(None)
+    else:
+        blur_effect = QGraphicsBlurEffect()
+        blur_effect.setBlurRadius(blur_amount)
+        widget.setGraphicsEffect(blur_effect)
 
 
 class PointWidget:
@@ -150,7 +160,7 @@ class MesoscopeGUI(QMainWindow):
 
     def update_points(self):
         [p.update() for p in self.points_widgets]
-        [self.update_point_opacity(idx) for idx in range(3)]
+        [self.update_point_filter(idx) for idx in range(3)]
 
     # UI
     # ---------------------------------------------------------------------------------------------
@@ -405,7 +415,7 @@ class MesoscopeGUI(QMainWindow):
         self.points[point_idx]['coords'] = (xr, yr)
         self.points[point_idx]['stack_idx'] = stack_idx
         self.update_point_position(point_idx)
-        self.update_point_opacity(point_idx)
+        self.update_point_filter(point_idx)
 
     def update_point_position(self, idx):
         xr, yr = self.points[idx].get('coords', (None, None))
@@ -414,10 +424,12 @@ class MesoscopeGUI(QMainWindow):
         x, y = self.to_absolute(xr, yr)
         self.points_widgets[idx].move(x, y)
 
-    def update_point_opacity(self, idx):
+    def update_point_filter(self, idx):
+        w = self.points_widgets[idx].widget
         stack_idx = self.points[idx].get('stack_idx', -1)
-        is_opaque = self.current_stack_idx == stack_idx
-        set_widget_opaque(self.points_widgets[idx].widget, is_opaque)
+        blur = abs(self.current_stack_idx - stack_idx)
+        blur = 0 if blur == 0 else 2 + .5 * blur * blur
+        set_blur(w, blur)
 
     def add_point_at_click(self, event):
         x, y = event.pos().x(), event.pos().y()
@@ -446,7 +458,7 @@ class MesoscopeGUI(QMainWindow):
         idx = self._widget_idx(w)
         assert 0 <= idx and idx <= 2
         self.points[idx]['stack_idx'] = self.current_stack_idx
-        self.update_point_opacity(idx)
+        self.update_point_filter(idx)
 
     def drag_point(self, event, w):
         new_pos = w.pos() + event.pos() - self.drag_offset
@@ -485,7 +497,7 @@ class MesoscopeGUI(QMainWindow):
         # Update the points position on the image.
         for point_idx in range(3):
             self.update_point_position(point_idx)
-            self.update_point_opacity(point_idx)
+            self.update_point_filter(point_idx)
 
         self.scrollbar.setValue(self.points[0].get('stack_idx', self.stack_count // 2))
 
