@@ -37,6 +37,7 @@ WHITE = (255, 255, 255)
 STROKE_WIDTH = 8
 BORDER_WIDTH = 4
 MAX_SIZE = RADIUS - STROKE_WIDTH - 2 * BORDER_WIDTH
+MIN_DISTANCE = .1
 
 
 # -------------------------------------------------------------------------------------------------
@@ -474,7 +475,21 @@ class MesoscopeGUI(QMainWindow):
         self.update_point_filter(idx)
 
     def drag_point(self, event, w):
+        idx = self._widget_idx(w)
         new_pos = w.pos() + event.pos() - self.drag_offset
+        x, y = self.to_relative(new_pos.x(), new_pos.y())
+        for i in range(3):
+            if i == idx:
+                continue
+            x_ = self.points[i]['coords'][0]
+            y_ = self.points[i]['coords'][1]
+            d = sqrt((x - x_) ** 2 + (y - y_) ** 2)
+            if d <= MIN_DISTANCE:
+                print(f"Warning: points {idx} and {i} are too close ({d: .3f} <= {MIN_DISTANCE})")
+            #     x = x_ + MIN_DISTANCE * (x-x_) / d
+            #     y = y_ + MIN_DISTANCE * (y-y_) / d
+            #     x, y = self.to_absolute(x, y)
+            #     new_pos = QPoint(x, y)
         w.move(new_pos)
 
     def end_drag(self, event, w, point_idx):
