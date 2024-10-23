@@ -2,9 +2,11 @@
 # Imports
 # -------------------------------------------------------------------------------------------------
 
-import sys
-import os
 import json
+import os
+import os.path as op
+from pathlib import Path
+import sys
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QVBoxLayout, QHBoxLayout, QListWidget, QLabel,
@@ -196,7 +198,8 @@ class MesoscopeGUI(QMainWindow):
             self.folder_paths = self.find_image_folders(paths)
 
             self.folder_list.clear()
-            self.folder_list.addItems([os.path.relpath(f, os.path.dirname(self.folder_paths[0])) for f in self.folder_paths])
+            # NOTE: remove "/reference" at the end
+            self.folder_list.addItems([f[:-10] for f in self.folder_paths])
 
             self.current_folder_idx = 0
             self.update_folder()
@@ -204,9 +207,10 @@ class MesoscopeGUI(QMainWindow):
     def find_image_folders(self, root_folders):
         image_folders = []
         for root_folder in root_folders:
-            for subdir, _, files in os.walk(root_folder):
-                if any(f.startswith("referenceImage.meta") for f in files):
-                    image_folders.append(subdir)
+            root_path = Path(root_folder)
+            for subdir in root_path.rglob('reference'):
+                if subdir.is_dir() and any(f.name.startswith("referenceImage.meta") for f in subdir.iterdir()):
+                    image_folders.append(str(subdir))
         return image_folders
 
     def update_folder(self):
@@ -229,7 +233,7 @@ class MesoscopeGUI(QMainWindow):
     def load_image_stack(self):
         folder = self.folder_paths[self.current_folder_idx]
         stack_file = next(f for f in os.listdir(folder) if f.startswith("referenceImage.stack") and f.endswith(".tif"))
-        self.stack_path = os.path.join(folder, stack_file)
+        self.stack_path = op.join(folder, stack_file)
 
         self.image_stack = iio.imread(self.stack_path)  # shape: nstacks, h, w
         assert self.image_stack.ndim == 3
@@ -410,7 +414,7 @@ class MesoscopeGUI(QMainWindow):
 
     @property
     def points_file(self):
-        return os.path.join(self.folder_paths[self.current_folder_idx], "referenceImage.points.json")
+        return op.join(self.folder_paths[self.current_folder_idx], "referenceImage.points.json")
 
     def load_points(self):
         self.clear_points()
@@ -418,7 +422,7 @@ class MesoscopeGUI(QMainWindow):
         points_file = self.points_file
 
         # Update the points structure.
-        if os.path.exists(points_file):
+        if op.exists(points_file):
             with open(points_file, 'r') as f:
                 data = json.load(f)
             self.points = data['points']
