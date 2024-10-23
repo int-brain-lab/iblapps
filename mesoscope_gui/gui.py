@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QScrollBar, QPushButton, QWidget, QMenu, QAction, QSplitter, QListView, QAbstractItemView,
     QTreeView, QGraphicsOpacityEffect)
 from PyQt5.QtCore import Qt, QPoint
-from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QKeySequence
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QKeySequence, QPen
 
 import imageio.v3 as iio
 import numpy as np
@@ -26,7 +26,16 @@ import numpy as np
 
 WIDTH = 1024
 HEIGHT = 768
-RADIUS = 20
+RADIUS = 48
+COLORS = (
+    (224, 54, 0),
+    (91, 200, 0),
+    (4, 100, 141),
+)
+WHITE = (255, 255, 255)
+STROKE_WIDTH = 8
+BORDER_WIDTH = 4
+MAX_SIZE = RADIUS - STROKE_WIDTH - 2 * BORDER_WIDTH
 
 
 # -------------------------------------------------------------------------------------------------
@@ -40,6 +49,65 @@ def set_widget_opaque(widget, is_opaque):
         opacity_effect = QGraphicsOpacityEffect()
         opacity_effect.setOpacity(0.5)
         widget.setGraphicsEffect(opacity_effect if not is_opaque else None)
+
+
+class PointWidget:
+    def __init__(self, color, opacity=255, parent=None):
+        self.color = color
+        self.opacity = opacity
+        self.size = MAX_SIZE
+
+        self.widget = None
+        if parent is not None:
+            self.set_widget(parent)
+
+    def set_size(self, size):
+        self.size = min(MAX_SIZE, max(0, size))
+        self.update()
+
+    def set_opacity(self, opacity):
+        self.opacity = opacity
+        self.update()
+
+    def pixmap(self):
+        s = RADIUS
+        offsets = (0, int(1.5*BORDER_WIDTH))
+        colors = (WHITE, self.color)
+        opacities = (255, self.opacity)
+        widths = (STROKE_WIDTH + BORDER_WIDTH, STROKE_WIDTH)
+
+        pixmap = QPixmap(RADIUS, RADIUS)
+        pixmap.fill(Qt.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setBrush(Qt.NoBrush)
+
+        for color, opacity, width, b in zip(colors, opacities, widths, offsets):
+            painter.setPen(QPen(QColor(*color, opacity), width))
+            painter.drawLine(b, s // 2, s-b, s // 2)
+            painter.drawLine(s // 2, b, s // 2, s-b)
+
+        painter.end()
+        return pixmap
+
+    def set_widget(self, parent):
+        r = RADIUS
+        self.widget = QLabel(parent)
+        self.widget.setFixedSize(r, r)
+        self.widget.setPixmap(self.pixmap())
+        self.widget.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        self.clear()
+        self.widget.show()
+
+    def clear(self):
+        self.widget.move(-100, -100)
+
+    def move(self, x, y):
+        r = RADIUS
+        self.widget.move(x - r // 2, y - r // 2)
+
+    def update(self):
+        self.widget.setPixmap(self.pixmap())
 
 
 # -------------------------------------------------------------------------------------------------
@@ -59,21 +127,30 @@ class MesoscopeGUI(QMainWindow):
         self.current_stack_idx = 0
 
         self.pixmap = None
-        self._clear_points_struct()
+        self.clear_points_struct()
 
         super().__init__()
         self.init_ui()
-        self._init_point_widgets()
+        self.init_points_widgets()
 
-    def _clear_points_struct(self):
+    def make_point_widget(self, idx):
+        color = COLORS[idx]
+        pw = PointWidget(color, parent=self.image_label)
+        w = pw.widget
+        w.mousePressEvent = lambda event: self.start_drag(event, w)
+        w.mouseMoveEvent = lambda event: self.drag_point(event, w)
+        w.mouseReleaseEvent = lambda event: self.end_drag(event, w, idx)
+        return pw
+
+    def init_points_widgets(self):
+        self.points_widgets = [self.make_point_widget(idx) for idx in range(3)]
+
+    def clear_points_struct(self):
         self.points = [{} for idx in range(3)]  # point_idx, stack_idx, coords
 
-    def _init_point_widgets(self):
-        self.points_widgets = []
-        for point_idx in range(3):
-            color = ['red', 'green', 'blue'][point_idx]
-            x = y = -100
-            self._add_point_widget(x, y, color, point_idx)
+    def update_points(self):
+        [p.update() for p in self.points_widgets]
+        [self.update_point_opacity(idx) for idx in range(3)]
 
     # UI
     # ---------------------------------------------------------------------------------------------
@@ -144,30 +221,6 @@ class MesoscopeGUI(QMainWindow):
         self.setWindowTitle('Mesoscope GUI')
         self.resize(WIDTH, HEIGHT)
         self.show()
-
-    def _add_point_widget(self, x, y, color, point_idx):
-        point_label = QLabel(self.image_label)
-        r = RADIUS
-        point_label.setFixedSize(r, r)
-
-        pixmap = QPixmap(r, r)
-        pixmap.fill(Qt.transparent)
-        painter = QPainter(pixmap)
-        painter.setBrush(QColor(color))
-        painter.setPen(Qt.NoPen)
-        painter.drawEllipse(0, 0, r, r)
-        painter.end()
-
-        point_label.setPixmap(pixmap)
-        point_label.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-        point_label.move(x - r // 2, y - r // 2)
-        point_label.show()
-
-        point_label.mousePressEvent = lambda event: self.start_drag(event, point_label)
-        point_label.mouseMoveEvent = lambda event: self.drag_point(event, point_label)
-        point_label.mouseReleaseEvent = lambda event: self.end_drag(event, point_label, point_idx)
-
-        self.points_widgets.append(point_label)
 
     # Folder opening
     # ---------------------------------------------------------------------------------------------
@@ -343,16 +396,10 @@ class MesoscopeGUI(QMainWindow):
             f"Slice #{self.current_stack_idx + 1} / {self.stack_count}")
 
         self.update_margins()
-        for point_idx in range(3):
-            self.update_point_opacity(point_idx)
+        self.update_points()
 
     # Adding points
     # ---------------------------------------------------------------------------------------------
-
-    def clear_points(self):
-        self._clear_points_struct()
-        for widget, point in zip(self.points_widgets, self.points):
-            widget.move(-100, -100)
 
     def set_point_position(self, point_idx, xr, yr, stack_idx):
         self.points[point_idx]['coords'] = (xr, yr)
@@ -360,17 +407,17 @@ class MesoscopeGUI(QMainWindow):
         self.update_point_position(point_idx)
         self.update_point_opacity(point_idx)
 
-    def update_point_position(self, point_idx):
-        xr, yr = self.points[point_idx].get('coords', (None, None))
+    def update_point_position(self, idx):
+        xr, yr = self.points[idx].get('coords', (None, None))
         if xr is None:
             return
         x, y = self.to_absolute(xr, yr)
-        self.points_widgets[point_idx].move(x - RADIUS // 2, y - RADIUS // 2)
+        self.points_widgets[idx].move(x, y)
 
-    def update_point_opacity(self, point_idx):
-        stack_idx = self.points[point_idx].get('stack_idx', -1)
-        opacity = self.current_stack_idx == stack_idx
-        set_widget_opaque(self.points_widgets[point_idx], opacity)
+    def update_point_opacity(self, idx):
+        stack_idx = self.points[idx].get('stack_idx', -1)
+        is_opaque = self.current_stack_idx == stack_idx
+        set_widget_opaque(self.points_widgets[idx].widget, is_opaque)
 
     def add_point_at_click(self, event):
         x, y = event.pos().x(), event.pos().y()
@@ -385,22 +432,29 @@ class MesoscopeGUI(QMainWindow):
     # Points drag and drop
     # ---------------------------------------------------------------------------------------------
 
-    def start_drag(self, event, point_label):
+    def _widget_idx(self, w):
+        widgets = [pw.widget for pw in self.points_widgets]
+        assert w in widgets
+        point_idx = widgets.index(w)
+        return point_idx
+
+    def start_drag(self, event, w):
         self.drag_offset = event.pos()
-        point_label.raise_()
+        w.raise_()
 
         # Set the point's stack idx to the current stack
-        point_idx = self.points_widgets.index(point_label)
-        self.points[point_idx]['stack_idx'] = self.current_stack_idx
-        self.update_point_opacity(point_idx)
+        idx = self._widget_idx(w)
+        assert 0 <= idx and idx <= 2
+        self.points[idx]['stack_idx'] = self.current_stack_idx
+        self.update_point_opacity(idx)
 
-    def drag_point(self, event, point_label):
-        new_pos = point_label.pos() + event.pos() - self.drag_offset
-        point_label.move(new_pos)
+    def drag_point(self, event, w):
+        new_pos = w.pos() + event.pos() - self.drag_offset
+        w.move(new_pos)
 
-    def end_drag(self, event, point_label, point_idx):
+    def end_drag(self, event, w, point_idx):
         r = RADIUS
-        x, y = point_label.x() + r // 2, point_label.y() + r // 2
+        x, y = w.x() + r // 2, w.y() + r // 2
         xr, yr = self.to_relative(x, y)
         if xr < 0 or xr > 1 or yr < 0 or yr > 1:
             print(f"Deleting point {point_idx}")
@@ -417,7 +471,8 @@ class MesoscopeGUI(QMainWindow):
         return op.join(self.folder_paths[self.current_folder_idx], "referenceImage.points.json")
 
     def load_points(self):
-        self.clear_points()
+        self.clear_points_struct()
+        [p.clear() for p in self.points_widgets]
 
         points_file = self.points_file
 
