@@ -218,14 +218,21 @@ class MesoscopeGUI(QMainWindow):
         self.splitter.addWidget(self.scrollbar)
 
         self.nav_layout = QHBoxLayout()
+
+        self.all_button = QPushButton('Move to current depth')
+        self.all_button.clicked.connect(self.move_to_current_depth)
+        self.nav_layout.addWidget(self.all_button)
+
         self.prev_button = QPushButton('Previous')
         self.prev_button.setEnabled(False)
         self.prev_button.clicked.connect(lambda: self.navigate(-1))
+        self.nav_layout.addWidget(self.prev_button)
+
         self.next_button = QPushButton('Next')
         self.next_button.setEnabled(False)
         self.next_button.clicked.connect(lambda: self.navigate(1))
-        self.nav_layout.addWidget(self.prev_button)
         self.nav_layout.addWidget(self.next_button)
+
         self.layout.addLayout(self.nav_layout)
 
         self.setWindowTitle('Mesoscope GUI')
@@ -439,6 +446,12 @@ class MesoscopeGUI(QMainWindow):
         assert 0 <= point_idx and point_idx < 3
         xr, yr = self.to_relative(x, y)
         self.set_point_position(point_idx, xr, yr, self.current_stack_idx)
+        self.save_points()
+
+    def move_to_current_depth(self, ev):
+        for idx in range(3):
+            self.points[idx]['stack_idx'] = self.current_stack_idx
+            self.update_point_filter(idx)
         self.save_points()
 
     # Points drag and drop
