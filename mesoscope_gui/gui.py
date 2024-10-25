@@ -177,6 +177,10 @@ class MesoscopeGUI(QMainWindow):
         open_action.triggered.connect(self.open_dialog)
         file_menu.addAction(open_action)
 
+        open_json_action = QAction('Open JSON points', self)
+        open_json_action.triggered.connect(self.open_json_dialog)
+        file_menu.addAction(open_json_action)
+
         quit_action = QAction('Quit', self)
         quit_action.setShortcut(QKeySequence.Quit)
         quit_action.triggered.connect(self.close)
@@ -265,9 +269,6 @@ class MesoscopeGUI(QMainWindow):
     def open_dialog(self):
         dialog = QFileDialog()
         dialog.setFileMode(QFileDialog.DirectoryOnly)
-        # dialog.setOption(QFileDialog.ShowDirsOnly, True)
-        # if dialog.exec_():
-        #     self.open(dialog.selectedFiles())
 
         dialog.setOption(QFileDialog.DontUseNativeDialog, True)
         file_view = dialog.findChild(QListView, 'listView')
@@ -283,6 +284,16 @@ class MesoscopeGUI(QMainWindow):
             paths = dialog.selectedFiles()
             paths = sorted(paths)
             self.open(paths)
+
+    def open_json_dialog(self):
+        json_file, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open JSON Points File",
+            "",
+            "JSON Files (*.json)"
+        )
+        if json_file:
+            self.load_points(json_file)
 
     def open(self, paths):
             self.folder_paths = self.find_image_folders(paths)
@@ -552,11 +563,11 @@ class MesoscopeGUI(QMainWindow):
     def points_file(self):
         return op.join(self.folder_paths[self.current_folder_idx], "referenceImage.points.json")
 
-    def load_points(self):
+    def load_points(self, points_file=None):
         self.clear_points_struct()
         [p.clear() for p in self.points_widgets]
 
-        points_file = self.points_file
+        points_file = points_file or self.points_file
 
         # Update the points structure.
         if op.exists(points_file):
