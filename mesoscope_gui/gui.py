@@ -206,26 +206,26 @@ class MesoscopeGUI(QMainWindow):
         file_menu.addAction(quit_action)
 
         self.central_widget = QWidget()
-        self.layout = QVBoxLayout(self.central_widget)
+        layout = QVBoxLayout(self.central_widget)
         self.setCentralWidget(self.central_widget)
 
-        self.splitter = QSplitter(Qt.Horizontal)
-        self.layout.addWidget(self.splitter)
+        splitter = QSplitter(Qt.Horizontal)
+        layout.addWidget(splitter)
 
         # Folder list
         self.folder_list = QListWidget()
         self.folder_list.setMaximumWidth(200)
         self.folder_list.currentRowChanged.connect(self.update_folder)
         self.folder_list.itemClicked.connect(lambda: self.select_folder(self.folder_list.currentRow()))
-        self.splitter.addWidget(self.folder_list)
+        splitter.addWidget(self.folder_list)
 
-        self.image_layout = QVBoxLayout()
+        image_layout = QVBoxLayout()
 
         # Slice label.
         self.slice_index_label = QLabel("Slice #0")
         self.slice_index_label.setAlignment(Qt.AlignRight)
         self.slice_index_label.setMaximumHeight(20)
-        self.image_layout.addWidget(self.slice_index_label)
+        image_layout.addWidget(self.slice_index_label)
 
         # Range slider.
         self.range_slider = QRangeSlider(Qt.Orientation.Horizontal)
@@ -233,7 +233,7 @@ class MesoscopeGUI(QMainWindow):
         self.range_slider.setValue((0, 100))
         self.range_slider.valueChanged.connect(
             lambda ev: (self.update_image(), self.save_points()))
-        self.image_layout.addWidget(self.range_slider)
+        image_layout.addWidget(self.range_slider)
 
         # Points.
         self.image_label = QLabel()
@@ -242,7 +242,7 @@ class MesoscopeGUI(QMainWindow):
         self.image_label.resizeEvent = self.on_resized
         self.image_label.mousePressEvent = self.add_point_at_click
         self.image_label.setMinimumSize(1, 1)
-        self.image_layout.addWidget(self.image_label)
+        image_layout.addWidget(self.image_label)
 
         # Stack scrollbar.
         self.scrollbar = QScrollBar(Qt.Vertical)
@@ -251,32 +251,47 @@ class MesoscopeGUI(QMainWindow):
 
         # Image.
         self.image_widget = QWidget()
-        self.image_widget.setLayout(self.image_layout)
-        self.splitter.addWidget(self.image_widget)
+        self.image_widget.setLayout(image_layout)
+        splitter.addWidget(self.image_widget)
 
-        self.splitter.addWidget(self.scrollbar)
+        splitter.addWidget(self.scrollbar)
 
-        # Bottom buttons
-        self.nav_layout = QHBoxLayout()
+        # Move buttons
+        move_layout = QHBoxLayout()
+
+        # Move down
+        down_button = QPushButton('Move down')
+        down_button.clicked.connect(self.move_down)
+        move_layout.addWidget(down_button)
 
         # Move to current depth button
-        self.all_button = QPushButton('Move to current depth')
-        self.all_button.clicked.connect(self.move_to_current_depth)
-        self.nav_layout.addWidget(self.all_button)
+        current_button = QPushButton('Move to current depth')
+        current_button.clicked.connect(self.move_to_current_depth)
+        move_layout.addWidget(current_button)
+
+        # Move up
+        up_button = QPushButton('Move up')
+        up_button.clicked.connect(self.move_up)
+        move_layout.addWidget(up_button)
+
+        layout.addLayout(move_layout)
+
+        # Nav buttons
+        nav_layout = QHBoxLayout()
 
         # Previous button
         self.prev_button = QPushButton('Previous')
         self.prev_button.setEnabled(False)
         self.prev_button.clicked.connect(lambda: self.navigate(-1))
-        self.nav_layout.addWidget(self.prev_button)
+        nav_layout.addWidget(self.prev_button)
 
         # Next button
         self.next_button = QPushButton('Next')
         self.next_button.setEnabled(False)
         self.next_button.clicked.connect(lambda: self.navigate(1))
-        self.nav_layout.addWidget(self.next_button)
+        nav_layout.addWidget(self.next_button)
 
-        self.layout.addLayout(self.nav_layout)
+        layout.addLayout(nav_layout)
 
         self.setWindowTitle('Mesoscope GUI')
         self.resize(WIDTH, HEIGHT)
@@ -393,6 +408,11 @@ class MesoscopeGUI(QMainWindow):
             return None, None
         vmin, vmax = self.range_slider.value()
         return vmin, vmax
+
+    def set_stack(self, idx):
+        idx = max(self.scrollbar.minimum(), min(self.scrollbar.maximum(), idx))
+        self.scrollbar.setValue(idx)
+        return idx
 
     # Coordinate transforms
     # ---------------------------------------------------------------------------------------------
@@ -534,9 +554,26 @@ class MesoscopeGUI(QMainWindow):
         self.set_point_position(point_idx, xr, yr, self.current_stack_idx)
         self.save_points()
 
+    # Stack navigation
+    # ---------------------------------------------------------------------------------------------
+
+    def move_down(self, ev):
+        self.current_stack_idx = self.set_stack(self.current_stack_idx - 1)
+        for idx in range(3):
+            self.points[idx]['stack_idx'] -= 1
+            self.update_point_filter(idx)
+        self.save_points()
+
     def move_to_current_depth(self, ev):
         for idx in range(3):
             self.points[idx]['stack_idx'] = self.current_stack_idx
+            self.update_point_filter(idx)
+        self.save_points()
+
+    def move_up(self, ev):
+        self.current_stack_idx = self.set_stack(self.current_stack_idx + 1)
+        for idx in range(3):
+            self.points[idx]['stack_idx'] += 1
             self.update_point_filter(idx)
         self.save_points()
 
@@ -563,6 +600,7 @@ class MesoscopeGUI(QMainWindow):
         idx = self._widget_idx(w)
         new_pos = w.pos() + event.pos() - self.drag_offset
         x, y = self.to_relative(new_pos.x(), new_pos.y())
+        # print(x, y)
         for i in range(3):
             if i == idx:
                 continue
