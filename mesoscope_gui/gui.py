@@ -39,6 +39,7 @@ STROKE_WIDTH = 8
 BORDER_WIDTH = 4
 MAX_SIZE = RADIUS - STROKE_WIDTH - 2 * BORDER_WIDTH
 MIN_DISTANCE = .1
+SNAPSHOT_RESCALING_FACTOR = .075
 
 
 # -------------------------------------------------------------------------------------------------
@@ -61,6 +62,22 @@ def set_blur(widget, blur_amount):
         blur_effect = QGraphicsBlurEffect()
         blur_effect.setBlurRadius(blur_amount)
         widget.setGraphicsEffect(blur_effect)
+
+
+def rescale(img, scale=1):
+    new_h = int(img.shape[0] * scale)
+    new_w = int(img.shape[1] * scale)
+    row_indices = (np.linspace(0, img.shape[0] - 1, new_h)).astype(int)
+    col_indices = (np.linspace(0, img.shape[1] - 1, new_w)).astype(int)
+    return img[np.ix_(row_indices, col_indices)]
+
+
+def inset(img, inset, loc='tl'):
+    new_h, new_w = inset.shape[:2]
+    if loc == 'tl':
+        img[:new_h, :new_w] = inset
+    if loc == 'tr':
+        img[:new_h, -new_w:] = inset
 
 
 class PointWidget:
@@ -139,6 +156,8 @@ class MesoscopeGUI(QMainWindow):
         self.current_stack_idx = 0
         self.range_slider = None
 
+        self.WF_before = None
+        self.WF_after = None
         self.pixmap = None
         self.clear_points_struct()
 
@@ -303,7 +322,7 @@ class MesoscopeGUI(QMainWindow):
             self.folder_list.addItems([f[:-10] for f in self.folder_paths])
 
             self.current_folder_idx = 0
-            self.update_folder()
+            # self.update_folder()
 
     def find_image_folders(self, root_folders):
         image_folders = []
@@ -333,15 +352,24 @@ class MesoscopeGUI(QMainWindow):
         self.folder_list.setCurrentRow(self.current_folder_idx)
 
     def load_image_stack(self):
-        folder = self.folder_paths[self.current_folder_idx]
+        folder = Path(self.folder_paths[self.current_folder_idx])
         stack_file = next(f for f in os.listdir(folder) if f.startswith("referenceImage.stack") and f.endswith(".tif"))
-        self.stack_path = op.join(folder, stack_file)
+        self.stack_path = folder / stack_file
 
         self.image_stack = iio.imread(self.stack_path)  # shape: nstacks, h, w
         assert self.image_stack.ndim == 3
         self.stack_count = self.image_stack.shape[0]
         self.scrollbar.setMaximum(self.stack_count - 1)
         self.image_stack = self.image_stack.astype(np.float32)
+
+        # Snapshot images.
+        snapshot_folder = folder / '../snapshots'
+        WF_before_path = (snapshot_folder / 'WF_before.png').resolve()
+        WF_after_path = (snapshot_folder / 'WF_after.png').resolve()
+        if WF_before_path.exists() and WF_after_path.exists():
+            # NOTE: rotate by 90°
+            self.WF_before = np.rot90(iio.imread(WF_before_path)).mean(axis=-1)
+            self.WF_after = np.rot90(iio.imread(WF_after_path)).mean(axis=-1)
 
     def normalize_image(self, img):
         h = .001
@@ -454,11 +482,18 @@ class MesoscopeGUI(QMainWindow):
         img = self.image_stack[self.current_stack_idx, ...]
         img = self.normalize_image(img)
 
-        qimg = QImage(img.data, img.shape[1], img.shape[0], img.strides[0], QImage.Format_Grayscale8)
+        # Snapshot insets.
+        if self.WF_before is not None and self.WF_after is not None:
+            WF_before = rescale(self.WF_before, SNAPSHOT_RESCALING_FACTOR)
+            WF_after = rescale(self.WF_after, SNAPSHOT_RESCALING_FACTOR)
+            inset(img, WF_before, loc='tl')
+            inset(img, WF_after, loc='tr')
 
+        qimg = QImage(img.data, img.shape[1], img.shape[0], img.strides[0], QImage.Format_Grayscale8)
         self.pixmap = QPixmap.fromImage(qimg)
         self.image_label.setPixmap(self.pixmap)
 
+        # Slice text.
         self.slice_index_label.setText(
             f"Slice #{self.current_stack_idx + 1} / {self.stack_count}")
 
