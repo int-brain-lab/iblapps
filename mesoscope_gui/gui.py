@@ -28,6 +28,7 @@ import numpy as np
 
 WIDTH = 1024
 HEIGHT = 768
+MAX_LISTVIEW_WIDTH = 250
 RADIUS = 48
 COLORS = (
     (224, 54, 0),
@@ -214,7 +215,7 @@ class MesoscopeGUI(QMainWindow):
 
         # Folder list
         self.folder_list = QListWidget()
-        self.folder_list.setMaximumWidth(200)
+        self.folder_list.setMaximumWidth(MAX_LISTVIEW_WIDTH)
         self.folder_list.currentRowChanged.connect(self.update_folder)
         self.folder_list.itemClicked.connect(lambda: self.select_folder(self.folder_list.currentRow()))
         splitter.addWidget(self.folder_list)
@@ -343,7 +344,7 @@ class MesoscopeGUI(QMainWindow):
         image_folders = []
         for root_folder in root_folders:
             root_path = Path(root_folder)
-            for subdir in root_path.rglob('reference'):
+            for subdir in root_path.rglob('raw_imaging_data_*/reference'):
                 if subdir.is_dir() and any(f.name.startswith("referenceImage.meta") for f in subdir.iterdir()):
                     image_folders.append(str(subdir))
         return image_folders
@@ -378,7 +379,7 @@ class MesoscopeGUI(QMainWindow):
         self.image_stack = self.image_stack.astype(np.float32)
 
         # Snapshot images.
-        snapshot_folder = folder / '../snapshots'
+        snapshot_folder = folder / '../../snapshots'
         WF_before_path = (snapshot_folder / 'WF_before.png').resolve()
         WF_after_path = (snapshot_folder / 'WF_after.png').resolve()
         if WF_before_path.exists() and WF_after_path.exists():
