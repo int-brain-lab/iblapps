@@ -12,7 +12,7 @@ import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QVBoxLayout, QHBoxLayout, QListWidget, QLabel,
     QScrollBar, QPushButton, QWidget, QMenu, QAction, QSplitter, QListView, QAbstractItemView,
-    QTreeView, QGraphicsOpacityEffect, QGraphicsBlurEffect)
+    QTreeView, QGraphicsOpacityEffect, QGraphicsBlurEffect, QSpinBox)
 from PyQt5.QtCore import Qt, QPoint
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QKeySequence, QPen
 from superqt import QRangeSlider
@@ -28,7 +28,7 @@ import numpy as np
 
 WIDTH = 1024
 HEIGHT = 768
-MAX_LISTVIEW_WIDTH = 250
+MAX_LEFT_PANEL_WIDTH = 250
 RADIUS = 48
 COLORS = (
     (224, 54, 0),
@@ -150,7 +150,7 @@ class MesoscopeGUI(QMainWindow):
     # ---------------------------------------------------------------------------------------------
 
     def __init__(self):
-        self.current_folder_idx = 0
+        # self.current_folder_idx = 0
         self.folder_paths = []
 
         self.stack_count = 0
@@ -189,6 +189,7 @@ class MesoscopeGUI(QMainWindow):
     # ---------------------------------------------------------------------------------------------
 
     def init_ui(self):
+        # Menu.
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu('File')
 
@@ -206,6 +207,7 @@ class MesoscopeGUI(QMainWindow):
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
 
+        # Central widget.
         self.central_widget = QWidget()
         layout = QVBoxLayout(self.central_widget)
         self.setCentralWidget(self.central_widget)
@@ -214,11 +216,29 @@ class MesoscopeGUI(QMainWindow):
         layout.addWidget(splitter)
 
         # Folder list
+        left_layout = QVBoxLayout()
+
         self.folder_list = QListWidget()
-        self.folder_list.setMaximumWidth(MAX_LISTVIEW_WIDTH)
+        self.folder_list.setMaximumWidth(MAX_LEFT_PANEL_WIDTH)
         self.folder_list.currentRowChanged.connect(self.update_folder)
-        self.folder_list.itemClicked.connect(lambda: self.select_folder(self.folder_list.currentRow()))
-        splitter.addWidget(self.folder_list)
+        # self.folder_list.itemClicked.connect(lambda: self.select_folder(self.folder_list.currentRow()))
+        left_layout.addWidget(self.folder_list)
+
+        # Cortical depth widget.
+        self.cortical_depth_widget = QSpinBox()
+        self.cortical_depth_widget.setRange(0, 1000)
+        self.cortical_depth_widget.setSingleStep(10)
+        self.cortical_depth_widget.setValue(0)
+        self.cortical_depth_widget.setPrefix("cortical depth: ")
+        self.cortical_depth_widget.setSuffix(" microns")
+        self.cortical_depth_widget.setMaximumWidth(MAX_LEFT_PANEL_WIDTH)
+        self.cortical_depth_widget.valueChanged.connect(self.save_cortical_depth)
+        left_layout.addWidget(self.cortical_depth_widget)
+
+        widget = QWidget()
+        widget.setMaximumWidth(MAX_LEFT_PANEL_WIDTH)
+        widget.setLayout(left_layout)
+        splitter.addWidget(widget)
 
         image_layout = QVBoxLayout()
 
@@ -232,8 +252,7 @@ class MesoscopeGUI(QMainWindow):
         self.range_slider = QRangeSlider(Qt.Orientation.Horizontal)
         self.range_slider.setMaximumHeight(20)
         self.range_slider.setValue((0, 100))
-        self.range_slider.valueChanged.connect(
-            lambda ev: (self.update_image(), self.save_points()))
+        self.range_slider.valueChanged.connect(self.update_image)
         image_layout.addWidget(self.range_slider)
 
         # Points.
@@ -301,6 +320,17 @@ class MesoscopeGUI(QMainWindow):
     # Folder opening
     # ---------------------------------------------------------------------------------------------
 
+    @property
+    def current_folder_idx(self):
+        if getattr(self, 'folder_list', None):
+            return self.folder_list.currentRow()
+        else:
+            return 0
+
+    @current_folder_idx.setter
+    def current_folder_idx(self, value):
+        self.folder_list.setCurrentRow(value)
+
     def open_dialog(self):
         dialog = QFileDialog()
         dialog.setFileMode(QFileDialog.DirectoryOnly)
@@ -338,7 +368,6 @@ class MesoscopeGUI(QMainWindow):
             self.folder_list.addItems([f[:-10] for f in self.folder_paths])
 
             self.current_folder_idx = 0
-            # self.update_folder()
 
     def find_image_folders(self, root_folders):
         image_folders = []
@@ -350,6 +379,7 @@ class MesoscopeGUI(QMainWindow):
         return image_folders
 
     def update_folder(self):
+        # print(f"update folder to {self.current_folder_idx}")
         self.current_stack_idx = 0
         self.load_points()
         # NOTE: load_points also loads the range values, which should come BEFORE image loading
@@ -359,13 +389,9 @@ class MesoscopeGUI(QMainWindow):
         self.prev_button.setEnabled(self.current_folder_idx > 0)
         self.next_button.setEnabled(self.current_folder_idx < len(self.folder_paths) - 1)
 
-    def select_folder(self, folder_idx):
-        self.current_folder_idx = folder_idx
-        self.update_folder()
-
     def navigate(self, direction):
         self.current_folder_idx += direction
-        self.folder_list.setCurrentRow(self.current_folder_idx)
+        # self.folder_list.setCurrentRow(self.current_folder_idx)
 
     def load_image_stack(self):
         folder = Path(self.folder_paths[self.current_folder_idx])
@@ -404,16 +430,30 @@ class MesoscopeGUI(QMainWindow):
 
         return img
 
+    def set_stack(self, idx):
+        idx = max(self.scrollbar.minimum(), min(self.scrollbar.maximum(), idx))
+        self.scrollbar.setValue(idx)
+        return idx
+
+    # Value range
+    # ---------------------------------------------------------------------------------------------
+
     def get_range(self):
         if self.range_slider is None:
             return None, None
         vmin, vmax = self.range_slider.value()
         return vmin, vmax
 
-    def set_stack(self, idx):
-        idx = max(self.scrollbar.minimum(), min(self.scrollbar.maximum(), idx))
-        self.scrollbar.setValue(idx)
-        return idx
+    # Cortical depth
+    # ---------------------------------------------------------------------------------------------
+
+    @property
+    def cortical_depth(self):
+        return self.cortical_depth_widget.value()
+
+    @cortical_depth.setter
+    def cortical_depth(self, value):
+        self.cortical_depth_widget.setValue(value)
 
     # Coordinate transforms
     # ---------------------------------------------------------------------------------------------
@@ -521,6 +561,8 @@ class MesoscopeGUI(QMainWindow):
         self.update_margins()
         self.update_points()
 
+        self.save_range
+
     # Adding points
     # ---------------------------------------------------------------------------------------------
 
@@ -601,7 +643,6 @@ class MesoscopeGUI(QMainWindow):
         idx = self._widget_idx(w)
         new_pos = w.pos() + event.pos() - self.drag_offset
         x, y = self.to_relative(new_pos.x(), new_pos.y())
-        # print(x, y)
         for i in range(3):
             if i == idx:
                 continue
@@ -630,41 +671,65 @@ class MesoscopeGUI(QMainWindow):
             self.points[point_idx]['coords'] = xr, yr
         self.save_points()
 
-    # Points file
+    # I/O
     # ---------------------------------------------------------------------------------------------
 
     @property
     def points_file(self):
         return op.join(self.folder_paths[self.current_folder_idx], "referenceImage.points.json")
 
+    def load(self, points_file=None):
+        points_file = points_file or self.points_file
+        if op.exists(points_file):
+            with open(points_file, 'r') as f:
+                data = json.load(f)
+        else:
+            data = {}
+        return data
+
+    def save_fields(self, points_file=None, **kwargs):
+        points_file = points_file or self.points_file
+        data = self.load(points_file=points_file)
+        data.update(**kwargs)
+        with open(self.points_file, 'w') as f:
+            json.dump(data, f, indent=2)
+            f.write('\n')
+
+    # Points file
+    # ---------------------------------------------------------------------------------------------
+
     def load_points(self, points_file=None):
         self.clear_points_struct()
         [p.clear() for p in self.points_widgets]
 
-        points_file = points_file or self.points_file
+        data = self.load(points_file=points_file)
 
-        # Update the points structure.
-        if op.exists(points_file):
-            with open(points_file, 'r') as f:
-                data = json.load(f)
-            self.points = data['points']
-            vrange = data.get('range', (0, 99))
-            self.range_slider.setValue(tuple(vrange))
+        # Points.
+        self.points = data.get('points', [])
+
+        # Range.
+        vrange = data.get('range', (0, 99))
+        self.range_slider.setValue(tuple(vrange))
+
+        # Cortical depth.
+        self.cortical_depth = data.get('cortical_depth', 0)
 
         # Update the points position on the image.
         for point_idx in range(3):
             self.update_point_position(point_idx)
             self.update_point_filter(point_idx)
 
-        self.scrollbar.setValue(self.points[0].get('stack_idx', self.stack_count // 2))
+        if self.points:
+            self.scrollbar.setValue(self.points[0].get('stack_idx', self.stack_count // 2))
 
     def save_points(self):
-        if self.current_folder_idx >= len(self.folder_paths):
-            return
-        # print("Saving points", self.points)
-        with open(self.points_file, 'w') as f:
-            json.dump({'points': self.points, 'range': self.get_range()}, f, indent=2)
-            f.write('\n')
+        self.save_fields(points=self.points)
+
+    def save_range(self):
+        self.save_fields(range=self.get_range())
+
+    def save_cortical_depth(self):
+        self.save_fields(cortical_depth=self.cortical_depth)
 
     # Event handling
     # ---------------------------------------------------------------------------------------------
