@@ -196,8 +196,8 @@ class SliceView(QtWidgets.QWidget):
             self.label_region.setText("")
             self.label_acronym.setText("")
         else:
-            self.label_region.setText(region['name'][0])
-            self.label_acronym.setText(region['acronym'][0])
+            self.label_region.setText(region['name'])
+            self.label_acronym.setText(region['acronym'])
 
     def replace_image_layer(self, index, **kwargs):
         if index and len(self.imageItem) >= index:
