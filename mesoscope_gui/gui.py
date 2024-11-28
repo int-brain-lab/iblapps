@@ -395,7 +395,7 @@ class MesoscopeGUI(QMainWindow):
 
     def load_image_stack(self):
         folder = Path(self.folder_paths[self.current_folder_idx])
-        stack_file = next(f for f in os.listdir(folder) if f.startswith("referenceImage.stack") and f.endswith(".tif"))
+        stack_file = next(f for f in os.listdir(folder) if f.endswith(".tif"))
         self.stack_path = folder / stack_file
 
         self.image_stack = iio.imread(self.stack_path)  # shape: nstacks, h, w
