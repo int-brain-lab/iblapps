@@ -603,21 +603,24 @@ class MesoscopeGUI(QMainWindow):
     def move_down(self, ev):
         self.current_stack_idx = self.set_stack(self.current_stack_idx - 1)
         for idx in range(3):
-            self.points[idx]['stack_idx'] -= 1
-            self.update_point_filter(idx)
+            if 'stack_idx' in self.points[idx]:
+                self.points[idx]['stack_idx'] -= 1
+                self.update_point_filter(idx)
         self.save_points()
 
     def move_to_current_depth(self, ev):
         for idx in range(3):
-            self.points[idx]['stack_idx'] = self.current_stack_idx
-            self.update_point_filter(idx)
+            if 'stack_idx' in self.points[idx]:
+                self.points[idx]['stack_idx'] = self.current_stack_idx
+                self.update_point_filter(idx)
         self.save_points()
 
     def move_up(self, ev):
         self.current_stack_idx = self.set_stack(self.current_stack_idx + 1)
         for idx in range(3):
-            self.points[idx]['stack_idx'] += 1
-            self.update_point_filter(idx)
+            if 'stack_idx' in self.points[idx]:
+                self.points[idx]['stack_idx'] += 1
+                self.update_point_filter(idx)
         self.save_points()
 
     # Points drag and drop
@@ -676,11 +679,12 @@ class MesoscopeGUI(QMainWindow):
 
     @property
     def points_file(self):
-        return op.join(self.folder_paths[self.current_folder_idx], "referenceImage.points.json")
+        if self.folder_paths:
+            return op.join(self.folder_paths[self.current_folder_idx], "referenceImage.points.json")
 
     def load(self, points_file=None):
         points_file = points_file or self.points_file
-        if op.exists(points_file):
+        if points_file and op.exists(points_file):
             with open(points_file, 'r') as f:
                 data = json.load(f)
         else:
@@ -689,6 +693,8 @@ class MesoscopeGUI(QMainWindow):
 
     def save_fields(self, points_file=None, **kwargs):
         points_file = points_file or self.points_file
+        if not points_file:
+            return
         data = self.load(points_file=points_file)
         data.update(**kwargs)
         with open(self.points_file, 'w') as f:
