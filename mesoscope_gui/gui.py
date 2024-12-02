@@ -573,6 +573,8 @@ class MesoscopeGUI(QMainWindow):
         self.update_point_filter(point_idx)
 
     def update_point_position(self, idx):
+        if not self.points:
+            return
         xr, yr = self.points[idx].get('coords', (None, None))
         if xr is None:
             return
@@ -581,6 +583,8 @@ class MesoscopeGUI(QMainWindow):
             self.points_widgets[idx].move(x, y)
 
     def update_point_filter(self, idx):
+        if not self.points:
+            return
         w = self.points_widgets[idx].widget
         stack_idx = self.points[idx].get('stack_idx', -1)
         blur = abs(self.current_stack_idx - stack_idx)
@@ -601,6 +605,8 @@ class MesoscopeGUI(QMainWindow):
     # ---------------------------------------------------------------------------------------------
 
     def move_down(self, ev):
+        if not self.points:
+            return
         self.current_stack_idx = self.set_stack(self.current_stack_idx - 1)
         for idx in range(3):
             if 'stack_idx' in self.points[idx]:
@@ -609,6 +615,8 @@ class MesoscopeGUI(QMainWindow):
         self.save_points()
 
     def move_to_current_depth(self, ev):
+        if not self.points:
+            return
         for idx in range(3):
             if 'stack_idx' in self.points[idx]:
                 self.points[idx]['stack_idx'] = self.current_stack_idx
@@ -616,6 +624,8 @@ class MesoscopeGUI(QMainWindow):
         self.save_points()
 
     def move_up(self, ev):
+        if not self.points:
+            return
         self.current_stack_idx = self.set_stack(self.current_stack_idx + 1)
         for idx in range(3):
             if 'stack_idx' in self.points[idx]:
@@ -633,6 +643,8 @@ class MesoscopeGUI(QMainWindow):
         return point_idx
 
     def start_drag(self, event, w):
+        if not self.points:
+            return
         self.drag_offset = event.pos()
         w.raise_()
 
@@ -643,6 +655,8 @@ class MesoscopeGUI(QMainWindow):
         self.update_point_filter(idx)
 
     def drag_point(self, event, w):
+        if not self.points:
+            return
         idx = self._widget_idx(w)
         new_pos = w.pos() + event.pos() - self.drag_offset
         x, y = self.to_relative(new_pos.x(), new_pos.y())
@@ -664,6 +678,8 @@ class MesoscopeGUI(QMainWindow):
         w.move(new_pos)
 
     def end_drag(self, event, w, point_idx):
+        if not self.points:
+            return
         r = RADIUS
         x, y = w.x() + r // 2, w.y() + r // 2
         xr, yr = self.to_relative(x, y)
