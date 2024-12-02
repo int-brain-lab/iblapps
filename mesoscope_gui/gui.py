@@ -2,17 +2,19 @@
 # Imports
 # -------------------------------------------------------------------------------------------------
 
+import glob
 import json
 from math import pow, sqrt, exp
 import os
 import os.path as op
 from pathlib import Path
 import sys
+from typing import List
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QVBoxLayout, QHBoxLayout, QListWidget, QLabel,
     QScrollBar, QPushButton, QWidget, QMenu, QAction, QSplitter, QListView, QAbstractItemView,
-    QTreeView, QGraphicsOpacityEffect, QGraphicsBlurEffect, QSpinBox)
+    QLineEdit, QTreeView, QGraphicsOpacityEffect, QGraphicsBlurEffect, QSpinBox)
 from PyQt5.QtCore import Qt, QPoint
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QKeySequence, QPen
 from superqt import QRangeSlider
@@ -28,7 +30,9 @@ import numpy as np
 
 WIDTH = 1024
 HEIGHT = 768
-MAX_LEFT_PANEL_WIDTH = 250
+DEFAULT_LEFT_PANEL_WIDTH = 250
+MAX_LEFT_PANEL_WIDTH = 500
+DEFAULT_GLOB = "*stack*.tif"
 RADIUS = 48
 COLORS = (
     (224, 54, 0),
@@ -41,6 +45,11 @@ BORDER_WIDTH = 4
 MAX_SIZE = RADIUS - STROKE_WIDTH - 2 * BORDER_WIDTH
 MIN_DISTANCE = .1
 SNAPSHOT_RESCALING_FACTOR = .075
+
+"""
+return self.folder_list.currentRow()
+self.folder_list.setCurrentRow(value)
+"""
 
 
 # -------------------------------------------------------------------------------------------------
@@ -141,6 +150,81 @@ class PointWidget:
 
 
 # -------------------------------------------------------------------------------------------------
+# Image loader
+# -------------------------------------------------------------------------------------------------
+
+class Loader:
+    def __init__(self):
+        self._image_list = []
+        self._current_index = -1
+        self.pattern = ''
+        self.root_dir = None
+
+    def set_root_dir(self, root_dir: Path):
+        assert root_dir
+        self.root_dir = root_dir
+        # self.update()
+
+    def set_glob(self, pattern: str):
+        self.pattern = pattern
+        # self.update()
+
+    def update(self):
+        pattern = '**/' + self.pattern
+        self._image_list = glob.glob(pattern, root_dir=self.root_dir, recursive=True)
+        self._image_list = [Path(_) for _ in self._image_list]
+        self._current_index = 0 if self._image_list else -1
+
+    @property
+    def image_list(self) -> List[Path]:
+        return self._image_list
+
+    @property
+    def current_image(self) -> Path:
+        if 0 <= self._current_index < len(self._image_list):
+            return self._image_list[self._current_index]
+
+    @property
+    def points_file(self) -> Path:
+        if self.current_image:
+            name = self.current_image.stem.split('.')[0]
+            return self.current_image.with_name(name + ".points.json")
+
+    @property
+    def current_index(self):
+        return self._current_index
+
+    def set_index(self, index):
+        self._current_index = index
+
+    def can_next(self):
+        return self._current_index < len(self._image_list) - 1
+
+    def can_prev(self):
+        return self._current_index > 0
+
+    def next(self):
+        if self.can_next():
+            self._current_index += 1
+
+    def prev(self):
+        if self.can_prev():
+            self._current_index -= 1
+
+    @property
+    def snapshot_before(self):
+        path = (self.current_image / '../../snapshots/WF_before.png').resolve()
+        if path:
+            return path
+
+    @property
+    def snapshot_after(self):
+        path = (self.current_image / '../../snapshots/WF_after.png').resolve()
+        if path:
+            return path
+
+
+# -------------------------------------------------------------------------------------------------
 # Mescoscope GUI
 # -------------------------------------------------------------------------------------------------
 
@@ -150,8 +234,7 @@ class MesoscopeGUI(QMainWindow):
     # ---------------------------------------------------------------------------------------------
 
     def __init__(self):
-        # self.current_folder_idx = 0
-        self.folder_paths = []
+        self.loader = Loader()
 
         self.stack_count = 0
         self.current_stack_idx = 0
@@ -218,10 +301,16 @@ class MesoscopeGUI(QMainWindow):
         # Folder list
         left_layout = QVBoxLayout()
 
+        # Add the glob_textbox
+        self.glob_textbox = QLineEdit()
+        self.glob_textbox.setText(DEFAULT_GLOB)
+        self.glob_textbox.returnPressed.connect(self.glob_updated)
+        left_layout.addWidget(self.glob_textbox)
+
         self.folder_list = QListWidget()
         self.folder_list.setMaximumWidth(MAX_LEFT_PANEL_WIDTH)
-        self.folder_list.currentRowChanged.connect(self.update_folder)
-        # self.folder_list.itemClicked.connect(lambda: self.select_folder(self.folder_list.currentRow()))
+        self.folder_list.resize(DEFAULT_LEFT_PANEL_WIDTH, self.folder_list.sizeHint().height())
+        self.folder_list.currentRowChanged.connect(self.update_selection)
         left_layout.addWidget(self.folder_list)
 
         # Cortical depth widget.
@@ -317,33 +406,22 @@ class MesoscopeGUI(QMainWindow):
         self.resize(WIDTH, HEIGHT)
         self.show()
 
-    # Folder opening
+    # File opening
     # ---------------------------------------------------------------------------------------------
-
-    @property
-    def current_folder_idx(self):
-        if getattr(self, 'folder_list', None):
-            return self.folder_list.currentRow()
-        else:
-            return 0
-
-    @current_folder_idx.setter
-    def current_folder_idx(self, value):
-        self.folder_list.setCurrentRow(value)
 
     def open_dialog(self):
         dialog = QFileDialog()
         dialog.setFileMode(QFileDialog.DirectoryOnly)
 
-        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
-        file_view = dialog.findChild(QListView, 'listView')
+        # dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        # file_view = dialog.findChild(QListView, 'listView')
 
-        # to make it possible to select multiple directories:
-        if file_view:
-            file_view.setSelectionMode(QAbstractItemView.MultiSelection)
-        f_tree_view = dialog.findChild(QTreeView)
-        if f_tree_view:
-            f_tree_view.setSelectionMode(QAbstractItemView.MultiSelection)
+        # # to make it possible to select multiple directories:
+        # if file_view:
+        #     file_view.setSelectionMode(QAbstractItemView.MultiSelection)
+        # f_tree_view = dialog.findChild(QTreeView)
+        # if f_tree_view:
+        #     f_tree_view.setSelectionMode(QAbstractItemView.MultiSelection)
 
         if dialog.exec():
             paths = dialog.selectedFiles()
@@ -361,53 +439,64 @@ class MesoscopeGUI(QMainWindow):
             self.load_points(json_file)
 
     def open(self, paths):
-            self.folder_paths = self.find_image_folders(paths)
+        if not paths:
+            return
+        path = paths[0]
+        path = Path(path).resolve()
 
-            self.folder_list.clear()
-            # NOTE: remove "/reference" at the end
-            self.folder_list.addItems([f[:-10] for f in self.folder_paths])
+        self.loader.set_glob(self.glob_textbox.text())
+        self.loader.set_root_dir(path)
+        self.update_list()
 
-            self.current_folder_idx = 0
+    def glob_updated(self):
+        self.loader.set_glob(self.glob_textbox.text())
+        self.update_list()
 
-    def find_image_folders(self, root_folders):
-        image_folders = []
-        for root_folder in root_folders:
-            root_path = Path(root_folder)
-            for subdir in root_path.rglob('raw_imaging_data_*/reference'):
-                if subdir.is_dir() and any(f.name.startswith("referenceImage.meta") for f in subdir.iterdir()):
-                    image_folders.append(str(subdir))
-        return image_folders
-
-    def update_folder(self):
-        # print(f"update folder to {self.current_folder_idx}")
-        self.current_stack_idx = 0
-        self.load_points()
-        # NOTE: load_points also loads the range values, which should come BEFORE image loading
-        self.load_image_stack()
-        self.update_image()
-
-        self.prev_button.setEnabled(self.current_folder_idx > 0)
-        self.next_button.setEnabled(self.current_folder_idx < len(self.folder_paths) - 1)
+    def update_list(self):
+        self.loader.update()
+        self.folder_list.clear()
+        self.folder_list.addItems([str(_) for _ in self.loader.image_list])
 
     def navigate(self, direction):
-        self.current_folder_idx += direction
-        # self.folder_list.setCurrentRow(self.current_folder_idx)
+        if direction > 0:
+            self.loader.next()
+        elif direction < 0:
+            self.loader.prev()
+        self.folder_list.setCurrentRow(self.loader.current_index)
+
+    # Image stack
+    # ---------------------------------------------------------------------------------------------
+
+    def update_selection(self):
+        self.loader.set_index(self.folder_list.currentRow())
+        self.prev_button.setEnabled(self.loader.can_prev())
+        self.next_button.setEnabled(self.loader.can_next())
+
+        # NOTE: load_points also loads the range values, which should come BEFORE image loading
+        self.load_points()
+
+        self.load_image_stack()
 
     def load_image_stack(self):
-        folder = Path(self.folder_paths[self.current_folder_idx])
-        stack_file = next(f for f in os.listdir(folder) if f.startswith("referenceImage.stack") and f.endswith(".tif"))
-        self.stack_path = folder / stack_file
-
-        self.image_stack = iio.imread(self.stack_path)  # shape: nstacks, h, w
+        if not self.loader.current_image:
+            return
+        self.image_stack = iio.imread(self.loader.current_image)  # shape: nstacks, h, w
         assert self.image_stack.ndim == 3
         self.stack_count = self.image_stack.shape[0]
         self.scrollbar.setMaximum(self.stack_count - 1)
+
+        if self.points:
+            idx = self.points[0].get('stack_idx', self.stack_count // 2)
+        else:
+            idx = self.stack_count // 2
+        self.set_stack(idx)
+
         self.image_stack = self.image_stack.astype(np.float32)
+        self.update_image()
 
         # Snapshot images.
-        snapshot_folder = folder / '../../snapshots'
-        WF_before_path = (snapshot_folder / 'WF_before.png').resolve()
-        WF_after_path = (snapshot_folder / 'WF_after.png').resolve()
+        WF_before_path = self.loader.snapshot_before
+        WF_after_path = self.loader.snapshot_after
         if WF_before_path.exists() and WF_after_path.exists():
             # NOTE: rotate by 90°
             self.WF_before = np.rot90(iio.imread(WF_before_path)).mean(axis=-1)
@@ -561,7 +650,7 @@ class MesoscopeGUI(QMainWindow):
         self.update_margins()
         self.update_points()
 
-        self.save_range
+        self.save_range()
 
     # Adding points
     # ---------------------------------------------------------------------------------------------
@@ -693,13 +782,8 @@ class MesoscopeGUI(QMainWindow):
     # I/O
     # ---------------------------------------------------------------------------------------------
 
-    @property
-    def points_file(self):
-        if self.folder_paths:
-            return op.join(self.folder_paths[self.current_folder_idx], "referenceImage.points.json")
-
     def load(self, points_file=None):
-        points_file = points_file or self.points_file
+        points_file = points_file or self.loader.points_file
         if points_file and op.exists(points_file):
             with open(points_file, 'r') as f:
                 data = json.load(f)
@@ -708,12 +792,12 @@ class MesoscopeGUI(QMainWindow):
         return data
 
     def save_fields(self, points_file=None, **kwargs):
-        points_file = points_file or self.points_file
+        points_file = points_file or self.loader.points_file
         if not points_file:
             return
         data = self.load(points_file=points_file)
         data.update(**kwargs)
-        with open(self.points_file, 'w') as f:
+        with open(points_file, 'w') as f:
             json.dump(data, f, indent=2)
             f.write('\n')
 
@@ -740,9 +824,6 @@ class MesoscopeGUI(QMainWindow):
         for point_idx in range(3):
             self.update_point_position(point_idx)
             self.update_point_filter(point_idx)
-
-        if self.points:
-            self.scrollbar.setValue(self.points[0].get('stack_idx', self.stack_count // 2))
 
     def save_points(self):
         self.save_fields(points=self.points)
