@@ -14,7 +14,7 @@ from typing import List
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QVBoxLayout, QHBoxLayout, QListWidget, QLabel,
     QScrollBar, QPushButton, QWidget, QMenu, QAction, QSplitter, QListView, QAbstractItemView,
-    QLineEdit, QTreeView, QGraphicsOpacityEffect, QGraphicsBlurEffect, QSpinBox)
+    QLineEdit, QTreeView, QGraphicsOpacityEffect, QGraphicsBlurEffect, QSpinBox, QComboBox)
 from PyQt5.QtCore import Qt, QPoint
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor, QKeySequence, QPen
 from superqt import QRangeSlider
@@ -27,10 +27,10 @@ import numpy as np
 # Constants
 # -------------------------------------------------------------------------------------------------
 
-
 WIDTH = 1024
 HEIGHT = 768
 DEFAULT_LEFT_PANEL_WIDTH = 250
+DEFAULT_POINT_COUNT = 3
 MAX_LEFT_PANEL_WIDTH = 500
 DEFAULT_GLOB = "*stack*.tif"
 RADIUS = 48
@@ -45,11 +45,6 @@ BORDER_WIDTH = 4
 MAX_SIZE = RADIUS - STROKE_WIDTH - 2 * BORDER_WIDTH
 MIN_DISTANCE = .1
 SNAPSHOT_RESCALING_FACTOR = .075
-
-"""
-return self.folder_list.currentRow()
-self.folder_list.setCurrentRow(value)
-"""
 
 
 # -------------------------------------------------------------------------------------------------
@@ -83,11 +78,32 @@ def rescale(img, scale=1):
 
 
 def inset(img, inset, loc='tl'):
+    if inset is None:
+        return img
+    assert img.ndim == 2
     new_h, new_w = inset.shape[:2]
     if loc == 'tl':
         img[:new_h, :new_w] = inset
     if loc == 'tr':
         img[:new_h, -new_w:] = inset
+    return img
+
+
+def normalize_image(img, v0, v1):
+    h = .001
+    vmin, vmax = np.quantile(img, [h, 1-h])
+    d = vmax - vmin
+
+    v0 /= 99.0
+    v1 /= 99.0
+    vmin += d * v0
+    vmax -= d * (1.0 - v1)
+
+    img = (img - vmin) / (vmax - vmin)
+    img = np.clip(img, 0, 1)
+    img = np.floor(img * 255).astype(np.uint8)
+
+    return img
 
 
 class PointWidget:
@@ -213,13 +229,13 @@ class Loader:
 
     @property
     def snapshot_before(self):
-        path = (self.current_image / '../../snapshots/WF_before.png').resolve()
+        path = (self.current_image / '../../../snapshots/WF_before.png').resolve()
         if path:
             return path
 
     @property
     def snapshot_after(self):
-        path = (self.current_image / '../../snapshots/WF_after.png').resolve()
+        path = (self.current_image / '../../../snapshots/WF_after.png').resolve()
         if path:
             return path
 
@@ -236,175 +252,257 @@ class MesoscopeGUI(QMainWindow):
     def __init__(self):
         self.loader = Loader()
 
-        self.stack_count = 0
-        self.current_stack_idx = 0
-        self.range_slider = None
+        self.widget_range_slider = None
 
+        # NOTE: we keep these in memory to avoid reloading them whenever we load a new slice
         self.WF_before = None
         self.WF_after = None
+
+        self.image_stack = None
         self.pixmap = None
         self.clear_points_struct()
 
         super().__init__()
         self.init_ui()
-        self.init_points_widgets()
 
     def make_point_widget(self, idx):
         color = COLORS[idx]
-        pw = PointWidget(color, parent=self.image_label)
+        pw = PointWidget(color, parent=self.widget_image)
         w = pw.widget
         w.mousePressEvent = lambda event: self.start_drag(event, w)
         w.mouseMoveEvent = lambda event: self.drag_point(event, w)
         w.mouseReleaseEvent = lambda event: self.end_drag(event, w, idx)
         return pw
 
-    def init_points_widgets(self):
-        self.points_widgets = [self.make_point_widget(idx) for idx in range(3)]
+    def create_points_widgets(self, n=DEFAULT_POINT_COUNT):
+        self.points_widgets = [self.make_point_widget(idx) for idx in range(n)]
 
-    def clear_points_struct(self):
-        self.points = [{} for idx in range(3)]  # point_idx, stack_idx, coords
+    def clear_points_struct(self, n=DEFAULT_POINT_COUNT):
+        self.points = [{} for idx in range(n)]  # point_idx, stack_idx, coords
 
     def update_points(self):
         [p.update() for p in self.points_widgets]
-        [self.update_point_filter(idx) for idx in range(3)]
+        [self.update_point_filter(idx) for idx in range(self.point_count)]
 
     # UI
     # ---------------------------------------------------------------------------------------------
 
     def init_ui(self):
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+
+        row1 = self.create_row1()
+        main_layout.addLayout(row1)
+
+        row2 = self.create_row2()
+        main_layout.addLayout(row2)
+
+        row3 = self.create_row3()
+        main_layout.addLayout(row3)
+
+        self.create_menu()
+        self.create_bindings()
+        self.create_points_widgets()
+
+        self.setWindowTitle('Mesoscope GUI')
+        self.resize(WIDTH, HEIGHT)
+        self.show()
+
+    def create_menu(self):
         # Menu.
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu('File')
 
+        # Open root directory.
         open_action = QAction('Open', self)
         open_action.setShortcut(QKeySequence.Open)
         open_action.triggered.connect(self.open_dialog)
         file_menu.addAction(open_action)
 
+        # Open JSON points.
         open_json_action = QAction('Open JSON points', self)
         open_json_action.triggered.connect(self.open_json_dialog)
         file_menu.addAction(open_json_action)
 
+        # Quit.
         quit_action = QAction('Quit', self)
         quit_action.setShortcut(QKeySequence.Quit)
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
 
-        # Central widget.
-        self.central_widget = QWidget()
-        layout = QVBoxLayout(self.central_widget)
-        self.setCentralWidget(self.central_widget)
+    def create_row1(self):
+        layout = QHBoxLayout()
+        layout.setSpacing(10)
 
-        splitter = QSplitter(Qt.Horizontal)
-        layout.addWidget(splitter)
+        # Glob pattern.
+        self.widget_glob = QLineEdit()
+        self.widget_glob.setText(DEFAULT_GLOB)
+        self.widget_glob.setFixedWidth(250)
+        layout.addWidget(self.widget_glob)
 
-        # Folder list
-        left_layout = QVBoxLayout()
+        # Dropdown with list of images.
+        self.widget_dropdown = QComboBox()
+        layout.addWidget(self.widget_dropdown)
 
-        # Add the glob_textbox
-        self.glob_textbox = QLineEdit()
-        self.glob_textbox.setText(DEFAULT_GLOB)
-        self.glob_textbox.returnPressed.connect(self.glob_updated)
-        left_layout.addWidget(self.glob_textbox)
+        # Previous button.
+        self.widget_prev_button = QPushButton("<")
+        self.widget_prev_button.setFixedWidth(40)
+        self.widget_prev_button.setEnabled(False)
+        layout.addWidget(self.widget_prev_button)
 
-        self.folder_list = QListWidget()
-        self.folder_list.setMaximumWidth(MAX_LEFT_PANEL_WIDTH)
-        self.folder_list.resize(DEFAULT_LEFT_PANEL_WIDTH, self.folder_list.sizeHint().height())
-        self.folder_list.currentRowChanged.connect(self.update_selection)
-        left_layout.addWidget(self.folder_list)
+        # Next button.
+        self.widget_next_button = QPushButton(">")
+        self.widget_next_button.setFixedWidth(40)
+        self.widget_next_button.setEnabled(False)
+        layout.addWidget(self.widget_next_button)
 
-        # Cortical depth widget.
-        self.cortical_depth_widget = QSpinBox()
-        self.cortical_depth_widget.setRange(0, 1000)
-        self.cortical_depth_widget.setSingleStep(10)
-        self.cortical_depth_widget.setValue(0)
-        self.cortical_depth_widget.setPrefix("cortical depth: ")
-        self.cortical_depth_widget.setSuffix(" microns")
-        self.cortical_depth_widget.setMaximumWidth(MAX_LEFT_PANEL_WIDTH)
-        self.cortical_depth_widget.valueChanged.connect(self.save_cortical_depth)
-        left_layout.addWidget(self.cortical_depth_widget)
+        layout.setContentsMargins(10, 0, 10, 0)
+        return layout
 
-        widget = QWidget()
-        widget.setMaximumWidth(MAX_LEFT_PANEL_WIDTH)
-        widget.setLayout(left_layout)
-        splitter.addWidget(widget)
+    def create_row2(self):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(10, 0, 10, 0)
+        layout.setSpacing(10)
 
-        image_layout = QVBoxLayout()
-
-        # Slice label.
-        self.slice_index_label = QLabel("Slice #0")
-        self.slice_index_label.setAlignment(Qt.AlignRight)
-        self.slice_index_label.setMaximumHeight(20)
-        image_layout.addWidget(self.slice_index_label)
+        range_slider_layout = QHBoxLayout()
 
         # Range slider.
-        self.range_slider = QRangeSlider(Qt.Orientation.Horizontal)
-        self.range_slider.setMaximumHeight(20)
-        self.range_slider.setValue((0, 100))
-        self.range_slider.valueChanged.connect(self.update_image)
-        image_layout.addWidget(self.range_slider)
+        self.widget_range_slider = QRangeSlider(Qt.Horizontal)
+        self.widget_range_slider.setMaximumHeight(20)
+        self.widget_range_slider.setValue((0, 100))
+        range_slider_layout.addWidget(self.widget_range_slider)
 
-        # Points.
-        self.image_label = QLabel()
-        self.image_label.installEventFilter(self) # for mouse wheel scroll
-        self.image_label.setScaledContents(True)
-        self.image_label.resizeEvent = self.on_resized
-        self.image_label.mousePressEvent = self.add_point_at_click
-        self.image_label.setMinimumSize(1, 1)
-        image_layout.addWidget(self.image_label)
+        image_layout = QHBoxLayout()
 
-        # Stack scrollbar.
-        self.scrollbar = QScrollBar(Qt.Vertical)
-        self.scrollbar.setMaximumWidth(20)
-        self.scrollbar.valueChanged.connect(self.update_image)
+        # Slice widget.
+        self.widget_slice_label = QLabel("Slice #0")
+        self.widget_slice_label.setAlignment(Qt.AlignRight)
+        self.widget_slice_label.setMaximumHeight(20)
+        range_slider_layout.addWidget(self.widget_slice_label)
+
+        layout.addLayout(range_slider_layout)
 
         # Image.
-        self.image_widget = QWidget()
-        self.image_widget.setLayout(image_layout)
-        splitter.addWidget(self.image_widget)
+        self.widget_image = QLabel()
+        self.widget_image.setAlignment(Qt.AlignCenter)
+        self.widget_image.installEventFilter(self) # for mouse wheel scroll
+        self.widget_image.setScaledContents(True)
+        self.widget_image.resizeEvent = self.on_resized
+        self.widget_image.mousePressEvent = self.add_point_at_click
+        self.widget_image.setMinimumSize(1, 1)
+        image_layout.addWidget(self.widget_image)
 
-        splitter.addWidget(self.scrollbar)
+        # Scrollbar.
+        self.widget_scrollbar = QScrollBar(Qt.Vertical)
+        # self.widget_scrollbar.setFixedWidth(20)
+        image_layout.addWidget(self.widget_scrollbar)
 
-        # Move buttons
-        move_layout = QHBoxLayout()
+        layout.addLayout(image_layout)
+        return layout
 
-        # Move down
-        down_button = QPushButton('Move down')
-        down_button.clicked.connect(self.move_down)
-        move_layout.addWidget(down_button)
+    def create_row3(self):
+        layout = QHBoxLayout()
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 0, 10, 0)
 
-        # Move to current depth button
-        current_button = QPushButton('Move to current depth')
-        current_button.clicked.connect(self.move_to_current_depth)
-        move_layout.addWidget(current_button)
+        # Cortical depth.
+        self.widget_cortical_depth = QSpinBox()
+        self.widget_cortical_depth.setRange(0, 1000)
+        self.widget_cortical_depth.setSingleStep(10)
+        self.widget_cortical_depth.setValue(0)
+        self.widget_cortical_depth.setPrefix("cortical depth: ")
+        self.widget_cortical_depth.setSuffix(" microns")
+        layout.addWidget(self.widget_cortical_depth)
 
-        # Move up
-        up_button = QPushButton('Move up')
-        up_button.clicked.connect(self.move_up)
-        move_layout.addWidget(up_button)
+        # Move down.
+        self.widget_move_down_button = QPushButton("Move down")
+        layout.addWidget(self.widget_move_down_button)
 
-        layout.addLayout(move_layout)
+        # Move to current depth.
+        self.widget_move_to_depth_button = QPushButton("Move to current depth")
+        layout.addWidget(self.widget_move_to_depth_button)
 
-        # Nav buttons
-        nav_layout = QHBoxLayout()
+        # Move up.
+        self.widget_move_up_button = QPushButton("Move up")
+        layout.addWidget(self.widget_move_up_button)
 
-        # Previous button
-        self.prev_button = QPushButton('Previous')
-        self.prev_button.setEnabled(False)
-        self.prev_button.clicked.connect(lambda: self.navigate(-1))
-        nav_layout.addWidget(self.prev_button)
+        layout.addStretch()
+        return layout
 
-        # Next button
-        self.next_button = QPushButton('Next')
-        self.next_button.setEnabled(False)
-        self.next_button.clicked.connect(lambda: self.navigate(1))
-        nav_layout.addWidget(self.next_button)
+    def create_bindings(self):
+        self.widget_glob.returnPressed.connect(self.on_glob)
+        self.widget_dropdown.currentTextChanged.connect(self.on_select)
+        self.widget_cortical_depth.valueChanged.connect(self.on_cortical_depth)
+        self.widget_range_slider.valueChanged.connect(self.on_slider)
+        self.widget_scrollbar.valueChanged.connect(self.on_scrollbar)
+        self.widget_move_down_button.clicked.connect(self.on_move_down)
+        self.widget_move_to_depth_button.clicked.connect(self.on_move_to_current_depth)
+        self.widget_move_up_button.clicked.connect(self.on_move_up)
+        self.widget_prev_button.clicked.connect(self.on_prev)
+        self.widget_next_button.clicked.connect(self.on_next)
 
-        layout.addLayout(nav_layout)
+    # Event handlers
+    # ---------------------------------------------------------------------------------------------
 
-        self.setWindowTitle('Mesoscope GUI')
-        self.resize(WIDTH, HEIGHT)
-        self.show()
+    def on_glob(self):
+        self.loader.set_glob(self.widget_glob.text())
+        self.update_files()
+
+    def on_select(self):
+        self.loader.set_index(self.widget_dropdown.currentIndex())
+        self.on_loader()
+
+    def on_loader(self):
+        self.widget_prev_button.setEnabled(self.loader.can_prev())
+        self.widget_next_button.setEnabled(self.loader.can_next())
+
+        # Load the range values, which should come BEFORE image loading
+        self.load_points()
+
+        # Load the image.
+        if self.loader.current_image:
+            self.WF_before = self.load_snapshot(self.loader.snapshot_before)
+            self.WF_after = self.load_snapshot(self.loader.snapshot_after)
+            self.image_stack = self.load_image_stack(self.loader.current_image)
+
+    def on_cortical_depth(self):
+        self.save_cortical_depth()
+
+    def on_slider(self):
+        if self.image_stack is None:
+            return
+        stack_idx = self.get_stack()
+        img = self.image_stack[stack_idx, ...]
+        self.set_image(img)
+        self.save_range()
+
+    def on_scrollbar(self):
+        if self.image_stack is None:
+            return
+        self.set_stack()
+        stack_idx = self.get_stack()
+        img = self.image_stack[stack_idx, ...]
+        self.set_image(img)
+
+    def on_move_down(self):
+        pass
+
+    def on_move_to_current_depth(self):
+        pass
+
+    def on_move_up(self):
+        pass
+
+    def on_prev(self):
+        self.loader.prev()
+        self.widget_dropdown.setCurrentIndex(self.loader.current_index)
+        self.on_loader()
+
+    def on_next(self):
+        self.loader.next()
+        self.widget_dropdown.setCurrentIndex(self.loader.current_index)
+        self.on_loader()
 
     # File opening
     # ---------------------------------------------------------------------------------------------
@@ -441,115 +539,123 @@ class MesoscopeGUI(QMainWindow):
     def open(self, paths):
         if not paths:
             return
+        # NOTE: only take the first path.
         path = paths[0]
         path = Path(path).resolve()
 
-        self.loader.set_glob(self.glob_textbox.text())
+        self.loader.set_glob(self.widget_glob.text())
         self.loader.set_root_dir(path)
-        self.update_list()
+        self.update_files()
 
-    def glob_updated(self):
-        self.loader.set_glob(self.glob_textbox.text())
-        self.update_list()
-
-    def update_list(self):
+    def update_files(self):
         self.loader.update()
-        self.folder_list.clear()
-        self.folder_list.addItems([str(_) for _ in self.loader.image_list])
+        self.widget_dropdown.clear()
+        self.widget_dropdown.addItems([str(_) for _ in self.loader.image_list])
 
     def navigate(self, direction):
         if direction > 0:
             self.loader.next()
         elif direction < 0:
             self.loader.prev()
-        self.folder_list.setCurrentRow(self.loader.current_index)
+        self.widget_dropdown.setCurrentIndex(self.loader.current_index)
+
+    # Image setting
+    # ---------------------------------------------------------------------------------------------
+
+    def set_image(self, img):
+        assert img.ndim == 2
+        v0, v1 = self.get_range()
+
+        # Slice image.
+        img = normalize_image(img, v0, v1)
+
+        # Add the reference images.
+        img = inset(img, self.WF_before, loc='tl')
+        img = inset(img, self.WF_after, loc='tr')
+
+        qimg = QImage(
+            img.data, img.shape[1], img.shape[0], img.strides[0], QImage.Format_Grayscale8)
+        self.pixmap = QPixmap.fromImage(qimg)
+        self.widget_image.setPixmap(self.pixmap)
 
     # Image stack
     # ---------------------------------------------------------------------------------------------
 
-    def update_selection(self):
-        self.loader.set_index(self.folder_list.currentRow())
-        self.prev_button.setEnabled(self.loader.can_prev())
-        self.next_button.setEnabled(self.loader.can_next())
+    @property
+    def stack_count(self):
+        return self.image_stack.shape[0] if self.image_stack is not None else 0
 
-        # NOTE: load_points also loads the range values, which should come BEFORE image loading
-        self.load_points()
+    def load_image_stack(self, img_path):
+        img = iio.imread(img_path).astype(np.float32)  # shape: nstacks, h, w
+        assert img.ndim == 3
+        stack_count = img.shape[0]
 
-        self.load_image_stack()
+        # Number of images in the stack.
+        self.widget_scrollbar.setMaximum(stack_count - 1)
 
-    def load_image_stack(self):
-        if not self.loader.current_image:
-            return
-        self.image_stack = iio.imread(self.loader.current_image)  # shape: nstacks, h, w
-        assert self.image_stack.ndim == 3
-        self.stack_count = self.image_stack.shape[0]
-        self.scrollbar.setMaximum(self.stack_count - 1)
+        # Default stack: middle.
+        mid_stack = stack_count // 2
 
-        if self.points:
-            idx = self.points[0].get('stack_idx', self.stack_count // 2)
-        else:
-            idx = self.stack_count // 2
-        self.set_stack(idx)
+        # Set the default stack.
+        stack_idx = mid_stack if not self.points else self.points[0].get('stack_idx', mid_stack)
+        self.set_stack(stack_idx)
 
-        self.image_stack = self.image_stack.astype(np.float32)
-        self.update_image()
+        # Set the image.
+        self.set_image(img[stack_idx, ...])
 
-        # Snapshot images.
-        WF_before_path = self.loader.snapshot_before
-        WF_after_path = self.loader.snapshot_after
-        if WF_before_path.exists() and WF_after_path.exists():
-            # NOTE: rotate by 90°
-            self.WF_before = np.rot90(iio.imread(WF_before_path)).mean(axis=-1)
-            self.WF_after = np.rot90(iio.imread(WF_after_path)).mean(axis=-1)
-
-    def normalize_image(self, img):
-        h = .001
-        vmin, vmax = np.quantile(img, [h, 1-h])
-        d = vmax - vmin
-
-        v0, v1 = self.get_range()
-        v0 /= 99.0
-        v1 /= 99.0
-        vmin += d * v0
-        vmax -= d * (1.0 - v1)
-
-        img = (img - vmin) / (vmax - vmin)
-        img = np.clip(img, 0, 1)
-        img = np.floor(img * 255).astype(np.uint8)
+        # Updates.
+        self.update_margins()
+        self.update_points()
 
         return img
 
-    def set_stack(self, idx):
-        idx = max(self.scrollbar.minimum(), min(self.scrollbar.maximum(), idx))
-        self.scrollbar.setValue(idx)
-        return idx
+    def load_snapshot(self, path):
+        if path.exists():
+            img = iio.imread(path)
+            img = np.rot90(img)
+            img = img.mean(axis=-1)
+            img = rescale(img, SNAPSHOT_RESCALING_FACTOR)
+            return img
+
+    # Scrollbar
+    # ---------------------------------------------------------------------------------------------
+
+    def get_stack(self):
+        return self.widget_scrollbar.value()
+
+    def set_stack(self, idx=None):
+        if idx is not None:
+            idx = max(self.widget_scrollbar.minimum(), min(self.widget_scrollbar.maximum(), idx))
+            self.widget_scrollbar.setValue(idx)
+
+        idx = self.widget_scrollbar.value()
+        s = f"Slice #{idx + 1:03d} / {self.stack_count}"
+        self.widget_slice_label.setText(s)
 
     # Value range
     # ---------------------------------------------------------------------------------------------
 
     def get_range(self):
-        if self.range_slider is None:
+        if self.widget_range_slider is None:
             return None, None
-        vmin, vmax = self.range_slider.value()
+        vmin, vmax = self.widget_range_slider.value()
         return vmin, vmax
 
     # Cortical depth
     # ---------------------------------------------------------------------------------------------
 
-    @property
-    def cortical_depth(self):
-        return self.cortical_depth_widget.value()
+    def get_cortical_depth(self):
+        return self.widget_cortical_depth.value()
 
-    @cortical_depth.setter
-    def cortical_depth(self, value):
-        self.cortical_depth_widget.setValue(value)
+    def set_cortical_depth(self, value):
+        self.widget_cortical_depth.setValue(value)
 
     # Coordinate transforms
     # ---------------------------------------------------------------------------------------------
 
     def to_relative(self, x, y):
-        label_width, label_height = self.image_label.width(), self.image_label.height()
-        pixmap = self.image_label.pixmap()
+        label_width, label_height = self.widget_image.width(), self.widget_image.height()
+        pixmap = self.widget_image.pixmap()
 
         if not pixmap:
             return None, None
@@ -578,8 +684,8 @@ class MesoscopeGUI(QMainWindow):
         return xr, yr
 
     def to_absolute(self, xr, yr):
-        label_width, label_height = self.image_label.width(), self.image_label.height()
-        pixmap = self.image_label.pixmap()
+        label_width, label_height = self.widget_image.width(), self.widget_image.height()
+        pixmap = self.widget_image.pixmap()
 
         if not pixmap:
             return None, None
@@ -611,7 +717,7 @@ class MesoscopeGUI(QMainWindow):
         pixmap = self.pixmap
         if not pixmap:
             return
-        size = self.image_label.size()
+        size = self.widget_image.size()
         w, h = size.width(), size.height()
         pw = pixmap.width()
         ph = pixmap.height()
@@ -619,50 +725,27 @@ class MesoscopeGUI(QMainWindow):
         if (w * ph > h * pw):
             m = (w - (pw * h / ph)) / 2
             m = int(m)
-            self.image_label.setContentsMargins(m, 0, m, 0)
+            self.widget_image.setContentsMargins(m, 0, m, 0)
         else:
             m = (h - (ph * w / pw)) / 2
             m = int(m)
-            self.image_label.setContentsMargins(0, m, 0, m)
-
-    def update_image(self):
-        self.current_stack_idx = self.scrollbar.value()
-        if self.current_stack_idx >= self.stack_count:
-            return
-        img = self.image_stack[self.current_stack_idx, ...]
-        img = self.normalize_image(img)
-
-        # Snapshot insets.
-        if self.WF_before is not None and self.WF_after is not None:
-            WF_before = rescale(self.WF_before, SNAPSHOT_RESCALING_FACTOR)
-            WF_after = rescale(self.WF_after, SNAPSHOT_RESCALING_FACTOR)
-            inset(img, WF_before, loc='tl')
-            inset(img, WF_after, loc='tr')
-
-        qimg = QImage(img.data, img.shape[1], img.shape[0], img.strides[0], QImage.Format_Grayscale8)
-        self.pixmap = QPixmap.fromImage(qimg)
-        self.image_label.setPixmap(self.pixmap)
-
-        # Slice text.
-        self.slice_index_label.setText(
-            f"Slice #{self.current_stack_idx + 1} / {self.stack_count}")
-
-        self.update_margins()
-        self.update_points()
-
-        self.save_range()
+            self.widget_image.setContentsMargins(0, m, 0, m)
 
     # Adding points
     # ---------------------------------------------------------------------------------------------
 
     def set_point_position(self, point_idx, xr, yr, stack_idx):
+        if not self.points or point_idx >= self.point_count:
+            return
+
         self.points[point_idx]['coords'] = (xr, yr)
         self.points[point_idx]['stack_idx'] = stack_idx
+
         self.update_point_position(point_idx)
         self.update_point_filter(point_idx)
 
     def update_point_position(self, idx):
-        if not self.points:
+        if not self.points or idx >= self.point_count:
             return
         xr, yr = self.points[idx].get('coords', (None, None))
         if xr is None:
@@ -672,11 +755,11 @@ class MesoscopeGUI(QMainWindow):
             self.points_widgets[idx].move(x, y)
 
     def update_point_filter(self, idx):
-        if not self.points:
+        if not self.points or idx >= self.point_count:
             return
         w = self.points_widgets[idx].widget
         stack_idx = self.points[idx].get('stack_idx', -1)
-        blur = abs(self.current_stack_idx - stack_idx)
+        blur = abs(self.get_stack() - stack_idx)
         blur = 0 if blur == 0 else 2 + .5 * blur * blur
         set_blur(w, blur)
 
@@ -685,42 +768,48 @@ class MesoscopeGUI(QMainWindow):
         point_idx = next((i for i, point in enumerate(self.points) if not point), None)
         if point_idx is None:
             return
-        assert 0 <= point_idx and point_idx < 3
-        xr, yr = self.to_relative(x, y)
-        self.set_point_position(point_idx, xr, yr, self.current_stack_idx)
-        self.save_points()
+        if 0 <= point_idx and point_idx < self.point_count:
+            xr, yr = self.to_relative(x, y)
+            self.set_point_position(point_idx, xr, yr, self.get_stack())
+            self.save_points()
+
+    @property
+    def point_count(self):
+        return len(self.points)
 
     # Stack navigation
     # ---------------------------------------------------------------------------------------------
 
-    def move_down(self, ev):
+    def move_points(self, absolute=None, relative=None):
         if not self.points:
             return
-        self.current_stack_idx = self.set_stack(self.current_stack_idx - 1)
-        for idx in range(3):
+
+        # Move the current scrollbar.
+        if relative is not None:
+            self.set_stack(self.get_stack() + relative)
+        elif absolute is not None:
+            self.set_stack(absolute)
+
+        # Move all points.
+        for idx in range(self.point_count):
             if 'stack_idx' in self.points[idx]:
-                self.points[idx]['stack_idx'] -= 1
+                if relative is not None:
+                    self.points[idx]['stack_idx'] += relative
+                elif absolute is not None:
+                    self.points[idx]['stack_idx'] = absolute
                 self.update_point_filter(idx)
+
+        # Save the points.
         self.save_points()
+
+    def move_down(self, ev):
+        self.move_points(relative=-1)
 
     def move_to_current_depth(self, ev):
-        if not self.points:
-            return
-        for idx in range(3):
-            if 'stack_idx' in self.points[idx]:
-                self.points[idx]['stack_idx'] = self.current_stack_idx
-                self.update_point_filter(idx)
-        self.save_points()
+        self.move_points(absolute=self.get_stack())
 
     def move_up(self, ev):
-        if not self.points:
-            return
-        self.current_stack_idx = self.set_stack(self.current_stack_idx + 1)
-        for idx in range(3):
-            if 'stack_idx' in self.points[idx]:
-                self.points[idx]['stack_idx'] += 1
-                self.update_point_filter(idx)
-        self.save_points()
+        self.move_points(relative=-1)
 
     # Points drag and drop
     # ---------------------------------------------------------------------------------------------
@@ -732,16 +821,14 @@ class MesoscopeGUI(QMainWindow):
         return point_idx
 
     def start_drag(self, event, w):
-        if not self.points:
-            return
         self.drag_offset = event.pos()
         w.raise_()
 
         # Set the point's stack idx to the current stack
         idx = self._widget_idx(w)
-        assert 0 <= idx and idx <= 2
-        self.points[idx]['stack_idx'] = self.current_stack_idx
-        self.update_point_filter(idx)
+        if 0 <= idx and idx < self.point_count:
+            self.points[idx]['stack_idx'] = self.get_stack()
+            self.update_point_filter(idx)
 
     def drag_point(self, event, w):
         if not self.points:
@@ -749,7 +836,7 @@ class MesoscopeGUI(QMainWindow):
         idx = self._widget_idx(w)
         new_pos = w.pos() + event.pos() - self.drag_offset
         x, y = self.to_relative(new_pos.x(), new_pos.y())
-        for i in range(3):
+        for i in range(self.point_count):
             if i == idx:
                 continue
             coords = self.points[i].get('coords', None)
@@ -767,7 +854,7 @@ class MesoscopeGUI(QMainWindow):
         w.move(new_pos)
 
     def end_drag(self, event, w, point_idx):
-        if not self.points:
+        if point_idx >= self.point_count:
             return
         r = RADIUS
         x, y = w.x() + r // 2, w.y() + r // 2
@@ -786,10 +873,8 @@ class MesoscopeGUI(QMainWindow):
         points_file = points_file or self.loader.points_file
         if points_file and op.exists(points_file):
             with open(points_file, 'r') as f:
-                data = json.load(f)
-        else:
-            data = {}
-        return data
+                return json.load(f)
+        return {}
 
     def save_fields(self, points_file=None, **kwargs):
         points_file = points_file or self.loader.points_file
@@ -805,23 +890,24 @@ class MesoscopeGUI(QMainWindow):
     # ---------------------------------------------------------------------------------------------
 
     def load_points(self, points_file=None):
+        # Reset the points.
         self.clear_points_struct()
-        [p.clear() for p in self.points_widgets]
+        for p in self.points_widgets:
+            p.clear()
 
+        # Load the points.
         data = self.load(points_file=points_file)
-
-        # Points.
         self.points = data.get('points', [])
 
         # Range.
         vrange = data.get('range', (0, 99))
-        self.range_slider.setValue(tuple(vrange))
+        self.widget_range_slider.setValue(tuple(vrange))
 
         # Cortical depth.
-        self.cortical_depth = data.get('cortical_depth', 0)
+        self.set_cortical_depth(data.get('cortical_depth', 0))
 
         # Update the points position on the image.
-        for point_idx in range(3):
+        for point_idx in range(self.point_count):
             self.update_point_position(point_idx)
             self.update_point_filter(point_idx)
 
@@ -832,22 +918,22 @@ class MesoscopeGUI(QMainWindow):
         self.save_fields(range=self.get_range())
 
     def save_cortical_depth(self):
-        self.save_fields(cortical_depth=self.cortical_depth)
+        self.save_fields(cortical_depth=self.get_cortical_depth())
 
     # Event handling
     # ---------------------------------------------------------------------------------------------
 
     def on_resized(self, ev):
         self.update_margins()
-        for point_idx in range(3):
+        for point_idx in range(self.point_count):
             self.update_point_position(point_idx)
 
     def eventFilter(self, obj, event):
-        if obj == self.image_label and event.type() == event.Wheel:
+        if obj == self.widget_image and event.type() == event.Wheel:
             delta = event.angleDelta().y() // 120
-            new_value = self.scrollbar.value() - delta
-            new_value = max(0, min(self.scrollbar.maximum(), new_value))
-            self.scrollbar.setValue(new_value)
+            new_value = self.widget_scrollbar.value() - delta
+            new_value = max(0, min(self.widget_scrollbar.maximum(), new_value))
+            self.widget_scrollbar.setValue(new_value)
             return True
         return super().eventFilter(obj, event)
 
