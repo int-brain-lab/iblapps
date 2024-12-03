@@ -82,6 +82,9 @@ def inset(img, inset, loc='tl'):
         return img
     assert img.ndim == 2
     new_h, new_w = inset.shape[:2]
+    if new_h > img.shape[0] or new_w > img.shape[1]:
+        print("Cannot add insert on such a small image")
+        return img
     if loc == 'tl':
         img[:new_h, :new_w] = inset
     if loc == 'tr':
@@ -182,14 +185,25 @@ class Loader:
 
     def set_root_dir(self, root_dir: Path):
         assert root_dir
-        self.root_dir = root_dir
-        # self.update()
+        if root_dir.is_dir():
+            self.root_dir = root_dir
 
     def set_glob(self, pattern: str):
         self.pattern = pattern
-        # self.update()
+
+    def set_file(self, path):
+        self.pattern = ''
+        path = Path(path)
+        if path.exists():
+            assert not path.is_dir()
+            self._image_list = [path]
+            self._current_index = 0
+        else:
+            self._image_list = []
 
     def update(self):
+        if not self.pattern:
+            return
         pattern = '**/' + self.pattern
         self._image_list = glob.glob(pattern, root_dir=self.root_dir, recursive=True)
         self._image_list = [Path(_) for _ in self._image_list]
@@ -467,6 +481,10 @@ class MesoscopeGUI(QMainWindow):
             self.WF_after = self.load_snapshot(self.loader.snapshot_after)
             self.image_stack = self.load_image_stack(self.loader.current_image)
             self.update_stack_label()
+        else:
+            self.WF_before = None
+            self.WF_after = None
+            self.image_stack = None
 
     def on_cortical_depth(self):
         self.save_cortical_depth()
@@ -501,12 +519,12 @@ class MesoscopeGUI(QMainWindow):
     def on_prev(self):
         self.loader.prev()
         self.widget_dropdown.setCurrentIndex(self.loader.current_index)
-        self.on_loader()
+        # self.on_loader()
 
     def on_next(self):
         self.loader.next()
         self.widget_dropdown.setCurrentIndex(self.loader.current_index)
-        self.on_loader()
+        # self.on_loader()
 
     # File opening
     # ---------------------------------------------------------------------------------------------
@@ -547,8 +565,11 @@ class MesoscopeGUI(QMainWindow):
         path = paths[0]
         path = Path(path).resolve()
 
-        self.loader.set_glob(self.widget_glob.text())
-        self.loader.set_root_dir(path)
+        if path.is_dir():
+            self.loader.set_glob(self.widget_glob.text())
+            self.loader.set_root_dir(path)
+        else:
+            self.loader.set_file(path)
         self.update_files()
 
     def update_files(self):
@@ -590,6 +611,12 @@ class MesoscopeGUI(QMainWindow):
         return self.image_stack.shape[0] if self.image_stack is not None else 0
 
     def load_image_stack(self, img_path):
+        print(f"Loading {img_path}")
+
+        assert img_path
+        assert img_path.exists()
+        assert not img_path.is_dir()
+
         img = iio.imread(img_path).astype(np.float32)  # shape: nstacks, h, w
         assert img.ndim == 3
         stack_count = img.shape[0]
