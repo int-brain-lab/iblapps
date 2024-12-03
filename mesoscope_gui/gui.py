@@ -106,6 +106,10 @@ def normalize_image(img, v0, v1):
     return img
 
 
+def default_points(n=DEFAULT_POINT_COUNT):
+    return [{} for idx in range(n)]  # point_idx, stack_idx, coords
+
+
 class PointWidget:
     def __init__(self, color, opacity=255, parent=None):
         self.color = color
@@ -260,7 +264,7 @@ class MesoscopeGUI(QMainWindow):
 
         self.image_stack = None
         self.pixmap = None
-        self.clear_points_struct()
+        self.points = default_points()
 
         super().__init__()
         self.init_ui()
@@ -276,9 +280,6 @@ class MesoscopeGUI(QMainWindow):
 
     def create_points_widgets(self, n=DEFAULT_POINT_COUNT):
         self.points_widgets = [self.make_point_widget(idx) for idx in range(n)]
-
-    def clear_points_struct(self, n=DEFAULT_POINT_COUNT):
-        self.points = [{} for idx in range(n)]  # point_idx, stack_idx, coords
 
     def update_points(self):
         [p.update() for p in self.points_widgets]
@@ -891,13 +892,13 @@ class MesoscopeGUI(QMainWindow):
 
     def load_points(self, points_file=None):
         # Reset the points.
-        self.clear_points_struct()
+        self.points = default_points()
         for p in self.points_widgets:
             p.clear()
 
         # Load the points.
         data = self.load(points_file=points_file)
-        self.points = data.get('points', [])
+        self.points = data.get('points', default_points())
 
         # Range.
         vrange = data.get('range', (0, 99))
