@@ -490,13 +490,13 @@ class MesoscopeGUI(QMainWindow):
             self.update_point_filter(idx)
 
     def on_move_down(self):
-        pass
+        self.move_points(relative=-1)
 
     def on_move_to_current_depth(self):
-        pass
+        self.move_points(absolute=self.get_stack())
 
     def on_move_up(self):
-        pass
+        self.move_points(relative=+1)
 
     def on_prev(self):
         self.loader.prev()
@@ -806,15 +806,6 @@ class MesoscopeGUI(QMainWindow):
 
         # Save the points.
         self.save_points()
-
-    def move_down(self, ev):
-        self.move_points(relative=-1)
-
-    def move_to_current_depth(self, ev):
-        self.move_points(absolute=self.get_stack())
-
-    def move_up(self, ev):
-        self.move_points(relative=-1)
 
     # Points drag and drop
     # ---------------------------------------------------------------------------------------------
