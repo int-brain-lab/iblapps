@@ -466,6 +466,7 @@ class MesoscopeGUI(QMainWindow):
             self.WF_before = self.load_snapshot(self.loader.snapshot_before)
             self.WF_after = self.load_snapshot(self.loader.snapshot_after)
             self.image_stack = self.load_image_stack(self.loader.current_image)
+            self.update_stack_label()
 
     def on_cortical_depth(self):
         self.save_cortical_depth()
@@ -481,10 +482,12 @@ class MesoscopeGUI(QMainWindow):
     def on_scrollbar(self):
         if self.image_stack is None:
             return
-        self.set_stack()
+        self.update_stack_label()
         stack_idx = self.get_stack()
         img = self.image_stack[stack_idx, ...]
         self.set_image(img)
+        for idx in range(self.point_count):
+            self.update_point_filter(idx)
 
     def on_move_down(self):
         pass
@@ -624,11 +627,12 @@ class MesoscopeGUI(QMainWindow):
     def get_stack(self):
         return self.widget_scrollbar.value()
 
-    def set_stack(self, idx=None):
-        if idx is not None:
-            idx = max(self.widget_scrollbar.minimum(), min(self.widget_scrollbar.maximum(), idx))
-            self.widget_scrollbar.setValue(idx)
+    def set_stack(self, idx):
+        idx = max(self.widget_scrollbar.minimum(), min(self.widget_scrollbar.maximum(), idx))
+        self.widget_scrollbar.setValue(idx)
+        self.update_stack_label()
 
+    def update_stack_label(self):
         idx = self.widget_scrollbar.value()
         s = f"Slice #{idx + 1:03d} / {self.stack_count}"
         self.widget_slice_label.setText(s)
@@ -761,7 +765,7 @@ class MesoscopeGUI(QMainWindow):
         w = self.points_widgets[idx].widget
         stack_idx = self.points[idx].get('stack_idx', -1)
         blur = abs(self.get_stack() - stack_idx)
-        blur = 0 if blur == 0 else 2 + .5 * blur * blur
+        blur = 0 if blur == 0 else 2 + .25 * blur * blur
         set_blur(w, blur)
 
     def add_point_at_click(self, event):
