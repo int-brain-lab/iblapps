@@ -206,7 +206,7 @@ class Loader:
             return
         pattern = '**/' + self.pattern
         self._image_list = glob.glob(pattern, root_dir=self.root_dir, recursive=True)
-        self._image_list = [Path(_) for _ in self._image_list]
+        self._image_list = [self.root_dir / Path(_) for _ in self._image_list]
         self._current_index = 0 if self._image_list else -1
 
     @property
