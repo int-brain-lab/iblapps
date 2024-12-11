@@ -934,6 +934,9 @@ class MesoscopeGUI(QMainWindow):
             self.update_point_position(point_idx)
             self.update_point_filter(point_idx)
 
+        # Save the points after loading.
+        self.save_points()
+
     def save_points(self):
         self.save_fields(points=self.points)
 
