@@ -816,11 +816,12 @@ class MesoscopeGUI(QMainWindow):
         if not self.points:
             return
 
-        # Move the current scrollbar.
-        if relative is not None:
-            self.set_stack(self.get_stack() + relative)
-        elif absolute is not None:
-            self.set_stack(absolute)
+        # Disabled following a request by Samuel on Slack on 2024-12-11.
+        # # Move the current scrollbar.
+        # if relative is not None:
+        #     self.set_stack(self.get_stack() + relative)
+        # elif absolute is not None:
+        #     self.set_stack(absolute)
 
         # Move all points.
         for idx in range(self.point_count):
