@@ -67,15 +67,14 @@ class UnityData:
 
     def set_points(self, points):
 
-        self.particles = urchin.particles.create(len(points['pos']))
-        urchin.particles.set_material('circle')
-
-        urchin.particles.set_positions(self.particles, points['pos'])
-        urchin.particles.set_colors(self.particles, points['col'])
+        self.particles = urchin.particles.ParticleSystem(n=len(points['pos']))
+        self.particles.set_material('circle')
+        self.particles.set_positions(points['pos'])
+        self.particles.set_colors(points['col'])
 
     def set_point_size(self, point_size):
 
-        urchin.particles.set_sizes(self.particles, list(np.ones((len(self.particles))) * point_size))
+        self.particles.set_sizes(list(np.ones(self.particles.data.n) * point_size * 1000))
 
     def set_text(self, text):
 
@@ -89,10 +88,11 @@ class UnityData:
 
     def set_probes(self, probes):
 
-        self.probes = urchin.particles.create(len(probes))
-        urchin.particles.set_sizes(self.probes, list(np.ones((len(self.probes))) * 0.1))
-        urchin.particles.set_colors(self.probes, [p['col'] for p in probes])
-        urchin.particles.set_positions(self.probes, [p['pos'] for p in probes])
+        self.probes = urchin.particles.ParticleSystem(n=len(probes))
+        self.probes.set_material('circle')
+        self.probes.set_positions([p['pos'] for p in probes])
+        self.probes.set_colors([p['col'] for p in probes])
+        self.probes.set_sizes(list(np.ones(self.probes.data.n) * 250))
 
     def prepare_data(self, data, point_type, feature, filter_type, ba):
 

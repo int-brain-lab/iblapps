@@ -4,7 +4,7 @@ from iblutil.numerical import bincount2D
 from brainbox.io.spikeglx import Streamer
 from brainbox.population.decode import xcorr
 from brainbox.task import passive
-from neurodsp import voltage
+from ibldsp import voltage
 import neuropixel
 import scipy
 from PyQt5 import QtGui
