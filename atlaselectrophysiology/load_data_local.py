@@ -18,7 +18,7 @@ logger = logging.getLogger('ibllib')
 
 class LoadDataLocal:
     def __init__(self):
-        ONE(silent=True, password='international')
+        ONE(base_url='https://openalyx.internationalbrainlab.org', silent=True, password='international')
         self.brain_atlas = atlas.AllenAtlas(25)
         self.franklin_atlas = None
         self.folder_path = None
@@ -99,8 +99,11 @@ class LoadDataLocal:
 
             shank_chns = np.bitwise_and(self.chn_coords_all[:, 0] >= shanks[self.shank_idx][0],
                                         self.chn_coords_all[:, 0] <= shanks[self.shank_idx][1])
+            self.orig_idx = np.where(shank_chns)[0]
             self.chn_coords = self.chn_coords_all[shank_chns, :]
+
         else:
+            self.orig_idx = None
             self.chn_coords = self.chn_coords_all
 
         chn_depths = self.chn_coords[:, 1]
@@ -261,8 +264,7 @@ class LoadDataLocal:
         with open(self.folder_path.joinpath(prev_align_filename), "w") as f:
             json.dump(original_json, f, indent=2, separators=(',', ': '))
 
-    @staticmethod
-    def create_channel_dict(brain_regions):
+    def create_channel_dict(self, brain_regions):
         """
         Create channel dictionary in form to write to json file
         :param brain_regions: information about location of electrode channels in brain atlas
@@ -281,6 +283,9 @@ class LoadDataLocal:
                 'brain_region_id': int(brain_regions.id[i]),
                 'brain_region': brain_regions.acronym[i]
             }
+            if self.orig_idx is not None:
+                channel['original_channel_idx'] = int(self.orig_idx[i])
+
             data = {'channel_' + str(i): channel}
             channel_dict.update(data)
 
