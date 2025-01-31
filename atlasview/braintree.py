@@ -1,8 +1,8 @@
 import sys
 from collections import deque
-from PyQt5.QtWidgets import QTreeView, QWidget, QVBoxLayout, QApplication, QLineEdit
+from PyQt5.QtWidgets import QTreeView, QWidget, QVBoxLayout, QLineEdit
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QBrush, QColor
-from PyQt5.QtCore import Qt, QSortFilterProxyModel, QRegExp
+from PyQt5.QtCore import Qt, QSortFilterProxyModel, QRegExp, pyqtSignal
 from PyQt5.Qt import pyqtSlot
 
 import numpy as np
@@ -12,6 +12,7 @@ from qt_helpers import qt
 
 
 class BrainTree(QWidget):
+    signal_region_selected = pyqtSignal(int)
 
     def __init__(self, regions=None):
         super(BrainTree, self).__init__()
@@ -59,18 +60,17 @@ class BrainTree(QWidget):
         for i in range(4):
             self.tree.resizeColumnToContents(i)
         self.tree.setEditTriggers(QTreeView.NoEditTriggers)
-        self.show()
         self.lineEditFilterAcronym.textChanged.connect(self._filter)
         self.lineEditFilterName.textChanged.connect(self._filter)
         self.lineEditFilterLevel.textChanged.connect(self._filter)
-
         self.tree.selectionModel().selectionChanged.connect(self.handle_selection_change)
+        self.show()
 
     def handle_selection_change(self, selected, deselected):
         indexes = selected.indexes()
         if indexes:
             rid = int(self.tree.model().itemData(indexes[1])[0])
-            print(self.regions.acronym[rid])
+            self.signal_region_selected.emit(rid)
 
     @pyqtSlot(str)
     def _filter(self, text: str):
@@ -120,21 +120,13 @@ class BrainTree(QWidget):
             seen[unique_id] = parent.child(parent.rowCount() - 1)
             r += 1
 
-# if __name__ == '__main__':
-#     app = QApplication(sys.argv)
-#     view = BrainTree()
-#     view.show()
-#     sys.exit(app.exec_())
 
-
-def console():
-    """ application entry point """
-    qt.create_app()
+if __name__ == '__main__':
+    app = qt.create_app()
     av = BrainTree()
     av.show()
-    return av
+    sys.exit(app.exec_())
 
-self = console()
 
 # %%
 

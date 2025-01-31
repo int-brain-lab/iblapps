@@ -15,13 +15,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
-from PyQt5 import QtWidgets, uic
+from PyQt5 import QtWidgets, uic, QtCore
 from PyQt5.QtGui import QTransform
 import pyqtgraph as pg
 import matplotlib
 
 from iblatlas.atlas import AllenAtlas
 from qt_helpers import qt
+
+from iblapps.atlasview.braintree import BrainTree
 
 
 class TopView(QtWidgets.QMainWindow):
@@ -68,6 +70,8 @@ class TopView(QtWidgets.QMainWindow):
         # slider for transparency between image and labels
         self.slider_alpha.sliderMoved.connect(self.slider_alpha_move)
         self.ctrl.set_top()
+        self.ctrl.fig_brain_tree.signal_region_selected.connect(self.on_brain_tree_selection)
+
 
     def add_scatter_feature(self, data):
         self.ctrl.scatter_data = data / 1e6
@@ -117,6 +121,11 @@ class TopView(QtWidgets.QMainWindow):
             return
         pass
         # qpoint = self.imageItem.mapFromScene(scenepos)
+
+    @QtCore.pyqtSlot(int)
+    def on_brain_tree_selection(self, rid):
+        self.ctrl.highlight_region = rid
+        self._refresh()
 
     def _refresh(self):
         self._refresh_sagittal()
@@ -199,8 +208,8 @@ class SliceView(QtWidgets.QWidget):
             self.label_region.setText("")
             self.label_acronym.setText("")
         else:
-            self.label_region.setText(region['name'])
-            self.label_acronym.setText(region['acronym'])
+            self.label_region.setText(region['name'][0])
+            self.label_acronym.setText(region['acronym'][0])
 
     def replace_image_layer(self, index, **kwargs):
         if index and len(self.imageItem) >= index:
@@ -267,6 +276,7 @@ class ControllerTopView(PgImageController):
     """
     def __init__(self, qmain: TopView, res: int = 25, volume='image', atlas=None, **kwargs):
         super(ControllerTopView, self).__init__(qmain)
+        self.highlight_region = None
         self.volume = volume
         self.atlas = AllenAtlas(res) if atlas is None else atlas
         self.atlas.regions.compute_hierarchy()
@@ -281,6 +291,7 @@ class ControllerTopView(PgImageController):
         self.fig_sagittal.setWindowTitle('Sagittal Slice')
         self.set_slice(self.fig_sagittal)
         self.fig_sagittal.show()
+        self.fig_brain_tree = BrainTree()
 
     def set_slice(self, fig, coord=0, mapping="Allen"):
         waxis, haxis, daxis = (fig.ctrl.waxis, fig.ctrl.haxis, fig.ctrl.daxis)
@@ -293,12 +304,12 @@ class ControllerTopView(PgImageController):
         # reversed order so the self.im is set with the base layer
         for layer_name, layer in fig.ctrl.image_layers.items():
             if layer_name == 'boundary':
-                highlight_region = 6
-                if highlight_region is None:
+
+                if self.highlight_region is None:
                     layer.image_item.setOpacity(0)
                     continue
                 else:
-                    ir = 13
+                    ir = self.highlight_region
                     _, iir = self.atlas.regions.descendants(self.atlas.regions.id[ir], return_indices=True)
                     slice_labels = self.atlas.slice(coord, axis=daxis, mapping='Allen', volume='rindex', mode='clip')
                     from iblutil.numerical import ismember
