@@ -5,6 +5,7 @@ import scipy.signal
 from PyQt5 import QtWidgets, QtCore, QtGui, uic
 import pyqtgraph as pg
 
+import easyqc.qt
 from iblutil.numerical import bincount2D
 from viewephys.gui import viewephys
 import ibldsp
@@ -43,13 +44,22 @@ def get_trial_events_to_display(trials):
 
 
 def view_raster(pid, one, stream=True):
+<<<<<<< Updated upstream
     from qt import create_app
     app = create_app()
+=======
+
+>>>>>>> Stashed changes
     ssl = SpikeSortingLoader(one=one, pid=pid)
     sl = EphysSessionLoader(one=one, eid=ssl.eid)
     sl.load_trials()
     spikes, clusters, channels = ssl.load_spike_sorting(dataset_types=['spikes.samples'])
+<<<<<<< Updated upstream
     clusters = ssl.merge_clusters(spikes, clusters, channels)
+=======
+    easyqc.qt.create_app()
+
+>>>>>>> Stashed changes
     return RasterView(ssl, spikes, clusters, channels, trials=sl.trials, stream=stream)
 
 

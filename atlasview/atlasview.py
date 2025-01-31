@@ -47,7 +47,7 @@ class TopView(QtWidgets.QMainWindow):
     def __init__(self, **kwargs):
         super(TopView, self).__init__()
         self.ctrl = ControllerTopView(self, **kwargs)
-        self.ctrl.image_layers = [ImageLayer()]
+        self.ctrl.image_layers = {'top': ImageLayer()}
         uic.loadUi(Path(__file__).parent.joinpath('topview.ui'), self)
         self.plotItem_topview.setAspectLocked(True)
         self.plotItem_topview.addItem(self.ctrl.imageItem)
@@ -104,10 +104,10 @@ class TopView(QtWidgets.QMainWindow):
 
     def slider_alpha_move(self):
         annotation_alpha = self.slider_alpha.value() / 100
-        self.ctrl.fig_coronal.ctrl.image_layers[0].pg_kwargs['opacity'] = 1 - annotation_alpha
-        self.ctrl.fig_sagittal.ctrl.image_layers[0].pg_kwargs['opacity'] = 1 - annotation_alpha
-        self.ctrl.fig_coronal.ctrl.image_layers[1].pg_kwargs['opacity'] = annotation_alpha
-        self.ctrl.fig_sagittal.ctrl.image_layers[1].pg_kwargs['opacity'] = annotation_alpha
+        self.ctrl.fig_coronal.ctrl.image_layers['image'].pg_kwargs['opacity'] = 1 - annotation_alpha
+        self.ctrl.fig_sagittal.ctrl.image_layers['image'].pg_kwargs['opacity'] = 1 - annotation_alpha
+        self.ctrl.fig_coronal.ctrl.image_layers['annotation'].pg_kwargs['opacity'] = annotation_alpha
+        self.ctrl.fig_sagittal.ctrl.image_layers['annotation'].pg_kwargs['opacity'] = annotation_alpha
         self._refresh()
 
     def mouseMoveEvent(self, scenepos):
@@ -142,9 +142,11 @@ class SliceView(QtWidgets.QWidget):
         self.ctrl = SliceController(self, waxis, haxis, daxis)
         uic.loadUi(Path(__file__).parent.joinpath('sliceview.ui'), self)
         self.add_image_layer(slice_kwargs={'volume': 'image', 'mode': 'clip'},
-                             pg_kwargs={'opacity': 0.8})
+                             pg_kwargs={'opacity': 0.8}, name='image')
         self.add_image_layer(slice_kwargs={'volume': 'annotation', 'mode': 'clip'},
-                             pg_kwargs={'opacity': 0.2})
+                             pg_kwargs={'opacity': 0.2}, name='annotation')
+        self.add_image_layer(slice_kwargs={'volume': 'boundary', 'mode': 'clip'},
+                             pg_kwargs={'opacity': 1}, name='boundary')
         # init the image display
         self.plotItem_slice.setAspectLocked(True)
         # connect signals and slots
@@ -156,15 +158,16 @@ class SliceView(QtWidgets.QWidget):
         self.scatterItem = pg.ScatterPlotItem()
         self.plotItem_slice.addItem(self.scatterItem)
 
-    def add_image_layer(self, **kwargs):
+    def add_image_layer(self, name=None, **kwargs):
         """
         :param pg_kwargs: pyqtgraph setImage arguments: {'levels': None, 'lut': None,
         'opacity': 1.0}
         :param slice_kwargs: iblatlas.atlas.slice arguments: {'volume': 'image', 'mode': 'clip'}
         :return:
         """
+        assert name is not None
         il = ImageLayer(**kwargs)
-        self.ctrl.image_layers.append(il)
+        self.ctrl.image_layers[name] = il
         self.plotItem_slice.addItem(il.image_item)
 
     def closeEvent(self, event):
@@ -182,7 +185,7 @@ class SliceView(QtWidgets.QWidget):
             scenepos = scenepos[0]
         else:
             return
-        qpoint = self.ctrl.image_layers[0].image_item.mapFromScene(scenepos)
+        qpoint = self.ctrl.image_layers['image'].image_item.mapFromScene(scenepos)
         iw, ih, w, h, v, region = self.ctrl.cursor2xyamp(qpoint)
         self.label_x.setText(f"{w:.4f}")
         self.label_y.setText(f"{h:.4f}")
@@ -214,7 +217,7 @@ class PgImageController:
     def __init__(self, win, res=25):
         self.qwidget = win
         self.transform = None  # affine transform image indices 2 data domain
-        self.image_layers = []
+        self.image_layers: dict = {}
 
     def cursor2xyamp(self, qpoint):
         """Used for the mouse hover function over image display"""
@@ -232,7 +235,8 @@ class PgImageController:
     @property
     def imageItem(self):
         """returns the first image item"""
-        return self.image_layers[0].image_item
+        return next((self.image_layers[k].image_item for k in self.image_layers))
+
 
     def set_image(self, pg_image_item, im, dw, dh, w0, h0, **pg_kwargs):
         """
@@ -265,6 +269,7 @@ class ControllerTopView(PgImageController):
         super(ControllerTopView, self).__init__(qmain)
         self.volume = volume
         self.atlas = AllenAtlas(res) if atlas is None else atlas
+        self.atlas.regions.compute_hierarchy()
         self.fig_top = self.qwidget = qmain
         # Setup Coronal slice: width: ml, height: dv, depth: ap
         self.fig_coronal = SliceView(qmain, waxis=0, haxis=2, daxis=1)
@@ -286,9 +291,25 @@ class ControllerTopView(PgImageController):
         hl = self.atlas.bc.lim(haxis) - dh / 2
         # the ImageLayer object carries slice kwargs and pyqtgraph ImageSet kwargs
         # reversed order so the self.im is set with the base layer
-        for layer in reversed(fig.ctrl.image_layers):
-            _slice = self.atlas.slice(coord, axis=daxis, mapping=mapping, **layer.slice_kwargs)
+        for layer_name, layer in fig.ctrl.image_layers.items():
+            if layer_name == 'boundary':
+                highlight_region = 6
+                if highlight_region is None:
+                    layer.image_item.setOpacity(0)
+                    continue
+                else:
+                    ir = 13
+                    _, iir = self.atlas.regions.descendants(self.atlas.regions.id[ir], return_indices=True)
+                    slice_labels = self.atlas.slice(coord, axis=daxis, mapping='Allen', volume='rindex', mode='clip')
+                    from iblutil.numerical import ismember
+                    _slice, _ = ismember(slice_labels, iir)
+                    _slice = self.atlas.compute_boundaries(_slice)
+                    _slice = np.tile(_slice.astype(np.uint8)[:, :, np.newaxis], (1, 1, 4)) * 255
+                    layer.image_item.setOpacity(1)
+            else:
+                _slice = self.atlas.slice(coord, axis=daxis, mapping=mapping, **layer.slice_kwargs)
             fig.ctrl.set_image(layer.image_item, _slice, dw, dh, wl[0], hl[0], **layer.pg_kwargs)
+
         fig.ctrl.slice_coord = coord
 
     def set_top(self):
@@ -297,7 +318,7 @@ class ControllerTopView(PgImageController):
         img[np.isnan(img)] = np.nanmin(img)  # img has dims ml, ap
         dw, dh = (self.atlas.bc.dxyz[0], self.atlas.bc.dxyz[1])
         wl, hl = (self.atlas.bc.xlim, self.atlas.bc.ylim)
-        self.set_image(self.image_layers[0].image_item, img, dw, dh, wl[0], hl[0])
+        self.set_image(self.image_layers['top'].image_item, img, dw, dh, wl[0], hl[0])
 
     def set_scatter(self, fig, coord=0):
         waxis = fig.ctrl.waxis
