@@ -36,10 +36,14 @@ class PlotData:
         chn_x_diff = np.diff(chn_x)
         n_shanks = np.sum(chn_x_diff > 100) + 1
 
+        groups = np.split(chn_x, np.where(np.diff(chn_x) > 100)[0] + 1)
+
         if n_shanks > 1:
             shanks = {}
-            for iShank in range(n_shanks):
-                shanks[iShank] = [chn_x[iShank * 2], chn_x[(iShank * 2) + 1]]
+            for iShank, grp in enumerate(groups):
+                if len(grp) == 1:
+                    grp = np.array([grp[0], grp[0]])
+                shanks[iShank] = [grp[0], grp[1]]
 
             shank_chns = np.bitwise_and(self.chn_coords_all[:, 0] >= shanks[shank_idx][0],
                                         self.chn_coords_all[:, 0] <= shanks[shank_idx][1])

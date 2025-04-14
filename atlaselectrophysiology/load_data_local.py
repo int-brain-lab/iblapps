@@ -91,11 +91,18 @@ class LoadDataLocal:
 
     def get_data(self):
 
-        chn_x = np.unique(self.chn_coords_all[:, 0])
         if self.n_shanks > 1:
+
+            chn_x = np.unique(self.chn_coords_all[:, 0])
+            groups = np.split(chn_x, np.where(np.diff(chn_x) > 100)[0] + 1)
+
+            assert len(groups) == self.n_shanks
+
             shanks = {}
-            for iShank in range(self.n_shanks):
-                shanks[iShank] = [chn_x[iShank * 2], chn_x[(iShank * 2) + 1]]
+            for iShank, grp in enumerate(groups):
+                if len(grp) == 1:
+                    grp = np.array([grp[0], grp[0]])
+                shanks[iShank] = [grp[0], grp[1]]
 
             shank_chns = np.bitwise_and(self.chn_coords_all[:, 0] >= shanks[self.shank_idx][0],
                                         self.chn_coords_all[:, 0] <= shanks[self.shank_idx][1])

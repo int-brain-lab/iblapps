@@ -15,6 +15,7 @@ from one import params
 import glob
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
 import ibllib.qc.critical_reasons as usrpmt
+from datetime import timedelta
 
 logger = logging.getLogger('ibllib')
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
@@ -22,8 +23,8 @@ ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
 
 class LoadData:
     def __init__(self, one=None, brain_atlas=None, testing=False, probe_id=None,
-                 load_histology=True, spike_collection=None, mode='auto'):
-        self.one = one or ONE(base_url=ONE_BASE_URL, mode=mode)
+                 load_histology=True, spike_collection=None):
+        self.one = one or ONE(base_url=ONE_BASE_URL)
         self.brain_atlas = brain_atlas or atlas.AllenAtlas(25)
         # self.franklin_atlas = atlas.FranklinPaxinosAtlas()
         self.franklin_atlas = None
@@ -39,7 +40,7 @@ class LoadData:
             self.chn_depths = SITES_COORDINATES[:, 1]
             self.probe_collection = None
         else:
-            self.brain_regions = self.one.alyx.rest('brain-regions', 'list')
+            self.brain_regions = self.one.alyx.rest('brain-regions', 'list', expires=timedelta(days=1))
             self.chn_coords = None
             self.chn_depths = None
             # Download bwm aggregate tables for for ephys feature gui
@@ -79,7 +80,7 @@ class LoadData:
         :type: list of strings
         """
 
-        self.sess_ins = self.one.alyx.rest('insertions', 'list', dataset_type='spikes.times')
+        self.sess_ins = self.one.alyx.rest('insertions', 'list', dataset_type='spikes.times', expires=timedelta(days=1))
         self.subj_ins = [sess['session_info']['subject'] for sess in self.sess_ins]
 
         self.subjects = np.unique(self.subj_ins)
@@ -192,7 +193,8 @@ class LoadData:
             self.sess_with_hist = self.one.alyx.rest('trajectories', 'list',
                                                      provenance='Histology track',
                                                      django='x__isnull,False,probe_insertion__'
-                                                     'datasets__name__icontains,spikes.times')
+                                                     'datasets__name__icontains,spikes.times',
+                                                     expires=timedelta(days=1))
             # Some do not have tracing, exclude these ones
 
             depths = np.arange(200, 4100, 20) / 1e6
