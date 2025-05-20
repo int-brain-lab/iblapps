@@ -279,11 +279,14 @@ class LoadData:
             self.probe_collection = f'alf/{probe_label}/{self.spike_collection}'
             probe_path = Path(self.sess_path, 'alf', probe_label, self.spike_collection)
         else:
-            # Pykilosort is default, if not present look for normal kilosort
+            # iblsorter is defaullt, then pykilosort, if not present look for normal kilosort
             # Find all collections
             all_collections = self.one.list_collections(self.eid)
 
-            if f'alf/{probe_label}/pykilosort' in all_collections:
+            if f'alf/{probe_label}/iblsorter' in all_collections:
+                self.probe_collection = f'alf/{probe_label}/iblsorter'
+                probe_path = Path(self.sess_path, 'alf', probe_label, 'iblsorter')
+            elif f'alf/{probe_label}/pykilosort' in all_collections:
                 self.probe_collection = f'alf/{probe_label}/pykilosort'
                 probe_path = Path(self.sess_path, 'alf', probe_label, 'pykilosort')
             else:

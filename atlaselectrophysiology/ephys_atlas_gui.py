@@ -41,7 +41,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         return av
 
     def __init__(self, offline=False, probe_id=None, one=None, histology=True,
-                 spike_collection=None, remote=False, unity=False):
+                 spike_collection=None, unity=False):
         super(MainWindow, self).__init__()
 
         if unity:
@@ -2311,7 +2311,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     app = QtWidgets.QApplication([])
-    mainapp = MainWindow(offline=args.offline, probe_id=args.insertion, remote=args.remote, unity=args.unity)
+    mainapp = MainWindow(offline=args.offline, probe_id=args.insertion, unity=args.unity)
     # mainapp = MainWindow(offline=True)
     mainapp.show()
     app.exec_()
