@@ -1,6 +1,6 @@
 from qtpy.QtWidgets import (QWidget, QApplication, QSizePolicy, QMainWindow, QVBoxLayout, QSplitter, QSlider,
                             QComboBox, QPushButton, QGraphicsProxyWidget, QGroupBox, QLabel, QFileDialog)
-from qtpy.QtCore import Qt
+from qtpy.QtCore import Qt, QSettings, QDir
 from qtpy.QtGui import QTransform, QStandardItemModel, QStandardItem
 import pyqtgraph as pg
 
@@ -72,6 +72,10 @@ class MesoscopeLoader(object):
         self.bad_frames = self.load_bad_frames()
 
         self.concat_mask = {val: None for val in self.get_cell_types()}
+
+        # Load in frames and times for pc signal (tPc sampled at a subset of the total frames)
+        self.tPc_frames = self.get_pc_frames()
+        self.tPc_times = self.imaging_times[self.tPc_frames]
 
     def load_times(self):
 
@@ -202,14 +206,16 @@ class MesoscopeLoader(object):
             weights = np.arange(mask.shape[0])[:, np.newaxis, np.newaxis]
             mask = mask * weights  # Broadcasting in sparse format
             concat = sparse.sum(mask, axis=0)
-            concat = sparse.asnumpy(concat).astype(float)
-            concat[concat == 0] = np.nan
+            concat = sparse.asnumpy(concat).astype(int)
+            # concat[concat == 0] = np.nan
             self.concat_mask[cell_type] = concat
 
         return self.concat_mask[cell_type]
 
-    def get_hist(self, vals, bins=100):
-        counts, bins = np.histogram(vals, bins=bins)
+    def get_hist(self, vals, width=None, nbins=100):
+        if width is not None:
+            nbins = np.arange(np.nanmin(vals), np.nanmax(vals) + width, width)
+        counts, bins = np.histogram(vals, bins=nbins)
         #TODO make bin in center
         return counts, bins[:-1]
 
@@ -220,6 +226,15 @@ class MesoscopeLoader(object):
         assert interval < n_intervals, f'interval must be between 0 and {n_intervals - 1}'
         n_ints = int(self.ops['tPC'].shape[0] / n_intervals)
         return int(n_ints * interval), int(n_ints * (interval + 1))
+
+    def get_pc_frames(self):
+
+        # Taken from https://github.com/main/suite2p/blob/main/suite2p/run_s2p.py#L152
+        nsamp = min(2000 if self.ops['nframes'] < 5000 or self.ops['Ly'] > 700 or self.ops['Lx'] > 700 else 5000,
+                    self.ops['nframes'])
+        inds = np.linspace(0, self.ops['nframes'] - 1, nsamp).astype("int")
+
+        return inds
 
 
 
@@ -370,8 +385,11 @@ class MesoscopeQcSetup():
         ops_diff_group, self.plot_items['ops_diff_image']['plot'], self.plot_items['ops_diff_image']['lut'], *_ = (
             add_layout_with_image_and_lut('Difference'))
 
-        ops_merge_group, self.plot_items['ops_merge_image']['plot'], self.plot_items['ops_merge_image']['lut'], *_ = (
-            add_layout_with_image_and_lut('Merged'))
+        (self.ops_merge_group, self.plot_items['ops_merge_image']['plot'], self.plot_items['ops_merge_image']['lut_0'],
+         *_) = (add_layout_with_image_and_lut('Merged'))
+        # We need lut for each layer
+        self.plot_items['ops_merge_image']['lut_1'] = pg.HistogramLUTItem()
+        self.plot_items['ops_merge_image']['lut_1'].axis.setVisible(False)
 
         (ops_raw_group, self.plot_items['ops_raw_image']['plot'], self.plot_items['ops_raw_image']['lut'],
          self.layer_info, self.layer_toggle) = (
@@ -411,8 +429,8 @@ class MesoscopeQcSetup():
         splitter1_graphics_layout.addItem(raw_image_group, 0, 0)
         splitter1_graphics_layout.addItem(mean_image_group, 0, 1)
         splitter1_graphics_layout.addItem(self.plot_items['fluo_signal']['plot'], 1, 0, colspan=2)
-        splitter1_graphics_layout.addItem(self.plot_items['pc_signal']['plot'], 2, 0, colspan=2)
-        splitter1_graphics_layout.addItem(self.plot_items['xy_signal']['plot'], 3, 0, colspan=2)
+        splitter1_graphics_layout.addItem(self.plot_items['xy_signal']['plot'], 2, 0, colspan=2)
+        splitter1_graphics_layout.addItem(self.plot_items['pc_signal']['plot'], 3, 0, colspan=2)
         splitter1_graphics_layout.layout.setContentsMargins(0, 0, 0, 0)
         splitter1_graphics_layout.layout.setRowStretchFactor(0, 2)
         splitter1_graphics_layout.layout.setRowStretchFactor(1, 1)
@@ -437,8 +455,8 @@ class MesoscopeQcSetup():
         splitter2_graphics_layout.addItem(self.plot_items['snr_scatter']['plot'], row=0, col=0)
         splitter2_graphics_layout.addItem(self.plot_items['skew_hist']['plot'], row=1, col=0)
         splitter2_graphics_layout.addItem(self.plot_items['fluo_hist']['plot'], row=2, col=0)
-        splitter2_graphics_layout.addItem(self.plot_items['pc_hist']['plot'], row=3, col=0)
-        splitter2_graphics_layout.addItem(self.plot_items['xy_hist']['plot'], row=4, col=0)
+        splitter2_graphics_layout.addItem(self.plot_items['xy_hist']['plot'], row=3, col=0)
+        splitter2_graphics_layout.addItem(self.plot_items['pc_hist']['plot'], row=4, col=0)
         splitter2_graphics_layout.layout.setContentsMargins(0, 0, 0, 0)
         splitter2_graphics_widget = pg.GraphicsLayoutWidget()
         splitter2_graphics_widget.addItem(splitter2_graphics_layout)
@@ -455,7 +473,7 @@ class MesoscopeQcSetup():
 
         splitter3_bottom_graphics_layout = pg.GraphicsLayout()
         splitter3_bottom_graphics_layout.addItem(ops_diff_group, row=0, col=0)
-        splitter3_bottom_graphics_layout.addItem(ops_merge_group, row=1, col=0)
+        splitter3_bottom_graphics_layout.addItem(self.ops_merge_group, row=1, col=0)
         splitter3_bottom_graphics_layout.addItem(ops_raw_group, row=2, col=0)
         splitter3_bottom_graphics_widget = pg.GraphicsLayoutWidget()
         splitter3_bottom_graphics_widget.addItem(splitter3_bottom_graphics_layout)
@@ -511,12 +529,17 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         super().__init__()
         self.init_ui()
 
+        # Load in settings
+        self.settings = QSettings("Mesoscope qc gui")
+
         # Load in some default colours and colourmaps
         self.get_pens()
-        self.cmap_mask = self.get_tab20_colormap()
+        self.cmap_mask = matplotlib.colormaps['hsv']
         self.cmap_skew = matplotlib.colormaps['Set1']
         self.cmap_pc = matplotlib.colormaps['YlOrBr']
         self.cmap_fluo = matplotlib.colormaps['PiYG']
+        self.cmap_top = self.get_colormap('vanimo', locs=np.arange(128)[::-1])
+        self.cmap_bottom = self.get_colormap('vanimo', locs=np.arange(128) + 128)
 
         # Add connections
         self.session_button.clicked.connect(self.on_load_data)
@@ -526,6 +549,13 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         self.raw_image_lut.sigLevelChangeFinished.connect(self.update_raw_level)
         self.cell_combobox.activated.connect(self.on_cell_selected)
         self.pc_combobox.activated.connect(self.on_pc_selected)
+
+        for key in self.plot_items:
+            self.plot_items[key]['plot'].scene().sigMouseClicked.connect(self.on_double_click)
+
+        # Add links between axis
+        self.plot_items['fluo_signal']['plot'].setXLink(self.plot_items['xy_signal']['plot'])
+        self.plot_items['xy_signal']['plot'].setXLink(self.plot_items['pc_signal']['plot'])
 
     # -------------------------------------------------------------------------------------------------
     # Entry point
@@ -538,18 +568,16 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         """
         # Clear all plots from previous session
         for items in self.plot_items:
-            # if isinstance(self.plot_items[items]['plot'], pg.ViewBox):
-            #     for item in self.plot_items[items]['plot'].addedItems:
-            #         self.plot_items[items]['plot'].removeItem(item)
-            #     self.plot_items[items]['plot'].update()
-            # else:
-            #     self.plot_items[items]['plot'].clear()
-            #     self.plot_items[items]['plot'].getViewBox().update()
-            keys = [k for k in self.plot_items[items].keys() if k not in ['plot', 'lut']]
+            if isinstance(self.plot_items[items]['plot'], pg.ViewBox):
+                self.plot_items[items]['plot'].enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+            else:
+
+                self.plot_items[items]['plot'].getViewBox().enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+
+            keys = [k for k in self.plot_items[items].keys() if k not in ['plot', 'lut', 'lut_0', 'lut_1']]
             for key in keys:
                 _ = self.plot_items[items].pop(key)
             self.plot_items[items]['plot'].clear()
-
 
         # Clear combobox items
         self.cell_list.clear()
@@ -619,10 +647,14 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         Load file dialog to select data
         :return:
         """
-        data_path = QFileDialog.getExistingDirectory(self, "Select FOV Directory")
+        prev_path = self.settings.value("lastDir", QDir.homePath())
+
+        data_path = QFileDialog.getExistingDirectory(self, "Select FOV Directory", prev_path)
         if data_path:
             self.reset_gui()
             self.load_gui(data_path)
+            self.settings.setValue("lastDir", str(Path(data_path).parent))
+
 
     def on_cell_selected(self, cell):
         """
@@ -671,16 +703,31 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         Toggle ops image showing data from top/ bottom 500 frames
         :return:
         """
+        plot = self.plot_items['ops_merge_image']
+
         if self.layer_idx == 0:
             self.layer_toggle.setText('Bottom')
             self.layer_info.setText('Bottom')
+            self.ops_merge_group.removeItem(plot[f'lut_{self.layer_idx}'])
             self.layer_idx = 1
+            self.ops_merge_group.addItem(plot[f'lut_{self.layer_idx}'], 1, 1)
+            plot[f'img_{self.layer_idx}'].setLookupTable(self.cmap_bottom.getLookupTable())
         else:
             self.layer_toggle.setText('Top')
             self.layer_info.setText('Top')
+            self.ops_merge_group.removeItem(plot[f'lut_{self.layer_idx}'])
             self.layer_idx = 0
+            self.ops_merge_group.addItem(plot[f'lut_{self.layer_idx}'], 1, 1)
+            plot[f'img_{self.layer_idx}'].setLookupTable(self.cmap_top.getLookupTable())
 
         self.plot_ops_raw()
+
+    def on_double_click(self, event):
+        if event.double():
+            vb = event.currentItem
+            if isinstance(vb, pg.ViewBox):
+                vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+
 
     # -------------------------------------------------------------------------------------------------
     # Update plots
@@ -703,7 +750,7 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         self.plot_ops_merge()
 
         self.plot_pc_signal()
-        # self.plot_pc_signal_point()
+        self.plot_pc_signal_point()
         self.plot_pc_hist()
 
         self.plot_pc_traces()
@@ -731,7 +778,7 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
             self.plot_raw_image()
         self.plot_fluorescence_point()
         self.plot_xy_point()
-        # self.plot_pc_signal_point()
+        self.plot_pc_signal_point()
 
     def init_plots(self):
 
@@ -749,7 +796,7 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         self.plot_fluorescence_hist()
 
         self.plot_pc_signal()
-        # self.plot_pc_signal_point()
+        self.plot_pc_signal_point()
         self.plot_pc_hist()
 
         self.plot_xy_signal()
@@ -788,17 +835,23 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         self.gbrush = pg.mkBrush(color='g')
 
         self.dashed_pen = pg.mkPen('#808080', width=1, style=pg.QtCore.Qt.DashLine)
+        self.dashed_pen_thick = pg.mkPen('#808080', width=2, style=pg.QtCore.Qt.DashLine)
 
     @staticmethod
-    def get_tab20_colormap():
-        # Get the tab20 colormap from Matplotlib in Pyqtgraph format
-        cmap = matplotlib.colormaps['tab20']
+    def get_colormap(name, locs=None):
+        # Get colormap from Matplotlib in Pyqtgraph format
+        cmap = matplotlib.colormaps[name]
         # Extract colors and positions
-        colors = [cmap(i) for i in range(cmap.N)]
-        positions = np.linspace(0, 1, cmap.N)
+        if locs is not None:
+            colors = [cmap(i) for i in locs]
+            positions = np.linspace(0, 1, len(locs))
+        else:
+            colors = [cmap(i) for i in range(cmap.N)]
+            positions = np.linspace(0, 1, cmap.N)
         # Convert to PyQtGraph format (0-255 range for RGBA)
         colors = [(int(r * 255), int(g * 255), int(b * 255), int(a * 255)) for r, g, b, a in colors]
         return pg.ColorMap(positions, colors)
+
 
     @staticmethod
     def set_axis_labels(plot, xlabel, ylabel):
@@ -910,8 +963,27 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
     def plot_mask(self):
         plot = self.plot_items['mean_image']
         data = self.ml.get_concatenated_mask(self.cell_idx)
-        plot['mask'] = self._plot_image(data, plot, 'mask', opacity=0.7, set_lut=False)
-        plot['mask'].setLookupTable(self.cmap_mask.getLookupTable(nPts=20))
+
+        # Get mask to set to nan later
+        mask = data == 0
+
+        # Compute size of cells
+        idx, weights = np.unique(data[~mask], return_counts=True)
+        weights = weights / np.max(weights)
+
+        # Assign random color to each cell
+        vals = np.random.default_rng(seed=1).integers(0, 256, int(np.nanmax(data) + 1))
+        cols = self.cmap_mask(vals)
+
+        # Assign opacity of each cell according to size of cell
+        cols[idx, -1] = weights * 0.7
+
+        # Convert data to rgba format
+        data = cols[data].astype(np.float16)
+        data[mask] = np.nan
+
+        plot['mask'] = self._plot_image(data, plot, 'mask', set_lut=False)
+
 
     def plot_ops_diff(self):
         plot = self.plot_items['ops_diff_image']
@@ -921,9 +993,14 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
 
     def plot_ops_merge(self):
         plot = self.plot_items['ops_merge_image']
-        data = self.ml.ops['regPC'][0, self.pc_idx, :, :] + self.ml.ops['regPC'][1, self.pc_idx, :, :]
-        plot['img'] = self._plot_image(data, plot, 'img')
-        plot['lut'].autoHistogramRange()
+        data1 = self.ml.ops['regPC'][0, self.pc_idx, :, :]
+        data2 = self.ml.ops['regPC'][1, self.pc_idx, :, :]
+        plot['img_0'] = self._plot_image(data1, plot, 'img_1', opacity=0.5, set_lut=False)
+        plot['img_1'] = self._plot_image(data2, plot, 'img_2', opacity=0.5, set_lut=False)
+        plot['lut_0'].setImageItem(plot['img_0'])
+        plot['lut_1'].setImageItem(plot['img_1'])
+        plot['img_0'].setLookupTable(self.cmap_top.getLookupTable())
+        plot['img_1'].setLookupTable(self.cmap_bottom.getLookupTable())
 
     def plot_ops_raw(self):
         plot = self.plot_items['ops_raw_image']
@@ -944,10 +1021,10 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
 
     def plot_pc_signal(self):
         plot = self.plot_items['pc_signal']
-        x = np.arange(self.ml.ops['tPC'].shape[0])
+        x = self.ml.tPc_times
         y = self.ml.ops['tPC'][:, self.pc_idx]
         plot['curve'] = self._plot_curve(x, y, plot, 'curve', pen=self.wpen)
-        self.set_axis_labels(plot['plot'], 'Time (frames)', 'Magnitude')
+        self.set_axis_labels(plot['plot'], 'Time (s)', 'Magnitude')
 
     def plot_xy_signal(self):
         plot = self.plot_items['xy_signal']
@@ -983,10 +1060,10 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         plot['scatter'] = self._plot_scatter(x, y, plot, 'scatter', pen=self.rpen, brush=self.rbrush)
 
     def plot_pc_signal_point(self):
-        # TODO FIGURE OUT
+
         plot = self.plot_items['pc_signal']
-        idx = np.searchsorted(np.arange(self.ml.ops['tPC'].shape[0]), self.frame_idx)
-        x = [np.arange(self.ml.ops['tPC'].shape[0])[idx]]
+        idx = np.searchsorted(self.ml.tPc_frames, self.frame_idx)
+        x = [self.ml.tPc_times[idx]]
         y = [self.ml.ops['tPC'][idx, self.pc_idx]]
         plot['scatter'] = self._plot_scatter(x, y, plot, 'scatter', pen=self.rpen, brush=self.rbrush)
 
@@ -1010,10 +1087,11 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
 
     def plot_snr(self):
         plot = self.plot_items['snr_scatter']
-        x = self.ml.get_average_cell_activity(self.cell_idx)
-        y = self.ml.get_average_neuropil_activity(self.cell_idx)
+        x = self.ml.get_average_neuropil_activity(self.cell_idx)
+        y = self.ml.get_average_cell_activity(self.cell_idx)
         plot['scatter'] = self._plot_scatter(x, y, plot, 'scatter', pen=None, brush='slategray', size=2)
-        self.set_axis_labels(plot['plot'], 'Avg cell activity', 'Avg neuropil activity')
+        plot['curve'] = self._plot_curve(x, x, plot, 'curve', pen=self.wpen)
+        self.set_axis_labels(plot['plot'], 'Avg neuropil activity', 'Avg cell activity')
 
     # -------------------------------------------------------------------------------------------------
     # Bar plots
@@ -1026,7 +1104,7 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         plot['legend'].setParentItem(plot['plot'])
 
         for i, cell_type in enumerate(self.ml.get_cell_types()):
-            x, y = self.ml.get_hist(self.ml.get_skew_for_cell(cell_type), bins=100)
+            x, y = self.ml.get_hist(self.ml.get_skew_for_cell(cell_type), nbins=100)
             col = matplotlib.colors.to_hex(self.cmap_skew(i))
             plot[f'bar_{cell_type}'] = self._plot_bar(x, y, plot, f'bar_{cell_type}', brush=pg.mkBrush(color=col))
             plot['legend'].addItem(plot[f'bar_{cell_type}'], self.ml.get_cell_name_from_type(cell_type))
@@ -1039,14 +1117,14 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         plot['legend'] = pg.LegendItem(offset=(-1, 1), verSpacing=1)
         plot['legend'].setParentItem(plot['plot'])
 
-        x, y = self.ml.get_hist(self.ml.get_average_cell_activity(self.cell_idx), bins=100)
+        x, y = self.ml.get_hist(self.ml.get_average_cell_activity(self.cell_idx), nbins=100)
         plot['bar_cell'] = self._plot_bar(x, y, plot, 'bar_cell',
                                           brush=pg.mkBrush(color=matplotlib.colors.to_hex(self.cmap_fluo(0))))
         plot['legend'].addItem(plot[f'bar_cell'], 'cell')
 
-        x, y = self.ml.get_hist(self.ml.get_average_neuropil_activity(self.cell_idx), bins=100)
+        x, y = self.ml.get_hist(self.ml.get_average_neuropil_activity(self.cell_idx), nbins=100)
         plot['bar_neuropil'] = self._plot_bar(x, y, plot, 'bar_neuropil',
-                                              brush=pg.mkBrush(color=matplotlib.colors.to_hex(self.cmap_fluo(256))))
+                                              brush=pg.mkBrush(color=matplotlib.colors.to_hex(self.cmap_fluo(255))))
         plot['legend'].addItem(plot[f'bar_neuropil'], 'neuropil')
 
         self.set_axis_labels(plot['plot'], 'Avg activity', 'Counts')
@@ -1059,7 +1137,7 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         n_intervals = 3
         for i in range(n_intervals):
             intervals = self.ml.get_pc_intervals(i, n_intervals=n_intervals)
-            x, y = self.ml.get_hist(self.ml.ops['tPC'][intervals[0]:intervals[1], self.pc_idx], bins=50)
+            x, y = self.ml.get_hist(self.ml.ops['tPC'][intervals[0]:intervals[1], self.pc_idx], nbins=50)
             col = np.array(self.cmap_pc(int(i * self.cmap_pc.N / (n_intervals - 1)))) * 255
             plot[f'bar_{i}'] = self._plot_bar(x, y, plot, f'bar_{i}',
                                               brush=pg.mkBrush(color=col))
@@ -1074,9 +1152,13 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         plot['legend'].setParentItem(plot['plot'])
 
         for val, brush in zip(['x', 'y'], [self.ybrush, self.gbrush]):
-            x, y = self.ml.get_hist(self.ml.ops[f'{val}off'], bins=100)
+            x, y = self.ml.get_hist(self.ml.ops[f'{val}off'], width=1)
             plot[f'bar_{val}'] = self._plot_bar(x, y, plot, f'bar_{val}', brush=brush)
             plot['legend'].addItem(plot[f'bar_{val}'], val)
+
+        for pos in [-10, 0, 10]:
+            v_line = pg.InfiniteLine(pos=pos, angle=90, pen=self.dashed_pen_thick)
+            plot['plot'].addItem(v_line)
 
         self.set_axis_labels(plot['plot'], 'Shift', 'Counts')
 
@@ -1085,11 +1167,11 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
     # -------------------------------------------------------------------------------------------------
 
     def plot_pc_signal_intervals(self, intervals, col, name):
-
+        times = self.ml.tPc_times
         plot = self.plot_items['pc_signal']
         col[-1] = 100
         brush = pg.mkBrush(color=col)
-        plot[name] = self._plot_rectangle(intervals[0], intervals[1], plot, name, pen=None, brush=brush)
+        plot[name] = self._plot_rectangle(times[intervals[0]], times[intervals[1]], plot, name, pen=None, brush=brush)
 
     def plot_bad_frames(self):
         plot = self.plot_items['fluo_signal']
