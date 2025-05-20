@@ -4,7 +4,7 @@ import logging
 from tqdm import tqdm
 import spikeglx
 import numpy as np
-from neurodsp import fourier, utils
+from ibldsp import fourier, utils
 from scipy import signal
 import one.alf.io as alfio
 import ibllib.ephys.ephysqc as ephysqc

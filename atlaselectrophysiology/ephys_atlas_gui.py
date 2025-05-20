@@ -20,7 +20,7 @@ from atlaselectrophysiology.subject_scaling import ScalingWindow
 from ephysfeatures.features_across_region import RegionFeatureWindow
 from atlaselectrophysiology.create_overview_plots import make_overview_plot
 from pathlib import Path
-import qt
+from qt_helpers import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
 
 
@@ -54,15 +54,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.init_variables()
         self.init_layout(self, offline=offline)
         self.configure = True
-        one_mode = 'remote' if remote else 'auto'
-
         if not offline and probe_id is None:
-            self.loaddata = LoadData(mode=one_mode)
+            self.loaddata = LoadData()
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
         elif not offline and probe_id is not None:
             self.loaddata = LoadData(probe_id=probe_id, one=one, load_histology=histology,
-                                     spike_collection=spike_collection, mode=one_mode)
+                                     spike_collection=spike_collection)
             self.current_shank_idx = 0
             _, self.histology_exists = self.loaddata.get_info(0)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
@@ -2294,13 +2292,20 @@ def viewer(probe_id, one=None, histology=False, spike_collection=None, title=Non
     return av
 
 
+def launch_offline():
+
+    app_off = QtWidgets.QApplication([])
+    mainapp_off = MainWindow(offline=True)
+    mainapp_off.show()
+    app_off.exec_()
+
+
 if __name__ == '__main__':
 
     import argparse
 
     parser = argparse.ArgumentParser(description='Offline vs online mode')
     parser.add_argument('-o', '--offline', default=False, required=False, help='Offline mode')
-    parser.add_argument('-r', '--remote', default=False, required=False, action='store_true', help='Remote mode')
     parser.add_argument('-i', '--insertion', default=None, required=False, help='Insertion mode')
     parser.add_argument('-u', '--unity', default=False, required=False, help='Unity mode')
     args = parser.parse_args()

@@ -21,7 +21,7 @@ import pyqtgraph as pg
 import matplotlib
 
 from iblatlas.atlas import AllenAtlas
-import qt
+from qt_helpers import qt
 
 
 class TopView(QtWidgets.QMainWindow):
@@ -196,8 +196,8 @@ class SliceView(QtWidgets.QWidget):
             self.label_region.setText("")
             self.label_acronym.setText("")
         else:
-            self.label_region.setText(region['name'][0])
-            self.label_acronym.setText(region['acronym'][0])
+            self.label_region.setText(region['name'])
+            self.label_acronym.setText(region['acronym'])
 
     def replace_image_layer(self, index, **kwargs):
         if index and len(self.imageItem) >= index:
@@ -261,10 +261,10 @@ class ControllerTopView(PgImageController):
     """
     TopView ControllerTopView
     """
-    def __init__(self, qmain: TopView, res: int = 25, volume='image', **kwargs):
+    def __init__(self, qmain: TopView, res: int = 25, volume='image', atlas=None, **kwargs):
         super(ControllerTopView, self).__init__(qmain)
         self.volume = volume
-        self.atlas = AllenAtlas(res)
+        self.atlas = AllenAtlas(res) if atlas is None else atlas
         self.fig_top = self.qwidget = qmain
         # Setup Coronal slice: width: ml, height: dv, depth: ap
         self.fig_coronal = SliceView(qmain, waxis=0, haxis=2, daxis=1)
@@ -362,10 +362,10 @@ class ImageLayer:
     slice_kwargs: dict = field(default_factory=lambda: {'volume': 'image', 'mode': 'clip'})
 
 
-def view(res=25, title=None, brainmap='Allen'):
+def view(res=25, title=None, atlas=None):
     """ application entry point """
     qt.create_app()
-    av = TopView._get_or_create(title=title, res=res, brainmap=brainmap)
+    av = TopView._get_or_create(title=title, res=res, atlas=atlas)
     av.show()
     return av
 
