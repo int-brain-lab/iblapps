@@ -33,7 +33,7 @@ class MesoscopeLoader(object):
         assert 'alf/FOV_' in full_path['collection'], 'Must select FOV_** folder'
         self.fov_path = Path(data_path)
         self.fov = int(re.search('alf/FOV_(\\d+)', full_path['collection']).group(1))
-        self.plane_path = self.session_path.joinpath('raw_bin_files', f'plane{self.fov}')
+        self.plane_path = self.session_path.joinpath('suite2p', f'plane{self.fov}')
 
         self.fov_info = full_path['collection'].split('/')[-1]
         self.session_info = '/'.join([full_path['subject'], full_path['date'], full_path['number']])
@@ -118,13 +118,13 @@ class MesoscopeLoader(object):
         return mask
 
     def load_raw(self):
-        if not self.plane_path.joinpath('data.bin').exists():
+        if not self.plane_path.joinpath('imaging.frames_motionRegistered.bin').exists():
             self.raw_data = False
             return None
 
         # TODO read in data type and frame size from metadata
         self.raw_data = True
-        raw = np.memmap(self.plane_path.joinpath('data.bin'), dtype=np.int16,
+        raw = np.memmap(self.plane_path.joinpath('imaging.frames_motionRegistered.bin'), dtype=np.int16,
                         shape=(self.imaging_times.size, 512, 512))
         return raw
 
