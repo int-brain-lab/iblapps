@@ -1,19 +1,25 @@
 from qtpy.QtWidgets import (QWidget, QApplication, QSizePolicy, QMainWindow, QVBoxLayout, QSplitter, QSlider,
-                            QComboBox, QPushButton, QGraphicsProxyWidget, QGroupBox, QLabel, QFileDialog)
+                            QComboBox, QPushButton, QGraphicsProxyWidget, QGroupBox, QLabel, QFileDialog, QDialog,
+                            QPlainTextEdit, QRadioButton, QButtonGroup)
 from qtpy.QtCore import Qt, QSettings, QDir
 from qtpy.QtGui import QTransform, QStandardItemModel, QStandardItem
 import pyqtgraph as pg
 
+import logging
 import matplotlib
 import numpy as np
 from pathlib import Path
 import pandas as pd
 import re
 import sparse
+import json
 
 from iblutil.util import Bunch
+from ibllib.qc import base
 from one.alf.path import get_session_path, folder_parts, ALFPath
+from one.api import ONE
 
+_log = logging.getLogger(__name__)
 
 class MesoscopeLoader(object):
 
@@ -420,7 +426,6 @@ class MesoscopeQcSetup():
         self.session_info = QLabel()
         self.fov_info = QLabel()
 
-
         # -------------------------------------------------------------------------------------------------
         # Splitter 1, slider, raw_image, mean_image, fluo_signal, pc_signal and xy_signal
         # -------------------------------------------------------------------------------------------------
@@ -502,10 +507,14 @@ class MesoscopeQcSetup():
         sessions_layout.addWidget(self.session_info)
         sessions_layout.addWidget(self.fov_info)
 
+        # Add QC options
+        self.qc_button = QPushButton("QC")
+
         splitter4_widget = QWidget()
         splitter4_layout = QVBoxLayout(splitter4_widget)
         splitter4_layout.addWidget(dropdown_widget)
         splitter4_layout.addWidget(sessions_widget)
+        splitter4_layout.addWidget(self.qc_button)
         splitter4.addWidget(splitter4_widget)
 
         # -------------------------------------------------------------------------------------------------
@@ -520,6 +529,195 @@ class MesoscopeQcSetup():
         splitter3.setStretchFactor(1, 3)
 
 
+class QC_dialog(QDialog):
+    def __init__(self,
+        one: ONE,
+        fov_id: str | None = None,
+        data_path: Path | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super(QC_dialog, self).__init__(parent)
+
+        self.one = one
+        self.fov_id = fov_id
+        self.parent = parent
+        self.data_path = data_path
+
+        # If we have a fov_id instantiate FOV_QC object
+        if self.fov_id is not None:
+            self.fov_qc = FOV_QC(self.fov_id, one=self.one)
+        else:
+            self.fov_qc = None
+
+        # Label and dropdown to select QC
+        self.qc_list = QStandardItemModel()
+        self.qc_combobox = QComboBox()
+        self.qc_combobox.setModel(self.qc_list)
+
+        for i, cell in enumerate(['NOT_SET', 'PASS', 'WARNING', 'FAIL', 'CRITICAL']):
+            item = QStandardItem(cell)
+            item.setEditable(False)
+            self.qc_list.appendRow(item)
+
+        # Button group with list of qc issues
+        issues = ['motion artefact','slow drift', 'change in SNR', 'cell detection issues', 'no signal']
+        self.qc_buttons = QGroupBox()
+        self.qc_button_group = QButtonGroup()
+        self.qc_button_group.setExclusive(False)
+        vbox = QVBoxLayout()
+        for issue in issues:
+            button = QRadioButton(issue)
+            vbox.addWidget(button)
+            self.qc_button_group.addButton(button)
+        self.qc_buttons.setLayout(vbox)
+
+        # Free text box
+        self.qc_free = QPlainTextEdit()
+
+        # Button to upload to alyx or save locally
+        text = 'Upload to Alyx' if self.fov_id is not None else 'Save to disk'
+        self.upload_button = QPushButton(text)
+
+        self.qc_widget = QWidget(parent=self.parent)
+        self.qc_layout = QVBoxLayout()
+        self.qc_layout.addWidget(QLabel('Select QC :'))
+        self.qc_layout.addWidget(self.qc_combobox)
+        self.qc_layout.addWidget(QLabel('Select issues :'))
+        self.qc_layout.addWidget(self.qc_buttons)
+        self.qc_layout.addWidget(QLabel('Add note to FOV :'))
+        self.qc_layout.addWidget(self.qc_free)
+        self.qc_layout.addWidget(self.upload_button)
+        self.qc_widget.setLayout(self.qc_layout)
+
+        QVBoxLayout(self)
+        self.layout().addWidget(self.qc_widget)
+
+        # Add interaction to upload data
+        self.upload_button.clicked.connect(self.on_upload_button_clicked)
+
+        # Find any existing qc and populate the relevant fields
+        self.get_existing_qc()
+
+    def get_existing_qc(self):
+
+        if self.fov_id is not None:
+            # If fov_id exists get info from Alyx
+            qc = self.fov_qc.get_fov_qc()
+            issues = self.fov_qc.get_fov_issues()
+            note_exists, notes = self.fov_qc.get_fov_note()
+            text = notes['text'] if note_exists else None
+        else:
+            # Read from local file if available
+            qc_dict_file = self.data_path.joinpath('mesoscope_gui_qc_dict.json')
+            if qc_dict_file.exists():
+                with open(qc_dict_file, 'r') as f:
+                    qc_dict = json.load(f)
+
+                qc = qc_dict['qc']
+                issues = qc_dict['issues']
+                text = qc_dict['note']
+            else:
+                qc = 'NOT_SET'
+                issues = []
+                text = None
+
+        # Populate combobox with qc value
+        index = self.qc_combobox.findText(qc)
+        self.qc_combobox.setCurrentIndex(index)
+
+        # Populate buttons with qc issues
+        for button in self.qc_button_group.buttons():
+            if button.text() in issues:
+                button.setChecked(True)
+
+        # Populate free text field with existing note
+        self.qc_free.insertPlainText(text)
+
+
+    def on_upload_button_clicked(self):
+
+        qc = self.get_qc_value()
+        issues = self.get_qc_issues()
+        text = self.qc_free.toPlainText()
+
+        qc_dict = dict()
+        qc_dict['qc'] = qc
+        qc_dict['issues'] = issues
+        qc_dict['note'] = text
+
+        with open(self.data_path.joinpath('mesoscope_gui_qc_dict.json'), 'w') as f:
+            json.dump(qc_dict, f)
+
+        if self.fov_id is not None:
+            # Upload results to alyx
+            self.fov_qc.update(outcome=qc, namespace='mesoscope_qc_gui', override=True)
+            self.fov_qc.update_extended_qc({'issues': ','.join(issues)})
+            if text != "":
+                self.fov_qc.upload_fov_note(text)
+
+        self.close()
+
+    def get_qc_value(self):
+
+        return self.qc_combobox.currentText()
+
+    def get_qc_issues(self):
+        issues = []
+        for button in self.qc_button_group.buttons():
+            if button.isChecked():
+                issues.append(button.text())
+
+        return issues
+
+
+
+class FOV_QC(base.QC):
+
+    NOTE_TITLE = '=== EXPERIMENTER NOTES FROM MESOSCOPE QC GUI ===\n'
+
+    def __init__(self, fov_id, one=None):
+        super().__init__(fov_id, one=one, log=_log, endpoint='fields-of-view')
+
+        self.fov = self.one.alyx.get(f'/fields-of-view/{self.eid}', clobber=True)
+        self.content_type = 'experiments.fov'
+
+    def get_fov_qc(self):
+        return self.outcome.name
+
+    def get_fov_issues(self):
+        issues = self.fov.get('json', {}).get('extended_qc', {}).get('issues', None)
+        return issues.split(',') if issues is not None else []
+
+    def get_fov_note(self):
+        query = f'text__icontains,{self.NOTE_TITLE},object_id,{str(self.eid)}'
+        notes = self.one.alyx.rest('notes', 'list', django=query, no_cache=True)
+
+        if len(notes) == 0:
+            return False, None
+        else:
+            return True, {'id': notes[0]['id'], 'text': notes[0]['text'].strip(self.NOTE_TITLE)}
+
+    def upload_fov_note(self, text):
+
+        # Format the text so that it has a title that it comes from the mesoscope gui
+        new_text = self.NOTE_TITLE + text
+
+        # Find any existing notes
+        note_exists, notes = self.get_fov_note()
+
+        data = {'user': self.one.alyx.user,
+                'content_type': self.content_type,
+                'object_id': self.eid,
+                'text': f'{new_text}'}
+
+        if note_exists:
+            # If existing note, update
+            self.one.alyx.rest('notes', 'partial_update', id=notes['id'], data=data)
+        else:
+            # Otherwise create a new one
+            self.one.alyx.rest('notes', 'create', data=data)
+
+
 class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
     # -------------------------------------------------------------------------------------------------
     # Initialization
@@ -528,6 +726,8 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
     def __init__(self):
         super().__init__()
         self.init_ui()
+
+        self.one = ONE()
 
         # Load in settings
         self.settings = QSettings("Mesoscope qc gui")
@@ -549,6 +749,8 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         self.raw_image_lut.sigLevelChangeFinished.connect(self.update_raw_level)
         self.cell_combobox.activated.connect(self.on_cell_selected)
         self.pc_combobox.activated.connect(self.on_pc_selected)
+
+        self.qc_button.clicked.connect(self.on_qc_button_clicked)
 
         for key in self.plot_items:
             self.plot_items[key]['plot'].scene().sigMouseClicked.connect(self.on_double_click)
@@ -605,6 +807,7 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         # Load in data for the session
         self.ml = MesoscopeLoader(data_path)
         self.ml.load_data()
+        self.fov_id = self.get_fov_id()
 
         # Update the session and FOV info
         self.session_info.setText(self.ml.session_info)
@@ -637,6 +840,17 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
         # Initialise the histogram LUT levels
         self.raw_image_lut.autoHistogramRange()
         self.update_raw_level()
+
+    def get_fov_id(self):
+        eid = self.one.path2eid(self.ml.session_path)
+        if eid is None:
+            return
+
+        fov = self.one.alyx.rest('fields-of-view', 'list', session=eid, name=self.ml.fov_info)
+        if len(fov) == 1:
+            return fov[0]['id']
+        else:
+            return
 
     # -------------------------------------------------------------------------------------------------
     # Interactions
@@ -727,6 +941,11 @@ class MesoscopeQcGUI(QMainWindow, MesoscopeQcSetup):
             vb = event.currentItem
             if isinstance(vb, pg.ViewBox):
                 vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+
+
+    def on_qc_button_clicked(self):
+        self.qc_dialog = QC_dialog(self.one, self.fov_id, self.ml.fov_path, parent=self)
+        self.qc_dialog.exec_()
 
 
     # -------------------------------------------------------------------------------------------------
