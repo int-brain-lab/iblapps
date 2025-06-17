@@ -607,14 +607,14 @@ class PlotData:
             return data_img
         elif not self.data['pass_stim']['exists'] and self.data['gabor']['exists']:
             stim_types = ['leftGabor', 'rightGabor']
-            stims = self.data['gabor']
+            stims = {stim_type: self.data['gabor'][stim_type] for stim_type in stim_types}
         elif self.data['pass_stim']['exists'] and not self.data['gabor']['exists']:
             stim_types = ['valveOn', 'toneOn', 'noiseOn']
             stims = {stim_type: self.data['pass_stim'][stim_type] for stim_type in stim_types}
         else:
             stim_types = stim_keys
             stims = {stim_type: self.data['pass_stim'][stim_type] for stim_type in stim_types[0:3]}
-            stims.update(self.data['gabor'])
+            stims.update({stim_type: self.data['gabor'][stim_type] for stim_type in stim_types[3:]})
 
         chn_min = np.min(np.r_[self.chn_min, self.data['spikes']['depths'][self.spike_idx][self.kp_idx]])
         chn_max = np.max(np.r_[self.chn_max, self.data['spikes']['depths'][self.spike_idx][self.kp_idx]])
