@@ -100,6 +100,10 @@ class LoadData:
         self.sess = [self.sess_ins[idx] for idx in sess_idx]
         session = [(sess['session_info']['start_time'][:10] + ' ' + sess['name']) for sess in
                    self.sess]
+        idx = np.argsort(session)
+        self.sess = np.array(self.sess)[idx]
+        session = np.array(session)[idx]
+
         return session
 
     def get_info(self, idx):
@@ -324,9 +328,8 @@ class LoadData:
 
         # Load in RFMAP data
         try:
-            rf_data = self.one.load_object(self.eid, 'passiveRFM', collection='alf')
-            frame_path = self.one.load_dataset(self.eid, '_iblrig_RFMapStim.raw.bin', collection='raw_passive_data',
-                                               download_only=True)
+            rf_data = self.one.load_object(self.eid, 'passiveRFM')
+            frame_path = self.one.load_dataset(self.eid, '_iblrig_RFMapStim.raw.bin', download_only=True)
             frames = np.fromfile(frame_path, dtype="uint8")
             rf_data['frames'] = np.transpose(np.reshape(frames, [15, 15, -1], order="F"), [2, 1, 0])
             rf_data['exists'] = True
@@ -337,7 +340,7 @@ class LoadData:
 
         # Load in passive stim data
         try:
-            stim_data = self.one.load_object(self.eid, 'passiveStims', collection='alf')
+            stim_data = self.one.load_object(self.eid, 'passiveStims')
             stim_data['exists'] = True
         except alf.exceptions.ALFObjectNotFound:
             logger.warning('passive stim data was not found, some plots will not display')
@@ -345,7 +348,7 @@ class LoadData:
             stim_data['exists'] = False
 
         try:
-            gabor = alf.io.load_object(self.eid, 'passiveGabor', collection='alf')
+            gabor = self.one.load_object(self.eid, 'passiveGabor')
             vis_stim = {}
             vis_stim['leftGabor'] = gabor['start'][(gabor['position'] == 35) & (gabor['contrast'] > 0.1)]
             vis_stim['rightGabor'] = gabor['start'][(gabor['position'] == -35) & (gabor['contrast'] > 0.1)]
