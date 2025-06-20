@@ -56,30 +56,7 @@ class Setup():
 
         # IMAGE PLOTS MENU BAR
         # Define all 2D scatter/ image plot options
-        scatter_drift = QtWidgets.QAction('Amplitude', self, checkable=True, checked=False)
-        scatter_drift.triggered.connect(lambda: self.plot_scatter(self.scat_drift_data))
-        scatter_fr = QtWidgets.QAction('Cluster Amp vs Depth vs FR', self, checkable=True,
-                                       checked=False)
-        scatter_fr.triggered.connect(lambda: self.plot_scatter(self.scat_fr_data))
-        scatter_p2t = QtWidgets.QAction('Cluster Amp vs Depth vs Duration', self, checkable=True,
-                                        checked=False)
-        scatter_p2t.triggered.connect(lambda: self.plot_scatter(self.scat_p2t_data))
-        scatter_amp = QtWidgets.QAction('Cluster FR vs Depth vs Amp', self, checkable=True,
-                                        checked=False)
-        scatter_amp.triggered.connect(lambda: self.plot_scatter(self.scat_amp_data))
-        img_fr = QtWidgets.QAction('Firing Rate', self, checkable=True, checked=True)
-        img_fr.triggered.connect(lambda: self.plot_image(self.img_fr_data))
-        img_corr = QtWidgets.QAction('Correlation', self, checkable=True, checked=False)
-        img_corr.triggered.connect(lambda: self.plot_image(self.img_corr_data))
-        img_rmsAP = QtWidgets.QAction('rms AP', self, checkable=True, checked=False)
-        img_rmsAP.triggered.connect(lambda: self.plot_image(self.img_rms_APdata))
-        img_rmsLFP = QtWidgets.QAction('rms LFP', self, checkable=True, checked=False)
-        img_rmsLFP.triggered.connect(lambda: self.plot_image(self.img_rms_LFPdata))
-        img_LFP = QtWidgets.QAction('LFP Spectrum', self, checkable=True, checked=False)
-        img_LFP.triggered.connect(lambda: self.plot_image(self.img_lfp_data))
-
-        # Initialise with firing rate 2D plot
-        self.img_init = img_fr
+        #TOOOODOOOO make it a dict like the other ones so we can iterate through them without all this hardcoded nonsense
 
         # Add menu bar for 2D scatter/ image plot options
         img_options = menu_bar.addMenu('Image Plots')
@@ -87,38 +64,21 @@ class Setup():
         self.img_options_group = QtWidgets.QActionGroup(img_options)
         # Only allow one to plot to be selected at any one time
         self.img_options_group.setExclusive(True)
-        img_options.addAction(img_fr)
-        self.img_options_group.addAction(img_fr)
-        img_options.addAction(scatter_drift)
-        self.img_options_group.addAction(scatter_drift)
-        img_options.addAction(img_corr)
-        self.img_options_group.addAction(img_corr)
-        img_options.addAction(img_rmsAP)
-        self.img_options_group.addAction(img_rmsAP)
-        img_options.addAction(img_rmsLFP)
-        self.img_options_group.addAction(img_rmsLFP)
-        img_options.addAction(img_LFP)
-        self.img_options_group.addAction(img_LFP)
-        img_options.addAction(scatter_fr)
-        self.img_options_group.addAction(scatter_fr)
-        img_options.addAction(scatter_p2t)
-        self.img_options_group.addAction(scatter_p2t)
-        img_options.addAction(scatter_amp)
-        self.img_options_group.addAction(scatter_amp)
 
-        raw_type = list(self.img_raw_data.keys())
-        for raw in raw_type:
-            img = QtWidgets.QAction(raw, self, checkable=True, checked=False)
-            img.triggered.connect(lambda checked, item=raw: self.plot_image(
-                                  self.img_raw_data[item]))
+        for i, img_plot in enumerate(self.shank.img_plots):
+            checked = True if i==0 else False
+            img = QtWidgets.QAction(img_plot, self, checkable=True, checked=checked)
+            img.triggered.connect(lambda checked, item=img_plot: self.plot_image(
+                                  self.shank.img_plots[item]))
             img_options.addAction(img)
             self.img_options_group.addAction(img)
+            if i == 0:
+                self.img_init = img
 
-        stim_type = list(self.img_stim_data.keys())
-        for stim in stim_type:
-            img = QtWidgets.QAction(stim, self, checkable=True, checked=False)
-            img.triggered.connect(lambda checked, item=stim: self.plot_image(
-                                  self.img_stim_data[item]))
+        for scat_plot in self.shank.scatter_plots:
+            img = QtWidgets.QAction(scat_plot, self, checkable=True, checked=False)
+            img.triggered.connect(lambda checked, item=scat_plot: self.plot_scatter(
+                                  self.shank.scatter_plots[item]))
             img_options.addAction(img)
             self.img_options_group.addAction(img)
 
@@ -128,62 +88,38 @@ class Setup():
 
         # LINE PLOTS MENU BAR
         # Define all 1D line plot options
-        line_fr = QtWidgets.QAction('Firing Rate', self, checkable=True, checked=True)
-        line_fr.triggered.connect(lambda: self.plot_line(self.line_fr_data))
-        line_amp = QtWidgets.QAction('Amplitude', self, checkable=True, checked=False)
-        line_amp.triggered.connect(lambda: self.plot_line(self.line_amp_data))
-        # Initialise with firing rate 1D plot
-        self.line_init = line_fr
-        # Add menu bar for 1D line plot options
         line_options = menu_bar.addMenu('Line Plots')
         # Add action group so we can toggle through 2D scatter/ image plot options
         self.line_options_group = QtWidgets.QActionGroup(line_options)
         # Only allow one to plot to be selected at any one time
         self.line_options_group.setExclusive(True)
-        line_options.addAction(line_fr)
-        self.line_options_group.addAction(line_fr)
-        line_options.addAction(line_amp)
-        self.line_options_group.addAction(line_amp)
+
+        for i, line_plot in enumerate(self.shank.line_plots):
+            checked = True if i == 0 else False
+            img = QtWidgets.QAction(line_plot, self, checkable=True, checked=checked)
+            img.triggered.connect(lambda checked, item=line_plot: self.plot_line(
+                                  self.shank.line_plots[item]))
+            line_options.addAction(img)
+            self.line_options_group.addAction(img)
+            if i == 0:
+                self.line_init = img
 
         # PROBE PLOTS MENU BAR
         # Define all 2D probe plot options
-        # In two stages 1) RMS plots manually, 2) frequency plots in for loop
-        probe_rmsAP = QtWidgets.QAction('rms AP', self, checkable=True, checked=True)
-        probe_rmsAP.triggered.connect(lambda: self.plot_probe(self.probe_rms_APdata))
-        probe_rmsLFP = QtWidgets.QAction('rms LFP', self, checkable=True, checked=False)
-        probe_rmsLFP.triggered.connect(lambda: self.plot_probe(self.probe_rms_LFPdata))
-
-        # Initialise with rms of AP probe plot
-        self.probe_init = probe_rmsAP
-
-        # Add menu bar for 2D probe plot options
         probe_options = menu_bar.addMenu("Probe Plots")
         # Add action group so we can toggle through probe plot options
         self.probe_options_group = QtWidgets.QActionGroup(probe_options)
         self.probe_options_group.setExclusive(True)
-        probe_options.addAction(probe_rmsAP)
-        self.probe_options_group.addAction(probe_rmsAP)
-        probe_options.addAction(probe_rmsLFP)
-        self.probe_options_group.addAction(probe_rmsLFP)
 
-        # Add the different frequency band options in a loop. These bands must be the same as
-        # defined in plot_data
-        freq_bands = np.vstack(([0, 4], [4, 10], [10, 30], [30, 80], [80, 200]))
-        for iF, freq in enumerate(freq_bands):
-            band = f"{freq[0]} - {freq[1]} Hz"
-            probe = QtWidgets.QAction(band, self, checkable=True, checked=False)
-            probe.triggered.connect(lambda checked, item=band: self.plot_probe(
-                                    self.probe_lfp_data[item]))
-            probe_options.addAction(probe)
-            self.probe_options_group.addAction(probe)
-
-        sub_types = list(self.probe_rfmap.keys())
-        for sub in sub_types:
-            probe = QtWidgets.QAction(f'RF Map - {sub}', self, checkable=True, checked=False)
-            probe.triggered.connect(lambda checked, item=sub: self.plot_probe(
-                                    self.probe_rfmap[item], bounds=self.rfmap_boundaries))
-            probe_options.addAction(probe)
-            self.probe_options_group.addAction(probe)
+        for i, probe_plot in enumerate(self.shank.probe_plots):
+            checked = True if i == 0 else False
+            img = QtWidgets.QAction(probe_plot, self, checkable=True, checked=checked)
+            img.triggered.connect(lambda checked, item=probe_plot: self.plot_probe(
+                self.shank.probe_plots[item]))
+            probe_options.addAction(img)
+            self.probe_options_group.addAction(img)
+            if i == 0:
+                self.probe_init = img
 
         # If unity add a callback from the probe options group to update the unity plots
         if self.unity:
@@ -192,21 +128,21 @@ class Setup():
         # SLICE PLOTS MENU BAR
         # Define all coronal slice plot options
         slice_hist_rd = QtWidgets.QAction('Histology Red', self, checkable=True, checked=True)
-        slice_hist_rd.triggered.connect(lambda: self.plot_slice(self.slice_data, 'hist_rd'))
+        slice_hist_rd.triggered.connect(lambda: self.plot_slice(self.shank.slice_data, 'hist_rd'))
         slice_hist_gr = QtWidgets.QAction('Histology Green', self, checkable=True, checked=False)
-        slice_hist_gr.triggered.connect(lambda: self.plot_slice(self.slice_data, 'hist_gr'))
+        slice_hist_gr.triggered.connect(lambda: self.plot_slice(self.shank.slice_data, 'hist_gr'))
         slice_ccf = QtWidgets.QAction('CCF', self, checkable=True, checked=False)
-        slice_ccf.triggered.connect(lambda: self.plot_slice(self.slice_data, 'ccf'))
+        slice_ccf.triggered.connect(lambda: self.plot_slice(self.shank.slice_data, 'ccf'))
         slice_label = QtWidgets.QAction('Annotation', self, checkable=True, checked=False)
-        slice_label.triggered.connect(lambda: self.plot_slice(self.slice_data, 'label'))
+        slice_label.triggered.connect(lambda: self.plot_slice(self.shank.slice_data, 'label'))
 
-        if self.fp_slice_data is not None:
+        if self.shank.fp_slice_data is not None:
             fp_slice_label = QtWidgets.QAction('Annotation FP', self, checkable=True, checked=False)
-            fp_slice_label.triggered.connect(lambda: self.plot_slice(self.fp_slice_data, 'label'))
+            fp_slice_label.triggered.connect(lambda: self.plot_slice(self.shank.fp_slice_data, 'label'))
 
         if not self.offline:
             slice_hist_cb = QtWidgets.QAction('Histology cerebellar example', self, checkable=True, checked=False)
-            slice_hist_cb.triggered.connect(lambda: self.plot_slice(self.slice_data, 'hist_cb'))
+            slice_hist_cb.triggered.connect(lambda: self.plot_slice(self.shank.slice_data, 'hist_cb'))
         # Initialise with raw histology image
         self.slice_init = slice_hist_rd
 
@@ -224,7 +160,7 @@ class Setup():
         self.slice_options_group.addAction(slice_ccf)
         slice_options.addAction(slice_label)
         self.slice_options_group.addAction(slice_label)
-        if self.fp_slice_data is not None:
+        if self.shank.fp_slice_data is not None:
             slice_options.addAction(fp_slice_label)
             self.slice_options_group.addAction(fp_slice_label)
 
@@ -234,169 +170,90 @@ class Setup():
 
         # FILTER UNITS MENU BAR
         # Define unit filtering options
-        all_units = QtWidgets.QAction('All', self, checkable=True, checked=True)
-        all_units.triggered.connect(lambda: self.filter_unit_pressed('all'))
-        good_units = QtWidgets.QAction('KS good', self, checkable=True, checked=False)
-        good_units.triggered.connect(lambda: self.filter_unit_pressed('KS good'))
-        mua_units = QtWidgets.QAction('KS mua', self, checkable=True, checked=False)
-        mua_units.triggered.connect(lambda: self.filter_unit_pressed('KS mua'))
-        ibl_units = QtWidgets.QAction('IBL good', self, checkable=True, checked=False)
-        ibl_units.triggered.connect(lambda: self.filter_unit_pressed('IBL good'))
-        # Initialise with all units being shown
-        self.unit_init = all_units
-
-        # Add menu bar for slice plot options
         unit_filter_options = menu_bar.addMenu("Filter Units")
         # Add action group so we can toggle through unit options
         unit_filter_options_group = QtWidgets.QActionGroup(unit_filter_options)
         unit_filter_options_group.setExclusive(True)
-        unit_filter_options.addAction(all_units)
-        unit_filter_options_group.addAction(all_units)
-        unit_filter_options.addAction(good_units)
-        unit_filter_options_group.addAction(good_units)
-        unit_filter_options.addAction(mua_units)
-        unit_filter_options_group.addAction(mua_units)
-        unit_filter_options.addAction(ibl_units)
-        unit_filter_options_group.addAction(ibl_units)
+
+        units = ['All', 'KS good', 'KS mua', 'IBL good']
+        for i, unit in enumerate(units):
+            checked = True if i == 0 else False
+            all_units = QtWidgets.QAction(unit, self, checkable=True, checked=checked)
+            all_units.triggered.connect(lambda: self.filter_unit_pressed(unit))
+            unit_filter_options.addAction(all_units)
+            unit_filter_options_group.addAction(all_units)
+            if i == 0:
+                self.unit_init = all_units
+
 
         # FIT OPTIONS MENU BAR
-        # Define all possible keyboard shortcut interactions for GUI
-        # Shortcut to apply interpolation
-        fit_option = QtWidgets.QAction('Fit', self)
-        fit_option.setShortcut('Return')
-        fit_option.triggered.connect(self.fit_button_pressed)
-        # Shortcuts to apply offset
-        offset_option = QtWidgets.QAction('Offset', self)
-        offset_option.setShortcut('O')
-        offset_option.triggered.connect(self.offset_button_pressed)
-        moveup_option = QtWidgets.QAction('Offset + 50um', self)
-        moveup_option.setShortcut('Shift+Up')
-        moveup_option.triggered.connect(self.moveup_button_pressed)
-        movedown_option = QtWidgets.QAction('Offset - 50um', self)
-        movedown_option.setShortcut('Shift+Down')
-        movedown_option.triggered.connect(self.movedown_button_pressed)
-        # Shortcut to remove a reference line
-        delete_line_option = QtWidgets.QAction('Remove Line', self)
-        delete_line_option.setShortcut('Shift+D')
-        delete_line_option.triggered.connect(self.delete_line_button_pressed)
-        # Shortcut to move between previous/next moves
-        next_option = QtWidgets.QAction('Next', self)
-        next_option.setShortcut('Right')
-        next_option.triggered.connect(self.next_button_pressed)
-        prev_option = QtWidgets.QAction('Previous', self)
-        prev_option.setShortcut('Left')
-        prev_option.triggered.connect(self.prev_button_pressed)
-        # Shortcut to reset GUI to initial state
-        reset_option = QtWidgets.QAction('Reset', self)
-        reset_option.setShortcut('Shift+R')
-        reset_option.triggered.connect(self.reset_button_pressed)
-        # Shortcut to upload final state to Alyx/to local file
-        complete_option = QtWidgets.QAction('Upload', self)
-        complete_option.setShortcut('Shift+U')
-        if not self.offline:
-            complete_option.triggered.connect(self.display_qc_options)
-        else:
-            complete_option.triggered.connect(self.complete_button_pressed_offline)
-
-        # Add menu bar with all possible keyboard interactions
         fit_options = menu_bar.addMenu("Fit Options")
-        fit_options.addAction(fit_option)
-        fit_options.addAction(offset_option)
-        fit_options.addAction(moveup_option)
-        fit_options.addAction(movedown_option)
-        fit_options.addAction(delete_line_option)
-        fit_options.addAction(next_option)
-        fit_options.addAction(prev_option)
-        fit_options.addAction(reset_option)
-        fit_options.addAction(complete_option)
-
         # DISPLAY OPTIONS MENU BAR
-        # Define all possible keyboard shortcut for visualisation features
-        # Shortcuts to toggle between plots options
-        toggle1_option = QtWidgets.QAction('Toggle Image Plots', self)
-        toggle1_option.setShortcut('Alt+1')
-        toggle1_option.triggered.connect(lambda: self.toggle_plots(self.img_options_group))
-        toggle2_option = QtWidgets.QAction('Toggle Line Plots', self)
-        toggle2_option.setShortcut('Alt+2')
-        toggle2_option.triggered.connect(lambda: self.toggle_plots(self.line_options_group))
-        toggle3_option = QtWidgets.QAction('Toggle Probe Plots', self)
-        toggle3_option.setShortcut('Alt+3')
-        toggle3_option.triggered.connect(lambda: self.toggle_plots(self.probe_options_group))
-        toggle4_option = QtWidgets.QAction('Toggle Slice Plots', self)
-        toggle4_option.setShortcut('Alt+4')
-        toggle4_option.triggered.connect(lambda: self.toggle_plots(self.slice_options_group))
-
-        # Shortcuts to switch order of 3 panels in ephys plot
-        view1_option = QtWidgets.QAction('View 1', self)
-        view1_option.setShortcut('Shift+1')
-        view1_option.triggered.connect(lambda: self.set_view(view=1))
-        view2_option = QtWidgets.QAction('View 2', self)
-        view2_option.setShortcut('Shift+2')
-        view2_option.triggered.connect(lambda: self.set_view(view=2))
-        view3_option = QtWidgets.QAction('View 3', self)
-        view3_option.setShortcut('Shift+3')
-        view3_option.triggered.connect(lambda: self.set_view(view=3))
-
-        # Shortcut to reset axis on figures
-        axis_option = QtWidgets.QAction('Reset Axis', self)
-        axis_option.setShortcut('Shift+A')
-        axis_option.triggered.connect(self.reset_axis_button_pressed)
-
-        # Shortcut to hide/show region labels
-        toggle_labels_option = QtWidgets.QAction('Hide/Show Labels', self)
-        toggle_labels_option.setShortcut('Shift+L')
-        toggle_labels_option.triggered.connect(self.toggle_labels_button_pressed)
-
-        # Shortcut to hide/show reference lines
-        toggle_lines_option = QtWidgets.QAction('Hide/Show Lines', self)
-        toggle_lines_option.setShortcut('Shift+H')
-        toggle_lines_option.triggered.connect(self.toggle_line_button_pressed)
-
-        # Shortcut to hide/show reference lines and channels on slice image
-        toggle_channels_option = QtWidgets.QAction('Hide/Show Channels', self)
-        toggle_channels_option.setShortcut('Shift+C')
-        toggle_channels_option.triggered.connect(self.toggle_channel_button_pressed)
-
-        # Shortcut to change default histology reference image
-        toggle_histology_option = QtWidgets.QAction('Hide/Show Nearby Boundaries', self)
-        toggle_histology_option.setShortcut('Shift+N')
-        toggle_histology_option.triggered.connect(self.toggle_histology_button_pressed)
-
-        # Option to change histology regions from Allen to Franklin Paxinos
-        toggle_histology_map_option = QtWidgets.QAction('Change Histology Map', self)
-        toggle_histology_map_option.setShortcut('Shift+M')
-        toggle_histology_map_option.triggered.connect(self.toggle_histology_map_button_pressed)
-
-        # Shortcuts for cluster popup window
-        popup_minimise = QtWidgets.QAction('Minimise/Show Cluster Popup', self)
-        popup_minimise.setShortcut('Alt+M')
-        popup_minimise.triggered.connect(self.minimise_popups)
-        popup_close = QtWidgets.QAction('Close Cluster Popup', self)
-        popup_close.setShortcut('Alt+X')
-        popup_close.triggered.connect(self.close_popups)
-
-        # Option to save all plots
-        save_plots = QtWidgets.QAction('Save Plots', self)
-        save_plots.triggered.connect(self.save_plots)
-
-        # Add menu bar with all possible display options
         display_options = menu_bar.addMenu('Display Options')
-        display_options.addAction(toggle1_option)
-        display_options.addAction(toggle2_option)
-        display_options.addAction(toggle3_option)
-        display_options.addAction(toggle4_option)
-        display_options.addAction(view1_option)
-        display_options.addAction(view2_option)
-        display_options.addAction(view3_option)
-        display_options.addAction(axis_option)
-        display_options.addAction(toggle_labels_option)
-        display_options.addAction(toggle_lines_option)
-        display_options.addAction(toggle_channels_option)
-        display_options.addAction(toggle_histology_option)
-        display_options.addAction(toggle_histology_map_option)
-        display_options.addAction(popup_minimise)
-        display_options.addAction(popup_close)
-        display_options.addAction(save_plots)
+
+        upload_callback = self.complete_button_pressed_offline if self.offline else self.display_qc_options
+        # Define all possible keyboard shortcut interactions for GUI
+        keyboard = {
+            'Fit': # Shortcuts to apply fit
+                {'shortcut': 'Return', 'callback': self.fit_button_pressed, 'menu': fit_options},
+            'Offset': # Shortcuts to apply offset
+                {'shortcut': 'O', 'callback': self.offset_button_pressed, 'menu': fit_options},
+            'Offset + 100um':
+                {'shortcut': 'Shift+Up', 'callback': self.moveup_button_pressed, 'menu': fit_options},
+            'Offset - 100um':
+                {'shortcut': 'Shift+Down', 'callback': self.movedown_button_pressed, 'menu': fit_options},
+            'Remove Line': # Shortcut to remove a reference line
+                {'shortcut': 'Shift+D', 'callback': self.delete_reference_line, 'menu': fit_options},
+            'Next': # Shortcut to move between previous/next moves
+                {'shortcut': 'Right', 'callback': self.next_button_pressed, 'menu': fit_options},
+            'Previous':
+                {'shortcut': 'Left', 'callback': self.prev_button_pressed, 'menu': fit_options},
+            'Reset': # Shortcut to reset GUI to initial state
+                {'shortcut': 'Shift+R', 'callback': self.reset_button_pressed, 'menu': fit_options},
+            'Upload': # Shortcut to upload final state to Alyx/to local file
+                {'shortcut': 'Shift+U', 'callback': upload_callback, 'menu': fit_options},
+            'Toggle Image Plots': # Shortcuts to toggle between plots options
+                {'shortcut': 'Alt+1', 'callback': lambda: self.toggle_plots(self.img_options_group), 'menu': display_options},
+            'Toggle Line Plots':
+                {'shortcut': 'Alt+2', 'callback': lambda: self.toggle_plots(self.line_options_group), 'menu': display_options},
+            'Toggle Probe Plots':
+                {'shortcut': 'Alt+3', 'callback': lambda: self.toggle_plots(self.probe_options_group), 'menu': display_options},
+            'Toggle Slice Plots':
+                {'shortcut': 'Alt+4', 'callback': lambda: self.toggle_plots(self.slice_options_group), 'menu': display_options},
+            'View 1': # Shortcuts to switch order of 3 panels in ephys plot
+                {'shortcut': 'Shift+1', 'callback': lambda: self.set_view(view=1), 'menu': display_options},
+            'View 2':
+                {'shortcut': 'Shift+2', 'callback': lambda: self.set_view(view=2), 'menu': display_options},
+            'View 3':
+                {'shortcut': 'Shift+3', 'callback': lambda: self.set_view(view=3), 'menu': display_options},
+            'Reset Axis': # Shortcut to reset axis on figures
+                {'shortcut': 'Shift+A', 'callback': self.reset_axis_button_pressed, 'menu': display_options},
+            'Hide/Show Labels': # Shortcut to hide/show region labels
+                {'shortcut': 'Shift+L', 'callback': self.toggle_labels, 'menu': display_options},
+            'Hide/Show Lines': # Shortcut to hide/show reference lines
+                {'shortcut': 'Shift+H', 'callback': self.toggle_reference_lines, 'menu': display_options},
+            'Hide/Show Channels': # Shortcut to hide/show reference lines and channels on slice image
+                {'shortcut': 'Shift+C', 'callback': self.toggle_channels, 'menu': display_options},
+            'Hide/Show Nearby Boundaries': # Shortcut to change default histology reference image
+                {'shortcut': 'Shift+N', 'callback': self.toggle_histology, 'menu': display_options},
+            'Change Histology Map': # Option to change histology regions from Allen to Franklin Paxinos
+                {'shortcut': 'Shift+M', 'callback': self.toggle_histology_map, 'menu': display_options},
+            'Minimise/Show Cluster Popup': # Shortcuts for cluster popup window
+                {'shortcut': 'Alt+M', 'callback': self.minimise_popups, 'menu': display_options},
+            'Close Cluster Popup':
+                {'shortcut': 'Alt+X', 'callback': self.close_popups, 'menu': display_options},
+            'Save Plots': # Option to save all plots
+                {'callback': self.save_plots, 'menu': display_options},
+
+        }
+
+        for key, val in keyboard.items():
+            option = QtWidgets.QAction(key, self)
+            shortcut = val.get('shortcut', None)
+            if shortcut:
+                option.setShortcut(shortcut)
+            option.triggered.connect(val['callback'])
+            val['menu'].addAction(option)
 
         # SESSION INFORMATION MENU BAR
         # Define all session information options
@@ -406,7 +263,7 @@ class Setup():
         # Shortcut to show label information
         region_info = QtWidgets.QAction('Region Info', self)
         region_info.setShortcut('Shift+I')
-        region_info.triggered.connect(self.describe_labels_pressed)
+        region_info.triggered.connect(lambda: region_lookup_callback(self))
 
         # Add menu bar with all possible session info options
         info_options = menu_bar.addMenu('Session Information')
@@ -435,20 +292,6 @@ class Setup():
             unity_options = menu_bar.addMenu('Urchin')
             unity_options.addAction(unity_regions)
 
-
-
-        # MAPPING MENU BAR
-        # allen_mapping = QtWidgets.QAction('Allen', self, checkable=True, checked=True)
-        # beryl_mapping = QtWidgets.QAction('Beryl', self, checkable=True, checked=False)
-        # cosmos_mapping = QtWidgets.QAction('Cosmos', self, checkable=True, checked=False)
-        #
-        # mapping_options = menu_bar.addMenu('Atlas Mappings')
-        # mapping_options.addAction(allen_mapping)
-        # mapping_options.addAction(beryl_mapping)
-        # mapping_options.addAction(cosmos_mapping)
-        #
-        # # Initialise with Allen mapping
-        # self.mapping_init = allen_mapping
 
     def init_interaction_features(self):
         """
@@ -524,7 +367,7 @@ class Setup():
         self.align_extra.clicked.connect(self.add_alignment_pressed)
 
         # Button to get data to display in GUI
-        self.data_button = QtWidgets.QPushButton('Get Data')
+        self.data_button = QtWidgets.QPushButton('Load')
         self.data_button.clicked.connect(self.data_button_pressed)
 
         # Arrange interaction features into three different layout groups
@@ -568,10 +411,12 @@ class Setup():
         # Group 3 will depend on online/ offline mode
         self.interaction_layout3 = QtWidgets.QHBoxLayout()
         if not self.offline:
-            self.interaction_layout3.addWidget(self.subj_combobox, stretch=1)
-            self.interaction_layout3.addWidget(self.sess_combobox, stretch=2)
+            # TODO Doesn't seem to work the stretch here??
+            self.interaction_layout3.addWidget(self.subj_combobox, stretch=2)
+            self.interaction_layout3.addWidget(self.sess_combobox, stretch=3)
+            self.interaction_layout3.addWidget(self.shank_combobox, stretch=1)
             self.interaction_layout3.addWidget(self.align_combobox, stretch=2)
-            self.interaction_layout3.addWidget(self.align_extra, stretch=1)
+            # self.interaction_layout3.addWidget(self.align_extra, stretch=1)
             self.interaction_layout3.addWidget(self.data_button, stretch=1)
         else:
             self.interaction_layout3.addWidget(self.folder_line, stretch=2)
@@ -625,53 +470,6 @@ class Setup():
             dialog_layout.addWidget(buttonBox)
             self.qc_dialog.setLayout(dialog_layout)
 
-    def init_region_lookup(self, allen):
-        """
-        Create Allen Atlas structure tree
-        """
-
-        # Remove the first row which corresponds to 'Void'
-        allen = allen.drop([0]).reset_index(drop=True)
-
-        # Find the parent path of each structure by removing the structure id from path
-        def parent_path(struct_path):
-            return struct_path.rsplit('/', 2)[0] + '/'
-        allen['parent_path'] = allen['structure_id_path'].apply(parent_path)
-
-        # Create standard model view
-        self.struct_list = QtGui.QStandardItemModel()
-        self.struct_view = QtWidgets.QTreeView()
-        self.struct_view.setModel(self.struct_list)
-        self.struct_view.clicked.connect(self.label_pressed)
-
-        # Defin
-        self.struct_view.setHeaderHidden(True)
-        unique_levels = np.unique(allen['depth']).astype(int)
-        parent_info = {}
-        idx = np.where(allen['depth'] == unique_levels[0])[0]
-        item = QtGui.QStandardItem(allen['acronym'][idx[0]] + ': ' + allen['name'][idx[0]])
-        icon = QtGui.QPixmap(20, 20)
-        icon.fill(QtGui.QColor('#' + allen['color_hex_triplet'][idx[0]]))
-        item.setIcon(QtGui.QIcon(icon))
-        item.setAccessibleText(str(allen['id'][idx[0]]))
-        item.setEditable(False)
-        self.struct_list.appendRow(item)
-        parent_info.update({allen['structure_id_path'][idx[0]]: item})
-
-        for level in unique_levels[1:]:
-            idx_levels = np.where(allen['depth'] == level)[0]
-            for idx in idx_levels:
-                parent = allen['parent_path'][idx]
-                parent_item = parent_info[parent]
-                item = QtGui.QStandardItem(allen['acronym'][idx] + ': ' + allen['name'][idx])
-                icon.fill(QtGui.QColor('#' + allen['color_hex_triplet'][idx]))
-                item.setIcon(QtGui.QIcon(icon))
-                item.setAccessibleText(str(allen['id'][idx]))
-                item.setEditable(False)
-                parent_item.appendRow(item)
-                parent_info.update({allen['structure_id_path'][idx]: item})
-
-        self.struct_description = QtWidgets.QTextEdit()
 
     def init_figures(self):
         """
@@ -730,7 +528,7 @@ class Setup():
         self.fig_probe_cb.setMouseEnabled(x=False, y=False)
         self.fig_probe_cb.setMaximumHeight(70)
         self.set_axis(self.fig_probe_cb, 'bottom', show=False)
-        self.set_axis(self.fig_probe_cb, 'left', show=False)
+        self.set_axis(self.fig_probe_cb, 'left', pen='w')
         self.set_axis(self.fig_probe_cb, 'top', pen='w')
 
         # Add img plot, line plot, probe plot, img colourbar and probe colourbar to a graphics
@@ -871,13 +669,30 @@ class Setup():
         self.lin_fit_option.move(70, 10)
 
 
+
+class CheckableComboBox(QtWidgets.QComboBox):
+    def __init__(self):
+        super(CheckableComboBox, self).__init__()
+        self.view().pressed.connect(self.handleItemPressed)
+        self.setModel(QtGui.QStandardItemModel(self))
+
+    def handleItemPressed(self, index):
+        item = self.model().itemFromIndex(index)
+        if item.checkState() == QtCore.Qt.Checked:
+            item.setCheckState(QtCore.Qt.Unchecked)
+        else:
+            item.setCheckState(QtCore.Qt.Checked)
+
+
 class PopupWindow(QtWidgets.QMainWindow):
+
     closed = QtCore.pyqtSignal(QtWidgets.QMainWindow)
     moved = QtCore.pyqtSignal()
 
     def __init__(self, title, parent=None, size=(300, 300), graphics=True):
         super(PopupWindow, self).__init__()
-        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+        self.parent = parent
+        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.Tool)
         self.resize(size[0], size[1])
         self.move(randrange(30) + 1000, randrange(30) + 200)
         if graphics:
@@ -898,15 +713,106 @@ class PopupWindow(QtWidgets.QMainWindow):
         self.moved.emit()
 
 
-class CheckableComboBox(QtWidgets.QComboBox):
-    def __init__(self):
-        super(CheckableComboBox, self).__init__()
-        self.view().pressed.connect(self.handleItemPressed)
-        self.setModel(QtGui.QStandardItemModel(self))
 
-    def handleItemPressed(self, index):
-        item = self.model().itemFromIndex(index)
-        if item.checkState() == QtCore.Qt.Checked:
-            item.setCheckState(QtCore.Qt.Unchecked)
+
+def region_lookup_callback(parent):
+
+    if parent.selected_region:
+        idx = np.where(parent.hist_regions['left'] == parent.selected_region)[0]
+        if not np.any(idx):
+            idx = np.where(parent.hist_regions['right'] == parent.selected_region)[0]
+        if not np.any(idx):
+            idx = np.array([0])
+
+    print('here')
+    parent.label_win = RegionLookup._get_or_create('Stucture Info', allen=parent.allen, parent=parent)
+
+
+
+class RegionLookup(PopupWindow):
+
+    @staticmethod
+    def _instances():
+        app = QtWidgets.QApplication.instance()
+        return [w for w in app.topLevelWidgets() if isinstance(w, RegionLookup)]
+
+    @staticmethod
+    def _get_or_create(title, **kwargs):
+        av = next(filter(lambda e: e.isVisible() and e.windowTitle() == title,
+                         RegionLookup._instances()), None)
+        if av is None:
+            av = RegionLookup(title, **kwargs)
         else:
-            item.setCheckState(QtCore.Qt.Checked)
+            av.showNormal()
+            av.activateWindow()
+        return av
+
+    def __init__(self, title, allen=None, parent=None):
+        super().__init__(title, parent=parent, size=(500, 700), graphics=False)
+
+        self.struct_list = QtGui.QStandardItemModel()
+        self.struct_view = QtWidgets.QTreeView()
+        self.struct_view.setModel(self.struct_list)
+        self.struct_view.clicked.connect(self.label_pressed)
+
+        allen = allen.drop([0]).reset_index(drop=True)
+
+        # Find the parent path of each structure by removing the structure id from path
+        def parent_path(struct_path):
+            return struct_path.rsplit('/', 2)[0] + '/'
+
+        allen['parent_path'] = allen['structure_id_path'].apply(parent_path)
+
+        self.struct_view.setHeaderHidden(True)
+        unique_levels = np.unique(allen['depth']).astype(int)
+        parent_info = {}
+        idx = np.where(allen['depth'] == unique_levels[0])[0]
+        item = QtGui.QStandardItem(allen['acronym'][idx[0]] + ': ' + allen['name'][idx[0]])
+        icon = QtGui.QPixmap(20, 20)
+        icon.fill(QtGui.QColor('#' + allen['color_hex_triplet'][idx[0]]))
+        item.setIcon(QtGui.QIcon(icon))
+        item.setAccessibleText(str(allen['id'][idx[0]]))
+        item.setEditable(False)
+        self.struct_list.appendRow(item)
+        parent_info.update({allen['structure_id_path'][idx[0]]: item})
+
+        for level in unique_levels[1:]:
+            idx_levels = np.where(allen['depth'] == level)[0]
+            for idx in idx_levels:
+                parent = allen['parent_path'][idx]
+                parent_item = parent_info[parent]
+                item = QtGui.QStandardItem(allen['acronym'][idx] + ': ' + allen['name'][idx])
+                icon.fill(QtGui.QColor('#' + allen['color_hex_triplet'][idx]))
+                item.setIcon(QtGui.QIcon(icon))
+                item.setAccessibleText(str(allen['id'][idx]))
+                item.setEditable(False)
+                parent_item.appendRow(item)
+                parent_info.update({allen['structure_id_path'][idx]: item})
+
+        self.struct_description = QtWidgets.QTextEdit()
+
+        self.layout.addWidget(self.struct_view)
+        self.layout.addWidget(self.struct_description)
+        self.layout.setRowStretch(0, 7)
+        self.layout.setRowStretch(1, 3)
+
+
+    def label_pressed(self, item):
+        idx = int(item.model().itemFromIndex(item).accessibleText())
+        description, lookup = self.loaddata.get_region_description(idx)
+        item = self.struct_list.findItems(lookup, flags=QtCore.Qt.MatchRecursive)
+        model_item = self.struct_list.indexFromItem(item[0])
+        self.struct_view.setCurrentIndex(model_item)
+        self.struct_description.setText(description)
+
+    def label_selected(self, region):
+
+        description, lookup = self.loaddata.get_region_description(
+            self.shank.align.ephysalign.region_id[region[0]][0])
+        item = self.struct_list.findItems(lookup, flags=QtCore.Qt.MatchRecursive)
+        model_item = self.struct_list.indexFromItem(item[0])
+        self.struct_view.collapseAll()
+        self.struct_view.scrollTo(model_item)
+        self.struct_view.setCurrentIndex(model_item)
+        self.struct_description.setText(description)
+

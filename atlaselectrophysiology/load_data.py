@@ -1,7 +1,9 @@
 import logging
+import traceback
 import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
+from ibllib.pipes.ephys_alignment import EphysAlignment
 from neuropixel import trace_header
 import iblatlas.atlas as atlas
 from ibllib.qc.alignment_qc import AlignmentQC
@@ -11,12 +13,15 @@ from one.api import ONE
 from one.remote import aws
 from pathlib import Path
 import one.alf as alf
+from one.alf.exceptions import ALFObjectNotFound
 from one import params
 import glob
 import json
 from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
+from atlaselectrophysiology.plot_data import PlotData
 import ibllib.qc.critical_reasons as usrpmt
 from datetime import timedelta
+import re
 
 logger = logging.getLogger('ibllib')
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
@@ -100,13 +105,43 @@ class LoadData:
         subj = self.subjects[idx]
         sess_idx = [i for i, e in enumerate(self.subj_ins) if e == subj]
         self.sess = [self.sess_ins[idx] for idx in sess_idx]
-        session = [(sess['session_info']['start_time'][:10] + ' ' + sess['name']) for sess in
-                   self.sess]
-        idx = np.argsort(session)
-        self.sess = np.array(self.sess)[idx]
-        session = np.array(session)[idx]
+        self.sessions = [self.get_session_probe_name(sess) for sess in self.sess]
+        self.sessions = np.unique(self.sessions)
 
-        return session
+        # idx = np.argsort(session)
+        # #self.sess = np.array(self.sess)[idx]
+        # session = np.array(session)[idx]
+
+        return self.sessions
+
+    def get_shanks(self, idx):
+
+        sess = self.sessions[idx]
+        sess_idx = [i for i, e in enumerate(self.sess) if self.get_session_probe_name(e) == sess]
+        self.shanks = [self.sess[idx] for idx in sess_idx]
+        shanks = [s['name'] for s in self.shanks]
+        # TODO better way to do this pleasee!
+        idx = np.argsort(shanks)
+        self.shanks = np.array(self.shanks)[idx]
+        shanks = np.array(shanks)[idx]
+
+
+        self.probes = Bunch()
+        #insertions = [self.sess[idx]] + self.get_other_shanks()
+        for ins in self.shanks:
+            self.probes[ins['name']] = ProbeLoader(ins, self.one, self.brain_atlas)
+
+        return list(shanks) + ['all']
+
+
+    @staticmethod
+    def normalize_probe_name(probe_name):
+        match = re.match(r'(probe\d+)', probe_name)
+        return match.group(1) if match else probe_name
+
+
+    def get_session_probe_name(self, ins):
+        return ins['session_info']['start_time'][:10] + ' ' + self.normalize_probe_name(ins['name'])
 
     def get_info(self, idx):
         """
@@ -118,47 +153,63 @@ class LoadData:
         option for 'original' alignment
         :type: list of strings
         """
-        self.n_sess = self.sess[idx]['session_info']['number']
-        self.date = self.sess[idx]['session_info']['start_time'][:10]
-        self.probe_label = self.sess[idx]['name']
-        self.probe_id = self.sess[idx]['id']
-        self.lab = self.sess[idx]['session_info']['lab']
-        self.eid = self.sess[idx]['session']
-        self.subj = self.sess[idx]['session_info']['subject']
 
-        histology_exists = False
+        self.n_sess = self.shanks[idx]['session_info']['number']
+        self.date = self.shanks[idx]['session_info']['start_time'][:10]
+        self.probe_label = self.shanks[idx]['name']
+        self.probe_id = self.shanks[idx]['id']
+        self.lab = self.shanks[idx]['session_info']['lab']
+        self.eid = self.shanks[idx]['session']
+        self.subj = self.shanks[idx]['session_info']['subject']
 
-        # Make sure there is a histology track
-        hist_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
-                                       provenance='Histology track')
-        if len(hist_traj) == 1:
-            if hist_traj[0]['x'] is not None:
-                histology_exists = True
-                self.traj_id = hist_traj[0]['id']
 
-        return self.get_previous_alignments(), histology_exists
+        # self.n_sess = self.sess[idx]['session_info']['number']
+        # self.date = self.sess[idx]['session_info']['start_time'][:10]
+        # self.probe_label = self.sess[idx]['name']
+        # self.probe_id = self.sess[idx]['id']
+        # self.lab = self.sess[idx]['session_info']['lab']
+        # self.eid = self.sess[idx]['session']
+        # self.subj = self.sess[idx]['session_info']['subject']
+
+        #
+        # self.probes = Bunch()
+        # #insertions = [self.sess[idx]] + self.get_other_shanks()
+        # for ins in self.shanks:
+        #     self.probes[ins['name']] = ProbeLoader(ins, self.one, self.brain_atlas)
+
+        print(self.subj)
+        print(self.probe_label)
+        print(self.date)
+        print(self.eid)
+
+
+
+    def get_starting_alignment(self, idx):
+        self.probes[self.probe_label].get_starting_alignment(idx)
 
     def get_previous_alignments(self):
-        """
-        Find out if there are any previous alignments associated with probe insertion
-        :return:
-        """
+        return self.probes[self.probe_label].get_previous_alignments()
 
-        # Looks for any previous alignments
-        ephys_traj_prev = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
-                                             provenance='Ephys aligned histology track',
-                                             no_cache=True)
+    def get_selected_probe(self):
+        return self.probes[self.probe_label]
 
-        if ephys_traj_prev:
-            self.alignments = ephys_traj_prev[0]['json'] or {}
-            self.prev_align = [*self.alignments.keys()]
-            self.prev_align = sorted(self.prev_align, reverse=True)
-            self.prev_align.append('original')
-        else:
-            self.alignments = {}
-            self.prev_align = ['original']
+    # TODO BETTER NAMING
+    def load_data(self):
+        for probe in self.probes.keys():
+            self.probes[probe].load_data()
 
-        return self.prev_align
+        # # TODO deal with histology exists
+        # histology_exists = False
+        #
+        # # Make sure there is a histology track
+        # hist_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+        #                                provenance='Histology track')
+        # if len(hist_traj) == 1:
+        #     if hist_traj[0]['x'] is not None:
+        #         histology_exists = True
+        #         self.traj_id = hist_traj[0]['id']
+        #
+        # return self.get_previous_alignments(), histology_exists
 
     def add_extra_alignments(self, file_path):
 
@@ -183,48 +234,6 @@ class LoadData:
 
         return self.prev_align
 
-    def get_alignment_for_insertion(self, ins):
-
-        xyz_picks = ins['json'].get('xyz_picks', None)
-        if not xyz_picks:
-            return None * 3
-
-        xyz_picks = np.array(xyz_picks) / 1e6
-
-        align_stored = ins['json'].get('extended_qc', {}).get('alignment_stored', None)
-        if align_stored:
-            # Needs to be either histology or ephys aligned track
-            traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=ins['id'],
-                                      provenance='Ephys aligned histology track')[0]
-            feature = traj['json'][align_stored][0]
-            track = traj['json'][align_stored][1]
-        else:
-            feature = None
-            track = None
-
-        return xyz_picks, feature, track
-
-    def get_starting_alignment(self, idx):
-        """
-        Finds all sessions for a particular subject that have a histology track trajectory
-        registered
-        :param idx: index of chosen alignment from drop-down list
-        :type idx: int
-        :return feature: reference points in feature space
-        :type: np.array
-        :return track: reference points in track space
-        :type: np.array
-        """
-        self.current_align = self.prev_align[idx]
-
-        if self.current_align == 'original':
-            feature = None
-            track = None
-        else:
-            feature = np.array(self.alignments[self.current_align][0])
-            track = np.array(self.alignments[self.current_align][1])
-
-        return feature, track
 
     def get_nearby_trajectories(self):
         """
@@ -274,193 +283,17 @@ class LoadData:
 
         return close_sessions, close_dist, close_dist_mlap
 
-    def get_probe_data(self, probe_label):
-
-        if self.spike_collection == '':
-            self.probe_collection = f'alf/{probe_label}'
-            probe_path = Path(self.sess_path, 'alf', probe_label)
-        elif self.spike_collection:
-            self.probe_collection = f'alf/{probe_label}/{self.spike_collection}'
-            probe_path = Path(self.sess_path, 'alf', probe_label, self.spike_collection)
-        else:
-            # iblsorter is defaullt, then pykilosort, if not present look for normal kilosort
-            # Find all collections
-            all_collections = self.one.list_collections(self.eid)
-
-            if f'alf/{probe_label}/iblsorter' in all_collections:
-                self.probe_collection = f'alf/{probe_label}/iblsorter'
-                probe_path = Path(self.sess_path, 'alf', probe_label, 'iblsorter')
-            elif f'alf/{probe_label}/pykilosort' in all_collections:
-                self.probe_collection = f'alf/{probe_label}/pykilosort'
-                probe_path = Path(self.sess_path, 'alf', probe_label, 'pykilosort')
-            else:
-                self.probe_collection = f'alf/{probe_label}'
-                probe_path = Path(self.sess_path, 'alf', probe_label)
-
-        data = {}
-        try:
-            data['spikes'] = self.one.load_object(self.eid, 'spikes', collection=self.probe_collection,
-                                                  attribute=['depths', 'amps', 'times', 'clusters'])
-
-            data['clusters'] = self.one.load_object(self.eid, 'clusters', collection=self.probe_collection,
-                                                    attribute=['metrics', 'peakToTrough', 'waveforms', 'channels'])
-
-            # Remove low firing rate clusters
-            min_firing_rate = 50. / 3600.
-            clu_idx = data['clusters'].metrics.firing_rate > min_firing_rate
-            data['clusters'] = Bunch({k: v[clu_idx] for k, v in data['clusters'].items()})
-            spike_idx, ib = ismember(data['spikes'].clusters, data['clusters'].metrics.index)
-            data['clusters'].metrics.reset_index(drop=True, inplace=True)
-            data['spikes'] = Bunch({k: v[spike_idx] for k, v in data['spikes'].items()})
-            data['spikes'].clusters = data['clusters'].metrics.index[ib].astype(np.int32)
-
-            data['spikes']['exists'] = True
-            data['clusters']['exists'] = True
-
-            data['channels'] = self.one.load_object(self.eid, 'channels', collection=self.probe_collection,
-                                                    attribute=['rawInd', 'localCoordinates'])
-            data['channels']['exists'] = True
-
-        except alf.exceptions.ALFObjectNotFound:
-            logger.error(f'Could not load spike sorting for probe insertion {self.probe_id}, GUI'
-                         f' will not work')
-            return [None] * 4
-
-        data['rms_AP'] = self.get_rms_data(band='AP')
-        data['rms_LF'] = self.get_rms_data(band='LF')
-        data['psd_lf'] = self.get_psd_data(band='LF')
-
-        return data, probe_path
-
-
-    def get_data(self):
-        """
-        Load/ Download all data and info associated with session
-        :return alf_path: path to folder containing alf format files
-        :type: Path
-        :return ephys_path: path to folder containing ephys files
-        :type: Path
-        :return chn_depths: depths of electrode channel on probe relative to tip
-        :type: np.array(384,1)
-        :return sess_notes: user notes associated with session
-        :type: str
-        """
-
-        self.sess_path = self.one.eid2path(self.eid)
-
-        data, self.probe_path = self.get_probe_data(self.probe_label)
-
-        data['rf_map'], data['pass_stim'], data['gabor'] = self.get_passive_data()
-
-        print(self.subj)
-        print(self.probe_label)
-        print(self.date)
-        print(self.eid)
-        print(self.probe_collection)
-
-        self.chn_coords = data['channels']['localCoordinates']
-        self.chn_depths = self.chn_coords[:, 1]
-        self.cluster_chns = data['clusters']['channels']
-
-        sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
-        sess_notes = None
-        if sess['notes']:
-            sess_notes = sess['notes'][0]['text']
-        if not sess_notes:
-            sess_notes = sess['narrative']
-        if not sess_notes:
-            sess_notes = 'No notes for this session'
-
-        return self.probe_path, self.chn_depths, sess_notes, data
 
     def get_other_shanks(self):
 
         insertions = self.one.alyx.rest('insertions', 'list', session=self.eid)
+        # TODO IMPROVE HANDLING OF THIS
         insertions = [ins for ins in insertions if self.probe_label[:7] in ins['name'] and
                       self.probe_label != ins['name']]
 
         return insertions
 
-    def get_passive_data(self):
 
-        # Load in RFMAP data
-        try:
-            rf_data = self.one.load_object(self.eid, 'passiveRFM')
-            frame_path = self.one.load_dataset(self.eid, '_iblrig_RFMapStim.raw.bin', download_only=True)
-            frames = np.fromfile(frame_path, dtype="uint8")
-            rf_data['frames'] = np.transpose(np.reshape(frames, [15, 15, -1], order="F"), [2, 1, 0])
-            rf_data['exists'] = True
-        except Exception:
-            logger.warning('rfmap data was not found, some plots will not display')
-            rf_data = {}
-            rf_data['exists'] = False
-
-        # Load in passive stim data
-        try:
-            stim_data = self.one.load_object(self.eid, 'passiveStims')
-            stim_data['exists'] = True
-        except alf.exceptions.ALFObjectNotFound:
-            logger.warning('passive stim data was not found, some plots will not display')
-            stim_data = {}
-            stim_data['exists'] = False
-
-        try:
-            gabor = self.one.load_object(self.eid, 'passiveGabor')
-            vis_stim = {}
-            vis_stim['leftGabor'] = gabor['start'][(gabor['position'] == 35) & (gabor['contrast'] > 0.1)]
-            vis_stim['rightGabor'] = gabor['start'][(gabor['position'] == -35) & (gabor['contrast'] > 0.1)]
-            vis_stim['exists'] = True
-        except Exception:
-            logger.warning('passive gabor data was not found, some plots will not display')
-            vis_stim = {}
-            vis_stim['exists'] = False
-
-        return rf_data, stim_data, vis_stim
-
-    def get_rms_data(self, band='AP'):
-
-        try:
-            data = self.one.load_object(self.eid, f'ephysTimeRms{band}', collection=f'raw_ephys_data/{self.probe_label}')
-            if len(data) != 2:
-                data = {}
-                data['exists'] = False
-            else:
-                if 'amps' in data.keys():
-                    data['rms'] = data.pop['amps']
-
-                if 'timestamps' not in data.keys():
-                    data['timestamps'] = np.array([0, data['rms'].shape[0]])
-                    data['xaxis'] = 'Time samples'
-                else:
-                    data['xaxis'] = 'Time (s)'
-
-                data['exists'] = True
-
-        except alf.exceptions.ALFObjectNotFound:
-            logger.warning(f'rms {band} data was not found, some plots will not display')
-            data = {}
-            data['exists'] = False
-
-        return data
-
-    def get_psd_data(self, band='LF'):
-
-        try:
-            data = self.one.load_object(self.eid, f'ephysSpectralDensity{band}', collection=f'raw_ephys_data/{self.probe_label}')
-            if len(data) != 2:
-                data = {}
-                data['exists'] = False
-            else:
-                if 'amps' in data.keys():
-                    data['power'] = data.pop['amps']
-
-                data['exists'] = True
-        except alf.exceptions.ALFObjectNotFound:
-            logger.warning('lfp data was not found, some plots will not display')
-            data = {}
-            data['exists'] = False
-
-        return data
 
     def get_allen_csv(self):
         """
@@ -475,18 +308,340 @@ class LoadData:
 
         return allen
 
-    def get_xyzpicks(self):
-        """
-        Load in user chosen track tracing points
-        :return xyz_picks: 3D coordinates of points relative to bregma
-        :type: np.array(n_picks, 3)
-        """
-        insertion = self.one.alyx.rest('insertions', 'read', id=self.probe_id, no_cache=True)
-        self.xyz_picks = np.array(insertion['json']['xyz_picks']) / 1e6
-        self.resolved = (insertion.get('json', {'temp': 0}).get('extended_qc', {'temp': 0}).
-                         get('alignment_resolved', False))
+    def get_region_description(self, region_idx):
+        struct_idx = np.where(self.allen_id == region_idx)[0][0]
+        description = self.brain_regions[struct_idx]['description']
+        region_lookup = (self.brain_regions[struct_idx]['acronym'] +
+                         ': ' + self.brain_regions[struct_idx]['name'])
 
-        return self.xyz_picks
+        if region_lookup == 'void: void':
+            region_lookup = 'root: root'
+
+        if not description:
+            description = region_lookup + '\nNo information available on Alyx for this region'
+        else:
+            description = region_lookup + '\n' + description
+
+        return description, region_lookup
+
+    def load_session_notes(self):
+        sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
+        sess_notes = None
+        if sess['notes']:
+            sess_notes = sess['notes'][0]['text']
+        if not sess_notes:
+            sess_notes = sess['narrative']
+        if not sess_notes:
+            sess_notes = 'No notes for this session'
+
+        return sess_notes
+
+
+class CircularIndexTracker:
+    """
+    A class to manage circular buffer indexing with tracking for navigation
+    and overwriting behavior.
+
+    Attributes
+    ----------
+    max_idx : int
+        Size of the circular buffer.
+    current_idx : int
+        The current index in logical (non-wrapped) space.
+    total_idx : int
+        The highest index filled so far in logical space.
+    last_idx : int
+        The last recorded total index.
+    diff_idx : int
+        Offset between current index and last index used in reset logic.
+    idx : int
+        The wrapped index used in the circular buffer.
+    idx_prev : int
+        The previous wrapped index.
+    """
+    def __init__(self, max_idx: int):
+
+        self.max_idx = max_idx
+        self.current_idx = 0
+        self.total_idx = 0
+        self.last_idx = 0
+        self.diff_idx = 0
+        self.idx = 0
+        self.idx_prev = 0
+
+    def _update_diff_idx(self) -> None:
+        """Internal method to update the diff_idx value."""
+        if self.current_idx < self.last_idx:
+            self.total_idx = self.current_idx
+            delta = np.mod(self.last_idx, self.max_idx) - np.mod(self.total_idx, self.max_idx)
+            self.diff_idx = self.max_idx - delta if delta >= 0 else np.abs(delta)
+        else:
+            self.diff_idx = self.max_idx - 1
+
+
+    def next_idx_to_fill(self) -> None:
+        """
+        Advance to the next index in fill mode (as if appending new data to a circular buffer).
+        """
+        self._update_diff_idx()
+        self.total_idx += 1
+        self.current_idx += 1
+        self.idx_prev = self.idx
+        self.idx = np.mod(self.current_idx, self.max_idx)
+
+    def previous_idx(self) -> bool:
+        """
+        Move backward through previously visited indices.
+        """
+        if self.total_idx > self.last_idx:
+            self.last_idx = self.total_idx
+
+        if self.current_idx > np.max([0, self.total_idx - self.diff_idx]):
+            self.current_idx -= 1
+            self.idx = np.mod(self.current_idx, self.max_idx)
+
+            return True
+
+    def next_idx(self) -> None:
+        """
+        Move forward through the buffer if within bounds.
+        """
+        if (self.current_idx < self.total_idx) & (self.current_idx > self.total_idx - self.max_idx):
+            self.current_idx += 1
+            self.idx = np.mod(self.current_idx, self.max_idx)
+
+            return True
+            # idx_prev is the fit
+            # idx is the one that is being displayed
+
+    def reset_idx(self) -> None:
+        """
+        Reset the index as if beginning a new overwrite sequence, recalculating the circular position.
+        """
+        self._update_diff_idx()
+        self.total_idx += 1
+        self.current_idx += 1
+        self.idx = np.mod(self.current_idx, self.max_idx)
+
+
+
+class AlignData:
+    def __init__(self, xyz_picks, chn_depths, brain_atlas):
+
+        self.buffer = CircularIndexTracker(10)
+        self.brain_atlas = brain_atlas
+        self.ephysalign = EphysAlignment(xyz_picks, chn_depths, brain_atlas=self.brain_atlas)
+        self.initiate_features_and_tracks()
+        self.hist_mapping = 'Allen'
+
+        #
+        # self.shank.align.features[self.idx], self.shank.align.track[self.idx], _ \
+        #     = self.shank.align.ephysalign.get_track_and_feature()
+
+    @property
+    def idx(self):
+        return self.buffer.idx
+
+    @property
+    def idx_prev(self):
+        return self.buffer.idx_prev
+
+    @property
+    def xyz_channels(self):
+        return self.ephysalign.get_channel_locations(self.features[self.idx], self.tracks[self.idx])
+
+    @property
+    def track_lines(self):
+        return self.ephysalign.get_perp_vector(self.features[self.idx], self.tracks[self.idx])
+
+    @property
+    def xyz_track(self):
+        return self.ephysalign.xyz_track
+
+    @property
+    def xyz_samples(self):
+        return self.ephysalign.xyz_samples
+
+    @property
+    def track(self):
+        return self.tracks[self.idx]
+
+    @property
+    def feature(self):
+        return self.features[self.idx]
+
+    def set_init_feature_track(self, feature, track):
+        self.ephysalign.feature_init = feature
+        self.ephysalign.track_init = track
+
+    def initiate_features_and_tracks(self):
+        self.tracks = [0] * (self.buffer.max_idx + 1)
+        self.features = [0] * (self.buffer.max_idx + 1)
+
+    def reset_features_and_tracks(self):
+        self.buffer.reset_idx()
+        self.tracks[self.idx] = self.ephysalign.track_init
+        self.features[self.idx] = self.ephysalign.feature_init
+
+    def get_scaled_histology(self):
+        hist_data = {}
+        scale_data = {}
+        hist_data_ref = {}
+        if self.hist_mapping == 'FP':
+            region_label = self.region_label_fp
+            region = self.region_fp
+            colour = self.region_colour_fp
+        else:
+            region_label = None
+            region = None
+            colour = self.ephysalign.region_colour
+
+
+        hist_data['region'], hist_data['axis_label'] = self.ephysalign.scale_histology_regions(
+            self.features[self.idx], self.tracks[self.idx], region=region, region_label=region_label)
+        hist_data['colour'] = colour
+
+        scale_data['region'], scale_data['scale'] = self.ephysalign.get_scale_factor(hist_data['region'], region_orig=region)
+        hist_data_ref['region'], hist_data_ref['axis_label'] = self.ephysalign.scale_histology_regions(
+            self.ephysalign.track_extent, self.ephysalign.track_extent, region=region, region_label=region_label)
+
+        hist_data_ref['colour'] = colour
+
+        return hist_data, hist_data_ref, scale_data
+
+    def offset_hist_data(self, offset):
+
+        self.buffer.next_idx_to_fill()
+        self.tracks[self.idx] = (self.tracks[self.idx_prev] + offset)
+        self.features[self.idx] = (self.features[self.idx_prev])
+
+
+    def scale_hist_data(self, line_track, line_feature, extend_feature=1, lin_fit=True):
+        """
+        Scale brain regions along probe track
+        """
+        self.buffer.next_idx_to_fill()
+        depths_track = np.sort(np.r_[self.tracks[self.idx_prev][[0, -1]], line_track])
+
+
+        self.tracks[self.idx] = self.ephysalign.feature2track(depths_track,
+                                                             self.features[self.idx_prev],
+                                                             self.tracks[self.idx_prev])
+
+        self.features[self.idx] = np.sort(np.r_[self.features[self.idx_prev]
+                                                [[0, -1]], line_feature])
+
+
+
+        if (self.features[self.idx].size >= 5) & lin_fit:
+            self.features[self.idx], self.tracks[self.idx] = \
+                self.ephysalign.adjust_extremes_linear(self.features[self.idx], self.tracks[self.idx], extend_feature)
+
+        else:
+            self.tracks[self.idx] = self.ephysalign.adjust_extremes_uniform(self.features[self.idx],
+                                                                           self.tracks[self.idx])
+
+    def compute_nearby_boundaries(self):
+
+        nearby_bounds = self.ephysalign.get_nearest_boundary(self.ephysalign.xyz_samples,
+                                                             self.allen, steps=6,
+                                                             brain_atlas=self.brain_atlas)
+        [self.hist_nearby_x, self.hist_nearby_y,
+         self.hist_nearby_col] = self.ephysalign.arrange_into_regions(
+            self.ephysalign.sampling_trk, nearby_bounds['id'], nearby_bounds['dist'],
+            nearby_bounds['col'])
+
+        [self.hist_nearby_parent_x,
+         self.hist_nearby_parent_y,
+         self.hist_nearby_parent_col] = self.ephysalign.arrange_into_regions(
+            self.ephysalign.sampling_trk, nearby_bounds['parent_id'], nearby_bounds['parent_dist'],
+            nearby_bounds['parent_col'])
+
+
+
+
+
+
+
+class ProbeLoader:
+    def __init__(self, insertion, one, brain_atlas, spike_collection=None):
+        self.one = one
+        self.spike_collection = spike_collection
+        self.brain_atlas = brain_atlas
+        self.insertion = insertion
+        self.probe_id = self.insertion['id']
+        self.session_path = self.one.eid2path(self.insertion['session'])
+        self.franklin_atlas = None
+        self.download_hist = True
+        self.subj = self.insertion['session_info']['subject']
+        self.lab = self.insertion['session_info']['lab']
+
+
+        self.histology = self.insertion['json'].get('extended_qc', {}).get('tracing_exists', False)
+        if self.histology:
+            self.xyz_picks = np.array(self.insertion['json']['xyz_picks']) / 1e6
+            self.resolved = self.insertion['json'].get('extended_qc', {}).get('alignment_resolved', False)
+            self.align_stored = self.insertion['json'].get('extended_qc', {}).get('alignment_stored', None)
+            self.get_previous_alignments()
+            self.get_starting_alignment(0)
+
+        self.data_loaded = False
+
+    @property
+    def xyz_channels(self):
+        return self.align.xyz_channels
+
+    @property
+    def xyz_track(self):
+        return self.align.ephysalign.xyz_track
+
+
+    def load_data(self):
+        # TODO cleaner way to do this
+        if not self.data_loaded:
+            self.raw_data = DataLoader(self.one, self.insertion['session'], self.insertion['name'],
+                                   spike_collection=self.spike_collection)
+
+            self.chn_coords = self.raw_data.data['channels']['localCoordinates']
+            self.chn_depths = self.chn_coords[:, 1]
+
+            # Generate plots
+            self.plotdata = PlotData(self.raw_data.probe_path, self.raw_data.data, 0)
+            self.img_plots = dict()
+            self.scatter_plots = dict()
+            self.probe_plots = dict()
+            self.line_plots = dict()
+
+            self.img_plots.update(self.plotdata.get_fr_img())
+            self.img_plots.update(self.plotdata.get_correlation_data_img())
+            rms_img, rms_probe = self.plotdata.get_rms_data_img_probe('AP')
+            self.img_plots.update(rms_img)
+            self.probe_plots.update(rms_probe)
+            rms_img, rms_probe = self.plotdata.get_rms_data_img_probe('LF')
+            self.img_plots.update(rms_img)
+            self.probe_plots.update(rms_probe)
+            rms_img, rms_probe = self.plotdata.get_lfp_spectrum_data()
+            self.img_plots.update(rms_img)
+            self.probe_plots.update(rms_probe)
+            self.img_plots.update(self.plotdata.get_raw_data_image(self.probe_id, one=self.one))
+            self.img_plots.update(self.plotdata.get_passive_events())
+
+            self.probe_plots.update(self.plotdata.get_rfmap_data())
+
+            self.scatter_plots.update(self.plotdata.get_depth_data_scatter())
+            self.scatter_plots.update(self.plotdata.get_fr_p2t_data_scatter())
+
+            self.line_plots.update(self.plotdata.get_fr_amp_data_line())
+
+            self.data_loaded = True
+
+            self.align = AlignData(self.xyz_picks, self.chn_depths, self.brain_atlas)
+
+            self.slice_data, self.fp_slice_data = self.get_slice_images(self.align.xyz_samples)
+
+        # Set the featuer to the current chosen alignment
+        self.align.set_init_feature_track(self.feature_prev, self.track_prev)
+
 
     def get_slice_images(self, xyz_channels):
 
@@ -507,7 +662,7 @@ class LoadData:
         # First see if the histology file exists before attempting to connect with FlatIron and
         # download
         if self.download_hist:
-            hist_dir = Path(self.sess_path.parent.parent, 'histology')
+            hist_dir = Path(self.session_path.parent.parent, 'histology')
             if hist_dir.exists():
                 path_to_rd_image = glob.glob(str(hist_dir) + '/*RD.tif')
                 if path_to_rd_image:
@@ -591,21 +746,50 @@ class LoadData:
 
         return slice_data, franklin_slice_data
 
-    def get_region_description(self, region_idx):
-        struct_idx = np.where(self.allen_id == region_idx)[0][0]
-        description = self.brain_regions[struct_idx]['description']
-        region_lookup = (self.brain_regions[struct_idx]['acronym'] +
-                         ': ' + self.brain_regions[struct_idx]['name'])
 
-        if region_lookup == 'void: void':
-            region_lookup = 'root: root'
 
-        if not description:
-            description = region_lookup + '\nNo information available on Alyx for this region'
+    def get_previous_alignments(self):
+        """
+        Find out if there are any previous alignments associated with probe insertion
+        :return:
+        """
+        # Looks for any previous alignments
+        ephys_traj_prev = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+                                             provenance='Ephys aligned histology track',
+                                             no_cache=True)
+
+        if ephys_traj_prev:
+            self.alignments = ephys_traj_prev[0]['json'] or {}
+            self.prev_align = [*self.alignments.keys()]
+            self.prev_align = sorted(self.prev_align, reverse=True)
+            self.prev_align.append('original')
         else:
-            description = region_lookup + '\n' + description
+            self.alignments = {}
+            self.prev_align = ['original']
 
-        return description, region_lookup
+        # TODO highlight the resolved alignment in black
+
+        return self.prev_align
+
+    def get_starting_alignment(self, idx):
+        """
+        Finds all sessions for a particular subject that have a histology track trajectory
+        registered
+        :param idx: index of chosen alignment from drop-down list
+        :type idx: int
+        :return feature: reference points in feature space
+        :type: np.array
+        :return track: reference points in track space
+        :type: np.array
+        """
+
+        # TODO by default load the resolved alignment
+
+        self.current_align = self.prev_align[idx]
+        start_lims = 6000 / 1e6
+        self.feature_prev = np.array(self.alignments[self.current_align][0]) if self.current_align != 'original' else np.array([-1 * start_lims, start_lims])
+        self.track_prev = np.array(self.alignments[self.current_align][1]) if self.current_align != 'original' else np.array([-1 * start_lims, start_lims])
+
 
     def upload_data(self, xyz_channels, channels=True):
         if not self.resolved:
@@ -657,8 +841,6 @@ class LoadData:
 
     def upload_dj(self, align_qc, ephys_qc, ephys_desc):
         # Upload qc results to datajoint table
-        # Check the FTP patcher credentials are in the params, so we can upload filed
-        self.check_FTP_patcher_credentials()
 
         if len(ephys_desc) == 0:
             ephys_desc_str = 'None'
@@ -685,15 +867,196 @@ class LoadData:
 
         return self.resolved
 
-    def check_FTP_patcher_credentials(self):
-        par = self.one.alyx._par
-        if not params._get_current_par('FTP_DATA_SERVER_LOGIN', par) \
-                or not params._get_current_par('FTP_DATA_SERVER_PWD', par):
-            par_dict = par.as_dict()
-            par_dict['FTP_DATA_SERVER_LOGIN'] = 'iblftp'
-            par_dict['FTP_DATA_SERVER_PWD'] = params._get_current_par('HTTP_DATA_SERVER_PWD', par)
 
-            from one.params import _PAR_ID_STR  # noqa
-            from iblutil.io import params as iopar  # noqa
-            iopar.write(f'{_PAR_ID_STR}/{params._key_from_url(self.one.alyx.base_url)}', par_dict)
-            self.one.alyx._par = params.get(client=self.one.alyx.base_url)
+
+
+class DataLoader:
+    def __init__(self, one, eid, probe_label, spike_collection=None):
+        """
+        Load and process data for a specific session/probe.
+        """
+
+        self.one = one
+        self.eid = eid
+        self.session_path = one.eid2path(eid)
+        self.probe_label = probe_label
+        self.spike_collection = spike_collection
+        self.probe_path = self.get_spikesorting_path()
+        self.probe_collection = str(self.probe_path.relative_to(self.session_path))
+        self.data = self.get_data()
+
+    def get_data(self):
+        """
+        Load/ Download all data associated with probe
+        """
+
+        data = Bunch()
+        # Load in spike sorting data
+        data['spikes'], data['clusters'], data['channels'] = self.get_spikesorting_data()
+        # Load in rms AP data
+        data['rms_AP'] = self.get_rms_data(band='AP')
+        # Load in rms LF data
+        data['rms_LF'] = self.get_rms_data(band='LF')
+        # Load in psd LF data
+        data['psd_lf'] = self.get_psd_data(band='LF')
+        # Load in passive data TODO make this cleverer, it should be shared across the probes
+        data['rf_map'], data['pass_stim'], data['gabor'] = self.get_passive_data()
+
+        return data
+
+
+    def get_spikesorting_path(self):
+        """
+        Determine spike sorting path based on input collection or auto-detection.
+        """
+
+        probe_path = self.session_path.joinpath('alf', self.probe_label)
+
+        if self.spike_collection == '':
+            return probe_path
+        elif self.spike_collection:
+            return probe_path.joinpath(self.spike_collection)
+
+        # Find all spike sorting collections
+        all_collections = self.one.list_collections(self.eid)
+        # iblsorter is default, then pykilosort
+        for sorter in ['iblsorter', 'pykilosort']:
+            if f'alf/{self.probe_label}/{sorter}' in all_collections:
+                return probe_path.joinpath(sorter)
+        # If neither exist return ks2 path
+        return probe_path
+
+    @staticmethod
+    def load_data(load_function, *args, raise_message=None, raise_exception=ALFObjectNotFound,
+                  raise_error=False, **kwargs):
+        """
+        Wrapper to load ONE data with logging and error handling.
+        """
+        alf_object = args[1]
+        try:
+            data = load_function(*args, **kwargs)
+            if isinstance(data, (dict, Bunch)):
+                data['exists'] = True
+            return data
+        except raise_exception as e:
+            raise_message = raise_message or f'{alf_object} data was not found, some plots will not display'
+            logger.warning(raise_message)
+            if raise_error:
+                logger.error(raise_message)
+                logger.error(traceback.format_exc())
+                raise e
+            return {'exists': False}
+
+
+    def get_passive_data(self):
+        """
+        Load passive stimulus data (RF map, visual stim, gabor stimuli).
+        """
+        # TO DO need to add in collections also improve hadnling of this will all these expections
+        # Load in RFMAP data
+        try:
+            rf_data = self.load_data(self.one.load_object, self.eid, 'passiveRFM')
+            frame_path = self.load_data(self.one.load_dataset,self.eid, '_iblrig_RFMapStim.raw.bin',
+                                        download_only=True)
+            frames = np.fromfile(frame_path, dtype="uint8")
+            rf_data['frames'] = np.transpose(np.reshape(frames, [15, 15, -1], order="F"), [2, 1, 0])
+        except Exception:
+            logger.warning('rfmap data was not found, some plots will not display')
+            rf_data = {}
+            rf_data['exists'] = False
+
+        # Load in passive stim data
+        stim_data = self.load_data(self.one.load_object, self.eid, 'passiveStims')
+
+        # Load in passive gabor data
+        try:
+            gabor = self.load_data(self.one.load_object, self.eid, 'passiveGabor')
+            vis_stim = {}
+            vis_stim['leftGabor'] = gabor['start'][(gabor['position'] == 35) & (gabor['contrast'] > 0.1)]
+            vis_stim['rightGabor'] = gabor['start'][(gabor['position'] == -35) & (gabor['contrast'] > 0.1)]
+            vis_stim['exists'] = True
+        except Exception:
+            logger.warning('passive gabor data was not found, some plots will not display')
+            vis_stim = {}
+            vis_stim['exists'] = False
+
+        return rf_data, stim_data, vis_stim
+
+    def get_rms_data(self, band='AP'):
+        """
+        Load RMS data for AP or LF band.
+        """
+
+        rms_data = self.load_data(
+            self.one.load_object, self.eid, f'ephysTimeRms{band}',
+            collection=f'raw_ephys_data/{self.probe_label}')
+
+        if rms_data['exists']:
+            if 'amps' in rms_data.keys():
+                rms_data['rms'] = rms_data.pop('amps')
+            if 'timestamps' not in rms_data.keys():
+                rms_data['timestamps'] = np.array([0, rms_data['rms'].shape[0]])
+                rms_data['xaxis'] = 'Time samples'
+            else:
+                rms_data['xaxis'] = 'Time (s)'
+
+        return rms_data
+
+    def get_psd_data(self, band='LF'):
+        """
+        Load PSD data for AP or LF band.
+        """
+
+        psd_data = self.load_data(
+            self.one.load_object, self.eid, f'ephysSpectralDensity{band}',
+            collection=f'raw_ephys_data/{self.probe_label}')
+
+        if psd_data['exists']:
+            if 'amps' in psd_data.keys():
+                psd_data['power'] = psd_data.pop('amps')
+
+        return psd_data
+
+
+    def get_spikesorting_data(self, filter=True):
+        """
+        Load spike sorting data (spikes, clusters, channels) and filter by min_fr
+        """
+
+        spikes = self.load_data(
+            self.one.load_object, self.eid, 'spikes', raise_error=False,
+            collection=self.probe_collection, attribute=['depths', 'amps', 'times', 'clusters'])
+
+        clusters = self.load_data(
+            self.one.load_object, self.eid, 'clusters', raise_error=False,
+            collection=self.probe_collection, attribute=['metrics', 'peakToTrough', 'waveforms', 'channels'])
+
+        channels = self.load_data(
+            self.one.load_object, self.eid, 'channels', raise_error=False,
+            collection=self.probe_collection, attribute=['rawInd', 'localCoordinates'])
+
+        if filter:
+            # Remove low firing rate clusters
+            spikes, clusters = self.filter_spikes_and_clusters(spikes, clusters)
+
+        return spikes, clusters, channels
+
+    @staticmethod
+    def filter_spikes_and_clusters(spikes, clusters, min_fr=50/3600):
+        """
+        Remove low-firing clusters and filter spikes accordingly.
+        """
+
+        clu_idx = clusters.metrics.firing_rate > min_fr
+        exists = clusters.pop('exists')
+        clusters = Bunch({k: v[clu_idx] for k, v in clusters.items()})
+        clusters['exists'] = exists
+
+        spike_idx, ib = ismember(spikes.clusters, clusters.metrics.index)
+        clusters.metrics.reset_index(drop=True, inplace=True)
+        exists = spikes.pop('exists')
+        spikes = Bunch({k: v[spike_idx] for k, v in spikes.items()})
+        spikes['exists'] = exists
+        spikes.clusters = clusters.metrics.index[ib].astype(np.int32)
+
+        return spikes, clusters

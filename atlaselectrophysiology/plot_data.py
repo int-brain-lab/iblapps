@@ -70,13 +70,13 @@ class PlotData:
                 if key == 'exists':
                     continue
                 self.data['spikes'][key] = self.data['spikes'][key][shank_spikes]
-            self.filter_units('all')
+            self.filter_units('All')
             self.compute_timescales()
 
     def filter_units(self, type):
 
         try:
-            if type == 'all':
+            if type == 'All':
                 self.spike_idx = np.arange(self.data['spikes']['clusters'].size)
                 self.clust = np.arange(self.data['clusters'].metrics.shape[0])
             elif type == 'KS good':
@@ -149,7 +149,7 @@ class PlotData:
                 'cluster': False
             }
 
-            return data_scatter
+            return {'Amplitude': data_scatter}
 
     def get_cluster_data(self):
 
@@ -271,7 +271,13 @@ class PlotData:
                 'cluster': True
             }
 
-            return data_fr_scatter, data_p2t_scatter, data_amp_scatter
+            data = {
+                'Cluster Amp vs Depth vs FR': data_fr_scatter,
+                'Cluster Amp vs Depth vs Duration': data_p2t_scatter,
+                'Cluster FR vs Depth vs Amp': data_amp_scatter,
+            }
+
+            return data
 
     def get_fr_img(self):
         if not self.data['spikes']['exists']:
@@ -300,7 +306,7 @@ class PlotData:
                 'title': 'Firing Rate'
             }
 
-            return data_img
+            return {'Firing Rate': data_img}
 
     def get_fr_amp_data_line(self):
         if not self.data['spikes']['exists']:
@@ -328,22 +334,23 @@ class PlotData:
             remove_bins = np.where(nspikes[:, 0] < 50)[0]
             mean_amp[remove_bins] = 0
 
-            data_fr_line = {
-                'x': mean_fr,
-                'y': depths,
-                'xrange': np.array([0, np.max(mean_fr)]),
-                'xaxis': 'Firing Rate (Sp/s)'
+            data = {
+                'Firing Rate': {
+                    'x': mean_fr,
+                    'y': depths,
+                    'xrange': np.array([0, np.max(mean_fr)]),
+                    'xaxis': 'Firing Rate (Sp/s)'
+                },
+                'Amplitude': {
+                    'x': mean_amp,
+                    'y': depths,
+                    'xrange': np.array([0, np.max(mean_amp)]),
+
+                    'xaxis': 'Amplitude (uV)'
+                }
             }
 
-            data_amp_line = {
-                'x': mean_amp,
-                'y': depths,
-                'xrange': np.array([0, np.max(mean_amp)]),
-
-                'xaxis': 'Amplitude (uV)'
-            }
-
-            return data_fr_line, data_amp_line
+            return data
 
     def get_correlation_data_img(self):
         if not self.data['spikes']['exists']:
@@ -370,7 +377,7 @@ class PlotData:
                 'title': 'Correlation',
                 'xaxis': 'Distance from probe tip (um)'
             }
-            return data_img
+            return {'Correlation': data_img}
 
     def get_rms_data_img_probe(self, format):
         # Finds channels that are at equivalent depth on probe and averages rms values for each
@@ -439,7 +446,7 @@ class PlotData:
             'title': format + ' RMS (uV)'
         }
 
-        return data_img, data_probe
+        return {f'rms {format}': data_img}, {f'rms {format}': data_probe}
 
     # only for IBL sorry
     def get_raw_data_image(self, pid, t0=(1000, 2000, 3000), one=None):
@@ -554,7 +561,7 @@ class PlotData:
                 }
                 data_probe.update(lfp_band_data)
 
-            return data_img, data_probe
+            return {'LF spectrum': data_img}, data_probe
 
     def get_rfmap_data(self):
         data_img = dict()
@@ -586,7 +593,7 @@ class PlotData:
 
             sub_type = ['on', 'off']
             for sub in sub_type:
-                sub_data = {sub: {
+                sub_data = {f'RF Map - {sub}': {
                     'img': [img[sub].T],
                     'scale': [np.array([xscale, yscale])],
                     'levels': levels,
@@ -594,11 +601,12 @@ class PlotData:
                     'cmap': 'viridis',
                     'xrange': np.array([0, 15]),
                     'xaxis': 'Position',
-                    'title': 'rfmap (dB)'}
+                    'title': 'rfmap (dB)',
+                    'boundaries': depths}
                 }
                 data_img.update(sub_data)
 
-            return data_img, depths
+            return data_img
 
     def get_passive_events(self):
         stim_keys = ['valveOn', 'toneOn', 'noiseOn', 'leftGabor', 'rightGabor']

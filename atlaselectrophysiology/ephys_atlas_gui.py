@@ -1,5 +1,6 @@
 import os
 import platform
+from typing import Any, Union, Optional, List, Dict, Tuple
 
 if platform.system() == 'Darwin':
     if platform.release().split('.')[0] >= '20':
@@ -9,7 +10,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import pyqtgraph.exporters
 import numpy as np
-from random import randrange
+import random
 from atlaselectrophysiology.load_data import LoadData
 from atlaselectrophysiology.load_data_local import LoadDataLocal
 from ibllib.pipes.ephys_alignment import EphysAlignment
@@ -41,7 +42,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         return av
 
     def __init__(self, offline=False, probe_id=None, one=None, histology=True,
-                 spike_collection=None, unity=False):
+                 spike_collection=None, unity=False, loaddata=None):
         super(MainWindow, self).__init__()
 
         if unity:
@@ -54,26 +55,35 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.init_variables()
         self.init_layout(self, offline=offline)
         self.configure = True
+
+        if loaddata is not None:
+            self.loaddata = loaddata
+            self.loaddata.get_info(probe_id)
+            self.loaddata.get_starting_alignment(0)
+            self.data_button_pressed()
+            self.offline = False
+
+
         if not offline and probe_id is None:
             self.loaddata = LoadData()
             self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
-        elif not offline and probe_id is not None:
-            self.loaddata = LoadData(probe_id=probe_id, one=one, load_histology=histology,
-                                     spike_collection=spike_collection)
-            self.current_shank_idx = 0
-            _, self.histology_exists = self.loaddata.get_info(0)
-            self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
-            self.data_status = False
-            self.data_button_pressed()
-            self.offline = False
-        else:
-            self.loaddata = LoadDataLocal()
-            self.offline = True
-            self.histology_exists = True
+        # elif not offline and probe_id is not None and loaddata is not None:
+        #     self.loaddata = LoadData(probe_id=probe_id, one=one, load_histology=histology,
+        #                              spike_collection=spike_collection)
+        #     self.current_shank_idx = 0
+        #     _, self.histology_exists = self.loaddata.get_info(0)
+        #     self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
+        #     self.data_status = False
+        #     self.data_button_pressed()
+        #     self.offline = False
+        # elif loaddata is None:
+        #     self.loaddata = LoadDataLocal()
+        #     self.offline = True
+        #     self.histology_exists = True
 
         self.allen = self.loaddata.get_allen_csv()
-        self.init_region_lookup(self.allen)
+        #self.init_region_lookup(self.allen)
 
     def init_variables(self):
         """
@@ -99,14 +109,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Initialise with linear fit scaling as default
         self.lin_fit = True
-
-        # Variables to keep track of number of fits (max 10)
-        self.max_idx = 10
-        self.idx = 0
-        self.current_idx = 0
-        self.total_idx = 0
-        self.last_idx = 0
-        self.diff_idx = 0
 
         # Variables to keep track of reference lines and points added
         self.line_status = True
@@ -136,22 +138,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.popup_status = True
         self.subj_win = None
 
-        self.hist_data = {
-            'region': [],
-            'axis_label': [],
-            'colour': []
-        }
-
-        self.hist_data_ref = {
-            'region': [],
-            'axis_label': [],
-            'colour': []
-        }
-
-        self.scale_data = {
-            'region': [],
-            'scale': []
-        }
 
         self.hist_nearby_x = None
         self.hist_nearby_y = None
@@ -161,8 +147,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.hist_nearby_parent_col = None
         self.hist_mapping = 'Allen'
 
-        self.track = [0] * (self.max_idx + 1)
-        self.features = [0] * (self.max_idx + 1)
+        self.hist_regions = dict()
+
 
         self.nearby = None
 
@@ -174,30 +160,46 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Filter by different types of units
         self.filter_type = 'all'
 
-    def set_axis(self, fig, ax, show=True, label=None, pen='k', ticks=True):
+    # TODO move to setup
+    @staticmethod
+    def set_axis(
+            fig: Union[pg.PlotItem, pg.PlotWidget],
+            ax: str,
+            show: bool = True,
+            label: Optional[str] =None,
+            pen: str = 'k',
+            ticks: bool = True
+        ) -> pg.AxisItem:
         """
-        Show/hide and configure axis of figure
-        :param fig: figure associated with axis
-        :type fig: pyqtgraph PlotWidget
-        :param ax: orientation of axis, must be one of 'left', 'right', 'top' or 'bottom'
-        :type ax: string
-        :param show: 'True' to show axis, 'False' to hide axis
-        :type show: bool
-        :param label: axis label
-        :type label: string
-        :parm pen: colour on axis
-        :type pen: string
-        :param ticks: 'True' to show axis ticks, 'False' to hide axis ticks
-        :param ticks: bool
-        :return axis: axis object
-        :type axis: pyqtgraph AxisItem
+        Show, hide, and configure an axis on a PyQtGraph figure.
+
+        Parameters
+        ----------
+        fig : pyqtgraph.PlotWidget or pyqtgraph.PlotItem
+            The figure containing the axis to modify.
+        ax : str
+            The orientation of the axis. Must be one of {'left', 'right', 'top', 'bottom'}.
+        show : bool, optional
+            Whether to show the axis (default is True).
+        label : str or None, optional
+            The label text for the axis (default is None).
+        pen : str, optional
+            The color for the axis line and text (default is 'k' for black).
+        ticks : bool, optional
+            Whether to show axis ticks (default is True).
+
+        Returns
+        -------
+        axis : pyqtgraph.AxisItem
+            The configured axis object.
         """
-        if not label:
-            label = ''
-        if type(fig) == pg.PlotItem:
-            axis = fig.getAxis(ax)
-        else:
-            axis = fig.plotItem.getAxis(ax)
+
+        if ax not in {'left', 'right', 'top', 'bottom'}:
+            raise ValueError(f"Invalid axis '{ax}'. Must be one of 'left', 'right', 'top', 'bottom'.")
+
+        label = label or ''
+        axis = fig.getAxis(ax) if isinstance(fig, pg.PlotItem) else fig.plotItem.getAxis(ax)
+
         if show:
             axis.show()
             axis.setPen(pen)
@@ -210,40 +212,66 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         return axis
 
-    def set_font(self, fig, ax, ptsize=8, width=None, height=None):
+    # TODO move to setup
+    @staticmethod
+    def set_font(
+            fig: Union[pg.PlotItem, pg.PlotWidget],
+            ax: str,
+            ptsize: int = 8,
+            width: Optional[int] = None,
+            height: Optional[int] = None
+        ) -> None:
 
-        if type(fig) == pg.PlotItem:
-            axis = fig.getAxis(ax)
-        else:
-            axis = fig.plotItem.getAxis(ax)
+        """
+        Set the font size and optionally the axis width/height for a given axis in a PyQtGraph figure.
+
+        Parameters
+        ----------
+        fig : pyqtgraph.PlotItem or pyqtgraph.PlotWidget
+            The figure containing the axis to modify.
+        ax : str
+            The orientation of the axis. Must be one of {'left', 'right', 'top', 'bottom'}.
+        ptsize : int, optional
+            Point size for the axis font (default is 8).
+        width : int, optional
+            Width to set for the axis in pixels. Only applicable for vertical axes.
+        height : int, optional
+            Height to set for the axis in pixels. Only applicable for horizontal axes.
+        """
+
+        if ax not in {'left', 'right', 'top', 'bottom'}:
+            raise ValueError(f"Invalid axis '{ax}'. Must be one of 'left', 'right', 'top', 'bottom'.")
+
+        axis = fig.getAxis(ax) if isinstance(fig, pg.PlotItem) else fig.plotItem.getAxis(ax)
 
         font = QtGui.QFont()
         font.setPointSize(ptsize)
         axis.setStyle(tickFont=font)
-        labelStyle = {'font-size': f'{ptsize}pt'}
-        axis.setLabel(**labelStyle)
+        axis.setLabel(**{'font-size': f'{ptsize}pt'})
 
-        if width:
+        if width is not None:
             axis.setWidth(width)
-        if height:
+        if height is not None:
             axis.setHeight(height)
 
-    def set_lims(self, min, max):
-        self.probe_tip = min
-        self.probe_top = max
-
-        [top_line.setY(self.probe_top) for top_line in self.probe_top_lines]
-        [tip_line.setY(self.probe_tip) for tip_line in self.probe_tip_lines]
-
-    def populate_lists(self, data, list_name, combobox):
+    # TODO move to setup
+    @staticmethod
+    def populate_lists(
+            data: List[str],
+            list_name: QtGui.QStandardItemModel,
+            combobox: QtWidgets.QComboBox
+    ) -> None:
         """
-        Populate drop down lists with subject/session/alignment options
-        :param data: list of options to add to widget
-        :type data: 1D array of strings
-        :param list_name: widget object to which to add data to
-        :type list_name: QtGui.QStandardItemModel
-        :param combobox: combobox object to which to add data to
-        :type combobox: QtWidgets.QComboBox
+        Populate a combo box and its associated model with a list of string options.
+
+        Parameters
+        ----------
+        data : List[str]
+            A list of strings to add to the widget.
+        list_name : QtGui.QStandardItemModel
+            The model object to which items will be added.
+        combobox : QtWidgets.QComboBox
+            The combo box widget to be populated and configured.
         """
         list_name.clear()
         for dat in data:
@@ -251,27 +279,35 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             item.setEditable(False)
             list_name.appendRow(item)
 
-        # This makes sure the drop down menu is wide enough to showw full length of string
+        # Ensure the drop-down menu is wide enough to display the longest string
         min_width = combobox.fontMetrics().width(max(data, key=len))
         min_width += combobox.view().autoScrollMargin()
         min_width += combobox.style().pixelMetric(QtWidgets.QStyle.PM_ScrollBarExtent)
         combobox.view().setMinimumWidth(min_width)
 
-        # Set the default to be the first option
+        # Set the default selected item to the first option, if available
         combobox.setCurrentIndex(0)
 
-    def set_view(self, view=1, configure=False):
+    # TODO move to setup
+    def set_view(
+            self,
+            view: int,
+            configure: bool = False
+    ) -> None:
         """
-        Layout of ephys data figures, can be changed using Shift+1, Shift+2, Shift+3
-        :param view: from left to right
-            1: img plot, line plot, probe plot
-            2: img plot, probe plot, line plot
-            3: probe plot, line plot, img_plot
-        :type view: int
-        :param configure: Returns the width of each image, set to 'True' once during the setup to
-                          ensure figures are always the same width
-        :type configure: bool
+        Update the layout and visual configuration of figure panels based on the selected view mode.
+
+        Parameters
+        ----------
+        view : int
+            The layout mode to use. Supported modes are:
+                1 - img | line | probe
+                2 - img | probe | line
+                3 - probe | line | img
+        configure : bool
+            If True, update stored figure width and height dimensions before applying the layout.
         """
+
         if configure:
             self.fig_ax_width = self.fig_data_ax.width()
             self.fig_img_width = self.fig_img.width() - self.fig_ax_width
@@ -281,113 +317,1784 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.slice_height = self.fig_slice.height()
             self.slice_rect = self.fig_slice.viewRect()
 
-        if view == 1:
-            self.fig_data_layout.removeItem(self.fig_img_cb)
-            self.fig_data_layout.removeItem(self.fig_probe_cb)
-            self.fig_data_layout.removeItem(self.fig_img)
-            self.fig_data_layout.removeItem(self.fig_line)
-            self.fig_data_layout.removeItem(self.fig_probe)
-            self.fig_data_layout.addItem(self.fig_img_cb, 0, 0)
-            self.fig_data_layout.addItem(self.fig_probe_cb, 0, 1, 1, 2)
-            self.fig_data_layout.addItem(self.fig_img, 1, 0)
-            self.fig_data_layout.addItem(self.fig_line, 1, 1)
-            self.fig_data_layout.addItem(self.fig_probe, 1, 2)
+        # Remove all existing layout items to start fresh
+        for item in [self.fig_img_cb, self.fig_probe_cb, self.fig_img, self.fig_line, self.fig_probe]:
+            self.fig_data_layout.removeItem(item)
 
-            self.set_axis(self.fig_img_cb, 'left', pen='w')
-            self.set_axis(self.fig_probe_cb, 'left', show=False)
-            self.set_axis(self.fig_img, 'left', label='Distance from probe tip (um)')
-            self.set_axis(self.fig_probe, 'left', show=False)
-            self.set_axis(self.fig_line, 'left', show=False)
+        # Define configurations for each view mode
+        layout_configs = {
+            1: {
+                'items': [
+                    (self.fig_img_cb, 0, 0),
+                    (self.fig_probe_cb, 0, 1, 1, 2),
+                    (self.fig_img, 1, 0),
+                    (self.fig_line, 1, 1),
+                    (self.fig_probe, 1, 2),
+                ],
+                'col_stretch': [(0, 6), (1, 2), (2, 1)],
+                'row_stretch': [(0, 1), (1, 10)],
+                'axis_target': self.fig_img,
+                'sizes': lambda: (
+                    self.fig_img.setPreferredWidth(self.fig_img_width + self.fig_ax_width),
+                    self.fig_line.setPreferredWidth(self.fig_line_width),
+                    self.fig_probe.setFixedWidth(self.fig_probe_width)
+                )
+            },
+            2: {
+                'items': [
+                    (self.fig_img_cb, 0, 0),
+                    (self.fig_probe_cb, 0, 1, 1, 2),
+                    (self.fig_img, 1, 0),
+                    (self.fig_probe, 1, 1),
+                    (self.fig_line, 1, 2),
+                ],
+                'col_stretch': [(0, 6), (1, 1), (2, 2)],
+                'row_stretch': [(0, 1), (1, 10)],
+                'axis_target': self.fig_img,
+                'sizes': lambda: (
+                    self.fig_img.setPreferredWidth(self.fig_img_width + self.fig_ax_width),
+                    self.fig_line.setPreferredWidth(self.fig_line_width),
+                    self.fig_probe.setFixedWidth(self.fig_probe_width)
+                )
+            },
+            3: {
+                'items': [
+                    (self.fig_probe_cb, 0, 0, 1, 2),
+                    (self.fig_img_cb, 0, 2),
+                    (self.fig_probe, 1, 0),
+                    (self.fig_line, 1, 1),
+                    (self.fig_img, 1, 2),
+                ],
+                'col_stretch': [(0, 1), (1, 2), (2, 6)],
+                'row_stretch': [(0, 1), (1, 10)],
+                'axis_target': self.fig_probe,
+                'sizes': lambda: (
+                    self.fig_probe.setFixedWidth(self.fig_probe_width + self.fig_ax_width),
+                    self.fig_img.setPreferredWidth(self.fig_img_width),
+                    self.fig_line.setPreferredWidth(self.fig_line_width)
+                )
+            }
+        }
 
-            self.fig_img.setPreferredWidth(self.fig_img_width + self.fig_ax_width)
-            self.fig_line.setPreferredWidth(self.fig_line_width)
-            self.fig_probe.setFixedWidth(self.fig_probe_width)
+        # Validate view and retrieve layout config
+        config = layout_configs.get(view)
+        if not config:
+            raise ValueError(f"Unknown view mode: {view}")
 
-            self.fig_data_layout.layout.setColumnStretchFactor(0, 6)
-            self.fig_data_layout.layout.setColumnStretchFactor(1, 2)
-            self.fig_data_layout.layout.setColumnStretchFactor(2, 1)
-            self.fig_data_layout.layout.setRowStretchFactor(0, 1)
-            self.fig_data_layout.layout.setRowStretchFactor(1, 10)
+        # Add layout items
+        for item_args in config['items']:
+            self.fig_data_layout.addItem(*item_args)
 
-            self.fig_img.update()
-            # Manually force the axis to shift and then reset axis as axis not always correct
-            # TO DO: find a better way!
-            self.fig_img.setXRange(min=self.xrange[0] - 10, max=self.xrange[1] + 10, padding=0)
-            self.reset_axis_button_pressed()
-            self.fig_line.update()
-            self.fig_probe.update()
+        # Apply column and row stretch factors
+        for col, factor in config['col_stretch']:
+            self.fig_data_layout.layout.setColumnStretchFactor(col, factor)
+        for row, factor in config['row_stretch']:
+            self.fig_data_layout.layout.setRowStretchFactor(row, factor)
 
-        if view == 2:
-            self.fig_data_layout.removeItem(self.fig_img_cb)
-            self.fig_data_layout.removeItem(self.fig_probe_cb)
-            self.fig_data_layout.removeItem(self.fig_img)
-            self.fig_data_layout.removeItem(self.fig_line)
-            self.fig_data_layout.removeItem(self.fig_probe)
-            self.fig_data_layout.addItem(self.fig_img_cb, 0, 0)
+        # Configure axes: only one figure shows the axis label
+        for fig in [self.fig_img, self.fig_line, self.fig_probe]:
+            if fig == config['axis_target']:
+                self.set_axis(fig, 'left', label='Distance from probe tip (um)')
+            else:
+                self.set_axis(fig, 'left', show=False)
 
-            self.fig_data_layout.addItem(self.fig_probe_cb, 0, 1, 1, 2)
-            self.fig_data_layout.addItem(self.fig_img, 1, 0)
-            self.fig_data_layout.addItem(self.fig_probe, 1, 1)
-            self.fig_data_layout.addItem(self.fig_line, 1, 2)
+        # Apply size adjustments specific to view
+        config['sizes']()
 
-            self.set_axis(self.fig_img_cb, 'left', pen='w')
-            self.set_axis(self.fig_probe_cb, 'left', show=False)
-            self.set_axis(self.fig_img, 'left', label='Distance from probe tip (um)')
-            self.set_axis(self.fig_probe, 'left', show=False)
-            self.set_axis(self.fig_line, 'left', show=False)
+        # Force updates and axis correction
+        for fig in [self.fig_img, self.fig_line, self.fig_probe]:
+            fig.update()
+        self.fig_img.setXRange(min=self.xrange[0] - 10, max=self.xrange[1] + 10, padding=0)
+        self.reset_axis_button_pressed()
 
-            self.fig_img.setPreferredWidth(self.fig_img_width + self.fig_ax_width)
-            self.fig_line.setPreferredWidth(self.fig_line_width)
-            self.fig_probe.setFixedWidth(self.fig_probe_width)
 
-            self.fig_data_layout.layout.setColumnStretchFactor(0, 6)
-            self.fig_data_layout.layout.setColumnStretchFactor(1, 1)
-            self.fig_data_layout.layout.setColumnStretchFactor(2, 2)
-            self.fig_data_layout.layout.setRowStretchFactor(0, 1)
-            self.fig_data_layout.layout.setRowStretchFactor(1, 10)
+    # TODO move to setup
+    @staticmethod
+    def toggle_plots(
+            options_group: QtWidgets.QActionGroup
+    ) -> None:
+        """
+        Cycle through image, line, probe and slice plots using keyboard shortcuts (Alt+1, Alt+2, Alt+3, Alt+4)
+        Parameters
+        ----------
+        options_group : QActionGroup
+            The group of QAction items representing plots to toggle through
+        """
 
-            self.fig_img.update()
-            self.fig_img.setXRange(min=self.xrange[0] - 10, max=self.xrange[1] + 10, padding=0)
-            self.reset_axis_button_pressed()
-            self.fig_line.update()
-            self.fig_probe.update()
+        current_act = options_group.checkedAction()
+        actions = options_group.actions()
+        current_idx = next(i for i, act in enumerate(actions) if act == current_act)
+        next_idx = np.mod(current_idx + 1, len(actions))
+        actions[next_idx].setChecked(True)
+        actions[next_idx].trigger()
 
-        if view == 3:
-            self.fig_data_layout.removeItem(self.fig_img_cb)
-            self.fig_data_layout.removeItem(self.fig_probe_cb)
-            self.fig_data_layout.removeItem(self.fig_img)
-            self.fig_data_layout.removeItem(self.fig_line)
-            self.fig_data_layout.removeItem(self.fig_probe)
-            self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
-            self.fig_data_layout.addItem(self.fig_img_cb, 0, 2)
-            self.fig_data_layout.addItem(self.fig_probe, 1, 0)
-            self.fig_data_layout.addItem(self.fig_line, 1, 1)
-            self.fig_data_layout.addItem(self.fig_img, 1, 2)
+    @staticmethod
+    def remove_items(fig, items):
+        for item in items:
+            fig.removeItem(item)
+        return []
 
-            self.set_axis(self.fig_probe_cb, 'left', pen='w')
-            self.set_axis(self.fig_img_cb, 'left', show=False)
-            self.set_axis(self.fig_line, 'left', show=False)
-            self.set_axis(self.fig_img, 'left', pen='w')
-            self.set_axis(self.fig_img, 'left', show=False)
-            self.set_axis(self.fig_probe, 'left', label='Distance from probe tip (um)')
+    def set_xaxis_range(self, fig, data, label=True):
+        fig.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
+        if label:
+            self.set_axis(fig, 'bottom', label=data['xaxis'])
 
-            self.fig_data_layout.layout.setColumnStretchFactor(0, 1)
-            self.fig_data_layout.layout.setColumnStretchFactor(1, 2)
-            self.fig_data_layout.layout.setColumnStretchFactor(2, 6)
-            self.fig_data_layout.layout.setRowStretchFactor(0, 1)
-            self.fig_data_layout.layout.setRowStretchFactor(1, 10)
+    def set_yaxis_range(self, fig):
+        fig.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
 
-            self.fig_probe.setFixedWidth(self.fig_probe_width + self.fig_ax_width)
-            self.fig_img.setPreferredWidth(self.fig_img_width)
-            self.fig_line.setPreferredWidth(self.fig_line_width)
 
-            self.fig_img.update()
-            self.fig_img.setXRange(min=self.xrange[0] - 10, max=self.xrange[1] + 10, padding=0)
-            self.reset_axis_button_pressed()
-            self.fig_line.update()
-            self.fig_probe.update()
+    # -------------------------------------------------------------------------------------------------
+    # Plotting functions
+    # -------------------------------------------------------------------------------------------------
+    def plot_histology(
+            self,
+            fig: pg.PlotWidget,
+            data: Dict[str, Any],
+            ax: str ='left'
+    ) -> None:
+        """
+        Plot histology regions on the given figure, shows brain regions intersecting with the probe track.
+
+        Parameters
+        ----------
+        fig : pyqtgraph.PlotWidget
+            The figure widget on which to plot the histology regions.
+        data : dict
+            A dictionary containing histology data with the following keys:
+            - 'axis_label' : list of tuple(float, str)
+                Tick labels and positions for the axis.
+            - 'region' : list of tuple(float, float)
+                Start and end coordinates for each histology region in micrometres.
+            - 'colour' : list of tuple(int, int, int)
+                RGB color tuples for each region.
+        ax : 'left' or 'right', optional
+            Orientation of the axis on which to add labels. 'left' for the main histology figure (fig_hist),
+            and 'right' for the reference figure (fig_hist_ref). Default is 'left'.
+        """
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        fig.clear()
+        self.hist_regions[ax] = np.empty((0, 1), dtype=object)
+
+        # Configure axis ticks and appearance
+        axis = fig.getAxis(ax)
+        axis.setTicks([data['axis_label']])
+        axis.setZValue(10)
+        self.set_axis(fig, 'bottom', pen='w', label='blank')
+
+        # Plot each histology region
+        for ir, reg in enumerate(data['region']):
+            colour = QtGui.QColor(*data['colour'][ir])
+            region = pg.LinearRegionItem(values=(reg[0], reg[1]),
+                                         orientation=pg.LinearRegionItem.Horizontal,
+                                         brush=colour,
+                                         movable=False)
+            bound = pg.InfiniteLine(pos=reg[0], angle=0, pen='w')
+            fig.addItem(region)
+            fig.addItem(bound)
+            # Keep track of each histology LinearRegionItem for label pressed interaction
+            self.hist_regions[ax] = np.vstack([self.hist_regions[ax], region])
+
+        # Add additional boundary for final region
+        bound = pg.InfiniteLine(pos=data['region'][-1][1], angle=0, pen='w')
+        fig.addItem(bound)
+
+        # Add dotted probe track limits (tip and top) as horizontal reference lines
+        # TODO this is ugly, also better handling of tip_pos and top_pos for the fig_hist vs fig_hist_ref
+        if ax == 'left':
+            self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot, movable=True)
+            self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot, movable=True)
+
+            offset = 1
+            self.tip_pos.setBounds((self.shank.align.track[0] * 1e6 + offset,
+                                    self.shank.align.track[-1] * 1e6 - (self.probe_top + offset)))
+            self.top_pos.setBounds((self.shank.align.track[0] * 1e6 + (self.probe_top + offset),
+                                    self.shank.align.track[-1] * 1e6 - offset))
+            self.tip_pos.sigPositionChanged.connect(self.tip_line_moved)
+            self.top_pos.sigPositionChanged.connect(self.top_line_moved)
+        else:
+            self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot)
+            self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot)
+
+        fig.addItem(self.tip_pos)
+        fig.addItem(self.top_pos)
+
+        # Set default selected region
+        if ax == 'left':
+            self.selected_region = self.hist_regions[ax][-2]
+
+
+    def plot_histology_nearby(self, fig, ax='right', movable=False):
+        # TODO
+
+        """
+        Plots histology figure - brain regions that intersect with probe track
+        :param fig: figure on which to plot
+        :type fig: pyqtgraph PlotWidget
+        :param ax: orientation of axis, must be one of 'left' (fig_hist) or 'right' (fig_hist_ref)
+        :type ax: string
+        :param movable: whether probe reference lines can be moved, True for fig_hist, False for
+                        fig_hist_ref
+        :type movable: Bool
+        """
+
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        fig.clear()
+        self.hist_ref_regions = np.empty((0, 1))
+        axis = fig.getAxis(ax)
+        axis.setTicks([self.hist_data_ref['axis_label']])
+        axis.setZValue(10)
+
+        self.set_axis(fig, 'bottom', label='dist to boundary (um)')
+        fig.setXRange(min=0, max=100)
+        fig.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra,
+                      padding=self.pad)
+
+        # Plot nearby regions
+        for ir, (x, y, c) in enumerate(zip(self.hist_nearby_x, self.hist_nearby_y,
+                                           self.hist_nearby_col)):
+            colour = QtGui.QColor(c)
+            plot = pg.PlotCurveItem()
+            plot.setData(x=x, y=y * 1e6, fillLevel=10, fillOutline=True)
+            plot.setBrush(colour)
+            plot.setPen(colour)
+            fig.addItem(plot)
+
+        for ir, (x, y, c) in enumerate(zip(self.hist_nearby_parent_x, self.hist_nearby_parent_y,
+                                           self.hist_nearby_parent_col)):
+            colour = QtGui.QColor(c)
+            colour.setAlpha(70)
+            plot = pg.PlotCurveItem()
+            plot.setData(x=x, y=y * 1e6, fillLevel=10, fillOutline=True)
+            plot.setBrush(colour)
+            plot.setPen(colour)
+            fig.addItem(plot)
+
+        # Add dotted lines to plot to indicate region along probe track where electrode
+        # channels are distributed
+        self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot,
+                                       movable=movable)
+        self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot,
+                                       movable=movable)
+        # Add lines to figure
+        fig.addItem(self.tip_pos)
+        fig.addItem(self.top_pos)
+
+
+    def plot_scale_factor(self) -> None:
+        """
+        Plot the scale factor applied to brain regions along the probe track, displayed alongside
+        the histology figure. This visualizes regional scale adjustments as colored horizontal bands.
+        """
+
+        # If no histology we can't do alignment
+        if not self.histology_exists:
+            return
+
+        self.fig_scale.clear()
+        self.scale_regions = np.empty((0, 1))
+        self.scale_factor = self.scale_data['scale']
+        scale_factor = self.scale_data['scale'] - 0.5
+
+        color_bar = cb.ColorBar('seismic')
+        cbar = color_bar.makeColourBar(20, 5, self.fig_scale_cb, min=0.5, max=1.5, label='Scale Factor')
+        colours = color_bar.map.mapToQColor(scale_factor)
+        self.fig_scale_cb.addItem(cbar)
+
+        for ir, reg in enumerate(self.scale_data['region']):
+            region = pg.LinearRegionItem(values=(reg[0], reg[1]),
+                                         orientation=pg.LinearRegionItem.Horizontal,
+                                         brush=colours[ir], movable=False)
+            bound = pg.InfiniteLine(pos=reg[0], angle=0, pen=colours[ir])
+
+            self.fig_scale.addItem(region)
+            self.fig_scale.addItem(bound)
+            self.scale_regions = np.vstack([self.scale_regions, region])
+
+        bound = pg.InfiniteLine(pos=self.scale_data['region'][-1][1], angle=0, pen=colours[-1])
+        self.fig_scale.addItem(bound)
+
+        self.fig_scale.setYRange(min=self.probe_tip - self.probe_extra,
+                                 max=self.probe_top + self.probe_extra, padding=self.pad)
+        self.set_axis(self.fig_scale, 'bottom', pen='w', label='blank')
+
+
+    def plot_fit(self) -> None:
+        """
+        Plot the scale factor and offset applied to channels along the depth of the probe track,
+        relative to the original positions of the channels.
+        """
+
+        # If no histology we can't do alignment
+        if not self.histology_exists:
+            return
+
+        x = self.shank.align.feature * 1e6
+        y = self.shank.align.track * 1e6
+
+        self.fit_plot.setData(x=x, y=y)
+        self.fit_scatter.setData(x=x,y=y)
+
+        depth_lin = self.shank.align.ephysalign.feature2track_lin(self.depth, x, y)
+
+        if np.any(depth_lin):
+            self.fit_plot_lin.setData(x=self.depth, y=depth_lin)
+        else:
+            self.fit_plot_lin.setData()
+
+    def plot_slice(
+            self,
+            data: Dict,
+            img_type: str):
+        """
+        Plot a slice image representing histology data, with optional label or intensity image.
+
+        Displays the histology slice on the figure widget with appropriate color mapping,
+        overlays trajectory lines, and updates channel plotting.
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary containing slice image data and metadata. Expected keys include:
+            - 'label' (np.ndarray): image data for annotation slice
+            - 'hist_rd', 'hist_gr', 'ccf' (np.ndarray): image data for histology slice
+            - 'scale' (tuple[float, float]): scaling factors for x and y axes
+            - 'offset' (tuple[float, float]): offsets for x and y axes
+        img_type : 'label', 'hist_rd', 'hist_gr', 'hist_cb' or 'ccf'
+            The key of the image data to plot. If 'label', displays a labeled slice without LUT.
+            For other types, a color lookup table and histogram are applied.
+        """
+
+        # If no histology we can't do alignment
+        if not self.histology_exists:
+            return
+
+        # Clear previous display
+        self.fig_slice.clear()
+        self.slice_chns = pg.ScatterPlotItem()
+        self.slice_lines = []
+
+        # Create image item with data to display
+        img = pg.ImageItem()
+        img.setImage(data[img_type])
+
+        # Construct QTransform from scale and offset data
+        transform = [data['scale'][0], 0., 0., 0.,
+                     data['scale'][1], 0.,
+                     data['offset'][0], data['offset'][1], 1.]
+        img.setTransform(QtGui.QTransform(*transform))
+
+
+        if img_type == 'label':
+            self.fig_slice_layout.removeItem(self.slice_item)
+            self.fig_slice_layout.addItem(self.fig_slice_hist_alt, 0, 1)
+            self.slice_item = self.fig_slice_hist_alt
+        else:
+            color_bar = cb.ColorBar('cividis')
+            lut = color_bar.getColourMap()
+            img.setLookupTable(lut)
+
+            self.fig_slice_layout.removeItem(self.slice_item)
+            self.fig_slice_hist = pg.HistogramLUTItem()
+            self.fig_slice_hist.axis.hide()
+            self.fig_slice_hist.setImageItem(img)
+            self.fig_slice_hist.gradient.setColorMap(color_bar.map)
+            self.fig_slice_hist.autoHistogramRange()
+            self.fig_slice_layout.addItem(self.fig_slice_hist, 0, 1)
+            hist_levels = self.fig_slice_hist.getLevels()
+            hist_val, hist_count = img.getHistogram()
+            upper_idx = np.where(hist_count > 10)[0][-1]
+            upper_val = hist_val[upper_idx]
+            if hist_levels[0] != 0:
+                self.fig_slice_hist.setLevels(min=hist_levels[0], max=upper_val)
+            self.slice_item = self.fig_slice_hist
+
+        self.fig_slice.addItem(img)
+
+        # Plot the trajectory line
+        self.traj_line = pg.PlotCurveItem()
+        self.traj_line.setData(x=self.shank.xyz_track[:, 0], y=self.shank.xyz_track[:, 2], pen=self.kpen_solid)
+        self.fig_slice.addItem(self.traj_line)
+
+        # Plot channels
+        self.fig_slice.addItem(self.slice_chns)
+        self.plot_channels()
+
+    def plot_channels(self) -> None:
+        """
+        Plot electrode channels and alignment lines on the histological slice.
+
+        Displays the locations of electrode channels and probe track reference lines
+        (alignment lines) on the histology slice view.
+        """
+
+        # If no histology we can't do alignment
+        if not self.histology_exists:
+            return
+
+        self.channel_status = True
+        self.xyz_channels = self.shank.xyz_channels
+        track_lines = self.shank.align.track_lines
+
+        # Clear existing reference lines
+        self.slice_lines = self.remove_items(self.fig_slice, self.slice_lines)
+
+        self.slice_chns.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2], pen='r', brush='r')
+
+        for ref_line in track_lines:
+            line = pg.PlotCurveItem()
+            line.setData(x=ref_line[:, 0], y=ref_line[:, 2], pen=self.kpen_dot)
+            self.fig_slice.addItem(line)
+            self.slice_lines.append(line)
+
+
+    def plot_scatter(
+            self,
+            data: Optional[Dict]
+        ) -> None:
+        """
+        Plot a 2D scatter plot of electrophysiological data on the figure.
+
+        Parameters
+        ----------
+        data : dict, optional
+            Dictionary containing the scatter plot data and display parameters. Expected keys:
+                - 'x' : np.ndarray of float
+                    X-coordinates of the data points.
+                - 'y' : np.ndarray of float
+                    Y-coordinates of the data points.
+                - 'size' : np.ndarray of float
+                    Size of each point.
+                - 'symbol' : np.ndarray of str
+                    Symbol type (e.g., 'o', 't', etc.) for each point.
+                - 'colours' : np.ndarray
+                    Either array of floats for colormap or array of QColor objects.
+                - 'pen' : str or QPen
+                    Pen used to outline each point.
+                - 'levels' : tuple[float, float]
+                    Min and max levels used for the colormap.
+                - 'title' : str
+                    Title for the colorbar.
+                - 'xrange' : tuple[float, float]
+                    Display range for the x-axis.
+                - 'xaxis' : str
+                    Label for the x-axis.
+                - 'cmap' : str
+                    Name of the colormap to use.
+                - 'cluster' : bool
+                    If True, enables interactive cluster selection on click.
+        """
+
+        if not data:
+            print('data for this plot not available')
+            return
+
+        # Clear existing plot
+        self.img_plots = self.remove_items(self.fig_img, self.img_plots)
+        self.img_cbars = self.remove_items(self.fig_img_cb, self.img_cbars)
+        # TODO check if I need this
+        # self.set_axis(self.fig_img_cb, 'top', pen='w')
+
+        size = data['size'].tolist()
+        symbol = data['symbol'].tolist()
+
+        # Create colorbar and add to figure
+        color_bar = cb.ColorBar(data['cmap'])
+        cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=np.min(data['levels'][0]),
+                                       max=np.max(data['levels'][1]), label=data['title'])
+        self.fig_img_cb.addItem(cbar)
+        self.img_cbars.append(cbar)
+
+        # Determine brush type based on given data
+        if isinstance(np.any(data['colours']), QtGui.QColor):
+            brush = data['colours'].tolist()
+        else:
+            brush = color_bar.getBrush(data['colours'], levels=list(data['levels']))
+
+        # Create scatter plot and add to figure
+        plot = pg.ScatterPlotItem()
+        plot.setData(x=data['x'], y=data['y'], symbol=symbol, size=size, brush=brush, pen=data['pen'])
+        self.fig_img.addItem(plot)
+        self.img_plots.append(plot)
+
+        # Set axis ranges
+        self.set_xaxis_range(self.fig_img, data)
+        self.set_yaxis_range(self.fig_img)
+
+        # Store plot references
+        self.y_scale = 1
+        self.ephys_plot = plot
+        self.xrange = data['xrange']
+
+        if data['cluster']:
+            self.cluster_data = data['x']
+            self.ephys_plot.sigClicked.connect(self.cluster_clicked)
+
+    def plot_line(
+            self,
+            data: Optional[Dict]
+        ) -> None:
+        """
+        Plot a 1D line plot of electrophysiological data on the figure.
+
+        Parameters
+        ----------
+        data : dict, optional
+            Dictionary containing the line plot data and display parameters. Expected keys:
+                - 'x' : np.ndarray of float
+                    X-coordinates of the data points.
+                - 'y' : np.ndarray of float
+                    Y-coordinates of the data points.
+                - 'xrange' : tuple[float, float]
+                    Display range for the x-axis.
+                - 'xaxis' : str
+                    Label for the x-axis.
+        """
+
+        if not data:
+            print('data for this plot not available')
+            return
+        # Clear existing plots
+        self.line_plots = self.remove_items(self.fig_line, self.line_plots)
+
+        # Create line plot at add to figure
+        line = pg.PlotCurveItem()
+        line.setData(x=data['x'], y=data['y'])
+        line.setPen(self.kpen_solid)
+        self.fig_line.addItem(line)
+        self.line_plots.append(line)
+
+        # Set axis ranges
+        self.set_xaxis_range(self.fig_line, data)
+        self.set_yaxis_range(self.fig_line)
+
+    def plot_probe(
+            self,
+            data: Optional[Dict],
+        ) -> None:
+        """
+        Plot a 2D image representing the probe geometry, including individual channel banks and optional boundaries.
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary containing information to plot the probe geometry.
+            Expected keys:
+                img : list of np.ndarray
+                    Image data arrays, one for each channel bank.
+                scale : list of np.ndarray
+                    Scaling to apply to each image, as [xscale, yscale].
+                offset : list of np.ndarray
+                    Offset to apply to each image, as [xoffset, yoffset].
+                levels : np.ndarray
+                    Two-element array specifying color bar limits [min, max].
+                cmap : str
+                    Colormap to use.
+                xrange : np.ndarray
+                    Two-element array for x-axis limits [min, max].
+                title : str
+                    Label for the color bar.
+        """
+        if not data:
+            print('data for this plot not available')
+            return
+
+        self.probe_plots = self.remove_items(self.fig_probe, self.probe_plots)
+        self.probe_cbars = self.remove_items(self.fig_probe_cb, self.probe_cbars)
+        self.probe_bounds = self.remove_items(self.fig_probe, self.probe_bounds)
+
+        # Create colorbar and add to figure
+        color_bar = cb.ColorBar(data['cmap'])
+        lut = color_bar.getColourMap()
+        cbar = color_bar.makeColourBar(20, 5, self.fig_probe_cb, min=data['levels'][0],
+                                       max=data['levels'][1], label=data['title'], lim=False)
+        self.fig_probe_cb.addItem(cbar)
+        self.probe_cbars.append(cbar)
+
+        # Create image plots per shank and add to figure
+        for img, scale, offset in zip(data['img'], data['scale'], data['offset']):
+            image = pg.ImageItem()
+            image.setImage(img)
+            transform = [scale[0], 0., 0., 0., scale[1], 0., offset[0], offset[1], 1.]
+            image.setTransform(QtGui.QTransform(*transform))
+            image.setLookupTable(lut)
+            image.setLevels((data['levels'][0], data['levels'][1]))
+            self.fig_probe.addItem(image)
+            self.probe_plots.append(image)
+
+        # Set axis ranges
+        self.set_xaxis_range(self.fig_probe, data, label=False)
+        self.set_yaxis_range(self.fig_probe)
+        # Add in a fake label so that the appearence is the same as other plots
+        self.set_axis(self.fig_probe, 'bottom', pen='w', label='blank')
+
+        # Optionally plot horizontal boundary lines
+        bounds = data.get('boundaries', None)
+        if bounds is not None:
+            for bound in bounds:
+                line = pg.InfiniteLine(pos=bound, angle=0, pen='w')
+                self.fig_probe.addItem(line)
+                self.probe_bounds.append(line)
+
+    def plot_image(
+            self,
+            data: Optional[Dict],
+        ) -> None:
+        """
+        Plot a 2D image of electrophysiology data
+
+        Parameters
+        ----------
+        data : dict
+            Dictionary containing image and display metadata. Expected keys:
+                img : np.ndarray
+                    2D image array of shape (nx, ny), representing the electrophysiological data.
+                scale : np.ndarray
+                    Two-element array [xscale, yscale] for scaling the image along each axis.
+                offset : np.ndarray
+                    Two-element array [xoffset, yoffset] specifying the image translation.
+                levels : np.ndarray
+                    Two-element array [min, max] specifying the color scaling limits.
+                cmap : str
+                    Name of the colormap to use.
+                xrange : np.ndarray
+                    Two-element array [xmin, xmax] for x-axis limits.
+                xaxis : str
+                    Label for the x-axis.
+                title : str
+                    Title or label for the colorbar.
+        """
+        if not data:
+            print('data for this plot not available')
+            return
+
+        self.img_plots = self.remove_items(self.fig_img, self.img_plots)
+        self.img_cbars = self.remove_items(self.fig_img_cb, self.img_cbars)
+        # TODO check if I need this
+        # self.set_axis(self.fig_img_cb, 'top', pen='w')
+
+        # Create image item and add to figure
+        image = pg.ImageItem()
+        image.setImage(data['img'])
+        transform = [data['scale'][0], 0., 0., 0., data['scale'][1], 0., data['offset'][0], data['offset'][1], 1.]
+        image.setTransform(QtGui.QTransform(*transform))
+        self.fig_img.addItem(image)
+        self.img_plots.append(image)
+
+        # If applicable create colorbar and add to figure
+        cmap = data.get('cmap', [])
+        if cmap:
+            color_bar = cb.ColorBar(data['cmap'])
+            lut = color_bar.getColourMap()
+            image.setLookupTable(lut)
+            image.setLevels((data['levels'][0], data['levels'][1]))
+            cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=data['levels'][0],
+                                           max=data['levels'][1], label=data['title'])
+            self.fig_img_cb.addItem(cbar)
+            self.img_cbars.append(cbar)
+        else:
+            image.setLevels((1, 0))
+
+        # Set axis ranges
+        self.set_xaxis_range(self.fig_img, data)
+        self.set_yaxis_range(self.fig_img)
+
+        # Store plot references
+        self.y_scale = data['scale'][1]
+        self.x_scale = data['scale'][0]
+        self.ephys_plot = image
+        self.xrange = data['xrange']
+
+
+    # -------------------------------------------------------------------------------------------------
+    # Session selection
+    # -------------------------------------------------------------------------------------------------
+    def on_subject_selected(self, idx):
+        """
+        Triggered when subject is selected from drop down list options
+        :param idx: index chosen subject (item) in drop down list
+        :type idx: int
+        """
+        self.shank = None
+        self.sess_list.clear()
+        self.shank_list.clear()
+        self.align_list.clear()
+        sessions = self.loaddata.get_sessions(idx)
+        self.populate_lists(sessions, self.sess_list, self.sess_combobox)
+        shanks = self.loaddata.get_shanks(0)
+        if len(shanks) > 1:
+            self.populate_lists(shanks, self.shank_list, self.shank_combobox)
+
+        self.loaddata.get_info(0)
+        self.prev_alignments = self.loaddata.get_previous_alignments()
+        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        self.loaddata.get_starting_alignment(0)
+        # For IBL case at the moment we only using single shank
+        #self.current_shank_idx = 0
+
+    def on_session_selected(self, idx):
+        """
+        Triggered when session is selected from drop down list options
+        :param idx: index of chosen session (item) in drop down list
+        :type idx: int
+        """
+        self.shank = None
+        self.shank_list.clear()
+        self.align_list.clear()
+        shanks = self.loaddata.get_shanks(idx)
+        if len(shanks) > 1:
+            self.populate_lists(shanks, self.shank_list, self.shank_combobox)
+
+        self.loaddata.get_info(0)
+        self.prev_alignments = self.loaddata.get_previous_alignments()
+        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        self.loaddata.get_starting_alignment(0)
+
+    # def on_shank_selected(self, idx):
+    #     """
+    #     Triggered in offline mode for selecting shank when using NP2.0
+    #     """
+    #     self.current_shank_idx = idx
+    #     # Update prev_alignments
+    #     self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
+    #     self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+    #     self.loaddata.get_starting_alignment(0)
+
+
+    def on_shank_selected(self, idx):
+        """
+        Online version
+        """
+        # Todo make this match the 'all' string
+        if idx == 4:
+            # Launch 3 more windows
+            self.loaddata.get_info(0)
+            # Update prev_alignments
+            self.prev_alignments = self.loaddata.get_previous_alignments()
+            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            self.loaddata.get_starting_alignment(0)
+            self.data_button_pressed()
+            for idx in [1, 2, 3]:
+                multi_shank_viewer(title=f'window_{idx}', probe_id=idx, loaddata=self.loaddata)
+
+
+        self.align_list.clear()
+        self.loaddata.get_info(idx)
+        # Update prev_alignments
+        self.prev_alignments = self.loaddata.get_previous_alignments()
+        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        self.loaddata.get_starting_alignment(0)
+
+        if self.shank is not None:
+            self.data_button_pressed()
+
+    def on_folder_selected(self):
+        """
+        Triggered in offline mode when folder button is clicked
+        """
+        self.data_status = False
+        folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
+        self.folder_line.setText(str(folder_path))
+        self.prev_alignments, shank_options = self.loaddata.get_info(folder_path)
+        self.populate_lists(shank_options, self.shank_list, self.shank_combobox)
+        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        self.on_shank_selected(0)
+
+    def on_alignment_selected(self, idx):
+        self.loaddata.get_starting_alignment(idx)
+        if self.shank is not None:
+            self.data_button_pressed()
+
+    def add_alignment_pressed(self):
+        file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
+        if file_path.name != 'prev_alignments.json':
+            print("Wrong file selected, must be of format prev_alignments.json")
+            return
+        else:
+            self.prev_alignments = self.loaddata.add_extra_alignments(file_path)
+            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
+
+    def data_button_pressed(self):
+        """
+        Triggered when Get Data button pressed, uses subject and session info to find eid and
+        downloads and computes data needed for GUI display
+        """
+
+        # Clear all plots from previous session
+        [self.fig_img.removeItem(plot) for plot in self.img_plots]
+        [self.fig_img.removeItem(cbar) for cbar in self.img_cbars]
+        [self.fig_line.removeItem(plot) for plot in self.line_plots]
+        [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
+        [self.fig_probe.removeItem(cbar) for cbar in self.probe_cbars]
+        self.fig_slice.clear()
+        self.fig_hist.clear()
+        self.ax_hist.setTicks([])
+        self.fig_hist_ref.clear()
+        self.ax_hist_ref.setTicks([])
+        self.fig_scale.clear()
+        self.fit_plot.setData()
+        self.fit_scatter.setData()
+        self.remove_reference_lines_from_display()
+        self.init_variables()
+
+        self.loaddata.load_data()
+
+        self.shank = self.loaddata.get_selected_probe()
+        # TODO figure out where to put this
+        self.shank.align.features[self.shank.align.idx], self.shank.align.tracks[self.shank.align.idx], _ \
+            = self.shank.align.ephysalign.get_track_and_feature()
+
+        self.xyz_channels = self.shank.xyz_channels
+        self.set_probe_lims(np.min([0, self.shank.plotdata.chn_min]), self.shank.plotdata.chn_max)
+        self.init_menubar()
+        self.get_scaled_histology()
+        self.histology_exists = self.shank.histology
+
+        # Initialise checked plots
+        self.img_init.setChecked(True)
+        self.line_init.setChecked(True)
+        self.probe_init.setChecked(True)
+        self.unit_init.setChecked(True)
+        self.slice_init.setChecked(True)
+
+        # Initialise ephys plots
+        self.plot_image(self.shank.img_plots['Firing Rate'])
+        self.plot_probe(self.shank.probe_plots['rms AP'])
+        self.plot_line(self.shank.line_plots['Firing Rate'])
+
+        # Initialise histology plots
+        self.plot_histology(self.fig_hist_ref, self.hist_data_ref, ax='right')
+        self.plot_histology(self.fig_hist, self.hist_data)
+        self.label_status = False
+        self.toggle_labels()
+        self.plot_scale_factor()
+        if np.any(self.shank.feature_prev):
+            self.create_reference_lines(self.shank.feature_prev[1:-1] * 1e6)
+        # Initialise slice and fit images
+        self.plot_fit()
+        self.plot_slice(self.shank.slice_data, 'hist_rd')
+
+        # Initialise unity plot
+        # if self.unity:
+        #     self.unitydata.add_regions(np.unique(self.hist_data['axis_label'][:, 1]))
+        #     self.set_unity_xyz()
+        #     self.plot_unity('probe')
+
+        # Only configure the view the first time the GUI is launched
+        self.set_view(view=1, configure=self.configure)
+        self.configure = False
+
+
+
+    def filter_unit_pressed(self, filter_type):
+        #TODO FIX
+        self.filter_type = filter_type
+        self.plotdata.filter_units(self.filter_type)
+        self.scat_drift_data = self.plotdata.get_depth_data_scatter()
+        (self.scat_fr_data, self.scat_p2t_data,
+         self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
+        self.img_corr_data = self.plotdata.get_correlation_data_img()
+        self.img_fr_data = self.plotdata.get_fr_img()
+        self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
+        self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
+        self.img_stim_data = self.plotdata.get_passive_events()
+        self.img_init.setChecked(True)
+        self.line_init.setChecked(True)
+        self.probe_init.setChecked(True)
+        self.plot_image(self.shank.img_plots['Firing Rate'])
+        self.plot_probe(self.shank.probe_plots['rms AP'])
+        self.plot_line(self.shank.line_plots['Firing Rate'])
+
+        if self.unity:
+            self.unity_plot = 'probe'
+            self.set_unity_xyz()
+            self.plot_unity()
+
+    # -------------------------------------------------------------------------------------------------
+    # Fitting functions
+    # -------------------------------------------------------------------------------------------------
+    def offset_hist_data(self, val=None):
+        """
+        Offset location of probe tip along probe track
+        """
+        # If no histology we can't do alignment
+        if not self.histology_exists:
+            return
+
+        val = val or self.tip_pos.value() / 1e6
+
+        self.shank.align.offset_hist_data(val)
+
+    def scale_hist_data(self):
+        """
+        Scale brain regions along probe track
+        """
+        # If no histology we can't do alignment
+        if not self.histology_exists:
+            return
+
+        line_track = np.array([line[0].pos().y() for line in self.lines_tracks]) / 1e6
+        line_feature = np.array([line[0].pos().y() for line in self.lines_features]) / 1e6
+
+        self.shank.align.scale_hist_data(line_track, line_feature, extend_feature=self.extend_feature,
+                                         lin_fit=self.lin_fit)
+
+    def get_scaled_histology(self):
+        self.hist_data, self.hist_data_ref, self.scale_data = self.shank.align.get_scaled_histology()
+
+
+    def apply_fit(self, fit_function, **kwargs):
+
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        fit_function(**kwargs)
+        self.update_plots()
+
+    def update_plots(self):
+
+        self.get_scaled_histology()
+        self.plot_histology(self.fig_hist, self.hist_data)
+        self.plot_scale_factor()
+        self.plot_fit()
+        self.plot_channels()
+        if self.unity:
+            self.set_unity_xyz()
+            self.plot_unity()
+        self.remove_reference_lines_from_display()
+        self.add_reference_lines_to_display()
+        self.align_reference_lines()
+        self.set_yaxis_range(self.fig_hist)
+        self.update_string()
+
+
+
+
+    def offset_button_pressed(self):
+        """
+        Triggered when offset button or o key pressed, applies offset to brain regions according to
+        locations of probe tip line on histology plot. Updates all plots and indices after offset
+        has been applied
+        """
+        self.apply_fit(self.offset_hist_data)
+
+
+    def movedown_button_pressed(self):
+        """
+        Triggered when Shift+down key pressed. Moves probe tip down by 50um and offsets data
+        """
+        self.apply_fit(self.offset_hist_data, val=-100/1e6)
+
+
+    def moveup_button_pressed(self):
+        """
+        Triggered when Shift+down key pressed. Moves probe tip up by 50um and offsets data
+        """
+        self.apply_fit(self.offset_hist_data, val=100/1e6)
+
+
+    def fit_button_pressed(self):
+        """
+        Triggered when fit button or Enter key pressed, applies scaling factor to brain regions
+        according to locations of reference lines on ephys and histology plots. Updates all plots
+        and indices after scaling has been applied
+        """
+        self.apply_fit(self.scale_hist_data)
+
+
+    def next_button_pressed(self):
+        """
+        Triggered when right key pressed. Updates all plots and indices with next move. Ensures
+        user cannot go past latest move
+        """
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        if self.shank.align.buffer.next_idx():
+            self.update_plots()
+
+
+    def prev_button_pressed(self):
+        """
+        Triggered when left key pressed. Updates all plots and indices with previous move.
+        Ensures user cannot go back more than self.max_idx moves
+        """
+
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        if self.shank.align.buffer.previous_idx():
+            self.update_plots()
+
+
+    def reset_button_pressed(self):
+        """
+        Triggered when reset button or Shift+R key pressed. Resets channel locations to orignal
+        location
+        """
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        self.remove_reference_lines_from_display()
+        self.lines_features = np.empty((0, 3))
+        self.lines_tracks = np.empty((0, 1))
+        self.points = np.empty((0, 1))
+
+        self.shank.align.reset_features_and_tracks()
+
+        self.get_scaled_histology()
+
+        self.plot_histology(self.fig_hist, self.hist_data)
+        self.plot_scale_factor()
+        if np.any(self.shank.feature_prev):
+            self.create_reference_lines(self.shank.feature_prev[1:-1] * 1e6)
+        self.plot_fit()
+        self.plot_channels()
+        self.set_yaxis_range(self.fig_hist)
+        self.update_string()
+
+
+    def lin_fit_option_changed(self, state):
+        if state == 0:
+            self.lin_fit = False
+            self.fit_button_pressed()
+        else:
+            self.lin_fit = True
+            self.fit_button_pressed()
+
+    def update_string(self) -> None:
+        """
+        Updates text boxes to indicate to user which move they are looking at
+        """
+        self.idx_string.setText(f"Current Index = {self.shank.align.buffer.current_idx}")
+        self.tot_idx_string.setText(f"Total Index = {self.shank.align.buffer.total_idx}")
+
+    # -------------------------------------------------------------------------------------------------
+    # Upload/ save data
+    # -------------------------------------------------------------------------------------------------
+
+    def complete_button_pressed(self):
+        """
+        Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
+        Alyx
+        """
+        # If no histology we can't upload alignment
+        if not self.histology_exists:
+            return
+
+        upload = QtWidgets.QMessageBox.question(self, '', "Upload alignment?",
+                                                QtWidgets.QMessageBox.Yes |
+                                                QtWidgets.QMessageBox.No)
+
+        if upload == QtWidgets.QMessageBox.Yes:
+            upload_channels = self.loaddata.upload_data(self.xyz_channels)
+            self.loaddata.update_alignments(self.shank.align.features[self.idx], self.shank.align.tracks[self.idx])
+            self.prev_alignments = self.loaddata.get_previous_alignments()
+            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            self.loaddata.get_starting_alignment(0)
+            resolved = self.loaddata.update_qc()
+
+            if upload_channels and resolved == 0:
+                # channels saved alignment not resolved
+                QtWidgets.QMessageBox.information(self, 'Status',
+                                                  ("Channels locations saved to Alyx. "
+                                                   "Alignment not resolved"))
+            if upload_channels and resolved == 1:
+                # channels saved alignment resolved, writen to flatiron
+                QtWidgets.QMessageBox.information(self, 'Status',
+                                                  ("Channel locations saved to Alyx. "
+                                                   "Alignment resolved and channels "
+                                                   "datasets written to flatiron"))
+            if not upload_channels and resolved == 1:
+                # alignment already resolved, save alignment but channels not written
+                QtWidgets.QMessageBox.information(self, 'Status',
+                                                  ("Channel locations not saved to Alyx"
+                                                   " as alignment has already been "
+                                                   "resolved. New user reference lines"
+                                                   " have been saved"))
+        else:
+            pass
+            QtWidgets.QMessageBox.information(self, 'Status', "Channels not saved")
+
+    def complete_button_pressed_offline(self):
+        """
+        Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
+        json file
+        """
+        upload = QtWidgets.QMessageBox.question(self, '', "Upload alignment?",
+                                                QtWidgets.QMessageBox.Yes |
+                                                QtWidgets.QMessageBox.No)
+
+        if upload == QtWidgets.QMessageBox.Yes:
+            self.loaddata.upload_data(self.shank.align.features[self.idx], self.shank.align.tracks[self.idx],
+                                      self.xyz_channels)
+            self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
+            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            self.loaddata.get_starting_alignment(0)
+            QtWidgets.QMessageBox.information(self, 'Status', "Channels locations saved")
+        else:
+            pass
+            QtWidgets.QMessageBox.warning(self, 'Status', "Channels not saved")
+
+    def display_qc_options(self):
+
+        # If not histology don't show
+        if not self.histology_exists:
+            return
+
+        self.qc_dialog.open()
+
+    def qc_button_clicked(self):
+
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        align_qc = self.align_qc.currentText()
+        ephys_qc = self.ephys_qc.currentText()
+        ephys_desc = []
+        for button in self.desc_buttons.buttons():
+            if button.isChecked():
+                ephys_desc.append(button.text())
+
+        if ephys_qc != 'Pass' and len(ephys_desc) == 0:
+            QtWidgets.QMessageBox.warning(self, 'Status', "You must select a reason for qc choice")
+            self.display_qc_options()
+            return
+
+        self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
+        self.complete_button_pressed()
+
+
+    def on_mouse_double_clicked(self, event):
+        """
+        Triggered when a double click event is detected on ephys of histology plots. Adds reference
+        line on ephys and histology plot that can be moved to align ephys signatures with brain
+        regions. Also adds scatter point on fit plot
+        :param event: double click event signals
+        :type event: pyqtgraph mouseEvents
+        """
+        # If no histology no point adding lines
+        if not self.histology_exists:
+            return
+
+        if event.double():
+            pos = self.ephys_plot.mapFromScene(event.scenePos())
+            self.create_reference_line(pos.y() * self.y_scale)
+
+    def on_mouse_hover(self, items):
+        """
+        Returns the pyqtgraph items that the mouse is hovering over. Used to identify reference
+        lines so that they can be deleted
+        """
+        if len(items) > 1:
+            self.selected_line = []
+            if type(items[0]) == pg.InfiniteLine:
+                self.selected_line = items[0]
+            elif (items[0] == self.fig_scale) & (type(items[1]) == pg.LinearRegionItem):
+                idx = np.where(self.scale_regions == items[1])[0][0]
+                self.fig_scale_ax.setLabel('Scale Factor = ' +
+                                           str(np.around(self.scale_factor[idx], 2)))
+            elif (items[0] == self.fig_hist) & (type(items[1]) == pg.LinearRegionItem):
+                self.selected_region = items[1]
+            elif (items[0] == self.fig_hist_ref) & (type(items[1]) == pg.LinearRegionItem):
+                self.selected_region = items[1]
+
+
+
+
+    # -------------------------------------------------------------------------------------------------
+    # Display options
+    # -------------------------------------------------------------------------------------------------
+    def toggle_labels(self) -> None:
+        """
+        Toggle visibility of brain region labels on histology plots.
+
+        Triggered by pressing Shift+A. Updates the pens for axis items on both the main
+        and reference histology plots to show or hide Allen atlas region labels.
+        """
+        self.label_status = not self.label_status
+        pen = 'k' if self.label_status else None
+        self.ax_hist_ref.setPen(pen)
+        self.ax_hist_ref.setTextPen(pen)
+        self.ax_hist.setPen(pen)
+        self.ax_hist.setTextPen(pen)
+
+        self.fig_hist_ref.update()
+        self.fig_hist.update()
+
+    def toggle_reference_lines(self) -> None:
+        """
+        Toggle visibility of reference lines on electrophysiology and histology plots.
+
+        Triggered by pressing Shift+L.
+        """
+        self.line_status = not self.line_status
+        if not self.line_status:
+            self.remove_reference_lines_from_display()
+        else:
+            self.add_reference_lines_to_display()
+
+    def toggle_channels(self) -> None:
+        """
+        Toggle visibility of channels and trajectory lines on the histology slice image.
+
+        Triggered by pressing Shift+C. Adds or removes the visual indicators of the probe
+        trajectory and channels on the slice view.
+        """
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        self.channel_status = not self.channel_status
+
+        # Choose the appropriate method (addItem or removeItem) based on toggle state
+        toggleItem = self.fig_slice.addItem if self.channel_status else self.fig_slice.removeItem
+
+        toggleItem(self.traj_line)
+        toggleItem(self.slice_chns)
+        for line in self.slice_lines:
+            toggleItem(line)
+
+    def toggle_histology(self) -> None:
+        """
+        Toggle between displaying histology boundaries or block regions
+
+        Triggered by pressing Shift+N. If nearby boundaries are not yet computed, this will
+        call the boundary computation method
+        """
+
+        self.hist_bound_status = not self.hist_bound_status
+
+        if not self.hist_bound_status:
+            if self.hist_nearby_x is None:
+                #TODO fix
+                self.compute_nearby_boundaries()
+            self.plot_histology_nearby(self.fig_hist_ref)
+        else:
+            self.plot_histology(self.fig_hist_ref, self.hist_data_ref, ax='right')
+
+    def toggle_histology_map(self) -> None:
+        """
+        Toggle between different histology mapping sources ('Allen' and 'FP').
+
+        Triggered by pressing Shift+M. Re-scales and re-renders histology data using the new mapping.
+        """
+
+        self.hist_mapping = 'FP' if self.hist_mapping == 'Allen' else 'Allen'
+
+        self.get_scaled_histology()
+        self.plot_histology(self.fig_hist, self.hist_data)
+        self.plot_histology(self.fig_hist_ref, self.hist_data_ref, ax='right')
+
+        self.remove_reference_lines_from_display()
+        self.add_reference_lines_to_display()
+
+    def reset_axis_button_pressed(self) -> None:
+        """
+        Reset zoomable plot axis to default
+
+        Triggered by pressing Shift+A.
+        """
+        self.set_yaxis_range(self.fig_hist)
+        self.set_yaxis_range(self.fig_hist_ref)
+        self.set_yaxis_range(self.fig_img)
+        self.set_xaxis_range(self.fig_img, {'xrange': [self.xrange[0], self.xrange[1]]}, label=False)
+
+    # -------------------------------------------------------------------------------------------------
+    # Probe top and tip lines
+    # -------------------------------------------------------------------------------------------------
+
+    def set_probe_lims(
+            self,
+            min_val: Union[int, float],
+            max_val: Union[int, float]
+        ) -> None:
+        """
+        Set the limits for the probe tip and probe top, and update the associated lines accordingly.
+
+        Parameters
+        ----------
+        min_val : int or float
+            The new minimum limit representing the probe tip position.
+        max_val : int or float
+            The new maximum limit representing the probe top position.
+        """
+        self.probe_tip = min_val
+        self.probe_top = max_val
+
+        for top_line in self.probe_top_lines:
+            top_line.setY(self.probe_top)
+
+        for tip_line in self.probe_tip_lines:
+            tip_line.setY(self.probe_tip)
+
+    def tip_line_moved(self) -> None:
+        """
+        Callback triggered when the probe tip line (dotted line) on the histology figure is moved.
+
+        This function updates the probe top line's vertical position to maintain a fixed
+        vertical distance between tip and top (i.e., the probe length).
+        """
+
+        self.top_pos.setPos(self.tip_pos.value() + self.probe_top)
+
+    def top_line_moved(self) -> None:
+        """
+        Callback triggered when the probe top line (dotted line) on the histology figure is moved.
+
+        This function updates the probe tip line's vertical position to maintain a fixed
+        vertical distance between tip and top (i.e., the probe length).
+        """
+
+        self.tip_pos.setPos(self.top_pos.value() - self.probe_top)
+
+
+    # -------------------------------------------------------------------------------------------------
+    # Reference lines
+    # -------------------------------------------------------------------------------------------------
+    @staticmethod
+    def create_line_style() -> Tuple[QtGui.QPen, QtGui.QBrush]:
+        """
+        Generate a random line style (color and dash style) for reference lines.
+
+        Returns
+        -------
+        pen : QtGui.QPen
+            A pen object defining the line color, dash style, and width.
+        brush : QtGui.QBrush
+            A brush object with the same color as the pen for use with filled items.
+        """
+        colours = ['#000000', '#cc0000', '#6aa84f', '#1155cc', '#a64d79']
+        styles = [QtCore.Qt.SolidLine, QtCore.Qt.DashLine, QtCore.Qt.DashDotLine]
+
+        colour = QtGui.QColor(random.choice(colours))
+        style = random.choice(styles)
+
+        pen = pg.mkPen(color=colour, style=style, width=3)
+        brush = pg.mkBrush(color=colour)
+
+        return pen, brush
+
+    def create_reference_line(
+            self,
+            pos: float,
+        ) -> None:
+        """
+        Create a single movable horizontal reference line and corresponding scatter point
+
+        This includes:
+        - A track line in the histology figure
+        - Feature lines in the image, line, and probe figures that are synchronized
+        - A scatter point in the fit figure indicating the correspondence
+
+        Parameters
+        ----------
+        pos : float
+            Y-axis position at which to draw the horizontal line.
+        """
+
+        pen, brush = self.create_line_style()
+
+        # Reference line on histology figure (track)
+        line_track = pg.InfiniteLine(pos=pos, angle=0, pen=pen, movable=True)
+        line_track.sigPositionChanged.connect(self.update_track_reference_line)
+        line_track.setZValue(100)
+        self.fig_hist.addItem(line_track)
+
+        # Reference lines on electrophysiology figures (feature)
+        line_features = []
+        for fig in [self.fig_img, self.fig_line, self.fig_probe]:
+            line_feature = pg.InfiniteLine(pos=pos, angle=0, pen=pen, movable=True)
+            line_feature.setZValue(100)
+            line_feature.sigPositionChanged.connect(self.update_feature_reference_line)
+            fig.addItem(line_feature)
+            line_features.append(line_feature)
+
+        self.lines_features = np.vstack([self.lines_features, line_features])
+        self.lines_tracks = np.vstack([self.lines_tracks, line_track])
+
+        # Add marker to fit figure
+        point = pg.PlotDataItem()
+        point.setData(x=[line_track.pos().y()], y=[line_features[0].pos().y()],
+                      symbolBrush=brush, symbol='o', symbolSize=10)
+        self.fig_fit.addItem(point)
+        self.points = np.vstack([self.points, point])
+
+    def create_reference_lines(
+            self,
+            positions: Union[np.ndarray, List[float]]
+        ) -> None:
+
+        """
+        Create movable horizontal reference lines across electrophysiology and histology figures at multiple positions
+
+        For each y-position in `positions`, this method creates:
+        - A movable horizontal line in the histology figure (track line)
+        - Synchronized lines in the image, line, and probe figures (feature lines)
+        - A corresponding scatter point in the fit figure
+
+        Parameters
+        ----------
+        positions : array-like of float
+            List or array of y-axis positions at which to draw horizontal lines across
+            histology, image, line, probe, and fit figures.
+        """
+
+        for pos in positions:
+            self.create_reference_line(pos)
+
+    def delete_reference_line(self) -> None:
+        """
+        Delete the currently selected reference line from all plots.
+
+        Triggered when the user hovers over a reference line and presses the Delete key.
+        Removes:
+        - Reference lines from image, line, probe, and histology figures
+        - Associated scatter point from the fit figure
+        """
+        if not self.selected_line:
+            return
+
+        # Attempt to find selected line in feature lines
+        line_idx = np.where(self.lines_features == self.selected_line)[0]
+        if line_idx.size == 0:
+            # If not found, try in track lines
+            line_idx = np.where(self.lines_tracks == self.selected_line)[0]
+            if line_idx.size == 0:
+                return  # Couldn't find either
+
+        line_idx = line_idx[0]
+
+        # Remove line items from plots
+        self.fig_img.removeItem(self.lines_features[line_idx][0])
+        self.fig_line.removeItem(self.lines_features[line_idx][1])
+        self.fig_probe.removeItem(self.lines_features[line_idx][2])
+        self.fig_hist.removeItem(self.lines_tracks[line_idx, 0])
+        self.fig_fit.removeItem(self.points[line_idx, 0])
+
+        # Remove from tracking arrays
+        self.lines_features = np.delete(self.lines_features, line_idx, axis=0)
+        self.lines_tracks = np.delete(self.lines_tracks, line_idx, axis=0)
+        self.points = np.delete(self.points, line_idx, axis=0)
+
+    def update_feature_reference_line(
+            self,
+            feature_line: pg.InfiniteLine
+        ) -> None:
+        """
+        Callback triggered when a reference line is moved in one of the electrophysiology plots
+        (image, line, or probe). This function ensures the line's new position is synchronized
+        across the other ephys plots, and updates the corresponding scatter point in the fit plot.
+
+        Parameters
+        ----------
+        feature_line : pyqtgraph.InfiniteLine
+            The line instance that was moved by the user.
+        """
+        idx = np.where(self.lines_features == feature_line)
+
+        line_idx = idx[0][0]
+        fig_idx = np.setdiff1d(np.arange(0, 3), idx[1][0]) #  Indices of two other plots
+
+        # Update the other two lines to the new y-position
+        self.lines_features[line_idx][fig_idx[0]].setPos(feature_line.value())
+        self.lines_features[line_idx][fig_idx[1]].setPos(feature_line.value())
+
+        # Update scatter point on the fit figure
+        self.points[line_idx][0].setData(x=[self.lines_features[line_idx][0].pos().y()],
+                                         y=[self.lines_tracks[line_idx][0].pos().y()])
+
+    def update_track_reference_line(
+            self,
+            track_line: pg.InfiniteLine
+        ) -> None:
+        """
+        Callback triggered when a reference line in the histology plot is moved.
+        This updates the corresponding scatter point in the fit plot.
+
+        Parameters
+        ----------
+        track_line : pyqtgraph.InfiniteLine
+            The line instance that was moved by the user.
+        """
+        line_idx = np.where(self.lines_tracks == track_line)[0][0]
+
+        self.points[line_idx][0].setData(x=[self.lines_features[line_idx][0].pos().y()],
+                                         y=[self.lines_tracks[line_idx][0].pos().y()])
+
+    def align_reference_lines(self) -> None:
+        """
+        Align the positions of all track reference lines and scatter points based on the new positions
+        of their corresponding feature reference lines.
+        """
+        for line_feature, line_track, point in zip(self.lines_features, self.lines_tracks, self.points):
+            line_track[0].setPos(line_feature[0].getYPos())
+            point[0].setData(x=[line_feature[0].pos().y()], y=[line_feature[0].pos().y()])
+
+
+    def remove_reference_lines_from_display(self) -> None:
+        """
+        Remove all reference lines and scatter points from the electrophysiology, histology, and fit plots.
+        """
+        for line_feature, line_track, point in zip(self.lines_features, self.lines_tracks, self.points):
+            self.fig_img.removeItem(line_feature[0])
+            self.fig_line.removeItem(line_feature[1])
+            self.fig_probe.removeItem(line_feature[2])
+            self.fig_hist.removeItem(line_track[0])
+            self.fig_fit.removeItem(point[0])
+
+    def add_reference_lines_to_display(self) -> None:
+        """
+        Add previously created reference lines and scatter points to their respective plots.
+        """
+        for line_feature, line_track, point in zip(self.lines_features, self.lines_tracks, self.points):
+            self.fig_img.addItem(line_feature[0])
+            self.fig_line.addItem(line_feature[1])
+            self.fig_probe.addItem(line_feature[2])
+            self.fig_hist.addItem(line_track[0])
+            self.fig_fit.addItem(point[0])
+
+    # -------------------------------------------------------------------------------------------------
+    # Plugins
+    # -------------------------------------------------------------------------------------------------
+    def cluster_clicked(self, item, point):
+        point_pos = point[0].pos()
+        clust_idx = np.argwhere(self.cluster_data == point_pos.x())[0][0]
+
+        autocorr, clust_no = self.plotdata.get_autocorr(clust_idx)
+        autocorr_plot = pg.PlotItem()
+        autocorr_plot.setXRange(min=np.min(self.plotdata.t_autocorr),
+                                max=np.max(self.plotdata.t_autocorr))
+        autocorr_plot.setYRange(min=0, max=1.05 * np.max(autocorr))
+        self.set_axis(autocorr_plot, 'bottom', label='T (ms)')
+        self.set_axis(autocorr_plot, 'left', label='Number of spikes')
+        plot = pg.BarGraphItem(x=self.plotdata.t_autocorr, height=autocorr, width=0.24,
+                               brush=self.bar_colour)
+        autocorr_plot.addItem(plot)
+
+        template_wf = self.plotdata.get_template_wf(clust_idx)
+        template_plot = pg.PlotItem()
+        plot = pg.PlotCurveItem()
+        template_plot.setXRange(min=np.min(self.plotdata.t_template),
+                                max=np.max(self.plotdata.t_template))
+        self.set_axis(template_plot, 'bottom', label='T (ms)')
+        self.set_axis(template_plot, 'left', label='Amplitude (a.u.)')
+        plot.setData(x=self.plotdata.t_template, y=template_wf, pen=self.kpen_solid)
+        template_plot.addItem(plot)
+
+        clust_layout = pg.GraphicsLayout()
+        clust_layout.addItem(autocorr_plot, 0, 0)
+        clust_layout.addItem(template_plot, 1, 0)
+
+        self.clust_win = ephys_gui.PopupWindow(title=f'Cluster {clust_no}')
+        self.clust_win.closed.connect(self.popup_closed)
+        self.clust_win.moved.connect(self.popup_moved)
+        self.clust_win.popup_widget.addItem(autocorr_plot, 0, 0)
+        self.clust_win.popup_widget.addItem(template_plot, 1, 0)
+        self.cluster_popups.append(self.clust_win)
+        self.activateWindow()
+
+        return clust_no
+
+    def display_subject_scaling(self):
+        if self.subj_win is not None:
+            self.subj_win.close()
+
+        self.subj_win = ScalingWindow(self.loaddata.probe_id, self.loaddata.subj, self.loaddata.one, self.loaddata.brain_atlas)
+
+    def display_region_features(self):
+        self.region_win = RegionFeatureWindow(self.loaddata.one, np.unique(np.array(self.ephysalign.region_id).ravel()),
+                                              self.loaddata.brain_atlas, download=False)
+        self.region_win.show()
+
+    def display_session_notes(self):
+        self.notes_win = ephys_gui.PopupWindow(title='Session notes from Alyx', size=(200, 100),
+                                               graphics=False)
+        notes = QtWidgets.QTextEdit()
+        notes.setReadOnly(True)
+        notes.setLineWrapMode(QtWidgets.QTextEdit.WidgetWidth)
+        notes.setText(self.sess_notes)
+        self.notes_win.layout.addWidget(notes)
+
+    def display_nearby_sessions(self):
+
+        # If no histology we can't get nearby sessions
+        if not self.histology_exists:
+            return
+
+        if not self.nearby:
+            self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
+
+        self.nearby_win = ephys_gui.PopupWindow(title='Nearby Sessions', size=(400, 300),
+                                                graphics=False)
+
+        self.nearby_table = QtWidgets.QTableWidget()
+        self.nearby_table.setRowCount(10)
+        self.nearby_table.setColumnCount(3)
+
+        self.nearby_table.setHorizontalHeaderItem(0, QtWidgets.QTableWidgetItem('Session'))
+        self.nearby_table.setHorizontalHeaderItem(1, QtWidgets.QTableWidgetItem('dist'))
+        self.nearby_table.setHorizontalHeaderItem(2, QtWidgets.QTableWidgetItem('dist_mlap'))
+        self.nearby_table.setSortingEnabled(True)
+        for iT, (near, dist, dist_mlap) in enumerate(zip(self.nearby, self.dist, self.dist_mlap)):
+            sess_item = QtWidgets.QTableWidgetItem(near)
+            dist_item = QtWidgets.QTableWidgetItem()
+            dist_item.setData(0, int(dist))
+            dist_mlap_item = QtWidgets.QTableWidgetItem()
+            dist_mlap_item.setData(0, int(dist_mlap))
+            self.nearby_table.setItem(iT, 0, sess_item)
+            self.nearby_table.setItem(iT, 1, dist_item)
+            self.nearby_table.setItem(iT, 2, dist_mlap_item)
+
+        self.nearby_win.layout.addWidget(self.nearby_table)
+
+    def popup_closed(self, popup):
+        popup_idx = [iP for iP, pop in enumerate(self.cluster_popups) if pop == popup][0]
+        self.cluster_popups.pop(popup_idx)
+
+    def popup_moved(self):
+        self.activateWindow()
+
+    def close_popups(self):
+        for pop in self.cluster_popups:
+            pop.blockSignals(True)
+            pop.close()
+        self.cluster_popups = []
+
+    def minimise_popups(self):
+        self.popup_status = not self.popup_status
+        if self.popup_status:
+            for pop in self.cluster_popups:
+                pop.showNormal()
+            self.activateWindow()
+        else:
+            for pop in self.cluster_popups:
+                pop.showMinimized()
+            self.activateWindow()
+
+
+    def describe_labels_pressed(self):
+
+        if self.selected_region:
+            idx = np.where(self.hist_regions['left'] == self.selected_region)[0]
+            if not np.any(idx):
+                idx = np.where(self.hist_regions['right'] == self.selected_region)[0]
+            if not np.any(idx):
+                idx = np.array([0])
+
+        print('here')
+        self.label_win = ephys_gui.RegionLookup._get_or_create('Stucture Info', allen=self.allen)
+
+        # win.label_selected(idx)
+
+
+
+
+
+    def prepare_shank_data(self, shank):
+        shank_picks, shank_feature, shank_track = self.loaddata.get_alignment_for_insertion(shank)
+        if shank_picks is None:
+            return None
+        shank_data, shank_path = self.loaddata.get_probe_data(shank['name'])
+        shank_align = EphysAlignment(shank_picks, shank_data['channels']['localCoordinates'][:, 1],
+                                     track_prev=shank_track,
+                                     feature_prev=shank_feature,
+                                     brain_atlas=self.loaddata.brain_atlas)
+
+        shank_plot = pd.PlotData(shank_path, shank_data, 0)
+        chn_data = shank_plot.get_channel_data()
+        clust_data = shank_plot.get_cluster_data()
+
+        shank_channels = shank_align.get_channel_locations(shank_align.feature_init, shank_align.track_init)
+
+        chn_data['x'] = shank_channels[:, 0]
+        chn_data['y'] = shank_channels[:, 1]
+        chn_data['z'] = shank_channels[:, 2]
+
+        clust_data['x'] = chn_data['x'][shank_data['clusters']['channels']]
+        clust_data['y'] = chn_data['y'][shank_data['clusters']['channels']]
+        clust_data['z'] = chn_data['z'][shank_data['clusters']['channels']]
+
+        clust_idx = dict()
+        clust_idx['all'] = shank_plot.clust
+
+        for filter_type in ['KS good', 'KS mua', 'IBL good']:
+            shank_plot.filter_units(filter_type)
+            clust_idx[filter_type] = shank_plot.clust
+
+        return chn_data, clust_data, clust_idx
+
+    def set_unity_xyz(self):
+        for i, a in enumerate(['x', 'y', 'z']):
+            self.unity_data[self.loaddata.probe_label]['channels'][a] = self.xyz_channels[:, i]
+            self.unity_data[self.loaddata.probe_label]['clusters'][a] = (self.xyz_channels[:, i][self.cluster_channels])
+
+    def toggle_unity_regions(self):
+        self.unity_region_status = not self.unity_region_status
+        self.unitydata.toggle_regions(self.unity_region_status)
+
+    def on_point_size_changed(self):
+        self.point_size = self.unity_slider.value() / 100
+        self.unitydata.set_point_size(self.point_size)
+
+        #     if self.unity:
+        #         self.unity_data = {}
+        #         self.unitydata.toggle_regions(False)
+        #         self.unitydata.delete_text()
+        #         self.unitydata.init()
+        #         other_shanks = self.loaddata.get_other_shanks()
+        #         for shank in other_shanks:
+        #             shank_data = self.prepare_shank_data(shank)
+        #             if shank_data is not None:
+        #                 self.unity_data[shank['name']] = {'channels': shank_data[0], 'clusters': shank_data[1],
+        #                                                   'cluster_idx': shank_data[2]}
+        #
+        #         # Fill in for the selected shank
+        #         clust_idx = dict()
+        #         clust_idx['all'] = self.plotdata.clust
+        #
+        #         for filter_type in ['KS good', 'KS mua', 'IBL good']:
+        #             self.plotdata.filter_units(filter_type)
+        #             clust_idx[filter_type] = self.plotdata.clust
+        #
+        #         self.plotdata.filter_units('all')
+        #
+        #         self.unity_data[self.loaddata.probe_label] = {
+        #             'channels': self.plotdata.get_channel_data(),
+        #             'clusters': self.plotdata.get_cluster_data(),
+        #             'cluster_idx': clust_idx,
+        #         }
+        #
+        #         self.set_unity_xyz()
+
+    def plot_unity(self, plot_type=None):
+        plot_type = plot_type or self.unity_plot
+        if plot_type == 'probe':
+            feature = self.probe_options_group.checkedAction().text()
+            points = 'channels'
+        else:
+            feature = self.img_options_group.checkedAction().text()
+            if 'Cluster' not in feature:
+                return
+            points = 'clusters'
+
+        self.unitydata.add_data(self.unity_data, points, feature, self.filter_type, self.point_size,
+                                self.loaddata.brain_atlas)
+        self.unity_plot = plot_type
 
     def save_plots(self, save_path=None):
+        #TODOOOOO improve
         """
         Saves all plots from the GUI into folder
         """
@@ -410,7 +2117,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Reset all axis, put view back to 1 and remove any reference lines
         self.reset_axis_button_pressed()
         self.set_view(view=1, configure=False)
-        self.remove_lines_points()
+        self.remove_reference_lines_from_display()
 
         xlabel_img = self.fig_img.getAxis('bottom').label.toPlainText()
         xlabel_line = self.fig_line.getAxis('bottom').label.toPlainText()
@@ -441,7 +2148,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                                                     self.img_options_group.checkedAction()
                                                     .text() + '.png')))
             self.toggle_plots(self.img_options_group)
-            self.remove_lines_points()
+            self.remove_reference_lines_from_display()
             plot = self.img_options_group.checkedAction()
 
         self.set_font(self.fig_img, 'left', ptsize=8, width=ax_width)
@@ -569,1717 +2276,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         make_overview_plot(image_path, sess_info, save_folder=image_path_overview)
 
-        self.add_lines_points()
+        self.add_reference_lines_to_display()
 
-    def toggle_plots(self, options_group):
-        """
-        Allows user to toggle through image, line, probe and slice plots using keyboard shortcuts
-        Alt+1, Alt+2, Alt+3 and Alt+4 respectively
-        :param options_group: Set of plots to toggle through
-        :type options_group: QtGui.QActionGroup
-        """
-
-        current_act = options_group.checkedAction()
-        actions = options_group.actions()
-        current_idx = [iA for iA, act in enumerate(actions) if act == current_act][0]
-        next_idx = np.mod(current_idx + 1, len(actions))
-        actions[next_idx].setChecked(True)
-        actions[next_idx].trigger()
-
-    """
-    Plot functions
-    """
-    def plot_histology(self, fig, ax='left', movable=True):
-        """
-        Plots histology figure - brain regions that intersect with probe track
-        :param fig: figure on which to plot
-        :type fig: pyqtgraph PlotWidget
-        :param ax: orientation of axis, must be one of 'left' (fig_hist) or 'right' (fig_hist_ref)
-        :type ax: string
-        :param movable: whether probe reference lines can be moved, True for fig_hist, False for
-                        fig_hist_ref
-        :type movable: Bool
-        """
-
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-        fig.clear()
-        self.hist_regions = np.empty((0, 1))
-        axis = fig.getAxis(ax)
-        axis.setTicks([self.hist_data['axis_label']])
-        axis.setZValue(10)
-        self.set_axis(self.fig_hist, 'bottom', pen='w', label='blank')
-
-        # Plot each histology region
-        for ir, reg in enumerate(self.hist_data['region']):
-            colour = QtGui.QColor(*self.hist_data['colour'][ir])
-            region = pg.LinearRegionItem(values=(reg[0], reg[1]),
-                                         orientation=pg.LinearRegionItem.Horizontal,
-                                         brush=colour, movable=False)
-            # Add a white line at the boundary between regions
-            bound = pg.InfiniteLine(pos=reg[0], angle=0, pen='w')
-            fig.addItem(region)
-            fig.addItem(bound)
-            # Need to keep track of each histology region for label pressed interaction
-            self.hist_regions = np.vstack([self.hist_regions, region])
-
-        self.selected_region = self.hist_regions[-2]
-
-        # Boundary for final region
-        bound = pg.InfiniteLine(pos=self.hist_data['region'][-1][1], angle=0,
-                                pen='w')
-
-        fig.addItem(bound)
-        # Add dotted lines to plot to indicate region along probe track where electrode
-        # channels are distributed
-        self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot,
-                                       movable=movable)
-        self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot,
-                                       movable=movable)
-
-        # Lines can be moved to adjust location of channels along the probe track
-        # Ensure distance between bottom and top channel is always constant at 3840um and that
-        # lines can't be moved outside interpolation bounds
-        # Add offset of 1um to keep within bounds of interpolation
-        offset = 1
-        self.tip_pos.setBounds((self.track[self.idx][0] * 1e6 + offset,
-                                self.track[self.idx][-1] * 1e6 -
-                                (self.probe_top + offset)))
-        self.top_pos.setBounds((self.track[self.idx][0] * 1e6 + (self.probe_top + offset),
-                                self.track[self.idx][-1] * 1e6 - offset))
-        self.tip_pos.sigPositionChanged.connect(self.tip_line_moved)
-        self.top_pos.sigPositionChanged.connect(self.top_line_moved)
-
-        # Add lines to figure
-        fig.addItem(self.tip_pos)
-        fig.addItem(self.top_pos)
-
-    def plot_histology_ref(self, fig, ax='right', movable=False):
-        """
-        Plots histology figure - brain regions that intersect with probe track
-        :param fig: figure on which to plot
-        :type fig: pyqtgraph PlotWidget
-        :param ax: orientation of axis, must be one of 'left' (fig_hist) or 'right' (fig_hist_ref)
-        :type ax: string
-        :param movable: whether probe reference lines can be moved, True for fig_hist, False for
-                        fig_hist_ref
-        :type movable: Bool
-        """
-
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        fig.clear()
-        self.hist_ref_regions = np.empty((0, 1))
-        axis = fig.getAxis(ax)
-        axis.setTicks([self.hist_data_ref['axis_label']])
-        axis.setZValue(10)
-        self.set_axis(self.fig_hist_ref, 'bottom', pen='w', label='blank')
-
-        # Plot each histology region
-        for ir, reg in enumerate(self.hist_data_ref['region']):
-            colour = QtGui.QColor(*self.hist_data_ref['colour'][ir])
-            region = pg.LinearRegionItem(values=(reg[0], reg[1]),
-                                         orientation=pg.LinearRegionItem.Horizontal,
-                                         brush=colour, movable=False)
-            bound = pg.InfiniteLine(pos=reg[0], angle=0, pen='w')
-            fig.addItem(region)
-            fig.addItem(bound)
-            self.hist_ref_regions = np.vstack([self.hist_ref_regions, region])
-
-        bound = pg.InfiniteLine(pos=self.hist_data_ref['region'][-1][1], angle=0,
-                                pen='w')
-        fig.addItem(bound)
-        # Add dotted lines to plot to indicate region along probe track where electrode
-        # channels are distributed
-        self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot,
-                                       movable=movable)
-        self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot,
-                                       movable=movable)
-        # Add lines to figure
-        fig.addItem(self.tip_pos)
-        fig.addItem(self.top_pos)
-
-    def plot_histology_nearby(self, fig, ax='right', movable=False):
-        """
-        Plots histology figure - brain regions that intersect with probe track
-        :param fig: figure on which to plot
-        :type fig: pyqtgraph PlotWidget
-        :param ax: orientation of axis, must be one of 'left' (fig_hist) or 'right' (fig_hist_ref)
-        :type ax: string
-        :param movable: whether probe reference lines can be moved, True for fig_hist, False for
-                        fig_hist_ref
-        :type movable: Bool
-        """
-
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        fig.clear()
-        self.hist_ref_regions = np.empty((0, 1))
-        axis = fig.getAxis(ax)
-        axis.setTicks([self.hist_data_ref['axis_label']])
-        axis.setZValue(10)
-
-        self.set_axis(fig, 'bottom', label='dist to boundary (um)')
-        fig.setXRange(min=0, max=100)
-        fig.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra,
-                      padding=self.pad)
-
-        # Plot nearby regions
-        for ir, (x, y, c) in enumerate(zip(self.hist_nearby_x, self.hist_nearby_y,
-                                           self.hist_nearby_col)):
-            colour = QtGui.QColor(c)
-            plot = pg.PlotCurveItem()
-            plot.setData(x=x, y=y * 1e6, fillLevel=10, fillOutline=True)
-            plot.setBrush(colour)
-            plot.setPen(colour)
-            fig.addItem(plot)
-
-        for ir, (x, y, c) in enumerate(zip(self.hist_nearby_parent_x, self.hist_nearby_parent_y,
-                                           self.hist_nearby_parent_col)):
-            colour = QtGui.QColor(c)
-            colour.setAlpha(70)
-            plot = pg.PlotCurveItem()
-            plot.setData(x=x, y=y * 1e6, fillLevel=10, fillOutline=True)
-            plot.setBrush(colour)
-            plot.setPen(colour)
-            fig.addItem(plot)
-
-        # Add dotted lines to plot to indicate region along probe track where electrode
-        # channels are distributed
-        self.tip_pos = pg.InfiniteLine(pos=self.probe_tip, angle=0, pen=self.kpen_dot,
-                                       movable=movable)
-        self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot,
-                                       movable=movable)
-        # Add lines to figure
-        fig.addItem(self.tip_pos)
-        fig.addItem(self.top_pos)
-
-    def offset_hist_data(self):
-        """
-        Offset location of probe tip along probe track
-        """
-        # If no histology we can't do alignment
-        if not self.histology_exists:
-            return
-
-        self.track[self.idx] = (self.track[self.idx_prev] + self.tip_pos.value() / 1e6)
-        self.features[self.idx] = (self.features[self.idx_prev])
-
-        self.get_scaled_histology()
-
-    def scale_hist_data(self):
-        """
-        Scale brain regions along probe track
-        """
-
-        # If no histology we can't do alignment
-        if not self.histology_exists:
-            return
-
-        # Track --> histology plot
-        line_track = np.array([line[0].pos().y() for line in self.lines_tracks]) / 1e6
-        # Feature --> ephys data plots
-        line_feature = np.array([line[0].pos().y() for line in self.lines_features]) / 1e6
-        depths_track = np.sort(np.r_[self.track[self.idx_prev][[0, -1]], line_track])
-
-        self.track[self.idx] = self.ephysalign.feature2track(depths_track,
-                                                             self.features[self.idx_prev],
-                                                             self.track[self.idx_prev])
-
-        self.features[self.idx] = np.sort(np.r_[self.features[self.idx_prev]
-                                                [[0, -1]], line_feature])
-
-        if (self.features[self.idx].size >= 5) & self.lin_fit:
-            self.features[self.idx], self.track[self.idx] = \
-                self.ephysalign.adjust_extremes_linear(self.features[self.idx],
-                                                       self.track[self.idx], self.extend_feature)
-
-        else:
-            self.track[self.idx] = self.ephysalign.adjust_extremes_uniform(self.features[self.idx],
-                                                                           self.track[self.idx])
-
-        self.get_scaled_histology()
-
-    def get_scaled_histology(self):
-        if self.hist_mapping == 'Allen':
-            self.hist_data['region'], self.hist_data['axis_label'] \
-                = self.ephysalign.scale_histology_regions(self.features[self.idx], self.track[self.idx])
-            self.hist_data['colour'] = self.ephysalign.region_colour
-
-            self.scale_data['region'], self.scale_data['scale'] \
-                = self.ephysalign.get_scale_factor(self.hist_data['region'])
-
-            self.hist_data_ref['region'], self.hist_data_ref['axis_label'] \
-                = self.ephysalign.scale_histology_regions(self.ephysalign.track_extent,
-                                                          self.ephysalign.track_extent)
-            self.hist_data_ref['colour'] = self.ephysalign.region_colour
-
-        elif self.hist_mapping == 'FP':
-            self.hist_data['region'], self.hist_data['axis_label'] \
-                = self.ephysalign.scale_histology_regions(self.features[self.idx], self.track[self.idx], region=self.region_fp,
-                                                          region_label=self.region_label_fp)
-            self.hist_data['colour'] = self.region_colour_fp
-            self.scale_data['region'], self.scale_data['scale'] \
-                = self.ephysalign.get_scale_factor(self.hist_data['region'], region_orig=self.region_fp)
-
-            self.hist_data_ref['region'], self.hist_data_ref['axis_label'] \
-                = self.ephysalign.scale_histology_regions(self.ephysalign.track_extent, self.ephysalign.track_extent,
-                                                          region=self.region_fp, region_label=self.region_label_fp)
-            self.hist_data_ref['colour'] = self.region_colour_fp
-
-    def plot_scale_factor(self):
-        """
-        Plots the scale factor applied to brain regions along probe track, displayed
-        alongside histology figure
-        """
-
-        # If no histology we can't do alignment
-        if not self.histology_exists:
-            return
-
-        self.fig_scale.clear()
-        self.scale_regions = np.empty((0, 1))
-        self.scale_factor = self.scale_data['scale']
-        scale_factor = self.scale_data['scale'] - 0.5
-        color_bar = cb.ColorBar('seismic')
-        cbar = color_bar.makeColourBar(20, 5, self.fig_scale_cb, min=0.5, max=1.5,
-                                       label='Scale Factor')
-        colours = color_bar.map.mapToQColor(scale_factor)
-
-        for ir, reg in enumerate(self.scale_data['region']):
-            region = pg.LinearRegionItem(values=(reg[0], reg[1]),
-                                         orientation=pg.LinearRegionItem.Horizontal,
-                                         brush=colours[ir], movable=False)
-            bound = pg.InfiniteLine(pos=reg[0], angle=0, pen=colours[ir])
-
-            self.fig_scale.addItem(region)
-            self.fig_scale.addItem(bound)
-            self.scale_regions = np.vstack([self.scale_regions, region])
-
-        bound = pg.InfiniteLine(pos=self.scale_data['region'][-1][1], angle=0,
-                                pen=colours[-1])
-
-        self.fig_scale.addItem(bound)
-
-        self.fig_scale.setYRange(min=self.probe_tip - self.probe_extra,
-                                 max=self.probe_top + self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_scale, 'bottom', pen='w', label='blank')
-        self.fig_scale_cb.addItem(cbar)
-
-    def plot_fit(self):
-        """
-        Plots the scale factor and offset applied to channels along depth of probe track
-        relative to orignal position of channels
-        """
-
-        # If no histology we can't do alignment
-        if not self.histology_exists:
-            return
-
-        self.fit_plot.setData(x=self.features[self.idx] * 1e6,
-                              y=self.track[self.idx] * 1e6)
-        self.fit_scatter.setData(x=self.features[self.idx] * 1e6,
-                                 y=self.track[self.idx] * 1e6)
-
-        depth_lin = self.ephysalign.feature2track_lin(self.depth / 1e6, self.features[self.idx],
-                                                      self.track[self.idx])
-        if np.any(depth_lin):
-            self.fit_plot_lin.setData(x=self.depth, y=depth_lin * 1e6)
-        else:
-            self.fit_plot_lin.setData()
-
-    def plot_slice(self, data, img_type):
-
-        # If no histology we can't do alignment
-        if not self.histology_exists:
-            return
-
-        self.fig_slice.clear()
-        self.slice_chns = []
-        self.slice_lines = []
-        img = pg.ImageItem()
-        img.setImage(data[img_type])
-        transform = [data['scale'][0], 0., 0., 0., data['scale'][1], 0., data['offset'][0],
-                     data['offset'][1], 1.]
-        img.setTransform(QtGui.QTransform(*transform))
-
-        if img_type == 'label':
-            self.fig_slice_layout.removeItem(self.slice_item)
-            self.fig_slice_layout.addItem(self.fig_slice_hist_alt, 0, 1)
-            self.slice_item = self.fig_slice_hist_alt
-        else:
-            color_bar = cb.ColorBar('cividis')
-            lut = color_bar.getColourMap()
-            img.setLookupTable(lut)
-
-            self.fig_slice_layout.removeItem(self.slice_item)
-            self.fig_slice_hist = pg.HistogramLUTItem()
-            self.fig_slice_hist.axis.hide()
-            self.fig_slice_hist.setImageItem(img)
-            self.fig_slice_hist.gradient.setColorMap(color_bar.map)
-            self.fig_slice_hist.autoHistogramRange()
-            self.fig_slice_layout.addItem(self.fig_slice_hist, 0, 1)
-            hist_levels = self.fig_slice_hist.getLevels()
-            hist_val, hist_count = img.getHistogram()
-            upper_idx = np.where(hist_count > 10)[0][-1]
-            upper_val = hist_val[upper_idx]
-            if hist_levels[0] != 0:
-                self.fig_slice_hist.setLevels(min=hist_levels[0], max=upper_val)
-            self.slice_item = self.fig_slice_hist
-
-        self.fig_slice.addItem(img)
-        self.traj_line = pg.PlotCurveItem()
-        self.traj_line.setData(x=self.xyz_track[:, 0], y=self.xyz_track[:, 2], pen=self.kpen_solid)
-        self.fig_slice.addItem(self.traj_line)
-        self.plot_channels()
-
-    def plot_channels(self):
-
-        # If no histology we can't do alignment
-        if not self.histology_exists:
-            return
-
-        self.channel_status = True
-        self.xyz_channels = self.ephysalign.get_channel_locations(self.features[self.idx],
-                                                                  self.track[self.idx])
-        if not self.slice_chns:
-            self.slice_lines = []
-            self.slice_chns = pg.ScatterPlotItem()
-            self.slice_chns.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2], pen='r',
-                                    brush='r')
-            self.fig_slice.addItem(self.slice_chns)
-            track_lines = self.ephysalign.get_perp_vector(self.features[self.idx],
-                                                          self.track[self.idx])
-
-            for ref_line in track_lines:
-                line = pg.PlotCurveItem()
-                line.setData(x=ref_line[:, 0], y=ref_line[:, 2], pen=self.kpen_dot)
-                self.fig_slice.addItem(line)
-                self.slice_lines.append(line)
-
-        else:
-            for line in self.slice_lines:
-                self.fig_slice.removeItem(line)
-            self.slice_lines = []
-            track_lines = self.ephysalign.get_perp_vector(self.features[self.idx],
-                                                          self.track[self.idx])
-
-            for ref_line in track_lines:
-                line = pg.PlotCurveItem()
-                line.setData(x=ref_line[:, 0], y=ref_line[:, 2], pen=self.kpen_dot)
-                self.fig_slice.addItem(line)
-                self.slice_lines.append(line)
-            self.slice_chns.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2], pen='r',
-                                    brush='r')
-
-    def plot_scatter(self, data):
-        """
-        Plots a 2D scatter plot with electrophysiology data
-        param data: dictionary of data to plot
-            {'x': x coordinate of data, np.array((npoints)), float
-             'y': y coordinate of data, np.array((npoints)), float
-             'size': size of data points, np.array((npoints)), float
-             'colour': colour of data points, np.array((npoints)), QtGui.QColor
-             'xrange': range to display of x axis, np.array([min range, max range]), float
-             'xaxis': label for xaxis, string
-            }
-        type data: dict
-        """
-        if not data:
-            print('data for this plot not available')
-            return
-        else:
-            [self.fig_img.removeItem(plot) for plot in self.img_plots]
-            [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
-
-            self.img_plots = []
-            self.img_cbars = []
-
-            size = data['size'].tolist()
-            symbol = data['symbol'].tolist()
-
-            color_bar = cb.ColorBar(data['cmap'])
-            cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=np.min(data['levels'][0]),
-                                           max=np.max(data['levels'][1]), label=data['title'])
-            self.fig_img_cb.addItem(cbar)
-            self.img_cbars.append(cbar)
-
-            if type(np.any(data['colours'])) == QtGui.QColor:
-                brush = data['colours'].tolist()
-                plot = pg.ScatterPlotItem()
-                plot.setData(x=data['x'], y=data['y'],
-                             symbol=symbol, size=size, brush=brush, pen=data['pen'])
-
-            else:
-                brush = color_bar.getBrush(data['colours'],
-                                           levels=[data['levels'][0], data['levels'][1]])
-                plot = pg.ScatterPlotItem()
-                plot.setData(x=data['x'], y=data['y'],
-                             symbol=symbol, size=size, brush=brush, pen=data['pen'])
-
-            self.fig_img.addItem(plot)
-            self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1],
-                                   padding=0)
-            self.fig_img.setYRange(min=self.probe_tip - self.probe_extra,
-                                   max=self.probe_top + self.probe_extra, padding=self.pad)
-            self.set_axis(self.fig_img, 'bottom', label=data['xaxis'])
-            self.y_scale = 1
-            self.img_plots.append(plot)
-            self.data_plot = plot
-            self.xrange = data['xrange']
-
-            if data['cluster']:
-                self.data = data['x']
-                self.data_plot.sigClicked.connect(self.cluster_clicked)
-
-    def plot_line(self, data):
-        """
-        Plots a 1D line plot with electrophysiology data
-        param data: dictionary of data to plot
-            {'x': x coordinate of data, np.array((npoints)), float
-             'y': y coordinate of data, np.array((npoints)), float
-             'xrange': range to display of x axis, np.array([min range, max range]), float
-             'xaxis': label for xaxis, string
-            }
-        type data: dict
-        """
-        if not data:
-            print('data for this plot not available')
-            return
-        else:
-            [self.fig_line.removeItem(plot) for plot in self.line_plots]
-            self.line_plots = []
-            line = pg.PlotCurveItem()
-            line.setData(x=data['x'], y=data['y'])
-            line.setPen(self.kpen_solid)
-            self.fig_line.addItem(line)
-            self.fig_line.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
-            self.fig_line.setYRange(min=self.probe_tip - self.probe_extra,
-                                    max=self.probe_top + self.probe_extra, padding=self.pad)
-            self.set_axis(self.fig_line, 'bottom', label=data['xaxis'])
-            self.line_plots.append(line)
-
-    def plot_probe(self, data, bounds=None):
-        """
-        Plots a 2D image with probe geometry
-        param data: dictionary of data to plot
-            {'img': image data for each channel bank, list of np.array((1,ny)), list
-             'scale': scaling to apply to each image, list of np.array([xscale,yscale]), list
-             'offset': offset to apply to each image, list of np.array([xoffset,yoffset]), list
-             'levels': colourbar extremes np.array([min val, max val]), float
-             'cmap': colourmap to use, string
-             'xrange': range to display of x axis, np.array([min range, max range]), float
-             'title': description to place on colorbar, string
-            }
-        type data: dict
-        """
-        if not data:
-            print('data for this plot not available')
-            return
-        else:
-            [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
-            [self.fig_probe_cb.removeItem(cbar) for cbar in self.probe_cbars]
-            [self.fig_probe.removeItem(line) for line in self.probe_bounds]
-            self.set_axis(self.fig_probe_cb, 'top', pen='w')
-            self.probe_plots = []
-            self.probe_cbars = []
-            self.probe_bounds = []
-            color_bar = cb.ColorBar(data['cmap'])
-            lut = color_bar.getColourMap()
-            for img, scale, offset in zip(data['img'], data['scale'], data['offset']):
-                image = pg.ImageItem()
-                image.setImage(img)
-                transform = [scale[0], 0., 0., 0., scale[1], 0., offset[0],
-                             offset[1], 1.]
-                image.setTransform(QtGui.QTransform(*transform))
-                image.setLookupTable(lut)
-                image.setLevels((data['levels'][0], data['levels'][1]))
-                self.fig_probe.addItem(image)
-                self.probe_plots.append(image)
-
-            cbar = color_bar.makeColourBar(20, 5, self.fig_probe_cb, min=data['levels'][0],
-                                           max=data['levels'][1], label=data['title'], lim=True)
-            self.fig_probe_cb.addItem(cbar)
-            self.probe_cbars.append(cbar)
-
-            self.fig_probe.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
-            self.fig_probe.setYRange(min=self.probe_tip - self.probe_extra,
-                                     max=self.probe_top + self.probe_extra, padding=self.pad)
-            # so stupid!!!!!
-            self.set_axis(self.fig_probe, 'bottom', pen='w', label='blank')
-            if bounds is not None:
-                # add some infinite line stuff
-                for bound in bounds:
-                    line = pg.InfiniteLine(pos=bound, angle=0, pen='w')
-                    self.fig_probe.addItem(line)
-                    self.probe_bounds.append(line)
-
-    def plot_image(self, data):
-        """
-        Plots a 2D image with with electrophysiology data
-        param data: dictionary of data to plot
-            {'img': image data, np.array((nx,ny)), float
-             'scale': scaling to apply to each axis, np.array([xscale,yscale]), float
-             'levels': colourbar extremes np.array([min val, max val]), float
-             'offset': offset to apply to each image, np.array([xoffset,yoffset]), float
-             'cmap': colourmap to use, string
-             'xrange': range to display of x axis, np.array([min range, max range]), float
-             'xaxis': label for xaxis, string
-             'title': description to place on colorbar, string
-            }
-        type data: dict
-        """
-        if not data:
-            print('data for this plot not available')
-            return
-        else:
-            [self.fig_img.removeItem(plot) for plot in self.img_plots]
-            [self.fig_img_cb.removeItem(cbar) for cbar in self.img_cbars]
-            self.set_axis(self.fig_img_cb, 'top', pen='w')
-            self.img_plots = []
-            self.img_cbars = []
-
-            image = pg.ImageItem()
-            image.setImage(data['img'])
-            transform = [data['scale'][0], 0., 0., 0., data['scale'][1], 0., data['offset'][0],
-                         data['offset'][1], 1.]
-            image.setTransform(QtGui.QTransform(*transform))
-            cmap = data.get('cmap', [])
-            if cmap:
-                color_bar = cb.ColorBar(data['cmap'])
-                lut = color_bar.getColourMap()
-                image.setLookupTable(lut)
-                image.setLevels((data['levels'][0], data['levels'][1]))
-                cbar = color_bar.makeColourBar(20, 5, self.fig_img_cb, min=data['levels'][0],
-                                               max=data['levels'][1], label=data['title'])
-                self.fig_img_cb.addItem(cbar)
-                self.img_cbars.append(cbar)
-            else:
-                image.setLevels((1, 0))
-
-            self.fig_img.addItem(image)
-            self.img_plots.append(image)
-            self.fig_img.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
-            self.fig_img.setYRange(min=self.probe_tip - self.probe_extra,
-                                   max=self.probe_top + self.probe_extra, padding=self.pad)
-            # TODO need to make this work, at the moment messes things up!
-            # self.fig_img.setLimits(xMin=data['xrange'][0], xMax=data['xrange'][1])
-            #                        yMin=self.probe_tip - self.probe_extra - self.pad,
-            #                        yMax=self.probe_top + self.probe_extra + self.pad)
-            self.set_axis(self.fig_img, 'bottom', label=data['xaxis'])
-            self.y_scale = data['scale'][1]
-            self.x_scale = data['scale'][0]
-            self.data_plot = image
-            self.xrange = data['xrange']
-
-    def plot_unity(self, plot_type=None):
-        plot_type = plot_type or self.unity_plot
-        if plot_type == 'probe':
-            feature = self.probe_options_group.checkedAction().text()
-            points = 'channels'
-        else:
-            feature = self.img_options_group.checkedAction().text()
-            if 'Cluster' not in feature:
-                return
-            points = 'clusters'
-
-        self.unitydata.add_data(self.unity_data, points, feature, self.filter_type, self.point_size,
-                                self.loaddata.brain_atlas)
-        self.unity_plot = plot_type
-
-    """
-    Interaction functions
-    """
-
-    def on_subject_selected(self, idx):
-        """
-        Triggered when subject is selected from drop down list options
-        :param idx: index chosen subject (item) in drop down list
-        :type idx: int
-        """
-        self.data_status = False
-        self.sess_list.clear()
-        sessions = self.loaddata.get_sessions(idx)
-        self.populate_lists(sessions, self.sess_list, self.sess_combobox)
-        self.prev_alignments, self.histology_exists = self.loaddata.get_info(0)
-        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-        self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
-        # For IBL case at the moment we only using single shank
-        self.current_shank_idx = 0
-
-    def on_session_selected(self, idx):
-        """
-        Triggered when session is selected from drop down list options
-        :param idx: index of chosen session (item) in drop down list
-        :type idx: int
-        """
-        self.data_status = False
-        self.prev_alignments, self.histology_exists = self.loaddata.get_info(idx)
-        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-        self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
-
-    def on_folder_selected(self):
-        """
-        Triggered in offline mode when folder button is clicked
-        """
-        self.data_status = False
-        folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
-        self.folder_line.setText(str(folder_path))
-        self.prev_alignments, shank_options = self.loaddata.get_info(folder_path)
-        self.populate_lists(shank_options, self.shank_list, self.shank_combobox)
-        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-        self.on_shank_selected(0)
-
-    def on_shank_selected(self, idx):
-        """
-        Triggered in offline mode for selecting shank when using NP2.0
-        """
-        self.data_status = False
-        self.current_shank_idx = idx
-        # Update prev_alignments
-        self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
-        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-        self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
-
-    def on_alignment_selected(self, idx):
-        self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(idx)
-
-    def add_alignment_pressed(self):
-        file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
-        if file_path.name != 'prev_alignments.json':
-            print("Wrong file selected, must be of format prev_alignments.json")
-            return
-        else:
-            self.prev_alignments = self.loaddata.add_extra_alignments(file_path)
-            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-            self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
-
-    def data_button_pressed(self):
-        """
-        Triggered when Get Data button pressed, uses subject and session info to find eid and
-        downloads and computes data needed for GUI display
-        """
-
-        # Clear all plots from previous session
-        [self.fig_img.removeItem(plot) for plot in self.img_plots]
-        [self.fig_img.removeItem(cbar) for cbar in self.img_cbars]
-        [self.fig_line.removeItem(plot) for plot in self.line_plots]
-        [self.fig_probe.removeItem(plot) for plot in self.probe_plots]
-        [self.fig_probe.removeItem(cbar) for cbar in self.probe_cbars]
-        self.fig_slice.clear()
-        self.fig_hist.clear()
-        self.ax_hist.setTicks([])
-        self.fig_hist_ref.clear()
-        self.ax_hist_ref.setTicks([])
-        self.fig_scale.clear()
-        self.fit_plot.setData()
-        self.fit_scatter.setData()
-        self.remove_lines_points()
-        self.init_variables()
-
-        # Only run once
-        if not self.data_status:
-            self.probe_path, self.chn_depths, self.sess_notes, data = \
-                self.loaddata.get_data()
-            self.cluster_channels = data['clusters']['channels']
-            if not self.probe_path:
-                return
-
-        # Only get histology specific stuff if the histology tracing exists
-        if self.histology_exists:
-            self.xyz_picks = self.loaddata.get_xyzpicks()
-
-            if np.any(self.feature_prev):
-                self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
-                                                 track_prev=self.track_prev,
-                                                 feature_prev=self.feature_prev,
-                                                 brain_atlas=self.loaddata.brain_atlas)
-            else:
-                self.ephysalign = EphysAlignment(self.xyz_picks, self.chn_depths,
-                                                 brain_atlas=self.loaddata.brain_atlas)
-
-            self.region_fp, self.region_label_fp, self.region_colour_fp, _ \
-                = EphysAlignment.get_histology_regions(self.ephysalign.xyz_samples, self.ephysalign.sampling_trk,
-                                                       self.loaddata.franklin_atlas)
-
-            self.features[self.idx], self.track[self.idx], self.xyz_track \
-                = self.ephysalign.get_track_and_feature()
-
-            self.xyz_channels = self.ephysalign.get_channel_locations(self.features[self.idx], self.track[self.idx])
-
-            self.get_scaled_histology()
-
-        # If we have not loaded in the data before then we load eveything we need
-        if not self.data_status:
-            self.plotdata = pd.PlotData(self.probe_path, data,
-                                        self.current_shank_idx)
-            self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
-            self.scat_drift_data = self.plotdata.get_depth_data_scatter()
-            (self.scat_fr_data, self.scat_p2t_data,
-             self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
-            self.img_corr_data = self.plotdata.get_correlation_data_img()
-            self.img_fr_data = self.plotdata.get_fr_img()
-            self.img_rms_APdata, self.probe_rms_APdata = self.plotdata.get_rms_data_img_probe('AP')
-            self.img_rms_LFPdata, self.probe_rms_LFPdata = self.plotdata.get_rms_data_img_probe(
-                'LF')
-            self.img_lfp_data, self.probe_lfp_data = self.plotdata.get_lfp_spectrum_data()
-            self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
-            self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
-            self.img_stim_data = self.plotdata.get_passive_events()
-            if not self.offline:
-                self.img_raw_data = self.plotdata.get_raw_data_image(self.loaddata.probe_id, one=self.loaddata.one)
-            else:
-                self.img_raw_data = {}
-            if self.histology_exists:
-                self.slice_data, self.fp_slice_data = self.loaddata.get_slice_images(self.ephysalign.xyz_samples)
-            else:
-                # probably need to return an empty array of things
-                self.slice_data = {}
-                self.fp_slice_data = None
-
-            if self.unity:
-                self.unity_data = {}
-                self.unitydata.toggle_regions(False)
-                self.unitydata.delete_text()
-                self.unitydata.init()
-                other_shanks = self.loaddata.get_other_shanks()
-                for shank in other_shanks:
-                    shank_data = self.prepare_shank_data(shank)
-                    if shank_data is not None:
-                        self.unity_data[shank['name']] = {'channels': shank_data[0], 'clusters': shank_data[1],
-                                                          'cluster_idx': shank_data[2]}
-
-                # Fill in for the selected shank
-                clust_idx = dict()
-                clust_idx['all'] = self.plotdata.clust
-
-                for filter_type in ['KS good', 'KS mua', 'IBL good']:
-                    self.plotdata.filter_units(filter_type)
-                    clust_idx[filter_type] = self.plotdata.clust
-
-                self.plotdata.filter_units('all')
-
-                self.unity_data[self.loaddata.probe_label] = {
-                    'channels': self.plotdata.get_channel_data(),
-                    'clusters': self.plotdata.get_cluster_data(),
-                    'cluster_idx': clust_idx,
-                }
-
-                self.set_unity_xyz()
-
-            self.data_status = True
-            self.init_menubar()
-        else:
-            self.set_lims(np.min([0, self.plotdata.chn_min]), self.plotdata.chn_max)
-
-        # Initialise checked plots
-        self.img_init.setChecked(True)
-        self.line_init.setChecked(True)
-        self.probe_init.setChecked(True)
-        self.unit_init.setChecked(True)
-        self.slice_init.setChecked(True)
-
-        # Initialise ephys plots
-        self.plot_image(self.img_fr_data)
-        self.plot_probe(self.probe_rms_APdata)
-        self.plot_line(self.line_fr_data)
-
-        # Initialise histology plots
-        self.plot_histology_ref(self.fig_hist_ref)
-        self.plot_histology(self.fig_hist)
-        self.label_status = False
-        self.toggle_labels_button_pressed()
-        self.plot_scale_factor()
-        if np.any(self.feature_prev):
-            self.create_lines(self.feature_prev[1:-1] * 1e6)
-        # Initialise slice and fit images
-        self.plot_fit()
-        self.plot_slice(self.slice_data, 'hist_rd')
-
-        # Initialise unity plot
-        if self.unity:
-            self.unitydata.add_regions(np.unique(self.hist_data['axis_label'][:, 1]))
-            self.set_unity_xyz()
-            self.plot_unity('probe')
-
-        # Only configure the view the first time the GUI is launched
-        self.set_view(view=1, configure=self.configure)
-        self.configure = False
-
-    def prepare_shank_data(self, shank):
-        shank_picks, shank_feature, shank_track = self.loaddata.get_alignment_for_insertion(shank)
-        if shank_picks is None:
-            return None
-        shank_data, shank_path = self.loaddata.get_probe_data(shank['name'])
-        shank_align = EphysAlignment(shank_picks, shank_data['channels']['localCoordinates'][:, 1],
-                                     track_prev=shank_track,
-                                     feature_prev=shank_feature,
-                                     brain_atlas=self.loaddata.brain_atlas)
-
-        shank_plot = pd.PlotData(shank_path, shank_data, 0)
-        chn_data = shank_plot.get_channel_data()
-        clust_data = shank_plot.get_cluster_data()
-
-        shank_channels = shank_align.get_channel_locations(shank_align.feature_init, shank_align.track_init)
-
-        chn_data['x'] = shank_channels[:, 0]
-        chn_data['y'] = shank_channels[:, 1]
-        chn_data['z'] = shank_channels[:, 2]
-
-        clust_data['x'] = chn_data['x'][shank_data['clusters']['channels']]
-        clust_data['y'] = chn_data['y'][shank_data['clusters']['channels']]
-        clust_data['z'] = chn_data['z'][shank_data['clusters']['channels']]
-
-        clust_idx = dict()
-        clust_idx['all'] = shank_plot.clust
-
-        for filter_type in ['KS good', 'KS mua', 'IBL good']:
-            shank_plot.filter_units(filter_type)
-            clust_idx[filter_type] = shank_plot.clust
-
-        return chn_data, clust_data, clust_idx
-
-    def set_unity_xyz(self):
-        for i, a in enumerate(['x', 'y', 'z']):
-            self.unity_data[self.loaddata.probe_label]['channels'][a] = self.xyz_channels[:, i]
-            self.unity_data[self.loaddata.probe_label]['clusters'][a] = (self.xyz_channels[:, i][self.cluster_channels])
-
-    def compute_nearby_boundaries(self):
-
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        nearby_bounds = self.ephysalign.get_nearest_boundary(self.ephysalign.xyz_samples,
-                                                             self.allen, steps=6,
-                                                             brain_atlas=self.loaddata.brain_atlas)
-        [self.hist_nearby_x, self.hist_nearby_y,
-         self.hist_nearby_col] = self.ephysalign.arrange_into_regions(
-            self.ephysalign.sampling_trk, nearby_bounds['id'], nearby_bounds['dist'],
-            nearby_bounds['col'])
-
-        [self.hist_nearby_parent_x,
-         self.hist_nearby_parent_y,
-         self.hist_nearby_parent_col] = self.ephysalign.arrange_into_regions(
-            self.ephysalign.sampling_trk, nearby_bounds['parent_id'], nearby_bounds['parent_dist'],
-            nearby_bounds['parent_col'])
-
-    def toggle_histology_button_pressed(self):
-        self.hist_bound_status = not self.hist_bound_status
-
-        if not self.hist_bound_status:
-            if self.hist_nearby_x is None:
-                self.compute_nearby_boundaries()
-
-            self.plot_histology_nearby(self.fig_hist_ref)
-        else:
-            self.plot_histology_ref(self.fig_hist_ref)
-
-    def toggle_histology_map_button_pressed(self):
-
-        if self.hist_mapping == 'Allen':
-            self.hist_mapping = 'FP'
-        else:
-            self.hist_mapping = 'Allen'
-
-        self.get_scaled_histology()
-        self.plot_histology(self.fig_hist)
-        self.plot_histology_ref(self.fig_hist_ref)
-        self.remove_lines_points()
-        self.add_lines_points()
-
-    def toggle_unity_regions(self):
-        self.unity_region_status = not self.unity_region_status
-        self.unitydata.toggle_regions(self.unity_region_status)
-
-    def on_point_size_changed(self):
-        self.point_size = self.unity_slider.value() / 100
-        self.unitydata.set_point_size(self.point_size)
-
-    def filter_unit_pressed(self, filter_type):
-        self.filter_type = filter_type
-        self.plotdata.filter_units(self.filter_type)
-        self.scat_drift_data = self.plotdata.get_depth_data_scatter()
-        (self.scat_fr_data, self.scat_p2t_data,
-         self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
-        self.img_corr_data = self.plotdata.get_correlation_data_img()
-        self.img_fr_data = self.plotdata.get_fr_img()
-        self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
-        self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
-        self.img_stim_data = self.plotdata.get_passive_events()
-        self.img_init.setChecked(True)
-        self.line_init.setChecked(True)
-        self.probe_init.setChecked(True)
-        self.plot_image(self.img_fr_data)
-        self.plot_probe(self.probe_rms_APdata)
-        self.plot_line(self.line_fr_data)
-
-        if self.unity:
-            self.unity_plot = 'probe'
-            self.set_unity_xyz()
-            self.plot_unity()
-
-    def fit_button_pressed(self):
-        """
-        Triggered when fit button or Enter key pressed, applies scaling factor to brain regions
-        according to locations of reference lines on ephys and histology plots. Updates all plots
-        and indices after scaling has been applied
-        """
-
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        # Use a cyclic buffer of length self.max_idx to hold information about previous moves,
-        # when a new move is initiated ensures indexes are all correct so user can only access
-        # fixed number of previous or next moves
-        if self.current_idx < self.last_idx:
-            self.total_idx = np.copy(self.current_idx)
-            self.diff_idx = (np.mod(self.last_idx, self.max_idx) - np.mod(self.total_idx,
-                                                                          self.max_idx))
-            if self.diff_idx >= 0:
-                self.diff_idx = self.max_idx - self.diff_idx
-            else:
-                self.diff_idx = np.abs(self.diff_idx)
-        else:
-            self.diff_idx = self.max_idx - 1
-
-        self.total_idx += 1
-        self.current_idx += 1
-        self.idx_prev = np.copy(self.idx)
-        self.idx = np.mod(self.current_idx, self.max_idx)
-        self.scale_hist_data()
-        self.plot_histology(self.fig_hist)
-        self.plot_scale_factor()
-        self.plot_fit()
-        self.plot_channels()
-        if self.unity:
-            self.set_unity_xyz()
-            self.plot_unity()
-        self.remove_lines_points()
-        self.add_lines_points()
-        self.update_lines_points()
-        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra,
-                                max=self.probe_top + self.probe_extra, padding=self.pad)
-        self.update_string()
-
-    def offset_button_pressed(self):
-        """
-        Triggered when offset button or o key pressed, applies offset to brain regions according to
-        locations of probe tip line on histology plot. Updates all plots and indices after offset
-        has been applied
-        """
-
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        if self.current_idx < self.last_idx:
-            self.total_idx = np.copy(self.current_idx)
-            self.diff_idx = (np.mod(self.last_idx, self.max_idx) - np.mod(self.total_idx,
-                                                                          self.max_idx))
-            if self.diff_idx >= 0:
-                self.diff_idx = self.max_idx - self.diff_idx
-            else:
-                self.diff_idx = np.abs(self.diff_idx)
-        else:
-            self.diff_idx = self.max_idx - 1
-
-        self.total_idx += 1
-        self.current_idx += 1
-        self.idx_prev = np.copy(self.idx)
-        self.idx = np.mod(self.current_idx, self.max_idx)
-        self.offset_hist_data()
-        self.plot_histology(self.fig_hist)
-        self.plot_scale_factor()
-        self.plot_fit()
-        self.plot_channels()
-        if self.unity:
-            self.set_unity_xyz()
-            self.plot_unity()
-        self.remove_lines_points()
-        self.add_lines_points()
-        self.update_lines_points()
-        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra,
-                                max=self.probe_top + self.probe_extra, padding=self.pad)
-        self.update_string()
-
-    def movedown_button_pressed(self):
-        """
-        Triggered when Shift+down key pressed. Moves probe tip down by 50um and offsets data
-        """
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        if self.track[self.idx][-1] - 50 / 1e6 >= np.max(self.chn_depths) / 1e6:
-            self.track[self.idx] -= 50 / 1e6
-            self.offset_button_pressed()
-
-    def moveup_button_pressed(self):
-        """
-        Triggered when Shift+down key pressed. Moves probe tip up by 50um and offsets data
-        """
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        if self.track[self.idx][0] + 50 / 1e6 <= np.min(self.chn_depths) / 1e6:
-            self.track[self.idx] += 50 / 1e6
-            self.offset_button_pressed()
-
-    def toggle_labels_button_pressed(self):
-        """
-        Triggered when Shift+A key pressed. Shows/hides labels Allen atlas labels on brain regions
-        in histology plots
-        """
-        self.label_status = not self.label_status
-        if not self.label_status:
-            self.ax_hist_ref.setPen(None)
-            self.ax_hist_ref.setTextPen(None)
-            self.ax_hist.setPen(None)
-            self.ax_hist.setTextPen(None)
-            self.fig_hist_ref.update()
-            self.fig_hist.update()
-
-        else:
-            self.ax_hist_ref.setPen('k')
-            self.ax_hist_ref.setTextPen('k')
-            self.ax_hist.setPen('k')
-            self.ax_hist.setTextPen('k')
-            self.fig_hist_ref.update()
-            self.fig_hist.update()
-
-    def toggle_line_button_pressed(self):
-        """
-        Triggered when Shift+L key pressed. Shows/hides reference lines on ephys and histology
-        plots
-        """
-        self.line_status = not self.line_status
-        if not self.line_status:
-            self.remove_lines_points()
-        else:
-            self.add_lines_points()
-
-    def toggle_channel_button_pressed(self):
-        """
-        Triggered when Shift+C key pressed. Shows/hides channels and trajectory on slice image
-        """
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        self.channel_status = not self.channel_status
-        if not self.channel_status:
-            self.fig_slice.removeItem(self.traj_line)
-            self.fig_slice.removeItem(self.slice_chns)
-            for line in self.slice_lines:
-                self.fig_slice.removeItem(line)
-
-        else:
-            self.fig_slice.addItem(self.traj_line)
-            self.fig_slice.addItem(self.slice_chns)
-            for line in self.slice_lines:
-                self.fig_slice.addItem(line)
-
-    def delete_line_button_pressed(self):
-        """
-        Triggered when mouse hovers over reference line and Del key pressed. Deletes a reference
-        line from the ephys and histology plots
-        """
-
-        if self.selected_line:
-            line_idx = np.where(self.lines_features == self.selected_line)[0]
-            if line_idx.size == 0:
-                line_idx = np.where(self.lines_tracks == self.selected_line)[0]
-            line_idx = line_idx[0]
-
-            self.fig_img.removeItem(self.lines_features[line_idx][0])
-            self.fig_line.removeItem(self.lines_features[line_idx][1])
-            self.fig_probe.removeItem(self.lines_features[line_idx][2])
-            self.fig_hist.removeItem(self.lines_tracks[line_idx, 0])
-            self.fig_fit.removeItem(self.points[line_idx, 0])
-            self.lines_features = np.delete(self.lines_features, line_idx, axis=0)
-            self.lines_tracks = np.delete(self.lines_tracks, line_idx, axis=0)
-            self.points = np.delete(self.points, line_idx, axis=0)
-
-    def describe_labels_pressed(self):
-
-        # if no histology don't show
-        if not self.histology_exists:
-            return
-
-        if self.selected_region:
-            idx = np.where(self.hist_regions == self.selected_region)[0]
-            if not np.any(idx):
-                idx = np.where(self.hist_ref_regions == self.selected_region)[0]
-            if not np.any(idx):
-                idx = np.array([0])
-
-            description, lookup = self.loaddata.get_region_description(
-                self.ephysalign.region_id[idx[0]][0])
-            item = self.struct_list.findItems(lookup, flags=QtCore.Qt.MatchRecursive)
-            model_item = self.struct_list.indexFromItem(item[0])
-            self.struct_view.collapseAll()
-            self.struct_view.scrollTo(model_item)
-            self.struct_view.setCurrentIndex(model_item)
-            self.struct_description.setText(description)
-
-            if not self.label_popup:
-                self.label_win = ephys_gui.PopupWindow(title='Structure Information',
-                                                       size=(500, 700), graphics=False)
-                self.label_win.layout.addWidget(self.struct_view)
-                self.label_win.layout.addWidget(self.struct_description)
-                self.label_win.layout.setRowStretch(0, 7)
-                self.label_win.layout.setRowStretch(1, 3)
-                self.label_popup.append(self.label_win)
-                self.label_win.closed.connect(self.label_closed)
-                self.label_win.moved.connect(self.label_moved)
-                self.activateWindow()
-            else:
-                self.label_win.show()
-                self.activateWindow()
-
-    def label_closed(self, popup):
-        self.label_win.hide()
-
-    def label_moved(self):
-        self.activateWindow()
-
-    def label_pressed(self, item):
-        idx = int(item.model().itemFromIndex(item).accessibleText())
-        description, lookup = self.loaddata.get_region_description(idx)
-        item = self.struct_list.findItems(lookup,
-                                          flags=QtCore.Qt.MatchRecursive)
-        model_item = self.struct_list.indexFromItem(item[0])
-        self.struct_view.setCurrentIndex(model_item)
-        self.struct_description.setText(description)
-
-    def next_button_pressed(self):
-        """
-        Triggered when right key pressed. Updates all plots and indices with next move. Ensures
-        user cannot go past latest move
-        """
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        if (self.current_idx < self.total_idx) & (self.current_idx >
-                                                  self.total_idx - self.max_idx):
-            self.current_idx += 1
-            self.idx = np.mod(self.current_idx, self.max_idx)
-            self.remove_lines_points()
-            self.add_lines_points()
-            self.get_scaled_histology()
-            self.plot_histology(self.fig_hist)
-            self.plot_scale_factor()
-            self.remove_lines_points()
-            self.add_lines_points()
-            self.plot_fit()
-            self.plot_channels()
-            if self.unity:
-                self.set_unity_xyz()
-                self.plot_unity()
-            self.update_string()
-
-    def prev_button_pressed(self):
-        """
-        Triggered when left key pressed. Updates all plots and indices with previous move.
-        Ensures user cannot go back more than self.max_idx moves
-        """
-
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        if self.total_idx > self.last_idx:
-            self.last_idx = np.copy(self.total_idx)
-
-        if (self.current_idx > np.max([0, self.total_idx - self.diff_idx])):
-            self.current_idx -= 1
-            self.idx = np.mod(self.current_idx, self.max_idx)
-            self.remove_lines_points()
-            self.add_lines_points()
-            self.get_scaled_histology()
-            self.plot_histology(self.fig_hist)
-            self.plot_scale_factor()
-            self.remove_lines_points()
-            self.add_lines_points()
-            self.plot_fit()
-            self.plot_channels()
-            if self.unity:
-                self.set_unity_xyz()
-                self.plot_unity()
-            self.update_string()
-
-    def reset_button_pressed(self):
-        """
-        Triggered when reset button or Shift+R key pressed. Resets channel locations to orignal
-        location
-        """
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        self.remove_lines_points()
-        self.lines_features = np.empty((0, 3))
-        self.lines_tracks = np.empty((0, 1))
-        self.points = np.empty((0, 1))
-        if self.current_idx < self.last_idx:
-            self.total_idx = np.copy(self.current_idx)
-            self.diff_idx = (np.mod(self.last_idx, self.max_idx) - np.mod(self.total_idx,
-                                                                          self.max_idx))
-            if self.diff_idx >= 0:
-                self.diff_idx = self.max_idx - self.diff_idx
-            else:
-                self.diff_idx = np.abs(self.diff_idx)
-        else:
-            self.diff_idx = self.max_idx - 1
-
-        self.total_idx += 1
-        self.current_idx += 1
-        self.idx = np.mod(self.current_idx, self.max_idx)
-        self.track[self.idx] = np.copy(self.ephysalign.track_init)
-        self.features[self.idx] = np.copy(self.ephysalign.feature_init)
-
-        self.get_scaled_histology()
-
-        self.plot_histology(self.fig_hist)
-        self.plot_scale_factor()
-        if np.any(self.feature_prev):
-            self.create_lines(self.feature_prev[1:-1] * 1e6)
-        self.plot_fit()
-        self.plot_channels()
-        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra,
-                                max=self.probe_top + self.probe_extra, padding=self.pad)
-        self.update_string()
-
-    def complete_button_pressed(self):
-        """
-        Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
-        Alyx
-        """
-        # If no histology we can't upload alignment
-        if not self.histology_exists:
-            return
-
-        upload = QtWidgets.QMessageBox.question(self, '', "Upload alignment?",
-                                                QtWidgets.QMessageBox.Yes |
-                                                QtWidgets.QMessageBox.No)
-
-        if upload == QtWidgets.QMessageBox.Yes:
-            upload_channels = self.loaddata.upload_data(self.xyz_channels)
-            self.loaddata.update_alignments(self.features[self.idx], self.track[self.idx])
-            self.prev_alignments = self.loaddata.get_previous_alignments()
-            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-            self.loaddata.get_starting_alignment(0)
-            resolved = self.loaddata.update_qc()
-
-            if upload_channels and resolved == 0:
-                # channels saved alignment not resolved
-                QtWidgets.QMessageBox.information(self, 'Status',
-                                                  ("Channels locations saved to Alyx. "
-                                                   "Alignment not resolved"))
-            if upload_channels and resolved == 1:
-                # channels saved alignment resolved, writen to flatiron
-                QtWidgets.QMessageBox.information(self, 'Status',
-                                                  ("Channel locations saved to Alyx. "
-                                                   "Alignment resolved and channels "
-                                                   "datasets written to flatiron"))
-            if not upload_channels and resolved == 1:
-                # alignment already resolved, save alignment but channels not written
-                QtWidgets.QMessageBox.information(self, 'Status',
-                                                  ("Channel locations not saved to Alyx"
-                                                   " as alignment has already been "
-                                                   "resolved. New user reference lines"
-                                                   " have been saved"))
-        else:
-            pass
-            QtWidgets.QMessageBox.information(self, 'Status', "Channels not saved")
-
-    def complete_button_pressed_offline(self):
-        """
-        Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
-        json file
-        """
-        upload = QtWidgets.QMessageBox.question(self, '', "Upload alignment?",
-                                                QtWidgets.QMessageBox.Yes |
-                                                QtWidgets.QMessageBox.No)
-
-        if upload == QtWidgets.QMessageBox.Yes:
-            self.loaddata.upload_data(self.features[self.idx], self.track[self.idx],
-                                      self.xyz_channels)
-            self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
-            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-            self.loaddata.get_starting_alignment(0)
-            QtWidgets.QMessageBox.information(self, 'Status', "Channels locations saved")
-        else:
-            pass
-            QtWidgets.QMessageBox.warning(self, 'Status', "Channels not saved")
-
-    def display_qc_options(self):
-
-        # If not histology don't show
-        if not self.histology_exists:
-            return
-
-        self.qc_dialog.open()
-
-    def qc_button_clicked(self):
-
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        align_qc = self.align_qc.currentText()
-        ephys_qc = self.ephys_qc.currentText()
-        ephys_desc = []
-        for button in self.desc_buttons.buttons():
-            if button.isChecked():
-                ephys_desc.append(button.text())
-
-        if ephys_qc != 'Pass' and len(ephys_desc) == 0:
-            QtWidgets.QMessageBox.warning(self, 'Status', "You must select a reason for qc choice")
-            self.display_qc_options()
-            return
-
-        self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
-        self.complete_button_pressed()
-
-    def reset_axis_button_pressed(self):
-        self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra,
-                                max=self.probe_top + self.probe_extra, padding=self.pad)
-        self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra,
-                                    max=self.probe_top + self.probe_extra, padding=self.pad)
-        self.fig_img.setXRange(min=self.xrange[0], max=self.xrange[1], padding=0)
-        self.fig_img.setYRange(min=self.probe_tip - self.probe_extra,
-                               max=self.probe_top + self.probe_extra, padding=self.pad)
-
-    def display_session_notes(self):
-        self.notes_win = ephys_gui.PopupWindow(title='Session notes from Alyx', size=(200, 100),
-                                               graphics=False)
-        notes = QtWidgets.QTextEdit()
-        notes.setReadOnly(True)
-        notes.setLineWrapMode(QtWidgets.QTextEdit.WidgetWidth)
-        notes.setText(self.sess_notes)
-        self.notes_win.layout.addWidget(notes)
-
-    def display_nearby_sessions(self):
-
-        # If no histology we can't get nearby sessions
-        if not self.histology_exists:
-            return
-
-        if not self.nearby:
-            self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
-
-        self.nearby_win = ephys_gui.PopupWindow(title='Nearby Sessions', size=(400, 300),
-                                                graphics=False)
-
-        self.nearby_table = QtWidgets.QTableWidget()
-        self.nearby_table.setRowCount(10)
-        self.nearby_table.setColumnCount(3)
-
-        self.nearby_table.setHorizontalHeaderItem(0, QtWidgets.QTableWidgetItem('Session'))
-        self.nearby_table.setHorizontalHeaderItem(1, QtWidgets.QTableWidgetItem('dist'))
-        self.nearby_table.setHorizontalHeaderItem(2, QtWidgets.QTableWidgetItem('dist_mlap'))
-        self.nearby_table.setSortingEnabled(True)
-        for iT, (near, dist, dist_mlap) in enumerate(zip(self.nearby, self.dist, self.dist_mlap)):
-            sess_item = QtWidgets.QTableWidgetItem(near)
-            dist_item = QtWidgets.QTableWidgetItem()
-            dist_item.setData(0, int(dist))
-            dist_mlap_item = QtWidgets.QTableWidgetItem()
-            dist_mlap_item.setData(0, int(dist_mlap))
-            self.nearby_table.setItem(iT, 0, sess_item)
-            self.nearby_table.setItem(iT, 1, dist_item)
-            self.nearby_table.setItem(iT, 2, dist_mlap_item)
-
-        self.nearby_win.layout.addWidget(self.nearby_table)
-
-    def popup_closed(self, popup):
-        popup_idx = [iP for iP, pop in enumerate(self.cluster_popups) if pop == popup][0]
-        self.cluster_popups.pop(popup_idx)
-
-    def popup_moved(self):
-        self.activateWindow()
-
-    def close_popups(self):
-        for pop in self.cluster_popups:
-            pop.blockSignals(True)
-            pop.close()
-        self.cluster_popups = []
-
-    def minimise_popups(self):
-        self.popup_status = not self.popup_status
-        if self.popup_status:
-            for pop in self.cluster_popups:
-                pop.showNormal()
-            self.activateWindow()
-        else:
-            for pop in self.cluster_popups:
-                pop.showMinimized()
-            self.activateWindow()
-
-    def lin_fit_option_changed(self, state):
-        if state == 0:
-            self.lin_fit = False
-            self.fit_button_pressed()
-        else:
-            self.lin_fit = True
-            self.fit_button_pressed()
-
-    def cluster_clicked(self, item, point):
-        point_pos = point[0].pos()
-        clust_idx = np.argwhere(self.data == point_pos.x())[0][0]
-
-        autocorr, clust_no = self.plotdata.get_autocorr(clust_idx)
-        autocorr_plot = pg.PlotItem()
-        autocorr_plot.setXRange(min=np.min(self.plotdata.t_autocorr),
-                                max=np.max(self.plotdata.t_autocorr))
-        autocorr_plot.setYRange(min=0, max=1.05 * np.max(autocorr))
-        self.set_axis(autocorr_plot, 'bottom', label='T (ms)')
-        self.set_axis(autocorr_plot, 'left', label='Number of spikes')
-        plot = pg.BarGraphItem(x=self.plotdata.t_autocorr, height=autocorr, width=0.24,
-                               brush=self.bar_colour)
-        autocorr_plot.addItem(plot)
-
-        template_wf = self.plotdata.get_template_wf(clust_idx)
-        template_plot = pg.PlotItem()
-        plot = pg.PlotCurveItem()
-        template_plot.setXRange(min=np.min(self.plotdata.t_template),
-                                max=np.max(self.plotdata.t_template))
-        self.set_axis(template_plot, 'bottom', label='T (ms)')
-        self.set_axis(template_plot, 'left', label='Amplitude (a.u.)')
-        plot.setData(x=self.plotdata.t_template, y=template_wf, pen=self.kpen_solid)
-        template_plot.addItem(plot)
-
-        clust_layout = pg.GraphicsLayout()
-        clust_layout.addItem(autocorr_plot, 0, 0)
-        clust_layout.addItem(template_plot, 1, 0)
-
-        self.clust_win = ephys_gui.PopupWindow(title=f'Cluster {clust_no}')
-        self.clust_win.closed.connect(self.popup_closed)
-        self.clust_win.moved.connect(self.popup_moved)
-        self.clust_win.popup_widget.addItem(autocorr_plot, 0, 0)
-        self.clust_win.popup_widget.addItem(template_plot, 1, 0)
-        self.cluster_popups.append(self.clust_win)
-        self.activateWindow()
-
-        return clust_no
-
-    def display_subject_scaling(self):
-        if self.subj_win is not None:
-            self.subj_win.close()
-
-        self.subj_win = ScalingWindow(self.loaddata.probe_id, self.loaddata.subj, self.loaddata.one, self.loaddata.brain_atlas)
-
-    def display_region_features(self):
-        self.region_win = RegionFeatureWindow(self.loaddata.one, np.unique(np.array(self.ephysalign.region_id).ravel()),
-                                              self.loaddata.brain_atlas, download=False)
-        self.region_win.show()
-
-    def on_mouse_double_clicked(self, event):
-        """
-        Triggered when a double click event is detected on ephys of histology plots. Adds reference
-        line on ephys and histology plot that can be moved to align ephys signatures with brain
-        regions. Also adds scatter point on fit plot
-        :param event: double click event signals
-        :type event: pyqtgraph mouseEvents
-        """
-        # If no histology no point adding lines
-        if not self.histology_exists:
-            return
-
-        if event.double():
-            pos = self.data_plot.mapFromScene(event.scenePos())
-            pen, brush = self.create_line_style()
-            line_track = pg.InfiniteLine(pos=pos.y() * self.y_scale, angle=0, pen=pen,
-                                         movable=True)
-            line_track.sigPositionChanged.connect(self.update_lines_track)
-            line_track.setZValue(100)
-            line_feature1 = pg.InfiniteLine(pos=pos.y() * self.y_scale, angle=0, pen=pen,
-                                            movable=True)
-            line_feature1.setZValue(100)
-            line_feature1.sigPositionChanged.connect(self.update_lines_features)
-            line_feature2 = pg.InfiniteLine(pos=pos.y() * self.y_scale, angle=0, pen=pen,
-                                            movable=True)
-            line_feature2.setZValue(100)
-            line_feature2.sigPositionChanged.connect(self.update_lines_features)
-            line_feature3 = pg.InfiniteLine(pos=pos.y() * self.y_scale, angle=0, pen=pen,
-                                            movable=True)
-            line_feature3.setZValue(100)
-            line_feature3.sigPositionChanged.connect(self.update_lines_features)
-            self.fig_hist.addItem(line_track)
-            self.fig_img.addItem(line_feature1)
-            self.fig_line.addItem(line_feature2)
-            self.fig_probe.addItem(line_feature3)
-
-            self.lines_features = np.vstack([self.lines_features, [line_feature1, line_feature2,
-                                                                   line_feature3]])
-            self.lines_tracks = np.vstack([self.lines_tracks, line_track])
-
-            point = pg.PlotDataItem()
-            point.setData(x=[line_track.pos().y()], y=[line_feature1.pos().y()],
-                          symbolBrush=brush, symbol='o', symbolSize=10)
-            self.fig_fit.addItem(point)
-            self.points = np.vstack([self.points, point])
-
-    def on_mouse_hover(self, items):
-        """
-        Returns the pyqtgraph items that the mouse is hovering over. Used to identify reference
-        lines so that they can be deleted
-        """
-        if len(items) > 1:
-            self.selected_line = []
-            if type(items[0]) == pg.InfiniteLine:
-                self.selected_line = items[0]
-            elif (items[0] == self.fig_scale) & (type(items[1]) == pg.LinearRegionItem):
-                idx = np.where(self.scale_regions == items[1])[0][0]
-                self.fig_scale_ax.setLabel('Scale Factor = ' +
-                                           str(np.around(self.scale_factor[idx], 2)))
-            elif (items[0] == self.fig_hist) & (type(items[1]) == pg.LinearRegionItem):
-                self.selected_region = items[1]
-            elif (items[0] == self.fig_hist_ref) & (type(items[1]) == pg.LinearRegionItem):
-                self.selected_region = items[1]
-
-    def update_lines_features(self, line):
-        """
-        Triggered when reference line on ephys data plots is moved. Moves all three lines on the
-        img_plot, line_plot and probe_plot and adjusts the corresponding point on the fit plot
-        :param line: selected line
-        :type line: pyqtgraph InfiniteLine
-        """
-        idx = np.where(self.lines_features == line)
-        line_idx = idx[0][0]
-        fig_idx = np.setdiff1d(np.arange(0, 3), idx[1][0])
-
-        self.lines_features[line_idx][fig_idx[0]].setPos(line.value())
-        self.lines_features[line_idx][fig_idx[1]].setPos(line.value())
-
-        self.points[line_idx][0].setData(x=[self.lines_features[line_idx][0].pos().y()],
-                                         y=[self.lines_tracks[line_idx][0].pos().y()])
-
-    def update_lines_track(self, line):
-        """
-        Triggered when reference line on histology plot is moved. Adjusts the corresponding point
-        on the fit plot
-        :param line: selected line
-        :type line: pyqtgraph InfiniteLine
-        """
-        line_idx = np.where(self.lines_tracks == line)[0][0]
-
-        self.points[line_idx][0].setData(x=[self.lines_features[line_idx][0].pos().y()],
-                                         y=[self.lines_tracks[line_idx][0].pos().y()])
-
-    def tip_line_moved(self):
-        """
-        Triggered when dotted line indicating probe tip on self.fig_hist moved. Gets the y pos of
-        probe tip line and ensures the probe top line is set to probe tip line y pos + 3840
-        """
-        self.top_pos.setPos(self.tip_pos.value() + self.probe_top)
-
-    def top_line_moved(self):
-        """
-        Triggered when dotted line indicating probe top on self.fig_hist moved. Gets the y pos of
-        probe top line and ensures the probe tip line is set to probe top line y pos - 3840
-        """
-        self.tip_pos.setPos(self.top_pos.value() - self.probe_top)
-
-    def remove_lines_points(self):
-        """
-        Removes all reference lines and scatter points from the ephys, histology and fit plots
-        """
-        for line_feature, line_track, point in zip(self.lines_features, self.lines_tracks,
-                                                   self.points):
-            self.fig_img.removeItem(line_feature[0])
-            self.fig_line.removeItem(line_feature[1])
-            self.fig_probe.removeItem(line_feature[2])
-            self.fig_hist.removeItem(line_track[0])
-            self.fig_fit.removeItem(point[0])
-
-    def add_lines_points(self):
-        """
-        Adds all reference lines and scatter points from the ephys, histology and fit plots
-        """
-        for line_feature, line_track, point in zip(self.lines_features, self.lines_tracks,
-                                                   self.points):
-            self.fig_img.addItem(line_feature[0])
-            self.fig_line.addItem(line_feature[1])
-            self.fig_probe.addItem(line_feature[2])
-            self.fig_hist.addItem(line_track[0])
-            self.fig_fit.addItem(point[0])
-
-    def update_lines_points(self):
-        """
-        Updates position of reference lines on histology plot after fit has been applied. Also
-        updates location of scatter point
-        """
-        for line_feature, line_track, point in zip(self.lines_features, self.lines_tracks,
-                                                   self.points):
-            line_track[0].setPos(line_feature[0].getYPos())
-            point[0].setData(x=[line_feature[0].pos().y()], y=[line_feature[0].pos().y()])
-
-    def create_lines(self, positions):
-        for pos in positions:
-
-            pen, brush = self.create_line_style()
-            line_track = pg.InfiniteLine(pos=pos, angle=0, pen=pen, movable=True)
-            line_track.sigPositionChanged.connect(self.update_lines_track)
-            line_track.setZValue(100)
-            line_feature1 = pg.InfiniteLine(pos=pos, angle=0, pen=pen,
-                                            movable=True)
-            line_feature1.setZValue(100)
-            line_feature1.sigPositionChanged.connect(self.update_lines_features)
-            line_feature2 = pg.InfiniteLine(pos=pos, angle=0, pen=pen,
-                                            movable=True)
-            line_feature2.setZValue(100)
-            line_feature2.sigPositionChanged.connect(self.update_lines_features)
-            line_feature3 = pg.InfiniteLine(pos=pos, angle=0, pen=pen,
-                                            movable=True)
-            line_feature3.setZValue(100)
-            line_feature3.sigPositionChanged.connect(self.update_lines_features)
-            self.fig_hist.addItem(line_track)
-            self.fig_img.addItem(line_feature1)
-            self.fig_line.addItem(line_feature2)
-            self.fig_probe.addItem(line_feature3)
-
-            self.lines_features = np.vstack([self.lines_features, [line_feature1, line_feature2,
-                                                                   line_feature3]])
-            self.lines_tracks = np.vstack([self.lines_tracks, line_track])
-
-            point = pg.PlotDataItem()
-            point.setData(x=[line_track.pos().y()], y=[line_feature1.pos().y()],
-                          symbolBrush=brush, symbol='o', symbolSize=10)
-            self.fig_fit.addItem(point)
-            self.points = np.vstack([self.points, point])
-
-    def create_line_style(self):
-        """
-        Create random choice of colour and style for reference line
-        :return pen: style to use for the line
-        :type pen: pyqtgraph Pen
-        :return brush: colour use for the line
-        :type brush: pyqtgraph Brush
-        """
-        colours = ['#000000', '#cc0000', '#6aa84f', '#1155cc', '#a64d79']
-        style = [QtCore.Qt.SolidLine, QtCore.Qt.DashLine, QtCore.Qt.DashDotLine]
-        col = QtGui.QColor(colours[randrange(len(colours))])
-        sty = style[randrange(len(style))]
-        pen = pg.mkPen(color=col, style=sty, width=3)
-        brush = pg.mkBrush(color=col)
-        return pen, brush
-
-    def update_string(self):
-        """
-        Updates text boxes to indicate to user which move they are looking at
-        """
-        self.idx_string.setText(f"Current Index = {self.current_idx}")
-        self.tot_idx_string.setText(f"Total Index = {self.total_idx}")
 
 
 def viewer(probe_id, one=None, histology=False, spike_collection=None, title=None):
@@ -2288,6 +2286,14 @@ def viewer(probe_id, one=None, histology=False, spike_collection=None, title=Non
     qt.create_app()
     av = MainWindow._get_or_create(probe_id=probe_id, one=one, histology=histology,
                                    spike_collection=spike_collection, title=title)
+    av.show()
+    return av
+
+
+def multi_shank_viewer(probe_id, loaddata, title):
+    """
+    """
+    av = MainWindow._get_or_create(title=title, probe_id=probe_id, loaddata=loaddata)
     av.show()
     return av
 
