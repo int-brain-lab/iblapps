@@ -295,35 +295,6 @@ class LoadData:
 
 
 
-    def get_allen_csv(self):
-        """
-        Load in allen csv file
-        :return allen: dataframe containing all information in csv file
-        :type: pd.Dataframe
-        """
-        allen_path = Path(Path(atlas.__file__).parent, 'allen_structure_tree.csv')
-        allen = alf.io.load_file_content(allen_path)
-
-        self.allen_id = allen['id']
-
-        return allen
-
-    def get_region_description(self, region_idx):
-        struct_idx = np.where(self.allen_id == region_idx)[0][0]
-        description = self.brain_regions[struct_idx]['description']
-        region_lookup = (self.brain_regions[struct_idx]['acronym'] +
-                         ': ' + self.brain_regions[struct_idx]['name'])
-
-        if region_lookup == 'void: void':
-            region_lookup = 'root: root'
-
-        if not description:
-            description = region_lookup + '\nNo information available on Alyx for this region'
-        else:
-            description = region_lookup + '\n' + description
-
-        return description, region_lookup
-
     def load_session_notes(self):
         sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
         sess_notes = None

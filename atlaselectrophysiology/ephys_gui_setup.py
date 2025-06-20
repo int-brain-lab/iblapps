@@ -3,8 +3,10 @@ import pyqtgraph as pg
 import pyqtgraph.exporters
 import numpy as np
 from random import randrange
-from atlaselectrophysiology.AdaptedAxisItem import replace_axis
+from atlaselectrophysiology.utils.AdaptedAxisItem import replace_axis
 from ibllib.qc.critical_reasons import CriticalInsertionNote
+from atlaselectrophysiology.plugins.region_tree import callback as region_tree_callback
+import atlaselectrophysiology.utils.qt_utils as utils
 
 
 pg.setConfigOption('background', 'w')
@@ -263,7 +265,7 @@ class Setup():
         # Shortcut to show label information
         region_info = QtWidgets.QAction('Region Info', self)
         region_info.setShortcut('Shift+I')
-        region_info.triggered.connect(lambda: region_lookup_callback(self))
+        region_info.triggered.connect(lambda: region_tree_callback(self))
 
         # Add menu bar with all possible session info options
         info_options = menu_bar.addMenu('Session Information')
@@ -488,16 +490,16 @@ class Setup():
                                                          z=50))
         self.probe_top_lines.append(self.fig_img.addLine(y=self.probe_top, pen=self.kpen_dot,
                                                          z=50))
-        self.set_axis(self.fig_img, 'bottom')
-        self.fig_data_ax = self.set_axis(self.fig_img, 'left',
+        utils.set_axis(self.fig_img, 'bottom')
+        self.fig_data_ax = utils.set_axis(self.fig_img, 'left',
                                          label='Distance from probe tip (uV)')
 
         self.fig_img_cb = pg.PlotItem()
         self.fig_img_cb.setMaximumHeight(70)
         self.fig_img_cb.setMouseEnabled(x=False, y=False)
-        self.set_axis(self.fig_img_cb, 'bottom', show=False)
-        self.set_axis(self.fig_img_cb, 'left', pen='w')
-        self.set_axis(self.fig_img_cb, 'top', pen='w')
+        utils.set_axis(self.fig_img_cb, 'bottom', show=False)
+        utils.set_axis(self.fig_img_cb, 'left', pen='w')
+        utils.set_axis(self.fig_img_cb, 'top', pen='w')
 
         # 1D line plot
         self.fig_line = pg.PlotItem()
@@ -508,8 +510,8 @@ class Setup():
                                                           z=50))
         self.probe_top_lines.append(self.fig_line.addLine(y=self.probe_top, pen=self.kpen_dot,
                                                           z=50))
-        self.set_axis(self.fig_line, 'bottom')
-        self.set_axis(self.fig_line, 'left', show=False)
+        utils.set_axis(self.fig_line, 'bottom')
+        utils.set_axis(self.fig_line, 'left', show=False)
 
         # 2D probe plot
         self.fig_probe = pg.PlotItem()
@@ -521,15 +523,15 @@ class Setup():
                                                            z=50))
         self.probe_top_lines.append(self.fig_probe.addLine(y=self.probe_top, pen=self.kpen_dot,
                                                            z=50))
-        self.set_axis(self.fig_probe, 'bottom', pen='w')
-        self.set_axis(self.fig_probe, 'left', show=False)
+        utils.set_axis(self.fig_probe, 'bottom', pen='w')
+        utils.set_axis(self.fig_probe, 'left', show=False)
 
         self.fig_probe_cb = pg.PlotItem()
         self.fig_probe_cb.setMouseEnabled(x=False, y=False)
         self.fig_probe_cb.setMaximumHeight(70)
-        self.set_axis(self.fig_probe_cb, 'bottom', show=False)
-        self.set_axis(self.fig_probe_cb, 'left', pen='w')
-        self.set_axis(self.fig_probe_cb, 'top', pen='w')
+        utils.set_axis(self.fig_probe_cb, 'bottom', show=False)
+        utils.set_axis(self.fig_probe_cb, 'left', pen='w')
+        utils.set_axis(self.fig_probe_cb, 'top', pen='w')
 
         # Add img plot, line plot, probe plot, img colourbar and probe colourbar to a graphics
         # layout widget so plots can be arranged and moved easily
@@ -558,13 +560,13 @@ class Setup():
         self.fig_hist.setMouseEnabled(x=False)
         self.fig_hist.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                 self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_hist, 'bottom', pen='w')
+        utils.set_axis(self.fig_hist, 'bottom', pen='w')
 
         # This is the solution from pyqtgraph people, but doesn't show ticks
         # self.fig_hist.showGrid(False, True, 0)
 
         replace_axis(self.fig_hist)
-        self.ax_hist = self.set_axis(self.fig_hist, 'left', pen=None)
+        self.ax_hist = utils.set_axis(self.fig_hist, 'left', pen=None)
         self.ax_hist.setWidth(0)
         self.ax_hist.setStyle(tickTextOffset=-70)
 
@@ -572,28 +574,28 @@ class Setup():
         self.fig_scale.setMaximumWidth(50)
         self.fig_scale.setMouseEnabled(x=False)
         self.scale_label = pg.LabelItem(color='k')
-        self.set_axis(self.fig_scale, 'bottom', pen='w')
-        self.set_axis(self.fig_scale, 'left', show=False)
+        utils.set_axis(self.fig_scale, 'bottom', pen='w')
+        utils.set_axis(self.fig_scale, 'left', show=False)
         (self.fig_scale).setYLink(self.fig_hist)
 
         # Figure that will show scale factor of histology boundaries
         self.fig_scale_cb = pg.PlotItem()
         self.fig_scale_cb.setMouseEnabled(x=False, y=False)
         self.fig_scale_cb.setMaximumHeight(70)
-        self.set_axis(self.fig_scale_cb, 'bottom', show=False)
-        self.set_axis(self.fig_scale_cb, 'left', show=False)
-        self.fig_scale_ax = self.set_axis(self.fig_scale_cb, 'top', pen='w')
-        self.set_axis(self.fig_scale_cb, 'right', show=False)
+        utils.set_axis(self.fig_scale_cb, 'bottom', show=False)
+        utils.set_axis(self.fig_scale_cb, 'left', show=False)
+        self.fig_scale_ax = utils.set_axis(self.fig_scale_cb, 'top', pen='w')
+        utils.set_axis(self.fig_scale_cb, 'right', show=False)
 
         # Histology figure that will remain at initial state for reference
         self.fig_hist_ref = pg.PlotItem()
         self.fig_hist_ref.setMouseEnabled(x=False)
         self.fig_hist_ref.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top +
                                     self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_hist_ref, 'bottom', pen='w')
-        self.set_axis(self.fig_hist_ref, 'left', show=False)
+        utils.set_axis(self.fig_hist_ref, 'bottom', pen='w')
+        utils.set_axis(self.fig_hist_ref, 'left', show=False)
         replace_axis(self.fig_hist_ref, orientation='right', pos=(2, 2))
-        self.ax_hist_ref = self.set_axis(self.fig_hist_ref, 'right', pen=None)
+        self.ax_hist_ref = utils.set_axis(self.fig_hist_ref, 'right', pen=None)
         self.ax_hist_ref.setWidth(0)
         self.ax_hist_ref.setStyle(tickTextOffset=-70)
 
@@ -609,8 +611,8 @@ class Setup():
                                             max=self.probe_top + self.probe_extra,
                                             padding=self.pad)
 
-        self.set_axis(self.fig_hist_extra_yaxis, 'bottom', pen='w')
-        self.ax_hist2 = self.set_axis(self.fig_hist_extra_yaxis, 'left', pen=None)
+        utils.set_axis(self.fig_hist_extra_yaxis, 'bottom', pen='w')
+        self.ax_hist2 = utils.set_axis(self.fig_hist_extra_yaxis, 'left', pen=None)
         self.ax_hist2.setWidth(10)
 
         self.fig_hist_layout = pg.GraphicsLayout()
@@ -646,8 +648,8 @@ class Setup():
         self.fig_fit.sigDeviceRangeChanged.connect(self.on_fig_size_changed)
         self.fig_fit.setXRange(min=self.view_total[0], max=self.view_total[1])
         self.fig_fit.setYRange(min=self.view_total[0], max=self.view_total[1])
-        self.set_axis(self.fig_fit, 'bottom', label='Original coordinates (um)')
-        self.set_axis(self.fig_fit, 'left', label='New coordinates (um)')
+        utils.set_axis(self.fig_fit, 'bottom', label='Original coordinates (um)')
+        utils.set_axis(self.fig_fit, 'left', label='New coordinates (um)')
         plot = pg.PlotCurveItem()
         plot.setData(x=self.depth, y=self.depth, pen=self.kpen_dot)
         self.fit_plot = pg.PlotCurveItem(pen=self.bpen_solid)
@@ -714,105 +716,4 @@ class PopupWindow(QtWidgets.QMainWindow):
 
 
 
-
-def region_lookup_callback(parent):
-
-    if parent.selected_region:
-        idx = np.where(parent.hist_regions['left'] == parent.selected_region)[0]
-        if not np.any(idx):
-            idx = np.where(parent.hist_regions['right'] == parent.selected_region)[0]
-        if not np.any(idx):
-            idx = np.array([0])
-
-    print('here')
-    parent.label_win = RegionLookup._get_or_create('Stucture Info', allen=parent.allen, parent=parent)
-
-
-
-class RegionLookup(PopupWindow):
-
-    @staticmethod
-    def _instances():
-        app = QtWidgets.QApplication.instance()
-        return [w for w in app.topLevelWidgets() if isinstance(w, RegionLookup)]
-
-    @staticmethod
-    def _get_or_create(title, **kwargs):
-        av = next(filter(lambda e: e.isVisible() and e.windowTitle() == title,
-                         RegionLookup._instances()), None)
-        if av is None:
-            av = RegionLookup(title, **kwargs)
-        else:
-            av.showNormal()
-            av.activateWindow()
-        return av
-
-    def __init__(self, title, allen=None, parent=None):
-        super().__init__(title, parent=parent, size=(500, 700), graphics=False)
-
-        self.struct_list = QtGui.QStandardItemModel()
-        self.struct_view = QtWidgets.QTreeView()
-        self.struct_view.setModel(self.struct_list)
-        self.struct_view.clicked.connect(self.label_pressed)
-
-        allen = allen.drop([0]).reset_index(drop=True)
-
-        # Find the parent path of each structure by removing the structure id from path
-        def parent_path(struct_path):
-            return struct_path.rsplit('/', 2)[0] + '/'
-
-        allen['parent_path'] = allen['structure_id_path'].apply(parent_path)
-
-        self.struct_view.setHeaderHidden(True)
-        unique_levels = np.unique(allen['depth']).astype(int)
-        parent_info = {}
-        idx = np.where(allen['depth'] == unique_levels[0])[0]
-        item = QtGui.QStandardItem(allen['acronym'][idx[0]] + ': ' + allen['name'][idx[0]])
-        icon = QtGui.QPixmap(20, 20)
-        icon.fill(QtGui.QColor('#' + allen['color_hex_triplet'][idx[0]]))
-        item.setIcon(QtGui.QIcon(icon))
-        item.setAccessibleText(str(allen['id'][idx[0]]))
-        item.setEditable(False)
-        self.struct_list.appendRow(item)
-        parent_info.update({allen['structure_id_path'][idx[0]]: item})
-
-        for level in unique_levels[1:]:
-            idx_levels = np.where(allen['depth'] == level)[0]
-            for idx in idx_levels:
-                parent = allen['parent_path'][idx]
-                parent_item = parent_info[parent]
-                item = QtGui.QStandardItem(allen['acronym'][idx] + ': ' + allen['name'][idx])
-                icon.fill(QtGui.QColor('#' + allen['color_hex_triplet'][idx]))
-                item.setIcon(QtGui.QIcon(icon))
-                item.setAccessibleText(str(allen['id'][idx]))
-                item.setEditable(False)
-                parent_item.appendRow(item)
-                parent_info.update({allen['structure_id_path'][idx]: item})
-
-        self.struct_description = QtWidgets.QTextEdit()
-
-        self.layout.addWidget(self.struct_view)
-        self.layout.addWidget(self.struct_description)
-        self.layout.setRowStretch(0, 7)
-        self.layout.setRowStretch(1, 3)
-
-
-    def label_pressed(self, item):
-        idx = int(item.model().itemFromIndex(item).accessibleText())
-        description, lookup = self.loaddata.get_region_description(idx)
-        item = self.struct_list.findItems(lookup, flags=QtCore.Qt.MatchRecursive)
-        model_item = self.struct_list.indexFromItem(item[0])
-        self.struct_view.setCurrentIndex(model_item)
-        self.struct_description.setText(description)
-
-    def label_selected(self, region):
-
-        description, lookup = self.loaddata.get_region_description(
-            self.shank.align.ephysalign.region_id[region[0]][0])
-        item = self.struct_list.findItems(lookup, flags=QtCore.Qt.MatchRecursive)
-        model_item = self.struct_list.indexFromItem(item[0])
-        self.struct_view.collapseAll()
-        self.struct_view.scrollTo(model_item)
-        self.struct_view.setCurrentIndex(model_item)
-        self.struct_description.setText(description)
 

@@ -1,6 +1,6 @@
 import os
 import platform
-from typing import Any, Union, Optional, List, Dict, Tuple
+from typing import Any, Union, Optional, List, Dict, Tuple, Callable
 
 if platform.system() == 'Darwin':
     if platform.release().split('.')[0] >= '20':
@@ -10,12 +10,13 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 import pyqtgraph as pg
 import pyqtgraph.exporters
 import numpy as np
-import random
+
+import atlaselectrophysiology.utils.qt_utils as utils
+
 from atlaselectrophysiology.load_data import LoadData
-from atlaselectrophysiology.load_data_local import LoadDataLocal
 from ibllib.pipes.ephys_alignment import EphysAlignment
 import atlaselectrophysiology.plot_data as pd
-import atlaselectrophysiology.ColorBar as cb
+import atlaselectrophysiology.utils.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 from atlaselectrophysiology.subject_scaling import ScalingWindow
 from ephysfeatures.features_across_region import RegionFeatureWindow
@@ -66,7 +67,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         if not offline and probe_id is None:
             self.loaddata = LoadData()
-            self.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
+            utils.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
         # elif not offline and probe_id is not None and loaddata is not None:
         #     self.loaddata = LoadData(probe_id=probe_id, one=one, load_histology=histology,
@@ -82,8 +83,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         #     self.offline = True
         #     self.histology_exists = True
 
-        self.allen = self.loaddata.get_allen_csv()
-        #self.init_region_lookup(self.allen)
 
     def init_variables(self):
         """
@@ -160,133 +159,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Filter by different types of units
         self.filter_type = 'all'
 
-    # TODO move to setup
-    @staticmethod
-    def set_axis(
-            fig: Union[pg.PlotItem, pg.PlotWidget],
-            ax: str,
-            show: bool = True,
-            label: Optional[str] =None,
-            pen: str = 'k',
-            ticks: bool = True
-        ) -> pg.AxisItem:
-        """
-        Show, hide, and configure an axis on a PyQtGraph figure.
-
-        Parameters
-        ----------
-        fig : pyqtgraph.PlotWidget or pyqtgraph.PlotItem
-            The figure containing the axis to modify.
-        ax : str
-            The orientation of the axis. Must be one of {'left', 'right', 'top', 'bottom'}.
-        show : bool, optional
-            Whether to show the axis (default is True).
-        label : str or None, optional
-            The label text for the axis (default is None).
-        pen : str, optional
-            The color for the axis line and text (default is 'k' for black).
-        ticks : bool, optional
-            Whether to show axis ticks (default is True).
-
-        Returns
-        -------
-        axis : pyqtgraph.AxisItem
-            The configured axis object.
-        """
-
-        if ax not in {'left', 'right', 'top', 'bottom'}:
-            raise ValueError(f"Invalid axis '{ax}'. Must be one of 'left', 'right', 'top', 'bottom'.")
-
-        label = label or ''
-        axis = fig.getAxis(ax) if isinstance(fig, pg.PlotItem) else fig.plotItem.getAxis(ax)
-
-        if show:
-            axis.show()
-            axis.setPen(pen)
-            axis.setTextPen(pen)
-            axis.setLabel(label)
-            if not ticks:
-                axis.setTicks([[(0, ''), (0.5, ''), (1, '')]])
-        else:
-            axis.hide()
-
-        return axis
-
-    # TODO move to setup
-    @staticmethod
-    def set_font(
-            fig: Union[pg.PlotItem, pg.PlotWidget],
-            ax: str,
-            ptsize: int = 8,
-            width: Optional[int] = None,
-            height: Optional[int] = None
-        ) -> None:
-
-        """
-        Set the font size and optionally the axis width/height for a given axis in a PyQtGraph figure.
-
-        Parameters
-        ----------
-        fig : pyqtgraph.PlotItem or pyqtgraph.PlotWidget
-            The figure containing the axis to modify.
-        ax : str
-            The orientation of the axis. Must be one of {'left', 'right', 'top', 'bottom'}.
-        ptsize : int, optional
-            Point size for the axis font (default is 8).
-        width : int, optional
-            Width to set for the axis in pixels. Only applicable for vertical axes.
-        height : int, optional
-            Height to set for the axis in pixels. Only applicable for horizontal axes.
-        """
-
-        if ax not in {'left', 'right', 'top', 'bottom'}:
-            raise ValueError(f"Invalid axis '{ax}'. Must be one of 'left', 'right', 'top', 'bottom'.")
-
-        axis = fig.getAxis(ax) if isinstance(fig, pg.PlotItem) else fig.plotItem.getAxis(ax)
-
-        font = QtGui.QFont()
-        font.setPointSize(ptsize)
-        axis.setStyle(tickFont=font)
-        axis.setLabel(**{'font-size': f'{ptsize}pt'})
-
-        if width is not None:
-            axis.setWidth(width)
-        if height is not None:
-            axis.setHeight(height)
-
-    # TODO move to setup
-    @staticmethod
-    def populate_lists(
-            data: List[str],
-            list_name: QtGui.QStandardItemModel,
-            combobox: QtWidgets.QComboBox
-    ) -> None:
-        """
-        Populate a combo box and its associated model with a list of string options.
-
-        Parameters
-        ----------
-        data : List[str]
-            A list of strings to add to the widget.
-        list_name : QtGui.QStandardItemModel
-            The model object to which items will be added.
-        combobox : QtWidgets.QComboBox
-            The combo box widget to be populated and configured.
-        """
-        list_name.clear()
-        for dat in data:
-            item = QtGui.QStandardItem(dat)
-            item.setEditable(False)
-            list_name.appendRow(item)
-
-        # Ensure the drop-down menu is wide enough to display the longest string
-        min_width = combobox.fontMetrics().width(max(data, key=len))
-        min_width += combobox.view().autoScrollMargin()
-        min_width += combobox.style().pixelMetric(QtWidgets.QStyle.PM_ScrollBarExtent)
-        combobox.view().setMinimumWidth(min_width)
-
-        # Set the default selected item to the first option, if available
-        combobox.setCurrentIndex(0)
 
     # TODO move to setup
     def set_view(
@@ -394,9 +266,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         # Configure axes: only one figure shows the axis label
         for fig in [self.fig_img, self.fig_line, self.fig_probe]:
             if fig == config['axis_target']:
-                self.set_axis(fig, 'left', label='Distance from probe tip (um)')
+                utils.set_axis(fig, 'left', label='Distance from probe tip (um)')
             else:
-                self.set_axis(fig, 'left', show=False)
+                utils.set_axis(fig, 'left', show=False)
 
         # Apply size adjustments specific to view
         config['sizes']()
@@ -437,7 +309,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def set_xaxis_range(self, fig, data, label=True):
         fig.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
         if label:
-            self.set_axis(fig, 'bottom', label=data['xaxis'])
+            utils.set_axis(fig, 'bottom', label=data['xaxis'])
 
     def set_yaxis_range(self, fig):
         fig.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra, padding=self.pad)
@@ -482,7 +354,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         axis = fig.getAxis(ax)
         axis.setTicks([data['axis_label']])
         axis.setZValue(10)
-        self.set_axis(fig, 'bottom', pen='w', label='blank')
+        utils.set_axis(fig, 'bottom', pen='w', label='blank')
 
         # Plot each histology region
         for ir, reg in enumerate(data['region']):
@@ -550,7 +422,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         axis.setTicks([self.hist_data_ref['axis_label']])
         axis.setZValue(10)
 
-        self.set_axis(fig, 'bottom', label='dist to boundary (um)')
+        utils.set_axis(fig, 'bottom', label='dist to boundary (um)')
         fig.setXRange(min=0, max=100)
         fig.setYRange(min=self.probe_tip - self.probe_extra, max=self.probe_top + self.probe_extra,
                       padding=self.pad)
@@ -621,7 +493,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         self.fig_scale.setYRange(min=self.probe_tip - self.probe_extra,
                                  max=self.probe_top + self.probe_extra, padding=self.pad)
-        self.set_axis(self.fig_scale, 'bottom', pen='w', label='blank')
+        utils.set_axis(self.fig_scale, 'bottom', pen='w', label='blank')
 
 
     def plot_fit(self) -> None:
@@ -798,7 +670,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.img_plots = self.remove_items(self.fig_img, self.img_plots)
         self.img_cbars = self.remove_items(self.fig_img_cb, self.img_cbars)
         # TODO check if I need this
-        # self.set_axis(self.fig_img_cb, 'top', pen='w')
+        # utils.set_axis(self.fig_img_cb, 'top', pen='w')
 
         size = data['size'].tolist()
         symbol = data['symbol'].tolist()
@@ -931,7 +803,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.set_xaxis_range(self.fig_probe, data, label=False)
         self.set_yaxis_range(self.fig_probe)
         # Add in a fake label so that the appearence is the same as other plots
-        self.set_axis(self.fig_probe, 'bottom', pen='w', label='blank')
+        utils.set_axis(self.fig_probe, 'bottom', pen='w', label='blank')
 
         # Optionally plot horizontal boundary lines
         bounds = data.get('boundaries', None)
@@ -976,7 +848,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.img_plots = self.remove_items(self.fig_img, self.img_plots)
         self.img_cbars = self.remove_items(self.fig_img_cb, self.img_cbars)
         # TODO check if I need this
-        # self.set_axis(self.fig_img_cb, 'top', pen='w')
+        # utils.set_axis(self.fig_img_cb, 'top', pen='w')
 
         # Create image item and add to figure
         image = pg.ImageItem()
@@ -1025,14 +897,14 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.shank_list.clear()
         self.align_list.clear()
         sessions = self.loaddata.get_sessions(idx)
-        self.populate_lists(sessions, self.sess_list, self.sess_combobox)
+        utils.populate_lists(sessions, self.sess_list, self.sess_combobox)
         shanks = self.loaddata.get_shanks(0)
         if len(shanks) > 1:
-            self.populate_lists(shanks, self.shank_list, self.shank_combobox)
+            utils.populate_lists(shanks, self.shank_list, self.shank_combobox)
 
         self.loaddata.get_info(0)
         self.prev_alignments = self.loaddata.get_previous_alignments()
-        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.loaddata.get_starting_alignment(0)
         # For IBL case at the moment we only using single shank
         #self.current_shank_idx = 0
@@ -1048,11 +920,11 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.align_list.clear()
         shanks = self.loaddata.get_shanks(idx)
         if len(shanks) > 1:
-            self.populate_lists(shanks, self.shank_list, self.shank_combobox)
+            utils.populate_lists(shanks, self.shank_list, self.shank_combobox)
 
         self.loaddata.get_info(0)
         self.prev_alignments = self.loaddata.get_previous_alignments()
-        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.loaddata.get_starting_alignment(0)
 
     # def on_shank_selected(self, idx):
@@ -1062,7 +934,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     #     self.current_shank_idx = idx
     #     # Update prev_alignments
     #     self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
-    #     self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+    #     utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
     #     self.loaddata.get_starting_alignment(0)
 
 
@@ -1076,7 +948,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.loaddata.get_info(0)
             # Update prev_alignments
             self.prev_alignments = self.loaddata.get_previous_alignments()
-            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
             self.loaddata.get_starting_alignment(0)
             self.data_button_pressed()
             for idx in [1, 2, 3]:
@@ -1087,7 +959,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.loaddata.get_info(idx)
         # Update prev_alignments
         self.prev_alignments = self.loaddata.get_previous_alignments()
-        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.loaddata.get_starting_alignment(0)
 
         if self.shank is not None:
@@ -1101,8 +973,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
         self.folder_line.setText(str(folder_path))
         self.prev_alignments, shank_options = self.loaddata.get_info(folder_path)
-        self.populate_lists(shank_options, self.shank_list, self.shank_combobox)
-        self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        utils.populate_lists(shank_options, self.shank_list, self.shank_combobox)
+        utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.on_shank_selected(0)
 
     def on_alignment_selected(self, idx):
@@ -1117,7 +989,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             return
         else:
             self.prev_alignments = self.loaddata.add_extra_alignments(file_path)
-            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
             self.feature_prev, self.track_prev = self.loaddata.get_starting_alignment(0)
 
     def data_button_pressed(self):
@@ -1217,169 +1089,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.plot_unity()
 
     # -------------------------------------------------------------------------------------------------
-    # Fitting functions
-    # -------------------------------------------------------------------------------------------------
-    def offset_hist_data(self, val=None):
-        """
-        Offset location of probe tip along probe track
-        """
-        # If no histology we can't do alignment
-        if not self.histology_exists:
-            return
-
-        val = val or self.tip_pos.value() / 1e6
-
-        self.shank.align.offset_hist_data(val)
-
-    def scale_hist_data(self):
-        """
-        Scale brain regions along probe track
-        """
-        # If no histology we can't do alignment
-        if not self.histology_exists:
-            return
-
-        line_track = np.array([line[0].pos().y() for line in self.lines_tracks]) / 1e6
-        line_feature = np.array([line[0].pos().y() for line in self.lines_features]) / 1e6
-
-        self.shank.align.scale_hist_data(line_track, line_feature, extend_feature=self.extend_feature,
-                                         lin_fit=self.lin_fit)
-
-    def get_scaled_histology(self):
-        self.hist_data, self.hist_data_ref, self.scale_data = self.shank.align.get_scaled_histology()
-
-
-    def apply_fit(self, fit_function, **kwargs):
-
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        fit_function(**kwargs)
-        self.update_plots()
-
-    def update_plots(self):
-
-        self.get_scaled_histology()
-        self.plot_histology(self.fig_hist, self.hist_data)
-        self.plot_scale_factor()
-        self.plot_fit()
-        self.plot_channels()
-        if self.unity:
-            self.set_unity_xyz()
-            self.plot_unity()
-        self.remove_reference_lines_from_display()
-        self.add_reference_lines_to_display()
-        self.align_reference_lines()
-        self.set_yaxis_range(self.fig_hist)
-        self.update_string()
-
-
-
-
-    def offset_button_pressed(self):
-        """
-        Triggered when offset button or o key pressed, applies offset to brain regions according to
-        locations of probe tip line on histology plot. Updates all plots and indices after offset
-        has been applied
-        """
-        self.apply_fit(self.offset_hist_data)
-
-
-    def movedown_button_pressed(self):
-        """
-        Triggered when Shift+down key pressed. Moves probe tip down by 50um and offsets data
-        """
-        self.apply_fit(self.offset_hist_data, val=-100/1e6)
-
-
-    def moveup_button_pressed(self):
-        """
-        Triggered when Shift+down key pressed. Moves probe tip up by 50um and offsets data
-        """
-        self.apply_fit(self.offset_hist_data, val=100/1e6)
-
-
-    def fit_button_pressed(self):
-        """
-        Triggered when fit button or Enter key pressed, applies scaling factor to brain regions
-        according to locations of reference lines on ephys and histology plots. Updates all plots
-        and indices after scaling has been applied
-        """
-        self.apply_fit(self.scale_hist_data)
-
-
-    def next_button_pressed(self):
-        """
-        Triggered when right key pressed. Updates all plots and indices with next move. Ensures
-        user cannot go past latest move
-        """
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        if self.shank.align.buffer.next_idx():
-            self.update_plots()
-
-
-    def prev_button_pressed(self):
-        """
-        Triggered when left key pressed. Updates all plots and indices with previous move.
-        Ensures user cannot go back more than self.max_idx moves
-        """
-
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        if self.shank.align.buffer.previous_idx():
-            self.update_plots()
-
-
-    def reset_button_pressed(self):
-        """
-        Triggered when reset button or Shift+R key pressed. Resets channel locations to orignal
-        location
-        """
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        self.remove_reference_lines_from_display()
-        self.lines_features = np.empty((0, 3))
-        self.lines_tracks = np.empty((0, 1))
-        self.points = np.empty((0, 1))
-
-        self.shank.align.reset_features_and_tracks()
-
-        self.get_scaled_histology()
-
-        self.plot_histology(self.fig_hist, self.hist_data)
-        self.plot_scale_factor()
-        if np.any(self.shank.feature_prev):
-            self.create_reference_lines(self.shank.feature_prev[1:-1] * 1e6)
-        self.plot_fit()
-        self.plot_channels()
-        self.set_yaxis_range(self.fig_hist)
-        self.update_string()
-
-
-    def lin_fit_option_changed(self, state):
-        if state == 0:
-            self.lin_fit = False
-            self.fit_button_pressed()
-        else:
-            self.lin_fit = True
-            self.fit_button_pressed()
-
-    def update_string(self) -> None:
-        """
-        Updates text boxes to indicate to user which move they are looking at
-        """
-        self.idx_string.setText(f"Current Index = {self.shank.align.buffer.current_idx}")
-        self.tot_idx_string.setText(f"Total Index = {self.shank.align.buffer.total_idx}")
-
-    # -------------------------------------------------------------------------------------------------
     # Upload/ save data
     # -------------------------------------------------------------------------------------------------
 
@@ -1400,7 +1109,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             upload_channels = self.loaddata.upload_data(self.xyz_channels)
             self.loaddata.update_alignments(self.shank.align.features[self.idx], self.shank.align.tracks[self.idx])
             self.prev_alignments = self.loaddata.get_previous_alignments()
-            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
             self.loaddata.get_starting_alignment(0)
             resolved = self.loaddata.update_qc()
 
@@ -1439,7 +1148,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.loaddata.upload_data(self.shank.align.features[self.idx], self.shank.align.tracks[self.idx],
                                       self.xyz_channels)
             self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
-            self.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
             self.loaddata.get_starting_alignment(0)
             QtWidgets.QMessageBox.information(self, 'Status', "Channels locations saved")
         else:
@@ -1476,14 +1185,208 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.complete_button_pressed()
 
 
-    def on_mouse_double_clicked(self, event):
+    # -------------------------------------------------------------------------------------------------
+    # Fitting functions
+    # -------------------------------------------------------------------------------------------------
+    def offset_hist_data(self, val: Optional[float] = None) -> None:
         """
-        Triggered when a double click event is detected on ephys of histology plots. Adds reference
-        line on ephys and histology plot that can be moved to align ephys signatures with brain
-        regions. Also adds scatter point on fit plot
-        :param event: double click event signals
-        :type event: pyqtgraph mouseEvents
+        Apply an offset to brain regions based on probe tip position.
+
+        Parameters
+        ----------
+        val : float, optional
+            Offset value in meters. If None, uses current value of  self.tip_pos
         """
+        # If no histology we can't do alignment
+        if not self.histology_exists:
+            return
+
+        val = val or self.tip_pos.value() / 1e6
+        self.shank.align.offset_hist_data(val)
+
+    def scale_hist_data(self) -> None:
+        """
+        Scale brain regions along the probe track based on reference lines.
+        """
+        # If no histology we can't do alignment
+        if not self.histology_exists:
+            return
+
+        line_track = np.array([line[0].pos().y() for line in self.lines_tracks]) / 1e6
+        line_feature = np.array([line[0].pos().y() for line in self.lines_features]) / 1e6
+
+        self.shank.align.scale_hist_data(line_track, line_feature,
+                                         extend_feature=self.extend_feature, lin_fit=self.lin_fit)
+
+    def get_scaled_histology(self) -> None:
+        """
+        Retrieve scaled histological data after alignment operations.
+        """
+
+        self.hist_data, self.hist_data_ref, self.scale_data = self.shank.align.get_scaled_histology()
+
+
+    def apply_fit(self, fit_function: Callable, **kwargs) -> None:
+        """
+        Apply a given fitting function to histology data and update all relevant plots.
+
+        Parameters
+        ----------
+        fit_function : Callable
+            A function that modifies the alignment
+        **kwargs :
+            Additional arguments passed to `fit_function`.
+        """
+
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        fit_function(**kwargs)
+        self.update_plots()
+
+    def update_plots(self) -> None:
+        """
+        Refresh all plots to reflect the current alignment state.
+        """
+
+        self.get_scaled_histology()
+        self.plot_histology(self.fig_hist, self.hist_data)
+        self.plot_scale_factor()
+        self.plot_fit()
+        self.plot_channels()
+        if self.unity:
+            self.set_unity_xyz()
+            self.plot_unity()
+        self.remove_reference_lines_from_display()
+        self.add_reference_lines_to_display()
+        self.align_reference_lines()
+        self.set_yaxis_range(self.fig_hist)
+        self.update_string()
+
+
+    def offset_button_pressed(self) -> None:
+        """
+        Called when the offset button or 'O' key is pressed.
+        Applies offset based on location of the probe tip line and refreshes plots.
+        """
+        self.apply_fit(self.offset_hist_data)
+
+
+    def movedown_button_pressed(self) -> None:
+        """
+        Called when Shift+Down is pressed. Offsets probe tip 100µm down.
+        """
+        self.apply_fit(self.offset_hist_data, val=-100/1e6)
+
+
+    def moveup_button_pressed(self) -> None:
+        """
+        Called when Shift+Up is pressed. Offsets probe tip 100µm up.
+        """
+        self.apply_fit(self.offset_hist_data, val=100/1e6)
+
+
+    def fit_button_pressed(self) -> None:
+        """
+        Called when the fit button or Enter is pressed.
+        Scales regions using reference lines and refreshes plots.
+        """
+        self.apply_fit(self.scale_hist_data)
+
+
+    def next_button_pressed(self) -> None:
+        """
+        Called when right key pressed.
+        Updates all plots and indices with next alignment. Ensures user cannot go past latest move
+        """
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        if self.shank.align.buffer.next_idx():
+            self.update_plots()
+
+
+    def prev_button_pressed(self) -> None:
+        """
+        Called when left key pressed.
+        Updates all plots and indices with previous alignment.
+        Ensures user cannot go back more than self.max_idx moves
+        """
+
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        if self.shank.align.buffer.previous_idx():
+            self.update_plots()
+
+
+    def reset_button_pressed(self) -> None:
+        """
+        Called when Reset button or Shift+R is pressed.
+        Resets feature and track alignment to original alignment and updates plots.
+        """
+        # If no histology we can't plot histology
+        if not self.histology_exists:
+            return
+
+        self.remove_reference_lines_from_display()
+        self.lines_features = np.empty((0, 3))
+        self.lines_tracks = np.empty((0, 1))
+        self.points = np.empty((0, 1))
+
+        self.shank.align.reset_features_and_tracks()
+
+        self.get_scaled_histology()
+
+        self.plot_histology(self.fig_hist, self.hist_data)
+        self.plot_scale_factor()
+        if np.any(self.shank.feature_prev):
+            self.create_reference_lines(self.shank.feature_prev[1:-1] * 1e6)
+        self.plot_fit()
+        self.plot_channels()
+        self.set_yaxis_range(self.fig_hist)
+        self.update_string()
+
+
+    def lin_fit_option_changed(self, state: int) -> None:
+        """
+        Toggle the use of linear fit for scaling histology data.
+
+        Parameters
+        ----------
+        state : int
+            0 disables linear fit, any other value enables it.
+        """
+        self.lin_fit = bool(state)
+        self.fit_button_pressed()
+
+    def update_string(self) -> None:
+        """
+        Updates on-screen text showing current and total alignment steps.
+        """
+        self.idx_string.setText(f"Current Index = {self.shank.align.buffer.current_idx}")
+        self.tot_idx_string.setText(f"Total Index = {self.shank.align.buffer.total_idx}")
+
+    # -------------------------------------------------------------------------------------------------
+    # Mouse interactions
+    # -------------------------------------------------------------------------------------------------
+
+
+    def on_mouse_double_clicked(self, event) -> None:
+        """
+        Handles a double-click event on the ephys or histology plots.
+
+        Adds a movable reference line on the ephys and histology plots
+
+        Parameters
+        ----------
+        event : pyqtgraph.GraphicsScene.mouseEvents.MouseClickEvent
+            The mouse double-click event.
+        """
+
         # If no histology no point adding lines
         if not self.histology_exists:
             return
@@ -1492,23 +1395,31 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             pos = self.ephys_plot.mapFromScene(event.scenePos())
             self.create_reference_line(pos.y() * self.y_scale)
 
-    def on_mouse_hover(self, items):
+    def on_mouse_hover(self, items: List[pg.GraphicsObject]) -> None:
         """
-        Returns the pyqtgraph items that the mouse is hovering over. Used to identify reference
-        lines so that they can be deleted
+        Handles mouse hover events over pyqtgraph plot items.
+
+        Identifies reference lines or linear regions the mouse is hovering over
+        to allow interactive operations like deletion or displaying additional info.
+
+        Parameters
+        ----------
+        items : list of pyqtgraph.GraphicsObject
+            List of items under the mouse cursor.
         """
         if len(items) > 1:
             self.selected_line = []
-            if type(items[0]) == pg.InfiniteLine:
-                self.selected_line = items[0]
-            elif (items[0] == self.fig_scale) & (type(items[1]) == pg.LinearRegionItem):
-                idx = np.where(self.scale_regions == items[1])[0][0]
-                self.fig_scale_ax.setLabel('Scale Factor = ' +
-                                           str(np.around(self.scale_factor[idx], 2)))
-            elif (items[0] == self.fig_hist) & (type(items[1]) == pg.LinearRegionItem):
-                self.selected_region = items[1]
-            elif (items[0] == self.fig_hist_ref) & (type(items[1]) == pg.LinearRegionItem):
-                self.selected_region = items[1]
+            item0, item1 = items[0], items[1]
+
+            if isinstance(item0, pg.InfiniteLine):
+                self.selected_line = item0
+            elif (item0 == self.fig_scale) and isinstance(item1, pg.LinearRegionItem):
+                idx = np.where(self.scale_regions == item1)[0][0]
+                self.fig_scale_ax.setLabel('Scale Factor = ' + str(np.around(self.scale_factor[idx], 2)))
+            elif (item0 == self.fig_hist) and isinstance(item1, pg.LinearRegionItem):
+                self.selected_region = item1
+            elif (item0 == self.fig_hist_ref) and isinstance(item1, pg.LinearRegionItem):
+                self.selected_region = items
 
 
 
@@ -1663,28 +1574,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     # -------------------------------------------------------------------------------------------------
     # Reference lines
     # -------------------------------------------------------------------------------------------------
-    @staticmethod
-    def create_line_style() -> Tuple[QtGui.QPen, QtGui.QBrush]:
-        """
-        Generate a random line style (color and dash style) for reference lines.
-
-        Returns
-        -------
-        pen : QtGui.QPen
-            A pen object defining the line color, dash style, and width.
-        brush : QtGui.QBrush
-            A brush object with the same color as the pen for use with filled items.
-        """
-        colours = ['#000000', '#cc0000', '#6aa84f', '#1155cc', '#a64d79']
-        styles = [QtCore.Qt.SolidLine, QtCore.Qt.DashLine, QtCore.Qt.DashDotLine]
-
-        colour = QtGui.QColor(random.choice(colours))
-        style = random.choice(styles)
-
-        pen = pg.mkPen(color=colour, style=style, width=3)
-        brush = pg.mkBrush(color=colour)
-
-        return pen, brush
 
     def create_reference_line(
             self,
@@ -1704,7 +1593,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             Y-axis position at which to draw the horizontal line.
         """
 
-        pen, brush = self.create_line_style()
+        pen, brush = utils.create_line_style()
 
         # Reference line on histology figure (track)
         line_track = pg.InfiniteLine(pos=pos, angle=0, pen=pen, movable=True)
@@ -1877,8 +1766,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         autocorr_plot.setXRange(min=np.min(self.plotdata.t_autocorr),
                                 max=np.max(self.plotdata.t_autocorr))
         autocorr_plot.setYRange(min=0, max=1.05 * np.max(autocorr))
-        self.set_axis(autocorr_plot, 'bottom', label='T (ms)')
-        self.set_axis(autocorr_plot, 'left', label='Number of spikes')
+        utils.set_axis(autocorr_plot, 'bottom', label='T (ms)')
+        utils.set_axis(autocorr_plot, 'left', label='Number of spikes')
         plot = pg.BarGraphItem(x=self.plotdata.t_autocorr, height=autocorr, width=0.24,
                                brush=self.bar_colour)
         autocorr_plot.addItem(plot)
@@ -1888,8 +1777,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         plot = pg.PlotCurveItem()
         template_plot.setXRange(min=np.min(self.plotdata.t_template),
                                 max=np.max(self.plotdata.t_template))
-        self.set_axis(template_plot, 'bottom', label='T (ms)')
-        self.set_axis(template_plot, 'left', label='Amplitude (a.u.)')
+        utils.set_axis(template_plot, 'bottom', label='T (ms)')
+        utils.set_axis(template_plot, 'left', label='Amplitude (a.u.)')
         plot.setData(x=self.plotdata.t_template, y=template_wf, pen=self.kpen_solid)
         template_plot.addItem(plot)
 
@@ -1982,23 +1871,6 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             for pop in self.cluster_popups:
                 pop.showMinimized()
             self.activateWindow()
-
-
-    def describe_labels_pressed(self):
-
-        if self.selected_region:
-            idx = np.where(self.hist_regions['left'] == self.selected_region)[0]
-            if not np.any(idx):
-                idx = np.where(self.hist_regions['right'] == self.selected_region)[0]
-            if not np.any(idx):
-                idx = np.array([0])
-
-        print('here')
-        self.label_win = ephys_gui.RegionLookup._get_or_create('Stucture Info', allen=self.allen)
-
-        # win.label_selected(idx)
-
-
 
 
 
@@ -2132,9 +2004,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         ax_width = self.fig_img.getAxis('left').width()
         ax_height = self.fig_img_cb.getAxis('top').height()
 
-        self.set_font(self.fig_img, 'left', ptsize=15, width=ax_width + 20)
-        self.set_font(self.fig_img, 'bottom', ptsize=15)
-        self.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height + 15)
+        utils.set_font(self.fig_img, 'left', ptsize=15, width=ax_width + 20)
+        utils.set_font(self.fig_img, 'bottom', ptsize=15)
+        utils.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height + 15)
 
         self.fig_data_area.resize(700, height1)
 
@@ -2142,7 +2014,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         start_plot = self.img_options_group.checkedAction()
 
         while plot != start_plot:
-            self.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height + 15)
+            utils.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height + 15)
             exporter = pg.exporters.ImageExporter(self.fig_data_layout.scene())
             exporter.export(str(image_path.joinpath(sess_info + 'img_' +
                                                     self.img_options_group.checkedAction()
@@ -2151,27 +2023,27 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.remove_reference_lines_from_display()
             plot = self.img_options_group.checkedAction()
 
-        self.set_font(self.fig_img, 'left', ptsize=8, width=ax_width)
-        self.set_font(self.fig_img, 'bottom', ptsize=8)
-        self.set_font(self.fig_img_cb, 'top', ptsize=8, height=ax_height)
-        self.set_axis(self.fig_img, 'bottom', label=xlabel_img)
+        utils.set_font(self.fig_img, 'left', ptsize=8, width=ax_width)
+        utils.set_font(self.fig_img, 'bottom', ptsize=8)
+        utils.set_font(self.fig_img_cb, 'top', ptsize=8, height=ax_height)
+        utils.set_axis(self.fig_img, 'bottom', label=xlabel_img)
         self.fig_data_layout.removeItem(self.fig_img)
         self.fig_data_layout.removeItem(self.fig_img_cb)
 
         # Next go over probe plots
         self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
         self.fig_data_layout.addItem(self.fig_probe, 1, 0)
-        self.set_axis(self.fig_probe, 'left', label='Distance from probe tip (uV)')
+        utils.set_axis(self.fig_probe, 'left', label='Distance from probe tip (uV)')
         self.fig_probe.setFixedWidth(self.fig_probe_width + self.fig_ax_width + 20)
-        self.set_font(self.fig_probe, 'left', ptsize=15, width=ax_width + 20)
-        self.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height + 15)
+        utils.set_font(self.fig_probe, 'left', ptsize=15, width=ax_width + 20)
+        utils.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height + 15)
         self.fig_data_area.resize(250, height1)
 
         plot = None
         start_plot = self.probe_options_group.checkedAction()
 
         while plot != start_plot:
-            self.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height + 15)
+            utils.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height + 15)
             exporter = pg.exporters.ImageExporter(self.fig_data_layout.scene())
             exporter.export(str(image_path.joinpath(sess_info + 'probe_' +
                                                     self.probe_options_group.checkedAction().
@@ -2180,9 +2052,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             plot = self.probe_options_group.checkedAction()
 
         self.fig_probe.setFixedWidth(self.fig_probe_width + self.fig_ax_width)
-        self.set_font(self.fig_probe, 'left', ptsize=8, width=ax_width)
-        self.set_font(self.fig_probe_cb, 'top', ptsize=8, height=ax_height)
-        self.set_axis(self.fig_probe, 'bottom', pen='w', label='blank')
+        utils.set_font(self.fig_probe, 'left', ptsize=8, width=ax_width)
+        utils.set_font(self.fig_probe_cb, 'top', ptsize=8, height=ax_height)
+        utils.set_axis(self.fig_probe, 'bottom', pen='w', label='blank')
         self.fig_data_layout.removeItem(self.fig_probe)
         self.fig_data_layout.removeItem(self.fig_probe_cb)
 
@@ -2190,12 +2062,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
         self.fig_probe_cb.clear()
         text = self.fig_probe_cb.getAxis('top').label.toPlainText()
-        self.set_axis(self.fig_probe_cb, 'top', pen='w')
+        utils.set_axis(self.fig_probe_cb, 'top', pen='w')
         self.fig_data_layout.addItem(self.fig_line, 1, 0)
 
-        self.set_axis(self.fig_line, 'left', label='Distance from probe tip (um)')
-        self.set_font(self.fig_line, 'left', ptsize=15, width=ax_width + 20)
-        self.set_font(self.fig_line, 'bottom', ptsize=15)
+        utils.set_axis(self.fig_line, 'left', label='Distance from probe tip (um)')
+        utils.set_font(self.fig_line, 'left', ptsize=15, width=ax_width + 20)
+        utils.set_font(self.fig_line, 'bottom', ptsize=15)
         self.fig_data_area.resize(200, height1)
 
         plot = None
@@ -2209,10 +2081,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             plot = self.line_options_group.checkedAction()
 
         [self.fig_probe_cb.addItem(cbar) for cbar in self.probe_cbars]
-        self.set_axis(self.fig_probe_cb, 'top', pen='k', label=text)
-        self.set_font(self.fig_line, 'left', ptsize=8, width=ax_width)
-        self.set_font(self.fig_line, 'bottom', ptsize=8)
-        self.set_axis(self.fig_line, 'bottom', label=xlabel_line)
+        utils.set_axis(self.fig_probe_cb, 'top', pen='k', label=text)
+        utils.set_font(self.fig_line, 'left', ptsize=8, width=ax_width)
+        utils.set_font(self.fig_line, 'bottom', ptsize=8)
+        utils.set_axis(self.fig_line, 'bottom', label=xlabel_line)
         self.fig_data_layout.removeItem(self.fig_line)
         self.fig_data_layout.removeItem(self.fig_probe_cb)
         self.fig_data_area.resize(width1, height1)
@@ -2260,19 +2132,19 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             plot = self.slice_options_group.checkedAction()
 
         # Save the brain regions image
-        self.set_axis(self.fig_hist_extra_yaxis, 'left')
+        utils.set_axis(self.fig_hist_extra_yaxis, 'left')
         # Add labels to show which ones are aligned
-        self.set_axis(self.fig_hist, 'bottom', label='aligned')
-        self.set_font(self.fig_hist, 'bottom', ptsize=12)
-        self.set_axis(self.fig_hist_ref, 'bottom', label='original')
-        self.set_font(self.fig_hist_ref, 'bottom', ptsize=12)
+        utils.set_axis(self.fig_hist, 'bottom', label='aligned')
+        utils.set_font(self.fig_hist, 'bottom', ptsize=12)
+        utils.set_axis(self.fig_hist_ref, 'bottom', label='original')
+        utils.set_font(self.fig_hist_ref, 'bottom', ptsize=12)
         exporter = pg.exporters.ImageExporter(self.fig_hist_layout.scene())
         exporter.export(str(image_path.joinpath(sess_info + 'hist.png')))
-        self.set_axis(self.fig_hist_extra_yaxis, 'left', pen=None)
-        self.set_font(self.fig_hist, 'bottom', ptsize=8)
-        self.set_axis(self.fig_hist, 'bottom', pen='w', label='blank')
-        self.set_font(self.fig_hist_ref, 'bottom', ptsize=8)
-        self.set_axis(self.fig_hist_ref, 'bottom', pen='w', label='blank')
+        utils.set_axis(self.fig_hist_extra_yaxis, 'left', pen=None)
+        utils.set_font(self.fig_hist, 'bottom', ptsize=8)
+        utils.set_axis(self.fig_hist, 'bottom', pen='w', label='blank')
+        utils.set_font(self.fig_hist_ref, 'bottom', ptsize=8)
+        utils.set_axis(self.fig_hist_ref, 'bottom', pen='w', label='blank')
 
         make_overview_plot(image_path, sess_info, save_folder=image_path_overview)
 

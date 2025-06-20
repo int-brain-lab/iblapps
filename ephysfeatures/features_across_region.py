@@ -1,5 +1,4 @@
 import copy
-from pathlib import Path
 import sys
 
 import pyqtgraph as pg
@@ -8,9 +7,9 @@ import pandas as pd
 import numpy as np
 
 from iblatlas.atlas import AllenAtlas
-import atlaselectrophysiology.ColorBar as cb
+import atlaselectrophysiology.utils.ColorBar as cb
 from ibllib.pipes.ephys_alignment import EphysAlignment
-from atlaselectrophysiology.AdaptedAxisItem import replace_axis
+from atlaselectrophysiology.utils.AdaptedAxisItem import replace_axis
 from ephysfeatures.qrangeslider import QRangeSlider
 from one.remote import aws
 from one.api import ONE
