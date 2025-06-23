@@ -1,6 +1,6 @@
 import os
 import platform
-from typing import Any, Union, Optional, List, Dict, Tuple, Callable
+from typing import Any, Union, Optional, List, Dict, Callable
 
 if platform.system() == 'Darwin':
     if platform.release().split('.')[0] >= '20':
@@ -14,13 +14,10 @@ import numpy as np
 import atlaselectrophysiology.utils.qt_utils as utils
 
 from atlaselectrophysiology.load_data import LoadData
-from ibllib.pipes.ephys_alignment import EphysAlignment
-import atlaselectrophysiology.plot_data as pd
 import atlaselectrophysiology.utils.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
-from atlaselectrophysiology.subject_scaling import ScalingWindow
-from ephysfeatures.features_across_region import RegionFeatureWindow
-from atlaselectrophysiology.create_overview_plots import make_overview_plot
+
+from atlaselectrophysiology.plugins.cluster_popup import callback as cluster_callback
 from pathlib import Path
 from qt_helpers import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
@@ -47,7 +44,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         super(MainWindow, self).__init__()
 
         if unity:
-            from atlaselectrophysiology.unity_data import UnityData
+            from atlaselectrophysiology.plugins.unity_data import UnityData
             self.unitydata = UnityData()
             self.unity = True
         else:
@@ -705,7 +702,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         if data['cluster']:
             self.cluster_data = data['x']
-            self.ephys_plot.sigClicked.connect(self.cluster_clicked)
+            self.ephys_plot.sigClicked.connect(lambda plot, points: cluster_callback(self, plot, points))
 
     def plot_line(
             self,
@@ -1264,6 +1261,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.set_yaxis_range(self.fig_hist)
         self.update_string()
 
+        # for hook in self.plot_hooks:
+        #     hook(self)
+        # def register_hook(self, func):
+        #     self.plot_hooks.append(func)
 
     def offset_button_pressed(self) -> None:
         """
@@ -1757,398 +1758,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     # -------------------------------------------------------------------------------------------------
     # Plugins
     # -------------------------------------------------------------------------------------------------
-    def cluster_clicked(self, item, point):
-        point_pos = point[0].pos()
-        clust_idx = np.argwhere(self.cluster_data == point_pos.x())[0][0]
-
-        autocorr, clust_no = self.plotdata.get_autocorr(clust_idx)
-        autocorr_plot = pg.PlotItem()
-        autocorr_plot.setXRange(min=np.min(self.plotdata.t_autocorr),
-                                max=np.max(self.plotdata.t_autocorr))
-        autocorr_plot.setYRange(min=0, max=1.05 * np.max(autocorr))
-        utils.set_axis(autocorr_plot, 'bottom', label='T (ms)')
-        utils.set_axis(autocorr_plot, 'left', label='Number of spikes')
-        plot = pg.BarGraphItem(x=self.plotdata.t_autocorr, height=autocorr, width=0.24,
-                               brush=self.bar_colour)
-        autocorr_plot.addItem(plot)
-
-        template_wf = self.plotdata.get_template_wf(clust_idx)
-        template_plot = pg.PlotItem()
-        plot = pg.PlotCurveItem()
-        template_plot.setXRange(min=np.min(self.plotdata.t_template),
-                                max=np.max(self.plotdata.t_template))
-        utils.set_axis(template_plot, 'bottom', label='T (ms)')
-        utils.set_axis(template_plot, 'left', label='Amplitude (a.u.)')
-        plot.setData(x=self.plotdata.t_template, y=template_wf, pen=self.kpen_solid)
-        template_plot.addItem(plot)
-
-        clust_layout = pg.GraphicsLayout()
-        clust_layout.addItem(autocorr_plot, 0, 0)
-        clust_layout.addItem(template_plot, 1, 0)
-
-        self.clust_win = ephys_gui.PopupWindow(title=f'Cluster {clust_no}')
-        self.clust_win.closed.connect(self.popup_closed)
-        self.clust_win.moved.connect(self.popup_moved)
-        self.clust_win.popup_widget.addItem(autocorr_plot, 0, 0)
-        self.clust_win.popup_widget.addItem(template_plot, 1, 0)
-        self.cluster_popups.append(self.clust_win)
-        self.activateWindow()
-
-        return clust_no
-
-    def display_subject_scaling(self):
-        if self.subj_win is not None:
-            self.subj_win.close()
-
-        self.subj_win = ScalingWindow(self.loaddata.probe_id, self.loaddata.subj, self.loaddata.one, self.loaddata.brain_atlas)
-
-    def display_region_features(self):
-        self.region_win = RegionFeatureWindow(self.loaddata.one, np.unique(np.array(self.ephysalign.region_id).ravel()),
-                                              self.loaddata.brain_atlas, download=False)
-        self.region_win.show()
-
-    def display_session_notes(self):
-        self.notes_win = ephys_gui.PopupWindow(title='Session notes from Alyx', size=(200, 100),
-                                               graphics=False)
-        notes = QtWidgets.QTextEdit()
-        notes.setReadOnly(True)
-        notes.setLineWrapMode(QtWidgets.QTextEdit.WidgetWidth)
-        notes.setText(self.sess_notes)
-        self.notes_win.layout.addWidget(notes)
-
-    def display_nearby_sessions(self):
-
-        # If no histology we can't get nearby sessions
-        if not self.histology_exists:
-            return
-
-        if not self.nearby:
-            self.nearby, self.dist, self.dist_mlap = self.loaddata.get_nearby_trajectories()
-
-        self.nearby_win = ephys_gui.PopupWindow(title='Nearby Sessions', size=(400, 300),
-                                                graphics=False)
-
-        self.nearby_table = QtWidgets.QTableWidget()
-        self.nearby_table.setRowCount(10)
-        self.nearby_table.setColumnCount(3)
-
-        self.nearby_table.setHorizontalHeaderItem(0, QtWidgets.QTableWidgetItem('Session'))
-        self.nearby_table.setHorizontalHeaderItem(1, QtWidgets.QTableWidgetItem('dist'))
-        self.nearby_table.setHorizontalHeaderItem(2, QtWidgets.QTableWidgetItem('dist_mlap'))
-        self.nearby_table.setSortingEnabled(True)
-        for iT, (near, dist, dist_mlap) in enumerate(zip(self.nearby, self.dist, self.dist_mlap)):
-            sess_item = QtWidgets.QTableWidgetItem(near)
-            dist_item = QtWidgets.QTableWidgetItem()
-            dist_item.setData(0, int(dist))
-            dist_mlap_item = QtWidgets.QTableWidgetItem()
-            dist_mlap_item.setData(0, int(dist_mlap))
-            self.nearby_table.setItem(iT, 0, sess_item)
-            self.nearby_table.setItem(iT, 1, dist_item)
-            self.nearby_table.setItem(iT, 2, dist_mlap_item)
-
-        self.nearby_win.layout.addWidget(self.nearby_table)
-
-    def popup_closed(self, popup):
-        popup_idx = [iP for iP, pop in enumerate(self.cluster_popups) if pop == popup][0]
-        self.cluster_popups.pop(popup_idx)
-
-    def popup_moved(self):
-        self.activateWindow()
-
-    def close_popups(self):
-        for pop in self.cluster_popups:
-            pop.blockSignals(True)
-            pop.close()
-        self.cluster_popups = []
-
-    def minimise_popups(self):
-        self.popup_status = not self.popup_status
-        if self.popup_status:
-            for pop in self.cluster_popups:
-                pop.showNormal()
-            self.activateWindow()
-        else:
-            for pop in self.cluster_popups:
-                pop.showMinimized()
-            self.activateWindow()
 
 
-
-    def prepare_shank_data(self, shank):
-        shank_picks, shank_feature, shank_track = self.loaddata.get_alignment_for_insertion(shank)
-        if shank_picks is None:
-            return None
-        shank_data, shank_path = self.loaddata.get_probe_data(shank['name'])
-        shank_align = EphysAlignment(shank_picks, shank_data['channels']['localCoordinates'][:, 1],
-                                     track_prev=shank_track,
-                                     feature_prev=shank_feature,
-                                     brain_atlas=self.loaddata.brain_atlas)
-
-        shank_plot = pd.PlotData(shank_path, shank_data, 0)
-        chn_data = shank_plot.get_channel_data()
-        clust_data = shank_plot.get_cluster_data()
-
-        shank_channels = shank_align.get_channel_locations(shank_align.feature_init, shank_align.track_init)
-
-        chn_data['x'] = shank_channels[:, 0]
-        chn_data['y'] = shank_channels[:, 1]
-        chn_data['z'] = shank_channels[:, 2]
-
-        clust_data['x'] = chn_data['x'][shank_data['clusters']['channels']]
-        clust_data['y'] = chn_data['y'][shank_data['clusters']['channels']]
-        clust_data['z'] = chn_data['z'][shank_data['clusters']['channels']]
-
-        clust_idx = dict()
-        clust_idx['all'] = shank_plot.clust
-
-        for filter_type in ['KS good', 'KS mua', 'IBL good']:
-            shank_plot.filter_units(filter_type)
-            clust_idx[filter_type] = shank_plot.clust
-
-        return chn_data, clust_data, clust_idx
-
-    def set_unity_xyz(self):
-        for i, a in enumerate(['x', 'y', 'z']):
-            self.unity_data[self.loaddata.probe_label]['channels'][a] = self.xyz_channels[:, i]
-            self.unity_data[self.loaddata.probe_label]['clusters'][a] = (self.xyz_channels[:, i][self.cluster_channels])
-
-    def toggle_unity_regions(self):
-        self.unity_region_status = not self.unity_region_status
-        self.unitydata.toggle_regions(self.unity_region_status)
-
-    def on_point_size_changed(self):
-        self.point_size = self.unity_slider.value() / 100
-        self.unitydata.set_point_size(self.point_size)
-
-        #     if self.unity:
-        #         self.unity_data = {}
-        #         self.unitydata.toggle_regions(False)
-        #         self.unitydata.delete_text()
-        #         self.unitydata.init()
-        #         other_shanks = self.loaddata.get_other_shanks()
-        #         for shank in other_shanks:
-        #             shank_data = self.prepare_shank_data(shank)
-        #             if shank_data is not None:
-        #                 self.unity_data[shank['name']] = {'channels': shank_data[0], 'clusters': shank_data[1],
-        #                                                   'cluster_idx': shank_data[2]}
-        #
-        #         # Fill in for the selected shank
-        #         clust_idx = dict()
-        #         clust_idx['all'] = self.plotdata.clust
-        #
-        #         for filter_type in ['KS good', 'KS mua', 'IBL good']:
-        #             self.plotdata.filter_units(filter_type)
-        #             clust_idx[filter_type] = self.plotdata.clust
-        #
-        #         self.plotdata.filter_units('all')
-        #
-        #         self.unity_data[self.loaddata.probe_label] = {
-        #             'channels': self.plotdata.get_channel_data(),
-        #             'clusters': self.plotdata.get_cluster_data(),
-        #             'cluster_idx': clust_idx,
-        #         }
-        #
-        #         self.set_unity_xyz()
-
-    def plot_unity(self, plot_type=None):
-        plot_type = plot_type or self.unity_plot
-        if plot_type == 'probe':
-            feature = self.probe_options_group.checkedAction().text()
-            points = 'channels'
-        else:
-            feature = self.img_options_group.checkedAction().text()
-            if 'Cluster' not in feature:
-                return
-            points = 'clusters'
-
-        self.unitydata.add_data(self.unity_data, points, feature, self.filter_type, self.point_size,
-                                self.loaddata.brain_atlas)
-        self.unity_plot = plot_type
-
-    def save_plots(self, save_path=None):
-        #TODOOOOO improve
-        """
-        Saves all plots from the GUI into folder
-        """
-        # make folder to save plots to
-        try:
-            sess_info = (self.loaddata.subj + '_' + str(self.loaddata.date) + '_' +
-                         self.loaddata.probe_label + '_')
-            image_path_overview = self.probe_path.joinpath('GUI_plots')
-            image_path = image_path_overview.joinpath(sess_info[:-1])
-        except Exception:
-            sess_info = ''
-            image_path_overview = self.probe_path.joinpath('GUI_plots')
-            image_path = image_path_overview
-
-        if save_path:
-            image_path_overview = Path(save_path)
-
-        os.makedirs(image_path_overview, exist_ok=True)
-        os.makedirs(image_path, exist_ok=True)
-        # Reset all axis, put view back to 1 and remove any reference lines
-        self.reset_axis_button_pressed()
-        self.set_view(view=1, configure=False)
-        self.remove_reference_lines_from_display()
-
-        xlabel_img = self.fig_img.getAxis('bottom').label.toPlainText()
-        xlabel_line = self.fig_line.getAxis('bottom').label.toPlainText()
-
-        # First go through all the image plots
-        self.fig_data_layout.removeItem(self.fig_probe)
-        self.fig_data_layout.removeItem(self.fig_probe_cb)
-        self.fig_data_layout.removeItem(self.fig_line)
-
-        width1 = self.fig_data_area.width()
-        height1 = self.fig_data_area.height()
-        ax_width = self.fig_img.getAxis('left').width()
-        ax_height = self.fig_img_cb.getAxis('top').height()
-
-        utils.set_font(self.fig_img, 'left', ptsize=15, width=ax_width + 20)
-        utils.set_font(self.fig_img, 'bottom', ptsize=15)
-        utils.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height + 15)
-
-        self.fig_data_area.resize(700, height1)
-
-        plot = None
-        start_plot = self.img_options_group.checkedAction()
-
-        while plot != start_plot:
-            utils.set_font(self.fig_img_cb, 'top', ptsize=15, height=ax_height + 15)
-            exporter = pg.exporters.ImageExporter(self.fig_data_layout.scene())
-            exporter.export(str(image_path.joinpath(sess_info + 'img_' +
-                                                    self.img_options_group.checkedAction()
-                                                    .text() + '.png')))
-            self.toggle_plots(self.img_options_group)
-            self.remove_reference_lines_from_display()
-            plot = self.img_options_group.checkedAction()
-
-        utils.set_font(self.fig_img, 'left', ptsize=8, width=ax_width)
-        utils.set_font(self.fig_img, 'bottom', ptsize=8)
-        utils.set_font(self.fig_img_cb, 'top', ptsize=8, height=ax_height)
-        utils.set_axis(self.fig_img, 'bottom', label=xlabel_img)
-        self.fig_data_layout.removeItem(self.fig_img)
-        self.fig_data_layout.removeItem(self.fig_img_cb)
-
-        # Next go over probe plots
-        self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
-        self.fig_data_layout.addItem(self.fig_probe, 1, 0)
-        utils.set_axis(self.fig_probe, 'left', label='Distance from probe tip (uV)')
-        self.fig_probe.setFixedWidth(self.fig_probe_width + self.fig_ax_width + 20)
-        utils.set_font(self.fig_probe, 'left', ptsize=15, width=ax_width + 20)
-        utils.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height + 15)
-        self.fig_data_area.resize(250, height1)
-
-        plot = None
-        start_plot = self.probe_options_group.checkedAction()
-
-        while plot != start_plot:
-            utils.set_font(self.fig_probe_cb, 'top', ptsize=15, height=ax_height + 15)
-            exporter = pg.exporters.ImageExporter(self.fig_data_layout.scene())
-            exporter.export(str(image_path.joinpath(sess_info + 'probe_' +
-                                                    self.probe_options_group.checkedAction().
-                                                    text() + '.png')))
-            self.toggle_plots(self.probe_options_group)
-            plot = self.probe_options_group.checkedAction()
-
-        self.fig_probe.setFixedWidth(self.fig_probe_width + self.fig_ax_width)
-        utils.set_font(self.fig_probe, 'left', ptsize=8, width=ax_width)
-        utils.set_font(self.fig_probe_cb, 'top', ptsize=8, height=ax_height)
-        utils.set_axis(self.fig_probe, 'bottom', pen='w', label='blank')
-        self.fig_data_layout.removeItem(self.fig_probe)
-        self.fig_data_layout.removeItem(self.fig_probe_cb)
-
-        # Next go through the line plots
-        self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
-        self.fig_probe_cb.clear()
-        text = self.fig_probe_cb.getAxis('top').label.toPlainText()
-        utils.set_axis(self.fig_probe_cb, 'top', pen='w')
-        self.fig_data_layout.addItem(self.fig_line, 1, 0)
-
-        utils.set_axis(self.fig_line, 'left', label='Distance from probe tip (um)')
-        utils.set_font(self.fig_line, 'left', ptsize=15, width=ax_width + 20)
-        utils.set_font(self.fig_line, 'bottom', ptsize=15)
-        self.fig_data_area.resize(200, height1)
-
-        plot = None
-        start_plot = self.line_options_group.checkedAction()
-        while plot != start_plot:
-            exporter = pg.exporters.ImageExporter(self.fig_data_layout.scene())
-            exporter.export(str(image_path.joinpath(sess_info + 'line_' +
-                                                    self.line_options_group.checkedAction().
-                                                    text() + '.png')))
-            self.toggle_plots(self.line_options_group)
-            plot = self.line_options_group.checkedAction()
-
-        [self.fig_probe_cb.addItem(cbar) for cbar in self.probe_cbars]
-        utils.set_axis(self.fig_probe_cb, 'top', pen='k', label=text)
-        utils.set_font(self.fig_line, 'left', ptsize=8, width=ax_width)
-        utils.set_font(self.fig_line, 'bottom', ptsize=8)
-        utils.set_axis(self.fig_line, 'bottom', label=xlabel_line)
-        self.fig_data_layout.removeItem(self.fig_line)
-        self.fig_data_layout.removeItem(self.fig_probe_cb)
-        self.fig_data_area.resize(width1, height1)
-        self.fig_data_layout.addItem(self.fig_probe_cb, 0, 0, 1, 2)
-        self.fig_data_layout.addItem(self.fig_img_cb, 0, 2)
-        self.fig_data_layout.addItem(self.fig_probe, 1, 0)
-        self.fig_data_layout.addItem(self.fig_line, 1, 1)
-        self.fig_data_layout.addItem(self.fig_img, 1, 2)
-
-        self.set_view(view=1, configure=False)
-
-        # Save slice images
-        plot = None
-        start_plot = self.slice_options_group.checkedAction()
-        while plot != start_plot:
-            self.toggle_channel_button_pressed()
-            self.traj_line.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2],
-                                   pen=self.rpen_dot)
-            self.fig_slice.addItem(self.traj_line)
-            slice_name = self.slice_options_group.checkedAction().text()
-            exporter = pg.exporters.ImageExporter(self.fig_slice)
-            exporter.export(str(image_path.joinpath(sess_info + 'slice_' + slice_name + '.png')))
-            self.toggle_plots(self.slice_options_group)
-            plot = self.slice_options_group.checkedAction()
-
-        plot = None
-        start_plot = self.slice_options_group.checkedAction()
-        while plot != start_plot:
-            self.toggle_channel_button_pressed()
-            self.traj_line.setData(x=self.xyz_channels[:, 0], y=self.xyz_channels[:, 2],
-                                   pen=self.rpen_dot)
-            self.fig_slice.addItem(self.traj_line)
-            slice_name = self.slice_options_group.checkedAction().text()
-            self.fig_slice.setXRange(min=np.min(self.xyz_channels[:, 0]) - 200 / 1e6,
-                                     max=np.max(self.xyz_channels[:, 0]) + 200 / 1e6)
-            self.fig_slice.setYRange(min=np.min(self.xyz_channels[:, 2]) - 500 / 1e6,
-                                     max=np.max(self.xyz_channels[:, 2]) + 500 / 1e6)
-            self.fig_slice.resize(50, self.slice_height)
-            exporter = pg.exporters.ImageExporter(self.fig_slice)
-            exporter.export(
-                str(image_path.joinpath(sess_info + 'slice_zoom_' + slice_name + '.png')))
-            self.fig_slice.resize(self.slice_width, self.slice_height)
-            self.fig_slice.setRange(rect=self.slice_rect)
-            self.toggle_plots(self.slice_options_group)
-            plot = self.slice_options_group.checkedAction()
-
-        # Save the brain regions image
-        utils.set_axis(self.fig_hist_extra_yaxis, 'left')
-        # Add labels to show which ones are aligned
-        utils.set_axis(self.fig_hist, 'bottom', label='aligned')
-        utils.set_font(self.fig_hist, 'bottom', ptsize=12)
-        utils.set_axis(self.fig_hist_ref, 'bottom', label='original')
-        utils.set_font(self.fig_hist_ref, 'bottom', ptsize=12)
-        exporter = pg.exporters.ImageExporter(self.fig_hist_layout.scene())
-        exporter.export(str(image_path.joinpath(sess_info + 'hist.png')))
-        utils.set_axis(self.fig_hist_extra_yaxis, 'left', pen=None)
-        utils.set_font(self.fig_hist, 'bottom', ptsize=8)
-        utils.set_axis(self.fig_hist, 'bottom', pen='w', label='blank')
-        utils.set_font(self.fig_hist_ref, 'bottom', ptsize=8)
-        utils.set_axis(self.fig_hist_ref, 'bottom', pen='w', label='blank')
-
-        make_overview_plot(image_path, sess_info, save_folder=image_path_overview)
-
-        self.add_reference_lines_to_display()
 
 
 

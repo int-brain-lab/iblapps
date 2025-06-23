@@ -2,6 +2,7 @@ import pyqtgraph as pg
 from PyQt5 import QtCore, QtGui, QtWidgets
 from typing import Any, Union, Optional, List, Dict, Tuple, Callable
 import random
+from abc import ABC, abstractmethod
 
 
 def set_axis(
@@ -181,7 +182,7 @@ class PopupWindow(QtWidgets.QMainWindow):
     def __init__(self, title, parent=None, size=(300, 300), graphics=True):
         super(PopupWindow, self).__init__()
         self.parent = parent
-        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.Tool)
+        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.Window)
         self.resize(size[0], size[1])
         self.move(random.randrange(30) + 1000, random.randrange(30) + 200)
         if graphics:
@@ -192,7 +193,15 @@ class PopupWindow(QtWidgets.QMainWindow):
             self.popup_widget.setLayout(self.layout)
         self.setCentralWidget(self.popup_widget)
         self.setWindowTitle(title)
+        self.setup()
         self.show()
+
+    @abstractmethod
+    def setup(self):
+        """
+
+        :return:
+        """
 
     def closeEvent(self, event):
         self.closed.emit(self)
@@ -200,5 +209,3 @@ class PopupWindow(QtWidgets.QMainWindow):
 
     def leaveEvent(self, event):
         self.moved.emit()
-
-

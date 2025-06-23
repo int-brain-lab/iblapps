@@ -49,10 +49,6 @@ class LoadData:
             self.brain_regions = self.one.alyx.rest('brain-regions', 'list', expires=timedelta(days=1))
             self.chn_coords = None
             self.chn_depths = None
-            # Download bwm aggregate tables for for ephys feature gui
-            table_path = self.one.cache_dir.joinpath('bwm_features')
-            s3, bucket_name = aws.get_s3_from_alyx(alyx=self.one.alyx)
-            aws.s3_download_folder("aggregates/bwm/latest", table_path, s3=s3, bucket_name=bucket_name)
 
         # Initialise all variables that get assigned
         self.sess_with_hist = None
@@ -163,20 +159,6 @@ class LoadData:
         self.subj = self.shanks[idx]['session_info']['subject']
 
 
-        # self.n_sess = self.sess[idx]['session_info']['number']
-        # self.date = self.sess[idx]['session_info']['start_time'][:10]
-        # self.probe_label = self.sess[idx]['name']
-        # self.probe_id = self.sess[idx]['id']
-        # self.lab = self.sess[idx]['session_info']['lab']
-        # self.eid = self.sess[idx]['session']
-        # self.subj = self.sess[idx]['session_info']['subject']
-
-        #
-        # self.probes = Bunch()
-        # #insertions = [self.sess[idx]] + self.get_other_shanks()
-        # for ins in self.shanks:
-        #     self.probes[ins['name']] = ProbeLoader(ins, self.one, self.brain_atlas)
-
         print(self.subj)
         print(self.probe_label)
         print(self.date)
@@ -233,55 +215,6 @@ class LoadData:
         self.prev_align.append('original')
 
         return self.prev_align
-
-
-    def get_nearby_trajectories(self):
-        """
-        Find sessions that have trajectories close to the currently selected session
-        :return close_session: list of nearby sessions ordered by absolute distance, displayed as
-        subject + date + probe
-        :type: list of strings
-        :return close_dist: absolute distance to nearby sessions
-        :type: list of float
-        :return close_dist_mlap: absolute distance to nearby sessions, only using ml and ap
-        directions
-        :type: list of float
-        """
-
-        if self.traj_ids is None:
-            self.sess_with_hist = self.one.alyx.rest('trajectories', 'list',
-                                                     provenance='Histology track',
-                                                     django='x__isnull,False,probe_insertion__'
-                                                     'datasets__name__icontains,spikes.times',
-                                                     expires=timedelta(days=1))
-            # Some do not have tracing, exclude these ones
-
-            depths = np.arange(200, 4100, 20) / 1e6
-            trajectories = [atlas.Insertion.from_dict(sess) for sess in self.sess_with_hist]
-            self.traj_ids = [sess['id'] for sess in self.sess_with_hist]
-            self.traj_coords = np.empty((len(self.traj_ids), len(depths), 3))
-            for iT, traj in enumerate(trajectories):
-                self.traj_coords[iT, :] = (histology.interpolate_along_track
-                                           (np.vstack([traj.tip, traj.entry]), depths))
-
-        chosen_traj = self.traj_ids.index(self.traj_id)
-        avg_dist = np.mean(np.sqrt(np.sum((self.traj_coords - self.traj_coords[chosen_traj]) ** 2,
-                                          axis=2)), axis=1)
-        avg_dist_mlap = np.mean(np.sqrt(np.sum((self.traj_coords[:, :, 0:2] -
-                                                self.traj_coords[chosen_traj][:, 0:2]) ** 2,
-                                        axis=2)), axis=1)
-
-        closest_traj = np.argsort(avg_dist)
-        close_dist = avg_dist[closest_traj[0:10]] * 1e6
-        close_dist_mlap = avg_dist_mlap[closest_traj[0:10]] * 1e6
-
-        close_sessions = []
-        for sess_idx in closest_traj[0:10]:
-            close_sessions.append((self.sess_with_hist[sess_idx]['session']['subject'] + ' ' +
-                                  self.sess_with_hist[sess_idx]['session']['start_time'][:10] +
-                                   ' ' + self.sess_with_hist[sess_idx]['probe_name']))
-
-        return close_sessions, close_dist, close_dist_mlap
 
 
     def get_other_shanks(self):
@@ -373,7 +306,7 @@ class CircularIndexTracker:
 
             return True
 
-    def next_idx(self) -> None:
+    def next_idx(self) -> bool:
         """
         Move forward through the buffer if within bounds.
         """
@@ -382,8 +315,6 @@ class CircularIndexTracker:
             self.idx = np.mod(self.current_idx, self.max_idx)
 
             return True
-            # idx_prev is the fit
-            # idx is the one that is being displayed
 
     def reset_idx(self) -> None:
         """
@@ -546,6 +477,15 @@ class ProbeLoader:
         self.download_hist = True
         self.subj = self.insertion['session_info']['subject']
         self.lab = self.insertion['session_info']['lab']
+        self.eid = self.insertion['session']
+        self.date = self.insertion['session_info']['start_time'][:10]
+        self.probe_label = self.insertion['name']
+
+        hist_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
+                                       provenance='Histology track')
+        if len(hist_traj) == 1:
+            if hist_traj[0]['x'] is not None:
+                self.traj_id = hist_traj[0]['id']
 
 
         self.histology = self.insertion['json'].get('extended_qc', {}).get('tracing_exists', False)
@@ -570,7 +510,7 @@ class ProbeLoader:
     def load_data(self):
         # TODO cleaner way to do this
         if not self.data_loaded:
-            self.raw_data = DataLoader(self.one, self.insertion['session'], self.insertion['name'],
+            self.raw_data = DataLoader(self.one, self.eid, self.insertion['name'],
                                    spike_collection=self.spike_collection)
 
             self.chn_coords = self.raw_data.data['channels']['localCoordinates']
@@ -612,6 +552,8 @@ class ProbeLoader:
 
         # Set the featuer to the current chosen alignment
         self.align.set_init_feature_track(self.feature_prev, self.track_prev)
+        # TODO better handling
+        self.probe_path = self.raw_data.probe_path
 
 
     def get_slice_images(self, xyz_channels):

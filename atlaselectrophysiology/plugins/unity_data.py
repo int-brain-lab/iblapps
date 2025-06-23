@@ -7,6 +7,103 @@ import numpy as np
 
 import time
 
+
+def prepare_shank_data(self, shank):
+    shank_picks, shank_feature, shank_track = self.loaddata.get_alignment_for_insertion(shank)
+    if shank_picks is None:
+        return None
+    shank_data, shank_path = self.loaddata.get_probe_data(shank['name'])
+    shank_align = EphysAlignment(shank_picks, shank_data['channels']['localCoordinates'][:, 1],
+                                 track_prev=shank_track,
+                                 feature_prev=shank_feature,
+                                 brain_atlas=self.loaddata.brain_atlas)
+
+    shank_plot = pd.PlotData(shank_path, shank_data, 0)
+    chn_data = shank_plot.get_channel_data()
+    clust_data = shank_plot.get_cluster_data()
+
+    shank_channels = shank_align.get_channel_locations(shank_align.feature_init, shank_align.track_init)
+
+    chn_data['x'] = shank_channels[:, 0]
+    chn_data['y'] = shank_channels[:, 1]
+    chn_data['z'] = shank_channels[:, 2]
+
+    clust_data['x'] = chn_data['x'][shank_data['clusters']['channels']]
+    clust_data['y'] = chn_data['y'][shank_data['clusters']['channels']]
+    clust_data['z'] = chn_data['z'][shank_data['clusters']['channels']]
+
+    clust_idx = dict()
+    clust_idx['all'] = shank_plot.clust
+
+    for filter_type in ['KS good', 'KS mua', 'IBL good']:
+        shank_plot.filter_units(filter_type)
+        clust_idx[filter_type] = shank_plot.clust
+
+    return chn_data, clust_data, clust_idx
+
+
+def set_unity_xyz(self):
+    for i, a in enumerate(['x', 'y', 'z']):
+        self.unity_data[self.loaddata.probe_label]['channels'][a] = self.xyz_channels[:, i]
+        self.unity_data[self.loaddata.probe_label]['clusters'][a] = (self.xyz_channels[:, i][self.cluster_channels])
+
+
+def toggle_unity_regions(self):
+    self.unity_region_status = not self.unity_region_status
+    self.unitydata.toggle_regions(self.unity_region_status)
+
+
+def on_point_size_changed(self):
+    self.point_size = self.unity_slider.value() / 100
+    self.unitydata.set_point_size(self.point_size)
+
+    #     if self.unity:
+    #         self.unity_data = {}
+    #         self.unitydata.toggle_regions(False)
+    #         self.unitydata.delete_text()
+    #         self.unitydata.init()
+    #         other_shanks = self.loaddata.get_other_shanks()
+    #         for shank in other_shanks:
+    #             shank_data = self.prepare_shank_data(shank)
+    #             if shank_data is not None:
+    #                 self.unity_data[shank['name']] = {'channels': shank_data[0], 'clusters': shank_data[1],
+    #                                                   'cluster_idx': shank_data[2]}
+    #
+    #         # Fill in for the selected shank
+    #         clust_idx = dict()
+    #         clust_idx['all'] = self.plotdata.clust
+    #
+    #         for filter_type in ['KS good', 'KS mua', 'IBL good']:
+    #             self.plotdata.filter_units(filter_type)
+    #             clust_idx[filter_type] = self.plotdata.clust
+    #
+    #         self.plotdata.filter_units('all')
+    #
+    #         self.unity_data[self.loaddata.probe_label] = {
+    #             'channels': self.plotdata.get_channel_data(),
+    #             'clusters': self.plotdata.get_cluster_data(),
+    #             'cluster_idx': clust_idx,
+    #         }
+    #
+    #         self.set_unity_xyz()
+
+
+def plot_unity(self, plot_type=None):
+    plot_type = plot_type or self.unity_plot
+    if plot_type == 'probe':
+        feature = self.probe_options_group.checkedAction().text()
+        points = 'channels'
+    else:
+        feature = self.img_options_group.checkedAction().text()
+        if 'Cluster' not in feature:
+            return
+        points = 'clusters'
+
+    self.unitydata.add_data(self.unity_data, points, feature, self.filter_type, self.point_size,
+                            self.loaddata.brain_atlas)
+    self.unity_plot = plot_type
+
+
 SHANK_COLOURS = {
     '0': '#000000',
     '1': '#000000',

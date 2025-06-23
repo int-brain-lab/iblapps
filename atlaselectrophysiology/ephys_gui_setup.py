@@ -1,12 +1,19 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
 import pyqtgraph.exporters
-import numpy as np
-from random import randrange
 from atlaselectrophysiology.utils.AdaptedAxisItem import replace_axis
 from ibllib.qc.critical_reasons import CriticalInsertionNote
-from atlaselectrophysiology.plugins.region_tree import callback as region_tree_callback
+
 import atlaselectrophysiology.utils.qt_utils as utils
+
+# Plugins
+from atlaselectrophysiology.plugins.nearby_sessions import setup as setup_nearby_sessions
+from atlaselectrophysiology.plugins.session_notes import setup as setup_session_notes
+from atlaselectrophysiology.plugins.region_tree import setup as setup_region_tree
+from atlaselectrophysiology.plugins.subject_scaling import setup as setup_subject_scaling
+from atlaselectrophysiology.plugins.ephys_features import setup as setup_ephys_features
+from atlaselectrophysiology.plugins.cluster_popup import setup as setup_cluster_popup
+from atlaselectrophysiology.plugins.export_pngs import setup as setup_export_pngs
 
 
 pg.setConfigOption('background', 'w')
@@ -240,13 +247,6 @@ class Setup():
                 {'shortcut': 'Shift+N', 'callback': self.toggle_histology, 'menu': display_options},
             'Change Histology Map': # Option to change histology regions from Allen to Franklin Paxinos
                 {'shortcut': 'Shift+M', 'callback': self.toggle_histology_map, 'menu': display_options},
-            'Minimise/Show Cluster Popup': # Shortcuts for cluster popup window
-                {'shortcut': 'Alt+M', 'callback': self.minimise_popups, 'menu': display_options},
-            'Close Cluster Popup':
-                {'shortcut': 'Alt+X', 'callback': self.close_popups, 'menu': display_options},
-            'Save Plots': # Option to save all plots
-                {'callback': self.save_plots, 'menu': display_options},
-
         }
 
         for key, val in keyboard.items():
@@ -257,34 +257,19 @@ class Setup():
             option.triggered.connect(val['callback'])
             val['menu'].addAction(option)
 
-        # SESSION INFORMATION MENU BAR
-        # Define all session information options
-        # Display any notes associated with recording session
-        session_notes = QtWidgets.QAction('Session Notes', self)
-        session_notes.triggered.connect(self.display_session_notes)
-        # Shortcut to show label information
-        region_info = QtWidgets.QAction('Region Info', self)
-        region_info.setShortcut('Shift+I')
-        region_info.triggered.connect(lambda: region_tree_callback(self))
+        # PLUGIN MENU BAR
+        self.plugin_options = menu_bar.addMenu('Plugins')
+        self.plugins = dict()
+        setup_session_notes(self)
+        setup_cluster_popup(self)
+        setup_region_tree(self)
+        setup_export_pngs(self)
 
-        # Add menu bar with all possible session info options
-        info_options = menu_bar.addMenu('Session Information')
-        info_options.addAction(session_notes)
-        info_options.addAction(region_info)
-
-        # Display other sessions that are closeby if online mode
         if not self.offline:
-            nearby_info = QtWidgets.QAction('Nearby Sessions', self)
-            nearby_info.triggered.connect(self.display_nearby_sessions)
-            info_options.addAction(nearby_info)
+            setup_nearby_sessions(self)
+            setup_subject_scaling(self)
+            setup_ephys_features(self)
 
-            scaling_info = QtWidgets.QAction('Subject Scaling', self)
-            scaling_info.triggered.connect(self.display_subject_scaling)
-            info_options.addAction(scaling_info)
-
-            feature_info = QtWidgets.QAction('Region Feature', self)
-            feature_info.triggered.connect(self.display_region_features)
-            info_options.addAction(feature_info)
 
         # UNITY MENU BAR
         if self.unity:
@@ -669,51 +654,3 @@ class Setup():
         # fig_width = self.fig_fit_exporter.getTargetRect().width()
         # fig_height = self.fig_fit_exporter.getTargetRect().width()
         self.lin_fit_option.move(70, 10)
-
-
-
-class CheckableComboBox(QtWidgets.QComboBox):
-    def __init__(self):
-        super(CheckableComboBox, self).__init__()
-        self.view().pressed.connect(self.handleItemPressed)
-        self.setModel(QtGui.QStandardItemModel(self))
-
-    def handleItemPressed(self, index):
-        item = self.model().itemFromIndex(index)
-        if item.checkState() == QtCore.Qt.Checked:
-            item.setCheckState(QtCore.Qt.Unchecked)
-        else:
-            item.setCheckState(QtCore.Qt.Checked)
-
-
-class PopupWindow(QtWidgets.QMainWindow):
-
-    closed = QtCore.pyqtSignal(QtWidgets.QMainWindow)
-    moved = QtCore.pyqtSignal()
-
-    def __init__(self, title, parent=None, size=(300, 300), graphics=True):
-        super(PopupWindow, self).__init__()
-        self.parent = parent
-        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.Tool)
-        self.resize(size[0], size[1])
-        self.move(randrange(30) + 1000, randrange(30) + 200)
-        if graphics:
-            self.popup_widget = pg.GraphicsLayoutWidget()
-        else:
-            self.popup_widget = QtWidgets.QWidget()
-            self.layout = QtWidgets.QGridLayout()
-            self.popup_widget.setLayout(self.layout)
-        self.setCentralWidget(self.popup_widget)
-        self.setWindowTitle(title)
-        self.show()
-
-    def closeEvent(self, event):
-        self.closed.emit(self)
-        self.close()
-
-    def leaveEvent(self, event):
-        self.moved.emit()
-
-
-
-
