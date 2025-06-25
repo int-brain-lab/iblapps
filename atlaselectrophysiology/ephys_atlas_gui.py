@@ -14,7 +14,7 @@ import numpy as np
 import atlaselectrophysiology.qt_utils.utils as utils
 
 from atlaselectrophysiology.load_data import LoadData
-from atlaselectrophysiology.loaders.probe_loader import ProbeLoaderONE, ProbeLoaderLocal
+from atlaselectrophysiology.loaders.probe_loader import ProbeLoaderONE, ProbeLoaderLocal, ProbeLoaderCSV
 import atlaselectrophysiology.qt_utils.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 
@@ -65,7 +65,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
 
         if not offline and probe_id is None:
-            self.loaddata = ProbeLoaderONE()
+            self.loaddata = ProbeLoaderCSV()
             utils.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
         # elif not offline and probe_id is not None and loaddata is not None:
@@ -1094,7 +1094,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if not self.histology_exists:
             return
 
-        if not self.offline:
+        if hasattr(self.shank.loaders['align'], 'get_qc_string'):
             display_qc(self)
 
         upload = QtWidgets.QMessageBox.question(self, '', "Upload alignment?",

@@ -4,6 +4,7 @@ import json
 from atlaselectrophysiology.utils.align import AlignData
 from functools import wraps
 from typing import List, Type, Union
+from one import params
 
 
 def delegate_attributes(
@@ -67,6 +68,7 @@ class AlignmentLoader(ABC):
         self.alignment_keys = ['original']
         self.xyz_picks = self.load_xyz_picks()
         self._delegate_alignment_attributes()
+        self.extra_alignments = dict()
 
     def _delegate_alignment_attributes(self) -> None:
         """
@@ -125,14 +127,14 @@ class AlignmentLoader(ABC):
         data = self.load_alignments()
 
         if data:
+            data.update(self.extra_alignments)
             self.alignments = data
-            self.alignment_keys = [*self.alignments.keys()]
-            self.alignment_keys = sorted(self.alignment_keys, reverse=True)
-            self.alignment_keys.append('original')
-
         else:
-            self.alignments = dict()
-            self.alignment_keys = ['original']
+            self.alignments = self.extra_alignments
+
+        self.alignment_keys = [*self.alignments.keys()]
+        self.alignment_keys = sorted(self.alignment_keys, reverse=True)
+        self.alignment_keys.append('original')
 
         return self.alignment_keys
 
@@ -189,6 +191,20 @@ class AlignmentLoaderONE(AlignmentLoader):
         if len(hist_traj) == 1:
             if hist_traj[0]['x'] is not None:
                 self.traj_id = hist_traj[0]['id']
+
+    def add_extra_alignments(self, file_path):
+
+        with open(file_path, "r") as f:
+            extra_alignments = json.load(f)
+        self.extra_alignments = {}
+
+        # Add the username to the keys, required if combining and offline and online alignment
+        user = params.get().ALYX_LOGIN
+        for key, val in extra_alignments.items():
+            if len(key) == 19:
+                self.extra_alignments[key + '_' + user] = val
+            else:
+                self.extra_alignments[key] = val
 
 
 

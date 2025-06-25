@@ -11,6 +11,7 @@ from atlaselectrophysiology.plot_data import PlotData
 from iblatlas.atlas import AllenAtlas
 from one.api import ONE
 from pathlib import Path
+import pandas as pd
 
 
 # Combinations
@@ -60,6 +61,12 @@ class ProbeLoader(ABC):
         :return:
         """
 
+    @staticmethod
+    def normalize_probe_name(probe_name):
+        match = re.match(r'(probe\d+)', probe_name)
+        return match.group(1) if match else probe_name
+
+
 
 class ProbeLoaderONE(ProbeLoader):
     def __init__(self, one=None, brain_atlas=None, spike_collection=None):
@@ -106,7 +113,7 @@ class ProbeLoaderONE(ProbeLoader):
         self.shanks = np.array(self.shanks)[idx]
         shanks = np.array(shanks)[idx]
 
-        self.initiate_shanks()
+        self.initialise_shanks()
 
         return list(shanks) + ['all']
 
@@ -120,7 +127,7 @@ class ProbeLoaderONE(ProbeLoader):
             self.probes[probe].loaders['hist'] = self.slice_loader
             self.probes[probe].load_data()
 
-    def initiate_shanks(self):
+    def initialise_shanks(self):
 
         self.probes = Bunch()
 
@@ -131,11 +138,6 @@ class ProbeLoaderONE(ProbeLoader):
             loaders['upload'] = DataUploaderONE(ins, self.one, self.brain_atlas)
 
             self.probes[ins['name']] = ShankLoader(loaders)
-
-    @staticmethod
-    def normalize_probe_name(probe_name):
-        match = re.match(r'(probe\d+)', probe_name)
-        return match.group(1) if match else probe_name
 
     def get_session_probe_name(self, ins):
         return ins['session_info']['start_time'][:10] + ' ' + self.normalize_probe_name(ins['name'])
@@ -156,8 +158,92 @@ class ProbeLoaderONE(ProbeLoader):
         self.lab = self.shanks[idx]['session_info']['lab']
 
 
+# This is pretty bespoke to IBL situation atm
 class ProbeLoaderCSV(ProbeLoader):
-    pass
+    def __init__(self, csv_file='/Users/admin/int-brain-lab/quarter.csv', one=None, brain_atlas=None):
+        self.df = pd.read_csv(csv_file)
+        self.sessions = self.df['session'].unique()
+        self.one = one or ONE()
+        super().__init__(brain_atlas)
+
+    def get_subjects(self):
+        self.subjects = self.df['session'].unique()
+
+        return self.subjects
+
+    def get_sessions(self, idx):
+        self.session_df = self.df.loc[self.df['session'] == self.subjects[idx]]
+        self.sessions = np.unique([self.normalize_probe_name(pr) for pr in self.session_df['probe'].values])
+        return self.sessions
+
+    def get_shanks(self, idx):
+        shank = self.sessions[idx]
+        self.shanks = self.session_df.loc[self.session_df['probe'].str.contains(shank)].sort_values('probe')
+
+        self.initialise_shanks()
+
+        return self.shanks['probe'].values
+
+    def get_info(self, idx):
+        self.probe_label = self.shanks.iloc[idx].probe
+        self.lab = 'steinmetzlab'
+        self.subj = 'KM_027'
+
+    def initialise_shanks(self):
+
+        self.probes = Bunch()
+
+        for _, shank in self.shanks.iterrows():
+            loaders = Bunch()
+            if shank.is_quarter:
+                loaders['data'] = DataLoaderLocal(Path(shank.local_path), CollectionData())
+                loaders['align'] = AlignmentLoaderLocal(Path(shank.local_path), 0, 1, self.brain_atlas)
+                loaders['upload'] = DataUploaderLocal(Path(shank.local_path),0, 1, self.brain_atlas)
+            else:
+                ins = self.get_insertion(shank)
+                collections = CollectionData(
+                    spike_collection=f'alf/{shank.probe}/iblsorter',
+                    ephys_collection=f'raw_ephys_data/{shank.probe}',
+                    task_collection='alf/task_01',
+                    raw_task_collection='raw_task_data_01')
+                loaders['data'] = DataLoaderLocal(Path(shank.local_path), collections)
+                loaders['align'] = AlignmentLoaderONE(ins, self.one, self.brain_atlas)
+                quarter = self.get_quarter_density_alignment(shank)
+                if quarter:
+                    loaders['align'].add_extra_alignments(quarter)
+                loaders['upload'] = DataUploaderONE(ins, self.one, self.brain_atlas)
+
+            self.probes[shank.probe] = ShankLoader(loaders)
+
+    def get_insertion(self, shank):
+
+        ins = self.one.alyx.rest('insertions', 'list', session=self.one.path2eid(shank.session), name=shank.probe)
+        return ins[0]
+
+    def get_quarter_density_alignment(self, shank):
+        sub_date = '/'.join(shank.session.split('/')[:-1])
+        quarter = self.df.loc[self.df['session'].str.contains(sub_date) & (self.df['probe'] == shank.probe)  &
+                              (self.df['is_quarter'] == True)]
+        if len(quarter) == 1:
+            prev_align = Path(quarter.iloc[0].local_path).joinpath('prev_alignments.json')
+            if prev_align.exists():
+                print(prev_align)
+                return prev_align
+
+    def download_histology(self):
+        _, hist_path = download_histology_data(self.subj, self.lab)
+        self.slice_loader = NrrdSliceLoader(hist_path, self.brain_atlas)
+
+    def load_data(self):
+        self.download_histology()
+        for probe in self.probes.keys():
+            self.probes[probe].loaders['hist'] = self.slice_loader
+            self.probes[probe].load_data()
+
+
+
+
+
 
 
 class ProbeLoaderLocal(ProbeLoader):
