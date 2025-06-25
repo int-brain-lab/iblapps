@@ -1,10 +1,8 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
-import pyqtgraph.exporters
-from atlaselectrophysiology.utils.AdaptedAxisItem import replace_axis
-from ibllib.qc.critical_reasons import CriticalInsertionNote
+from atlaselectrophysiology.qt_utils.AdaptedAxisItem import replace_axis
 
-import atlaselectrophysiology.utils.qt_utils as utils
+import atlaselectrophysiology.qt_utils.utils as utils
 
 # Plugins
 from atlaselectrophysiology.plugins.nearby_sessions import setup as setup_nearby_sessions
@@ -14,10 +12,13 @@ from atlaselectrophysiology.plugins.subject_scaling import setup as setup_subjec
 from atlaselectrophysiology.plugins.ephys_features import setup as setup_ephys_features
 from atlaselectrophysiology.plugins.cluster_popup import setup as setup_cluster_popup
 from atlaselectrophysiology.plugins.export_pngs import setup as setup_export_pngs
+from atlaselectrophysiology.plugins.qc_dialog import setup as setup_qc_dialog
 
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
+
+
 
 
 class Setup():
@@ -136,46 +137,21 @@ class Setup():
 
         # SLICE PLOTS MENU BAR
         # Define all coronal slice plot options
-        slice_hist_rd = QtWidgets.QAction('Histology Red', self, checkable=True, checked=True)
-        slice_hist_rd.triggered.connect(lambda: self.plot_slice(self.shank.slice_data, 'hist_rd'))
-        slice_hist_gr = QtWidgets.QAction('Histology Green', self, checkable=True, checked=False)
-        slice_hist_gr.triggered.connect(lambda: self.plot_slice(self.shank.slice_data, 'hist_gr'))
-        slice_ccf = QtWidgets.QAction('CCF', self, checkable=True, checked=False)
-        slice_ccf.triggered.connect(lambda: self.plot_slice(self.shank.slice_data, 'ccf'))
-        slice_label = QtWidgets.QAction('Annotation', self, checkable=True, checked=False)
-        slice_label.triggered.connect(lambda: self.plot_slice(self.shank.slice_data, 'label'))
-
-        if self.shank.fp_slice_data is not None:
-            fp_slice_label = QtWidgets.QAction('Annotation FP', self, checkable=True, checked=False)
-            fp_slice_label.triggered.connect(lambda: self.plot_slice(self.shank.fp_slice_data, 'label'))
-
-        if not self.offline:
-            slice_hist_cb = QtWidgets.QAction('Histology cerebellar example', self, checkable=True, checked=False)
-            slice_hist_cb.triggered.connect(lambda: self.plot_slice(self.shank.slice_data, 'hist_cb'))
-        # Initialise with raw histology image
-        self.slice_init = slice_hist_rd
-
-        # Add menu bar for slice plot
-
         slice_options = menu_bar.addMenu("Slice Plots")
         # Add action group so we can toggle through slice plot options
         self.slice_options_group = QtWidgets.QActionGroup(slice_options)
         self.slice_options_group.setExclusive(True)
-        slice_options.addAction(slice_hist_rd)
-        self.slice_options_group.addAction(slice_hist_rd)
-        slice_options.addAction(slice_hist_gr)
-        self.slice_options_group.addAction(slice_hist_gr)
-        slice_options.addAction(slice_ccf)
-        self.slice_options_group.addAction(slice_ccf)
-        slice_options.addAction(slice_label)
-        self.slice_options_group.addAction(slice_label)
-        if self.shank.fp_slice_data is not None:
-            slice_options.addAction(fp_slice_label)
-            self.slice_options_group.addAction(fp_slice_label)
 
-        if not self.offline:
-            slice_options.addAction(slice_hist_cb)
-            self.slice_options_group.addAction(slice_hist_cb)
+
+        for i, slice_plot in enumerate(self.shank.slice_plots):
+            checked = True if i == 0 else False
+            sl = QtWidgets.QAction(slice_plot, self, checkable=True, checked=checked)
+            sl.triggered.connect(lambda checked, item=slice_plot: self.plot_slice(
+                self.shank.slice_plots[item]))
+            slice_options.addAction(sl)
+            self.slice_options_group.addAction(sl)
+            if i == 0:
+                self.slice_init = sl
 
         # FILTER UNITS MENU BAR
         # Define unit filtering options
@@ -188,7 +164,7 @@ class Setup():
         for i, unit in enumerate(units):
             checked = True if i == 0 else False
             all_units = QtWidgets.QAction(unit, self, checkable=True, checked=checked)
-            all_units.triggered.connect(lambda: self.filter_unit_pressed(unit))
+            all_units.triggered.connect(lambda _, u=unit: self.filter_unit_pressed(u))
             unit_filter_options.addAction(all_units)
             unit_filter_options_group.addAction(all_units)
             if i == 0:
@@ -200,7 +176,6 @@ class Setup():
         # DISPLAY OPTIONS MENU BAR
         display_options = menu_bar.addMenu('Display Options')
 
-        upload_callback = self.complete_button_pressed_offline if self.offline else self.display_qc_options
         # Define all possible keyboard shortcut interactions for GUI
         keyboard = {
             'Fit': # Shortcuts to apply fit
@@ -220,7 +195,7 @@ class Setup():
             'Reset': # Shortcut to reset GUI to initial state
                 {'shortcut': 'Shift+R', 'callback': self.reset_button_pressed, 'menu': fit_options},
             'Upload': # Shortcut to upload final state to Alyx/to local file
-                {'shortcut': 'Shift+U', 'callback': upload_callback, 'menu': fit_options},
+                {'shortcut': 'Shift+U', 'callback': self.complete_button_pressed, 'menu': fit_options},
             'Toggle Image Plots': # Shortcuts to toggle between plots options
                 {'shortcut': 'Alt+1', 'callback': lambda: self.toggle_plots(self.img_options_group), 'menu': display_options},
             'Toggle Line Plots':
@@ -260,15 +235,19 @@ class Setup():
         # PLUGIN MENU BAR
         self.plugin_options = menu_bar.addMenu('Plugins')
         self.plugins = dict()
-        setup_session_notes(self)
+        #setup_session_notes(self)
         setup_cluster_popup(self)
         setup_region_tree(self)
         setup_export_pngs(self)
 
         if not self.offline:
-            setup_nearby_sessions(self)
-            setup_subject_scaling(self)
-            setup_ephys_features(self)
+            # TODO add these back in and fix the parent.one etc
+            # setup_nearby_sessions(self)
+            # setup_subject_scaling(self)
+            # setup_ephys_features(self)
+            #setup_session_notes(self)
+
+            setup_qc_dialog(self)
 
 
         # UNITY MENU BAR
@@ -305,10 +284,8 @@ class Setup():
         self.reset_button.clicked.connect(self.reset_button_pressed)
         # Button to upload final state to Alyx/ to local file
         self.complete_button = QtWidgets.QPushButton('Upload')
-        if not self.offline:
-            self.complete_button.clicked.connect(self.display_qc_options)
-        else:
-            self.complete_button.clicked.connect(self.complete_button_pressed_offline)
+        self.complete_button.clicked.connect(self.complete_button_pressed)
+
 
         if not self.offline:
             # If offline mode is False, read in Subject and Session options from Alyx
@@ -413,49 +390,6 @@ class Setup():
             self.interaction_layout3.addWidget(self.align_extra, stretch=1)
             self.interaction_layout3.addWidget(self.data_button, stretch=1)
 
-
-        # Pop up dialog for qc results to datajoint, only for online mode
-        if not self.offline:
-            align_qc_label = QtWidgets.QLabel("Confidence of alignment")
-            self.align_qc = QtWidgets.QComboBox()
-            self.align_qc.addItems(["High", "Medium", "Low"])
-            ephys_qc_label = QtWidgets.QLabel("QC for ephys recording")
-            self.ephys_qc = QtWidgets.QComboBox()
-            self.ephys_qc.addItems(["Pass", "Warning", "Critical"])
-
-            self.desc_buttons = QtWidgets.QButtonGroup()
-            self.desc_group = QtWidgets.QGroupBox("Describe problem with recording")
-            self.desc_layout = QtWidgets.QVBoxLayout()
-            self.desc_layout.setSpacing(5)
-            self.desc_buttons.setExclusive(False)
-            options = CriticalInsertionNote.descriptions_gui
-            for i, val in enumerate(options):
-
-                button = QtWidgets.QCheckBox(val)
-                button.setCheckState(QtCore.Qt.Unchecked)
-
-                self.desc_buttons.addButton(button, id=i)
-                self.desc_layout.addWidget(button)
-
-            self.desc_group.setLayout(self.desc_layout)
-
-            self.qc_dialog = QtWidgets.QDialog(self)
-            self.qc_dialog.setWindowTitle('QC assessment')
-            self.qc_dialog.resize(300, 150)
-            self.qc_dialog.accepted.connect(self.qc_button_clicked)
-            buttonBox = QtWidgets.QDialogButtonBox(
-                QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-            buttonBox.accepted.connect(self.qc_dialog.accept)
-            buttonBox.rejected.connect(self.qc_dialog.reject)
-            #
-            dialog_layout = QtWidgets.QVBoxLayout()
-            dialog_layout.addWidget(align_qc_label)
-            dialog_layout.addWidget(self.align_qc)
-            dialog_layout.addWidget(ephys_qc_label)
-            dialog_layout.addWidget(self.ephys_qc)
-            dialog_layout.addWidget(self.desc_group)
-            dialog_layout.addWidget(buttonBox)
-            self.qc_dialog.setLayout(dialog_layout)
 
 
     def init_figures(self):

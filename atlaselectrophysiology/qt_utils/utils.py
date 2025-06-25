@@ -154,6 +154,8 @@ def populate_lists(
     combobox.setCurrentIndex(0)
 
 
+def add_menu(keys, data, callback):
+    return
 
 
 class PopupWindow(QtWidgets.QMainWindow):
@@ -173,8 +175,6 @@ class PopupWindow(QtWidgets.QMainWindow):
             window.showNormal()
             window.activateWindow()
         return window
-
-    # Ideally the get create would go here
 
     closed = QtCore.pyqtSignal(QtWidgets.QMainWindow)
     moved = QtCore.pyqtSignal()

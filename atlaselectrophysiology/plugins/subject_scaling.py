@@ -1,9 +1,9 @@
 import pyqtgraph as pg
 from PyQt5 import QtGui, QtWidgets
 import numpy as np
-import atlaselectrophysiology.utils.ColorBar as cb
+import atlaselectrophysiology.qt_utils.ColorBar as cb
 from ibllib.pipes.ephys_alignment import EphysAlignment
-from atlaselectrophysiology.utils.AdaptedAxisItem import replace_axis
+from atlaselectrophysiology.qt_utils.AdaptedAxisItem import replace_axis
 from neuropixel import trace_header
 
 pg.setConfigOption('background', 'w')

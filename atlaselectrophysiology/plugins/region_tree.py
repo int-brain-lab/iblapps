@@ -1,5 +1,5 @@
 from qtpy import QtCore, QtGui, QtWidgets
-from atlaselectrophysiology.utils.qt_utils import PopupWindow
+from atlaselectrophysiology.qt_utils.utils import PopupWindow
 import numpy as np
 from pathlib import Path
 import iblatlas.atlas as atlas

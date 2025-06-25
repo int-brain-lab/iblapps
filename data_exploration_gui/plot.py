@@ -3,7 +3,7 @@ import pyqtgraph as pg
 import pyqtgraph.dockarea
 from data_exploration_gui.utils import (MAP_SORT_OPTIONS, MAP_SIDE_OPTIONS, MAP_CHOICE_OPTIONS,
                                         PSTH_OPTIONS, RASTER_OPTIONS, colours)
-import atlaselectrophysiology.utils.ColorBar as cb
+import atlaselectrophysiology.qt_utils.ColorBar as cb
 import numpy as np
 
 

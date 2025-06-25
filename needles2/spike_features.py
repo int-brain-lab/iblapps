@@ -2,7 +2,7 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 import pyqtgraph as pg
 import pyqtgraph.exporters
 from qt_helpers import qt
-import atlaselectrophysiology.utils.ColorBar as cb
+import atlaselectrophysiology.qt_utils.ColorBar as cb
 
 from dataclasses import dataclass, field
 from pathlib import Path

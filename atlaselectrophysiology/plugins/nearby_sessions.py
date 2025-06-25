@@ -1,5 +1,5 @@
 from qtpy import QtWidgets
-from atlaselectrophysiology.utils.qt_utils import PopupWindow
+from atlaselectrophysiology.qt_utils.utils import PopupWindow
 from iblatlas.atlas import Insertion
 from ibllib.pipes import histology
 import numpy as np

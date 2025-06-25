@@ -11,13 +11,15 @@ import pyqtgraph as pg
 import pyqtgraph.exporters
 import numpy as np
 
-import atlaselectrophysiology.utils.qt_utils as utils
+import atlaselectrophysiology.qt_utils.utils as utils
 
 from atlaselectrophysiology.load_data import LoadData
-import atlaselectrophysiology.utils.ColorBar as cb
+from atlaselectrophysiology.loaders.probe_loader import ProbeLoaderONE, ProbeLoaderLocal
+import atlaselectrophysiology.qt_utils.ColorBar as cb
 import atlaselectrophysiology.ephys_gui_setup as ephys_gui
 
 from atlaselectrophysiology.plugins.cluster_popup import callback as cluster_callback
+from atlaselectrophysiology.plugins.qc_dialog import display as display_qc
 from pathlib import Path
 from qt_helpers import qt
 import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show properly :/
@@ -63,7 +65,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
 
         if not offline and probe_id is None:
-            self.loaddata = LoadData()
+            self.loaddata = ProbeLoaderONE()
             utils.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
         # elif not offline and probe_id is not None and loaddata is not None:
@@ -75,10 +77,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         #     self.data_status = False
         #     self.data_button_pressed()
         #     self.offline = False
-        # elif loaddata is None:
-        #     self.loaddata = LoadDataLocal()
-        #     self.offline = True
-        #     self.histology_exists = True
+        elif loaddata is None:
+            self.loaddata = ProbeLoaderLocal()
+            self.offline = True
+            self.histology_exists = True
 
 
     def init_variables(self):
@@ -377,10 +379,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             self.top_pos = pg.InfiniteLine(pos=self.probe_top, angle=0, pen=self.kpen_dot, movable=True)
 
             offset = 1
-            self.tip_pos.setBounds((self.shank.align.track[0] * 1e6 + offset,
-                                    self.shank.align.track[-1] * 1e6 - (self.probe_top + offset)))
-            self.top_pos.setBounds((self.shank.align.track[0] * 1e6 + (self.probe_top + offset),
-                                    self.shank.align.track[-1] * 1e6 - offset))
+            self.tip_pos.setBounds((self.shank.loaders['align'].track[0] * 1e6 + offset,
+                                    self.shank.loaders['align'].track[-1] * 1e6 - (self.probe_top + offset)))
+            self.top_pos.setBounds((self.shank.loaders['align'].track[0] * 1e6 + (self.probe_top + offset),
+                                    self.shank.loaders['align'].track[-1] * 1e6 - offset))
             self.tip_pos.sigPositionChanged.connect(self.tip_line_moved)
             self.top_pos.sigPositionChanged.connect(self.top_line_moved)
         else:
@@ -503,13 +505,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if not self.histology_exists:
             return
 
-        x = self.shank.align.feature * 1e6
-        y = self.shank.align.track * 1e6
+        x = self.shank.loaders['align'].feature * 1e6
+        y = self.shank.loaders['align'].track * 1e6
 
         self.fit_plot.setData(x=x, y=y)
         self.fit_scatter.setData(x=x,y=y)
 
-        depth_lin = self.shank.align.ephysalign.feature2track_lin(self.depth, x, y)
+        depth_lin = self.shank.loaders['align'].align.ephysalign.feature2track_lin(self.depth, x, y)
 
         if np.any(depth_lin):
             self.fit_plot_lin.setData(x=self.depth, y=depth_lin)
@@ -518,8 +520,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
     def plot_slice(
             self,
-            data: Dict,
-            img_type: str):
+            data: Dict):
         """
         Plot a slice image representing histology data, with optional label or intensity image.
 
@@ -550,7 +551,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Create image item with data to display
         img = pg.ImageItem()
-        img.setImage(data[img_type])
+        img.setImage(data['slice'])
 
         # Construct QTransform from scale and offset data
         transform = [data['scale'][0], 0., 0., 0.,
@@ -558,8 +559,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
                      data['offset'][0], data['offset'][1], 1.]
         img.setTransform(QtGui.QTransform(*transform))
 
-
-        if img_type == 'label':
+        label_img = data.get('label', False)
+        if label_img:
             self.fig_slice_layout.removeItem(self.slice_item)
             self.fig_slice_layout.addItem(self.fig_slice_hist_alt, 0, 1)
             self.slice_item = self.fig_slice_hist_alt
@@ -587,7 +588,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
 
         # Plot the trajectory line
         self.traj_line = pg.PlotCurveItem()
-        self.traj_line.setData(x=self.shank.xyz_track[:, 0], y=self.shank.xyz_track[:, 2], pen=self.kpen_solid)
+        self.traj_line.setData(x=self.shank.loaders['align'].xyz_track[:, 0], y=self.shank.loaders['align'].xyz_track[:, 2], pen=self.kpen_solid)
         self.fig_slice.addItem(self.traj_line)
 
         # Plot channels
@@ -607,8 +608,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             return
 
         self.channel_status = True
-        self.xyz_channels = self.shank.xyz_channels
-        track_lines = self.shank.align.track_lines
+        self.xyz_channels = self.shank.loaders['align'].xyz_channels
+        track_lines = self.shank.loaders['align'].track_lines
 
         # Clear existing reference lines
         self.slice_lines = self.remove_items(self.fig_slice, self.slice_lines)
@@ -667,7 +668,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.img_plots = self.remove_items(self.fig_img, self.img_plots)
         self.img_cbars = self.remove_items(self.fig_img_cb, self.img_cbars)
         # TODO check if I need this
-        # utils.set_axis(self.fig_img_cb, 'top', pen='w')
+        # qt_utils.set_axis(self.fig_img_cb, 'top', pen='w')
 
         size = data['size'].tolist()
         symbol = data['symbol'].tolist()
@@ -845,7 +846,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.img_plots = self.remove_items(self.fig_img, self.img_plots)
         self.img_cbars = self.remove_items(self.fig_img_cb, self.img_cbars)
         # TODO check if I need this
-        # utils.set_axis(self.fig_img_cb, 'top', pen='w')
+        # qt_utils.set_axis(self.fig_img_cb, 'top', pen='w')
 
         # Create image item and add to figure
         image = pg.ImageItem()
@@ -931,7 +932,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     #     self.current_shank_idx = idx
     #     # Update prev_alignments
     #     self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
-    #     utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+    #     qt_utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
     #     self.loaddata.get_starting_alignment(0)
 
 
@@ -966,12 +967,13 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         Triggered in offline mode when folder button is clicked
         """
-        self.data_status = False
+        self.shank = None
+        self.align_list.clear()
+        self.shank_list.clear()
         folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
         self.folder_line.setText(str(folder_path))
-        self.prev_alignments, shank_options = self.loaddata.get_info(folder_path)
+        shank_options = self.loaddata.get_shanks(folder_path)
         utils.populate_lists(shank_options, self.shank_list, self.shank_combobox)
-        utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.on_shank_selected(0)
 
     def on_alignment_selected(self, idx):
@@ -1015,11 +1017,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.loaddata.load_data()
 
         self.shank = self.loaddata.get_selected_probe()
-        # TODO figure out where to put this
-        self.shank.align.features[self.shank.align.idx], self.shank.align.tracks[self.shank.align.idx], _ \
-            = self.shank.align.ephysalign.get_track_and_feature()
 
-        self.xyz_channels = self.shank.xyz_channels
+        self.shank.loaders['align'].set_init_alignment()
+
+        self.xyz_channels = self.shank.loaders['align'].xyz_channels
         self.set_probe_lims(np.min([0, self.shank.plotdata.chn_min]), self.shank.plotdata.chn_max)
         self.init_menubar()
         self.get_scaled_histology()
@@ -1043,11 +1044,12 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.label_status = False
         self.toggle_labels()
         self.plot_scale_factor()
-        if np.any(self.shank.feature_prev):
-            self.create_reference_lines(self.shank.feature_prev[1:-1] * 1e6)
+        if np.any(self.shank.loaders['align'].feature_prev):
+            self.create_reference_lines(self.shank.loaders['align'].feature_prev[1:-1] * 1e6)
         # Initialise slice and fit images
         self.plot_fit()
-        self.plot_slice(self.shank.slice_data, 'hist_rd')
+        self.plot_slice(self.shank.slice_plots['CCF'])
+        self.update_string()
 
         # Initialise unity plot
         # if self.unity:
@@ -1064,15 +1066,9 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
     def filter_unit_pressed(self, filter_type):
         #TODO FIX
         self.filter_type = filter_type
-        self.plotdata.filter_units(self.filter_type)
-        self.scat_drift_data = self.plotdata.get_depth_data_scatter()
-        (self.scat_fr_data, self.scat_p2t_data,
-         self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
-        self.img_corr_data = self.plotdata.get_correlation_data_img()
-        self.img_fr_data = self.plotdata.get_fr_img()
-        self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
-        self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
-        self.img_stim_data = self.plotdata.get_passive_events()
+        self.shank.plotdata.filter_units(self.filter_type)
+        self.shank.filter_plots()
+
         self.img_init.setChecked(True)
         self.line_init.setChecked(True)
         self.probe_init.setChecked(True)
@@ -1080,10 +1076,10 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.plot_probe(self.shank.probe_plots['rms AP'])
         self.plot_line(self.shank.line_plots['Firing Rate'])
 
-        if self.unity:
-            self.unity_plot = 'probe'
-            self.set_unity_xyz()
-            self.plot_unity()
+        # if self.unity:
+        #     self.unity_plot = 'probe'
+        #     self.set_unity_xyz()
+        #     self.plot_unity()
 
     # -------------------------------------------------------------------------------------------------
     # Upload/ save data
@@ -1098,88 +1094,23 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if not self.histology_exists:
             return
 
+        if not self.offline:
+            display_qc(self)
+
         upload = QtWidgets.QMessageBox.question(self, '', "Upload alignment?",
                                                 QtWidgets.QMessageBox.Yes |
                                                 QtWidgets.QMessageBox.No)
 
         if upload == QtWidgets.QMessageBox.Yes:
-            upload_channels = self.loaddata.upload_data(self.xyz_channels)
-            self.loaddata.update_alignments(self.shank.align.features[self.idx], self.shank.align.tracks[self.idx])
-            self.prev_alignments = self.loaddata.get_previous_alignments()
-            utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-            self.loaddata.get_starting_alignment(0)
-            resolved = self.loaddata.update_qc()
 
-            if upload_channels and resolved == 0:
-                # channels saved alignment not resolved
-                QtWidgets.QMessageBox.information(self, 'Status',
-                                                  ("Channels locations saved to Alyx. "
-                                                   "Alignment not resolved"))
-            if upload_channels and resolved == 1:
-                # channels saved alignment resolved, writen to flatiron
-                QtWidgets.QMessageBox.information(self, 'Status',
-                                                  ("Channel locations saved to Alyx. "
-                                                   "Alignment resolved and channels "
-                                                   "datasets written to flatiron"))
-            if not upload_channels and resolved == 1:
-                # alignment already resolved, save alignment but channels not written
-                QtWidgets.QMessageBox.information(self, 'Status',
-                                                  ("Channel locations not saved to Alyx"
-                                                   " as alignment has already been "
-                                                   "resolved. New user reference lines"
-                                                   " have been saved"))
+            info = self.shank.upload_data()
+            self.prev_alignments = self.shank.get_previous_alignments()
+            utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+            self.shank.get_starting_alignment(0)
+
+            QtWidgets.QMessageBox.information(self, 'Status', info)
         else:
-            pass
             QtWidgets.QMessageBox.information(self, 'Status', "Channels not saved")
-
-    def complete_button_pressed_offline(self):
-        """
-        Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
-        json file
-        """
-        upload = QtWidgets.QMessageBox.question(self, '', "Upload alignment?",
-                                                QtWidgets.QMessageBox.Yes |
-                                                QtWidgets.QMessageBox.No)
-
-        if upload == QtWidgets.QMessageBox.Yes:
-            self.loaddata.upload_data(self.shank.align.features[self.idx], self.shank.align.tracks[self.idx],
-                                      self.xyz_channels)
-            self.prev_alignments = self.loaddata.get_previous_alignments(self.current_shank_idx)
-            utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-            self.loaddata.get_starting_alignment(0)
-            QtWidgets.QMessageBox.information(self, 'Status', "Channels locations saved")
-        else:
-            pass
-            QtWidgets.QMessageBox.warning(self, 'Status', "Channels not saved")
-
-    def display_qc_options(self):
-
-        # If not histology don't show
-        if not self.histology_exists:
-            return
-
-        self.qc_dialog.open()
-
-    def qc_button_clicked(self):
-
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        align_qc = self.align_qc.currentText()
-        ephys_qc = self.ephys_qc.currentText()
-        ephys_desc = []
-        for button in self.desc_buttons.buttons():
-            if button.isChecked():
-                ephys_desc.append(button.text())
-
-        if ephys_qc != 'Pass' and len(ephys_desc) == 0:
-            QtWidgets.QMessageBox.warning(self, 'Status', "You must select a reason for qc choice")
-            self.display_qc_options()
-            return
-
-        self.loaddata.upload_dj(align_qc, ephys_qc, ephys_desc)
-        self.complete_button_pressed()
 
 
     # -------------------------------------------------------------------------------------------------
@@ -1199,7 +1130,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
             return
 
         val = val or self.tip_pos.value() / 1e6
-        self.shank.align.offset_hist_data(val)
+        self.shank.loaders['align'].offset_hist_data(val)
 
     def scale_hist_data(self) -> None:
         """
@@ -1212,7 +1143,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         line_track = np.array([line[0].pos().y() for line in self.lines_tracks]) / 1e6
         line_feature = np.array([line[0].pos().y() for line in self.lines_features]) / 1e6
 
-        self.shank.align.scale_hist_data(line_track, line_feature,
+        self.shank.loaders['align'].scale_hist_data(line_track, line_feature,
                                          extend_feature=self.extend_feature, lin_fit=self.lin_fit)
 
     def get_scaled_histology(self) -> None:
@@ -1220,7 +1151,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         Retrieve scaled histological data after alignment operations.
         """
 
-        self.hist_data, self.hist_data_ref, self.scale_data = self.shank.align.get_scaled_histology()
+        self.hist_data, self.hist_data_ref, self.scale_data = self.shank.loaders['align'].get_scaled_histology()
 
 
     def apply_fit(self, fit_function: Callable, **kwargs) -> None:
@@ -1305,7 +1236,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if not self.histology_exists:
             return
 
-        if self.shank.align.buffer.next_idx():
+        if self.shank.loaders['align'].next_idx():
             self.update_plots()
 
 
@@ -1320,7 +1251,7 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         if not self.histology_exists:
             return
 
-        if self.shank.align.buffer.previous_idx():
+        if self.shank.loaders['align'].prev_idx():
             self.update_plots()
 
 
@@ -1338,14 +1269,14 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         self.lines_tracks = np.empty((0, 1))
         self.points = np.empty((0, 1))
 
-        self.shank.align.reset_features_and_tracks()
+        self.shank.loaders['align'].reset_features_and_tracks()
 
         self.get_scaled_histology()
 
         self.plot_histology(self.fig_hist, self.hist_data)
         self.plot_scale_factor()
-        if np.any(self.shank.feature_prev):
-            self.create_reference_lines(self.shank.feature_prev[1:-1] * 1e6)
+        if np.any(self.shank.loaders['align'].feature_prev):
+            self.create_reference_lines(self.shank.loaders['align'].feature_prev[1:-1] * 1e6)
         self.plot_fit()
         self.plot_channels()
         self.set_yaxis_range(self.fig_hist)
@@ -1368,8 +1299,8 @@ class MainWindow(QtWidgets.QMainWindow, ephys_gui.Setup):
         """
         Updates on-screen text showing current and total alignment steps.
         """
-        self.idx_string.setText(f"Current Index = {self.shank.align.buffer.current_idx}")
-        self.tot_idx_string.setText(f"Total Index = {self.shank.align.buffer.total_idx}")
+        self.idx_string.setText(f"Current Index = {self.shank.loaders['align'].current_idx}")
+        self.tot_idx_string.setText(f"Total Index = {self.shank.loaders['align'].total_idx}")
 
     # -------------------------------------------------------------------------------------------------
     # Mouse interactions

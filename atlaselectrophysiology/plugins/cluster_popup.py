@@ -1,4 +1,4 @@
-from atlaselectrophysiology.utils.qt_utils import PopupWindow, set_axis
+from atlaselectrophysiology.qt_utils.utils import PopupWindow, set_axis
 import pyqtgraph as pg
 from qtpy import QtCore, QtGui, QtWidgets
 import numpy as np

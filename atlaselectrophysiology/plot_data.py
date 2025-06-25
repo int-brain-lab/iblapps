@@ -105,7 +105,7 @@ class PlotData:
 # Plots that require spike and cluster data
     def get_depth_data_scatter(self):
         if not self.data['spikes']['exists']:
-            data_scatter = None
+            data_scatter = {}
             return data_scatter
         else:
             A_BIN = 10
@@ -198,9 +198,9 @@ class PlotData:
 
     def get_fr_p2t_data_scatter(self):
         if not self.data['spikes']['exists']:
-            data_fr_scatter = None
-            data_p2t_scatter = None
-            data_amp_scatter = None
+            data_fr_scatter = {}
+            data_p2t_scatter = {}
+            data_amp_scatter = {}
             return data_fr_scatter, data_p2t_scatter, data_amp_scatter
         else:
             (clu,
@@ -281,7 +281,7 @@ class PlotData:
 
     def get_fr_img(self):
         if not self.data['spikes']['exists']:
-            data_img = None
+            data_img = {}
             return data_img
         else:
             T_BIN = 0.05
@@ -310,8 +310,8 @@ class PlotData:
 
     def get_fr_amp_data_line(self):
         if not self.data['spikes']['exists']:
-            data_fr_line = None
-            data_amp_line = None
+            data_fr_line = {}
+            data_amp_line = {}
             return data_fr_line, data_amp_line
         else:
             T_BIN = np.max(self.data['spikes']['times'])
@@ -354,7 +354,7 @@ class PlotData:
 
     def get_correlation_data_img(self):
         if not self.data['spikes']['exists']:
-            data_img = None
+            data_img = {}
             return data_img
         else:
             T_BIN = 0.05
@@ -384,8 +384,8 @@ class PlotData:
         # time point at same depth togehter
 
         if not self.data[f'rms_{format}']['exists']:
-            data_img = None
-            data_probe = None
+            data_img = {}
+            data_probe = {}
             return data_img, data_probe
 
         _rms = np.take(self.data[f'rms_{format}']['rms'], self.chn_ind, axis=1)
@@ -501,12 +501,12 @@ class PlotData:
         data_probe = {}
 
         if not self.data['psd_lf']['exists']:
-            data_img = None
+            data_img = {}
             for freq in freq_bands:
-                lfp_band_data = {f"{freq[0]} - {freq[1]} Hz": None}
+                lfp_band_data = {f"{freq[0]} - {freq[1]} Hz": {}}
                 data_probe.update(lfp_band_data)
 
-            return data_img, data_probe
+            return {}, {}
         else:
             # Power spectrum image
             freq_range = [0, 300]
@@ -566,7 +566,7 @@ class PlotData:
     def get_rfmap_data(self):
         data_img = dict()
         if not self.data['rf_map']['exists']:
-            return data_img, None
+            return data_img
         else:
 
             (rf_map_times, rf_map_pos,

@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from pathlib import Path
 import glob
-import atlaselectrophysiology.utils.qt_utils as utils
+import atlaselectrophysiology.qt_utils.utils as utils
 import pyqtgraph as pg
 from qtpy import QtWidgets
 import numpy as np

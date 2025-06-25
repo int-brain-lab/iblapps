@@ -7,9 +7,9 @@ import pandas as pd
 import numpy as np
 
 from iblatlas.atlas import AllenAtlas
-import atlaselectrophysiology.utils.ColorBar as cb
+import atlaselectrophysiology.qt_utils.ColorBar as cb
 from ibllib.pipes.ephys_alignment import EphysAlignment
-from atlaselectrophysiology.utils.AdaptedAxisItem import replace_axis
+from atlaselectrophysiology.qt_utils.AdaptedAxisItem import replace_axis
 from ephysfeatures.qrangeslider import QRangeSlider
 from one.remote import aws
 from one.api import ONE

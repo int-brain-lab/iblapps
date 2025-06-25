@@ -3,25 +3,25 @@ import traceback
 import numpy as np
 from datetime import datetime
 import ibllib.pipes.histology as histology
-from ibllib.pipes.ephys_alignment import EphysAlignment
+
 from neuropixel import trace_header
 import iblatlas.atlas as atlas
 from ibllib.qc.alignment_qc import AlignmentQC
 from iblutil.numerical import ismember
 from iblutil.util import Bunch
 from one.api import ONE
-from one.remote import aws
-from pathlib import Path
-import one.alf as alf
+
 from one.alf.exceptions import ALFObjectNotFound
 from one import params
-import glob
 import json
-from atlaselectrophysiology.load_histology import download_histology_data, tif2nrrd
+
+from atlaselectrophysiology.loaders.histology_loader import NrrdSliceLoader, download_histology_data
 from atlaselectrophysiology.plot_data import PlotData
 import ibllib.qc.critical_reasons as usrpmt
 from datetime import timedelta
 import re
+
+from atlaselectrophysiology.utils.align import AlignData
 
 logger = logging.getLogger('ibllib')
 ONE_BASE_URL = "https://alyx.internationalbrainlab.org"
@@ -72,6 +72,7 @@ class LoadData:
         self.alyx_str = None
         self.sr = None
         self.probe_path = None
+        self.slice_loader = None
 
         if probe_id is not None:
             self.sess = self.one.alyx.rest('insertions', 'list', id=probe_id)
@@ -175,23 +176,18 @@ class LoadData:
     def get_selected_probe(self):
         return self.probes[self.probe_label]
 
+    def download_histology(self):
+        _, hist_path = download_histology_data(self.subj, self.lab)
+        self.slice_loader = NrrdSliceLoader(hist_path, self.brain_atlas)
+
     # TODO BETTER NAMING
     def load_data(self):
+        # Should this be here?
+        if self.slice_loader is None:
+            self.download_histology()
         for probe in self.probes.keys():
-            self.probes[probe].load_data()
+            self.probes[probe].load_data(self.slice_loader)
 
-        # # TODO deal with histology exists
-        # histology_exists = False
-        #
-        # # Make sure there is a histology track
-        # hist_traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.probe_id,
-        #                                provenance='Histology track')
-        # if len(hist_traj) == 1:
-        #     if hist_traj[0]['x'] is not None:
-        #         histology_exists = True
-        #         self.traj_id = hist_traj[0]['id']
-        #
-        # return self.get_previous_alignments(), histology_exists
 
     def add_extra_alignments(self, file_path):
 
@@ -226,238 +222,6 @@ class LoadData:
 
         return insertions
 
-
-
-    def load_session_notes(self):
-        sess = self.one.alyx.rest('sessions', 'read', id=self.eid)
-        sess_notes = None
-        if sess['notes']:
-            sess_notes = sess['notes'][0]['text']
-        if not sess_notes:
-            sess_notes = sess['narrative']
-        if not sess_notes:
-            sess_notes = 'No notes for this session'
-
-        return sess_notes
-
-
-class CircularIndexTracker:
-    """
-    A class to manage circular buffer indexing with tracking for navigation
-    and overwriting behavior.
-
-    Attributes
-    ----------
-    max_idx : int
-        Size of the circular buffer.
-    current_idx : int
-        The current index in logical (non-wrapped) space.
-    total_idx : int
-        The highest index filled so far in logical space.
-    last_idx : int
-        The last recorded total index.
-    diff_idx : int
-        Offset between current index and last index used in reset logic.
-    idx : int
-        The wrapped index used in the circular buffer.
-    idx_prev : int
-        The previous wrapped index.
-    """
-    def __init__(self, max_idx: int):
-
-        self.max_idx = max_idx
-        self.current_idx = 0
-        self.total_idx = 0
-        self.last_idx = 0
-        self.diff_idx = 0
-        self.idx = 0
-        self.idx_prev = 0
-
-    def _update_diff_idx(self) -> None:
-        """Internal method to update the diff_idx value."""
-        if self.current_idx < self.last_idx:
-            self.total_idx = self.current_idx
-            delta = np.mod(self.last_idx, self.max_idx) - np.mod(self.total_idx, self.max_idx)
-            self.diff_idx = self.max_idx - delta if delta >= 0 else np.abs(delta)
-        else:
-            self.diff_idx = self.max_idx - 1
-
-
-    def next_idx_to_fill(self) -> None:
-        """
-        Advance to the next index in fill mode (as if appending new data to a circular buffer).
-        """
-        self._update_diff_idx()
-        self.total_idx += 1
-        self.current_idx += 1
-        self.idx_prev = self.idx
-        self.idx = np.mod(self.current_idx, self.max_idx)
-
-    def previous_idx(self) -> bool:
-        """
-        Move backward through previously visited indices.
-        """
-        if self.total_idx > self.last_idx:
-            self.last_idx = self.total_idx
-
-        if self.current_idx > np.max([0, self.total_idx - self.diff_idx]):
-            self.current_idx -= 1
-            self.idx = np.mod(self.current_idx, self.max_idx)
-
-            return True
-
-    def next_idx(self) -> bool:
-        """
-        Move forward through the buffer if within bounds.
-        """
-        if (self.current_idx < self.total_idx) & (self.current_idx > self.total_idx - self.max_idx):
-            self.current_idx += 1
-            self.idx = np.mod(self.current_idx, self.max_idx)
-
-            return True
-
-    def reset_idx(self) -> None:
-        """
-        Reset the index as if beginning a new overwrite sequence, recalculating the circular position.
-        """
-        self._update_diff_idx()
-        self.total_idx += 1
-        self.current_idx += 1
-        self.idx = np.mod(self.current_idx, self.max_idx)
-
-
-
-class AlignData:
-    def __init__(self, xyz_picks, chn_depths, brain_atlas):
-
-        self.buffer = CircularIndexTracker(10)
-        self.brain_atlas = brain_atlas
-        self.ephysalign = EphysAlignment(xyz_picks, chn_depths, brain_atlas=self.brain_atlas)
-        self.initiate_features_and_tracks()
-        self.hist_mapping = 'Allen'
-
-        #
-        # self.shank.align.features[self.idx], self.shank.align.track[self.idx], _ \
-        #     = self.shank.align.ephysalign.get_track_and_feature()
-
-    @property
-    def idx(self):
-        return self.buffer.idx
-
-    @property
-    def idx_prev(self):
-        return self.buffer.idx_prev
-
-    @property
-    def xyz_channels(self):
-        return self.ephysalign.get_channel_locations(self.features[self.idx], self.tracks[self.idx])
-
-    @property
-    def track_lines(self):
-        return self.ephysalign.get_perp_vector(self.features[self.idx], self.tracks[self.idx])
-
-    @property
-    def xyz_track(self):
-        return self.ephysalign.xyz_track
-
-    @property
-    def xyz_samples(self):
-        return self.ephysalign.xyz_samples
-
-    @property
-    def track(self):
-        return self.tracks[self.idx]
-
-    @property
-    def feature(self):
-        return self.features[self.idx]
-
-    def set_init_feature_track(self, feature, track):
-        self.ephysalign.feature_init = feature
-        self.ephysalign.track_init = track
-
-    def initiate_features_and_tracks(self):
-        self.tracks = [0] * (self.buffer.max_idx + 1)
-        self.features = [0] * (self.buffer.max_idx + 1)
-
-    def reset_features_and_tracks(self):
-        self.buffer.reset_idx()
-        self.tracks[self.idx] = self.ephysalign.track_init
-        self.features[self.idx] = self.ephysalign.feature_init
-
-    def get_scaled_histology(self):
-        hist_data = {}
-        scale_data = {}
-        hist_data_ref = {}
-        if self.hist_mapping == 'FP':
-            region_label = self.region_label_fp
-            region = self.region_fp
-            colour = self.region_colour_fp
-        else:
-            region_label = None
-            region = None
-            colour = self.ephysalign.region_colour
-
-
-        hist_data['region'], hist_data['axis_label'] = self.ephysalign.scale_histology_regions(
-            self.features[self.idx], self.tracks[self.idx], region=region, region_label=region_label)
-        hist_data['colour'] = colour
-
-        scale_data['region'], scale_data['scale'] = self.ephysalign.get_scale_factor(hist_data['region'], region_orig=region)
-        hist_data_ref['region'], hist_data_ref['axis_label'] = self.ephysalign.scale_histology_regions(
-            self.ephysalign.track_extent, self.ephysalign.track_extent, region=region, region_label=region_label)
-
-        hist_data_ref['colour'] = colour
-
-        return hist_data, hist_data_ref, scale_data
-
-    def offset_hist_data(self, offset):
-
-        self.buffer.next_idx_to_fill()
-        self.tracks[self.idx] = (self.tracks[self.idx_prev] + offset)
-        self.features[self.idx] = (self.features[self.idx_prev])
-
-
-    def scale_hist_data(self, line_track, line_feature, extend_feature=1, lin_fit=True):
-        """
-        Scale brain regions along probe track
-        """
-        self.buffer.next_idx_to_fill()
-        depths_track = np.sort(np.r_[self.tracks[self.idx_prev][[0, -1]], line_track])
-
-
-        self.tracks[self.idx] = self.ephysalign.feature2track(depths_track,
-                                                             self.features[self.idx_prev],
-                                                             self.tracks[self.idx_prev])
-
-        self.features[self.idx] = np.sort(np.r_[self.features[self.idx_prev]
-                                                [[0, -1]], line_feature])
-
-
-
-        if (self.features[self.idx].size >= 5) & lin_fit:
-            self.features[self.idx], self.tracks[self.idx] = \
-                self.ephysalign.adjust_extremes_linear(self.features[self.idx], self.tracks[self.idx], extend_feature)
-
-        else:
-            self.tracks[self.idx] = self.ephysalign.adjust_extremes_uniform(self.features[self.idx],
-                                                                           self.tracks[self.idx])
-
-    def compute_nearby_boundaries(self):
-
-        nearby_bounds = self.ephysalign.get_nearest_boundary(self.ephysalign.xyz_samples,
-                                                             self.allen, steps=6,
-                                                             brain_atlas=self.brain_atlas)
-        [self.hist_nearby_x, self.hist_nearby_y,
-         self.hist_nearby_col] = self.ephysalign.arrange_into_regions(
-            self.ephysalign.sampling_trk, nearby_bounds['id'], nearby_bounds['dist'],
-            nearby_bounds['col'])
-
-        [self.hist_nearby_parent_x,
-         self.hist_nearby_parent_y,
-         self.hist_nearby_parent_col] = self.ephysalign.arrange_into_regions(
-            self.ephysalign.sampling_trk, nearby_bounds['parent_id'], nearby_bounds['parent_dist'],
-            nearby_bounds['parent_col'])
 
 
 
@@ -507,7 +271,7 @@ class ProbeLoader:
         return self.align.ephysalign.xyz_track
 
 
-    def load_data(self):
+    def load_data(self, slice_loader):
         # TODO cleaner way to do this
         if not self.data_loaded:
             self.raw_data = DataLoader(self.one, self.eid, self.insertion['name'],
@@ -515,6 +279,7 @@ class ProbeLoader:
 
             self.chn_coords = self.raw_data.data['channels']['localCoordinates']
             self.chn_depths = self.chn_coords[:, 1]
+            self.cluster_chns = self.raw_data.data['clusters']['channels']
 
             # Generate plots
             self.plotdata = PlotData(self.raw_data.probe_path, self.raw_data.data, 0)
@@ -548,117 +313,54 @@ class ProbeLoader:
 
             self.align = AlignData(self.xyz_picks, self.chn_depths, self.brain_atlas)
 
-            self.slice_data, self.fp_slice_data = self.get_slice_images(self.align.xyz_samples)
+            self.slice_plots = slice_loader.get_slices(self.align.xyz_samples)
+
 
         # Set the featuer to the current chosen alignment
         self.align.set_init_feature_track(self.feature_prev, self.track_prev)
         # TODO better handling
         self.probe_path = self.raw_data.probe_path
+        self.probe_collection = self.raw_data.probe_collection
 
+    def filter_plots(self):
 
-    def get_slice_images(self, xyz_channels):
+        # self.scat_drift_data = self.plotdata.get_depth_data_scatter()
+        # (self.scat_fr_data, self.scat_p2t_data,
+        #  self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
+        # self.img_corr_data = self.plotdata.get_correlation_data_img()
+        # self.img_fr_data = self.plotdata.get_fr_img()
+        # self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
+        # self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
+        # self.img_stim_data = self.plotdata.get_passive_events()
 
-        index = self.brain_atlas.bc.xyz2i(xyz_channels)[:, self.brain_atlas.xyz2dims]
-        ccf_slice = self.brain_atlas.image[index[:, 0], :, index[:, 2]]
-        ccf_slice = np.swapaxes(ccf_slice, 0, 1)
+        # TODO need to make this better so that we don't get the raw ephys plots again
 
-        label_slice = self.brain_atlas._label2rgb(self.brain_atlas.label[index[:, 0], :,
-                                                  index[:, 2]])
-        label_slice = np.swapaxes(label_slice, 0, 1)
+        self.img_plots = dict()
+        self.scatter_plots = dict()
+        self.probe_plots = dict()
+        self.line_plots = dict()
 
-        width = [self.brain_atlas.bc.i2x(0), self.brain_atlas.bc.i2x(456)]
-        height = [self.brain_atlas.bc.i2z(index[0, 2]), self.brain_atlas.bc.i2z(index[-1, 2])]
+        self.img_plots['Firing Rate'] = self.plotdata.get_fr_img()['Firing Rate']
+        self.img_plots.update(self.plotdata.get_fr_img())
+        self.img_plots.update(self.plotdata.get_correlation_data_img())
+        rms_img, rms_probe = self.plotdata.get_rms_data_img_probe('AP')
+        self.img_plots.update(rms_img)
+        self.probe_plots.update(rms_probe)
+        rms_img, rms_probe = self.plotdata.get_rms_data_img_probe('LF')
+        self.img_plots.update(rms_img)
+        self.probe_plots.update(rms_probe)
+        rms_img, rms_probe = self.plotdata.get_lfp_spectrum_data()
+        self.img_plots.update(rms_img)
+        self.probe_plots.update(rms_probe)
+        self.img_plots.update(self.plotdata.get_raw_data_image(self.probe_id, one=self.one))
+        self.img_plots.update(self.plotdata.get_passive_events())
 
-        hist_path_rd = None
-        hist_path_gr = None
-        hist_path_cb = None
-        # First see if the histology file exists before attempting to connect with FlatIron and
-        # download
-        if self.download_hist:
-            hist_dir = Path(self.session_path.parent.parent, 'histology')
-            if hist_dir.exists():
-                path_to_rd_image = glob.glob(str(hist_dir) + '/*RD.tif')
-                if path_to_rd_image:
-                    hist_path_rd = tif2nrrd(Path(path_to_rd_image[0]))
-                else:
-                    files = download_histology_data(self.subj, self.lab)
-                    if files is not None:
-                        hist_path_rd = files[1]
+        self.probe_plots.update(self.plotdata.get_rfmap_data())
 
-                path_to_gr_image = glob.glob(str(hist_dir) + '/*GR.tif')
-                if path_to_gr_image:
-                    hist_path_gr = tif2nrrd(Path(path_to_gr_image[0]))
-                else:
-                    files = download_histology_data(self.subj, self.lab)
-                    if files is not None:
-                        hist_path_gr = files[0]
+        self.scatter_plots.update(self.plotdata.get_depth_data_scatter())
+        self.scatter_plots.update(self.plotdata.get_fr_p2t_data_scatter())
 
-            else:
-                files = download_histology_data(self.subj, self.lab)
-                if files is not None:
-                    hist_path_gr = files[0]
-                    hist_path_rd = files[1]
-
-            files = download_histology_data('MB059', 'hausserlab')
-            if files is not None:
-                hist_path_cb = files[1]
-
-        if hist_path_rd:
-            hist_atlas_rd = atlas.AllenAtlas(hist_path=hist_path_rd)
-            hist_slice_rd = hist_atlas_rd.image[index[:, 0], :, index[:, 2]]
-            hist_slice_rd = np.swapaxes(hist_slice_rd, 0, 1)
-            del hist_atlas_rd
-        else:
-            print('Could not find red histology image for this subject')
-            hist_slice_rd = np.copy(ccf_slice)
-
-        if hist_path_gr:
-            hist_atlas_gr = atlas.AllenAtlas(hist_path=hist_path_gr)
-            hist_slice_gr = hist_atlas_gr.image[index[:, 0], :, index[:, 2]]
-            hist_slice_gr = np.swapaxes(hist_slice_gr, 0, 1)
-            del hist_atlas_gr
-        else:
-            print('Could not find green histology image for this subject')
-            hist_slice_gr = np.copy(ccf_slice)
-
-        if hist_path_cb:
-            hist_atlas_cb = atlas.AllenAtlas(hist_path=hist_path_cb)
-            hist_slice_cb = hist_atlas_cb.image[index[:, 0], :, index[:, 2]]
-            hist_slice_cb = np.swapaxes(hist_slice_cb, 0, 1)
-            del hist_atlas_cb
-        else:
-            print('Could not find example cerebellar histology image')
-            hist_slice_cb = np.copy(ccf_slice)
-
-        slice_data = {
-            'hist_rd': hist_slice_rd,
-            'hist_gr': hist_slice_gr,
-            'hist_cb': hist_slice_cb,
-            'ccf': ccf_slice,
-            'label': label_slice,
-            'scale': np.array([(width[-1] - width[0]) / ccf_slice.shape[0],
-                               (height[-1] - height[0]) / ccf_slice.shape[1]]),
-            'offset': np.array([width[0], height[0]])
-        }
-
-        if self.franklin_atlas is not None:
-            index = self.franklin_atlas.bc.xyz2i(xyz_channels)[:, self.franklin_atlas.xyz2dims]
-            label_slice = self.franklin_atlas._label2rgb(self.franklin_atlas.label[index[:, 0], :, index[:, 2]])
-            label_slice = np.swapaxes(label_slice, 0, 1)
-            width = [self.franklin_atlas.bc.i2x(0), self.franklin_atlas.bc.i2x(456)]
-            height = [self.franklin_atlas.bc.i2z(index[0, 2]), self.franklin_atlas.bc.i2z(index[-1, 2])]
-
-            franklin_slice_data = {
-                'label': label_slice,
-                'scale': np.array([(width[-1] - width[0]) / ccf_slice.shape[0],
-                                   (height[-1] - height[0]) / ccf_slice.shape[1]]),
-                'offset': np.array([width[0], height[0]])
-            }
-        else:
-            franklin_slice_data = None
-
-        return slice_data, franklin_slice_data
-
+        self.line_plots.update(self.plotdata.get_fr_amp_data_line())
 
 
     def get_previous_alignments(self):
@@ -704,29 +406,63 @@ class ProbeLoader:
         self.track_prev = np.array(self.alignments[self.current_align][1]) if self.current_align != 'original' else np.array([-1 * start_lims, start_lims])
 
 
-    def upload_data(self, xyz_channels, channels=True):
+    def upload_data(self):
+
+        # Upload channels
+        channels = self.upload_channels()
+        # Upload alignments
+        self.update_alignments()
+        # Update alignment qc
+        resolved = self.update_qc()
+        # Update probe qc
+
+        upload_info = self.get_upload_info(channels, resolved)
+
+        return upload_info
+    @staticmethod
+    def get_upload_info(channels, resolved):
+        if channels and resolved == 0:
+            # Channels saved alignment not resolved
+            info = "Channels locations saved to Alyx. \nAlignment not resolved"
+
+        if channels and resolved == 1:
+            # channels saved alignment resolved, writen to flatiron
+            info = "Channel locations saved to Alyx. \nAlignment resolved and channels datasets written to flatiron"
+
+        if not channels and resolved == 1:
+            # alignment already resolved, save alignment but channels not written
+            info = ("Channel locations not saved to Alyx as alignment has already been resolved. "
+                    "\nNew user reference lines have been saved")
+
+        return info
+
+    def upload_channels(self, channels=True):
         if not self.resolved:
+
             channel_upload = True
             # Create new trajectory and overwrite previous one
-            histology.register_aligned_track(self.probe_id, xyz_channels,
-                                             chn_coords=self.chn_coords, one=self.one,
+            histology.register_aligned_track(self.probe_id, self.align.xyz_channels, chn_coords=self.chn_coords, one=self.one,
                                              overwrite=True, channels=channels, brain_atlas=self.brain_atlas)
         else:
             channel_upload = False
 
         return channel_upload
 
-    def update_alignments(self, feature, track, key_info=None, user_eval=None):
+    def update_alignments(self, key_info=None, user_eval=None):
+
+        feature = self.align.feature.tolist()
+        track = self.align.track.tolist()
+
         if not key_info:
             user = params.get().ALYX_LOGIN
             date = datetime.now().replace(microsecond=0).isoformat()
-            data = {date + '_' + user: [feature.tolist(), track.tolist(), self.alyx_str]}
+            data = {date + '_' + user: [feature, track, self.qc_str, self.confidence_str]}
         else:
             user = key_info[20:]
             if user_eval:
-                data = {key_info: [feature.tolist(), track.tolist(), user_eval]}
+                data = {key_info: [feature, track, user_eval]}
             else:
-                data = {key_info: [feature.tolist(), track.tolist()]}
+                data = {key_info: [feature, track]}
 
         old_user = [key for key in self.alignments.keys() if user in key]
         # Only delete duplicated if trajectory is not resolved
@@ -752,15 +488,16 @@ class ProbeLoader:
         self.one.alyx.rest('trajectories', 'partial_update', id=ephys_traj[0]['id'],
                            data=patch_dict)
 
-    def upload_dj(self, align_qc, ephys_qc, ephys_desc):
-        # Upload qc results to datajoint table
+    def get_qc_string(self, align_qc, ephys_qc, ephys_desc):
 
         if len(ephys_desc) == 0:
             ephys_desc_str = 'None'
         else:
             ephys_desc_str = ", ".join(ephys_desc)
 
-        self.alyx_str = ephys_qc.upper() + ': ' + ephys_desc_str
+        self.qc_str = ephys_qc.upper() + ': ' + ephys_desc_str
+        self.confidence_str = f'Confidence: {align_qc}'
+
 
         if ephys_qc.upper() == 'CRITICAL':
             usrpmt.main_gui(self.probe_id, reasons_selected=ephys_desc, alyx=self.one.alyx)
@@ -783,6 +520,9 @@ class ProbeLoader:
 
 
 
+
+
+
 class DataLoader:
     def __init__(self, one, eid, probe_label, spike_collection=None):
         """
@@ -797,6 +537,7 @@ class DataLoader:
         self.probe_path = self.get_spikesorting_path()
         self.probe_collection = str(self.probe_path.relative_to(self.session_path))
         self.data = self.get_data()
+        self.load_method = self.one.load_object
 
     def get_data(self):
         """
