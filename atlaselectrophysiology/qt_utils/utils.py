@@ -5,6 +5,22 @@ import random
 from abc import ABC, abstractmethod
 
 
+colours = ['#cc0000', '#6aa84f', '#1155cc', '#a64d79']
+
+kpen_dot = pg.mkPen(color='k', style=QtCore.Qt.DotLine, width=2)
+rpen_dot = pg.mkPen(color='r', style=QtCore.Qt.DotLine, width=2)
+kpen_solid = pg.mkPen(color='k', style=QtCore.Qt.SolidLine, width=2)
+bpen_solid = pg.mkPen(color='b', style=QtCore.Qt.SolidLine, width=3)
+
+
+@staticmethod
+def remove_items(fig, items):
+    for item in items:
+        fig.removeItem(item)
+        del item
+    return []
+
+
 def set_axis(
         fig: Union[pg.PlotItem, pg.PlotWidget],
         ax: str,
@@ -97,7 +113,7 @@ def set_font(
         axis.setHeight(height)
 
 
-def create_line_style() -> Tuple[QtGui.QPen, QtGui.QBrush]:
+def create_line_style(colour=None) -> Tuple[QtGui.QPen, QtGui.QBrush]:
     """
     Generate a random line style (color and dash style) for reference lines.
 
@@ -111,7 +127,7 @@ def create_line_style() -> Tuple[QtGui.QPen, QtGui.QBrush]:
     colours = ['#000000', '#cc0000', '#6aa84f', '#1155cc', '#a64d79']
     styles = [QtCore.Qt.SolidLine, QtCore.Qt.DashLine, QtCore.Qt.DashDotLine]
 
-    colour = QtGui.QColor(random.choice(colours))
+    colour = colour or QtGui.QColor(random.choice(colours))
     style = random.choice(styles)
 
     pen = pg.mkPen(color=colour, style=style, width=3)
@@ -119,6 +135,47 @@ def create_line_style() -> Tuple[QtGui.QPen, QtGui.QBrush]:
 
     return pen, brush
 
+def create_combobox(function, editable=False):
+
+    model = QtGui.QStandardItemModel()
+    combobox = QtWidgets.QComboBox()
+    combobox.setModel(model)
+    if editable:
+        combobox.setLineEdit(QtWidgets.QLineEdit())
+        completer = QtWidgets.QCompleter()
+        completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        combobox.setCompleter(completer)
+        combobox.completer().setModel(model)
+
+    combobox.activated.connect(function)
+
+    return model, combobox
+
+
+def create_action_menu(menubar, options, function, title=None, set_checked=True, **kwargs):
+
+    action_menu = kwargs.pop('action_menu', None)
+    if action_menu is None:
+        action_menu  = menubar.addMenu(title)
+    action_group = kwargs.pop('action_group',  None)
+    if action_group is None:
+        action_group = QtWidgets.QActionGroup(action_menu)
+        action_group.setExclusive(True)
+
+    for i, option in enumerate(options):
+        if set_checked:
+            checked = True if i == 0 else False
+        else:
+            checked = False
+
+        action = QtWidgets.QAction(option, checkable=True, checked=checked)
+        action.triggered.connect(lambda _, o=option: function(o))
+        action_menu.addAction(action)
+        action_group.addAction(action)
+        if i == 0:
+            action_init = action
+
+    return action_group, action_menu, action_init
 
 
 def populate_lists(

@@ -154,6 +154,7 @@ class ProbeLoaderONE(ProbeLoader):
         """
 
         self.probe_label = self.shanks[idx]['name']
+        self.shank_idx = idx
         self.subj = self.shanks[idx]['session_info']['subject']
         self.lab = self.shanks[idx]['session_info']['lab']
 
@@ -178,14 +179,17 @@ class ProbeLoaderCSV(ProbeLoader):
 
     def get_shanks(self, idx):
         shank = self.sessions[idx]
-        self.shanks = self.session_df.loc[self.session_df['probe'].str.contains(shank)].sort_values('probe')
+        self.shank_df = self.session_df.loc[self.session_df['probe'].str.contains(shank)].sort_values('probe')
 
         self.initialise_shanks()
 
-        return self.shanks['probe'].values
+        self.shanks = self.shank_df['probe'].values
+
+        return self.shanks
 
     def get_info(self, idx):
-        self.probe_label = self.shanks.iloc[idx].probe
+        self.probe_label = self.shanks[idx]
+        self.shank_idx = idx
         self.lab = 'steinmetzlab'
         self.subj = 'KM_027'
 
@@ -193,7 +197,7 @@ class ProbeLoaderCSV(ProbeLoader):
 
         self.probes = Bunch()
 
-        for _, shank in self.shanks.iterrows():
+        for _, shank in self.shank_df.iterrows():
             loaders = Bunch()
             if shank.is_quarter:
                 loaders['data'] = DataLoaderLocal(Path(shank.local_path), CollectionData())
@@ -252,6 +256,7 @@ class ProbeLoaderLocal(ProbeLoader):
 
     def get_info(self, idx):
         self.probe_label = f'shank_{self.shanks[idx]}'
+        self.shank_idx = idx
 
     def get_shanks(self, folder_path):
         """
