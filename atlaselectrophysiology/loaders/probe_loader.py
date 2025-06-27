@@ -210,12 +210,14 @@ class ProbeLoaderCSV(ProbeLoader):
                     ephys_collection=f'raw_ephys_data/{shank.probe}',
                     task_collection='alf/task_01',
                     raw_task_collection='raw_task_data_01')
+
                 loaders['data'] = DataLoaderLocal(Path(shank.local_path), collections)
                 loaders['align'] = AlignmentLoaderONE(ins, self.one, self.brain_atlas)
+                loaders['upload'] = DataUploaderONE(ins, self.one, self.brain_atlas)
+
                 quarter = self.get_quarter_density_alignment(shank)
                 if quarter:
                     loaders['align'].add_extra_alignments(quarter)
-                loaders['upload'] = DataUploaderONE(ins, self.one, self.brain_atlas)
 
             self.probes[shank.probe] = ShankLoader(loaders)
 

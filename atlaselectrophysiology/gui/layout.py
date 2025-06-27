@@ -3,147 +3,10 @@ import pyqtgraph as pg
 from iblutil.util import Bunch
 from atlaselectrophysiology.qt_utils import utils
 from atlaselectrophysiology.qt_utils.AdaptedAxisItem import replace_axis
-import numpy as np
+from atlaselectrophysiology.qt_utils.widgets import GridTabSwitcher
 
-
-
-class GridTabSwitcher(QtWidgets.QWidget):
-    custom_signal = QtCore.Signal(str)
-    def __init__(self):
-
-        super().__init__()
-        self.setFocusPolicy(QtCore.Qt.StrongFocus)
-
-        # Layouts and containers
-        self.main_layout = QtWidgets.QVBoxLayout(self)
-
-        self.panels = []
-        # Tab widget
-        self.tab_widget = QtWidgets.QTabWidget()
-        self.tab_widget.setTabPosition(QtWidgets.QTabWidget.South)
-        self.tab_widget.hide()
-
-        # TODO add rounded corners
-        self.tab_widget.setStyleSheet("""
-        QTabBar::tab:selected {
-            background-color: #2c3e50;
-            color: white;
-            font-weight: bold;
-        }
-        """)
-
-        # Splitter widget
-        self.splitter_main = QtWidgets.QSplitter(QtCore.Qt.Vertical)
-        #self.splitter_main.setContentsMargins(0, 0, 0, 0)
-        self.splitter_top = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
-        self.splitter_bottom = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
-
-        # Splitter layout
-        self.grid_layout = True
-
-    def initialise(self, panels, names, headers=()):
-        self.headers = headers
-        self.panels = panels
-        self.panel_names = list(names)
-
-        if len(self.panels) == 4:
-            self.splitter_main.addWidget(self.splitter_top)
-            self.splitter_main.addWidget(self.splitter_bottom)
-
-        self.add_splitter_layout()
-        self.main_layout.setContentsMargins(0, 0, 0, 0)
-        self.main_layout.setSpacing(0)
-
-    def add_splitter_layout(self):
-
-        if len(self.panels) == 1:
-            self.splitter_main.addWidget(self.panels[0])
-        elif len(self.panels) == 4:
-            self.splitter_top.addWidget(self.panels[0])
-            self.splitter_top.addWidget(self.panels[1])
-            self.splitter_bottom.addWidget(self.panels[2])
-            self.splitter_bottom.addWidget(self.panels[3])
-        else:
-            return
-
-        self.splitter_main.show()
-        for panel in self.panels:
-            panel.show()
-
-        self.main_layout.addWidget(self.splitter_main)
-
-    def delete_widgets(self):
-        if self.grid_layout:
-            self.remove_splitter_layout(delete=True)
-        else:
-            self.remove_tab_layout(delete=True)
-        self.panels = []
-
-    def remove_header(self):
-        if self.headers:
-            for panel, header in zip(self.panels, self.headers):
-                panel.layout().removeWidget(header)
-
-    def add_header(self):
-        if self.headers:
-            for panel, header in zip(self.panels, self.headers):
-                panel.layout().insertWidget(0, header)
-
-    def remove_splitter_layout(self, delete=False):
-
-        if len(self.panels) == 1:
-            splitters = [self.splitter_main]
-        elif len(self.panels) == 4:
-            splitters = [self.splitter_top, self.splitter_bottom]
-        else:
-            return
-
-        for splitter in splitters:
-            for i in reversed(range(splitter.count())):
-                widget = splitter.widget(i)
-                widget.setParent(None)
-                if delete:
-                    del widget
-
-        self.main_layout.removeWidget(self.splitter_main)
-        self.splitter_main.hide()
-
-    def add_tab_layout(self):
-
-        for i, w in enumerate(self.panels):
-            self.tab_widget.addTab(w, f"{self.panel_names[i]}")
-        self.main_layout.addWidget(self.tab_widget)
-        self.tab_widget.show()
-
-    def remove_tab_layout(self, delete=False):
-
-        for i in reversed(range(self.tab_widget.count())):
-            widget = self.tab_widget.widget(i)
-            widget.setParent(None)
-            if delete:
-                del widget
-
-        self.main_layout.removeWidget(self.tab_widget)
-        self.tab_widget.hide()
-
-    def toggle_layout(self):
-        self.tab_widget.blockSignals(True)
-        if self.grid_layout:
-            # Switch to tab layout
-            self.remove_splitter_layout()
-            self.remove_header()
-            self.add_tab_layout()
-        else:
-            # Switch to grid layout
-            self.remove_tab_layout()
-            self.add_header()
-            self.add_splitter_layout()
-            # Emit so we can signal that we have to add the lines for the fit as we now show 4 displays
-            self.custom_signal.emit("lala")
-
-        self.grid_layout = not self.grid_layout
-        self.tab_widget.blockSignals(False)
-
+pg.setConfigOption('background', 'w')
+pg.setConfigOption('foreground', 'k')
 
 
 class Setup():
@@ -157,8 +20,9 @@ class Setup():
         self.menu_bar = QtWidgets.QMenuBar(self)
         self.menu_bar.setNativeMenuBar(False)
         self.setMenuBar(self.menu_bar)
-        # self.menu_bar.setStyleSheet("""QMenuBar {padding-bottom: 10px;}""")
+        self.menu_bar.setStyleSheet("""QMenuBar {padding-bottom: 10px;}""")
 
+        self.init_menubar()
         self.init_session_selection()
         self.init_button_features()
         self.init_fit_figures()
@@ -181,7 +45,7 @@ class Setup():
         self.main_splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         self.main_splitter.addWidget(self.shank_tabs)
         self.main_splitter.addWidget(container)
-        self.main_splitter.setStretchFactor(0, 80)
+        self.main_splitter.setStretchFactor(0, 3)
         self.main_splitter.setStretchFactor(1, 1)
 
 
@@ -194,44 +58,40 @@ class Setup():
         self.hist_tabs.tab_widget.blockSignals(True)
         self.shank_tabs.delete_widgets()
         self.hist_tabs.delete_widgets()
-        self.docks = []
-        self.histology_docks = []
-        self.dock_items = {}
         self.shank_tabs.tab_widget.blockSignals(False)
         self.hist_tabs.tab_widget.blockSignals(False)
 
 
     def init_tabs(self):
-        self.dock_items = dict()
-        self.docks = []
-        self.histology_docks = []
+        self.shank_items = dict()
+        self.shank_panels = []
+        self.hist_panels = []
 
         headers = []
-        for i, probe in enumerate(self.loaddata.probes):
-            widget, items = self.create_shank_docks(f'{probe}', i)
-            self.docks.append(widget)
-            self.dock_items[probe] = items
+        for i, probe in enumerate(self.all_shanks):
+            widget, items = self.create_shank_tabs(f'{probe}', i)
+            self.shank_panels.append(widget)
+            self.shank_items[probe] = items
             self.fig_fit.addItem(items.fit_plot)
             self.fig_fit.addItem(items.fit_scatter)
             self.fig_fit.addItem(items.fit_plot_lin)
-            self.histology_docks.append(items.fig_slice_area)
+            self.hist_panels.append(items.fig_slice_area)
             headers.append(items.header)
 
         plot = pg.PlotCurveItem()
-        plot.setData(x=self.depth, y=self.depth, pen=self.kpen_dot)
+        plot.setData(x=self.depth, y=self.depth, pen=utils.kpen_dot)
         self.fig_fit.addItem(plot)
 
-        self.shank_tabs.initialise(self.docks, self.dock_items.keys(), headers)
-        self.hist_tabs.initialise(self.histology_docks, self.dock_items.keys())
+        self.shank_tabs.initialise(self.shank_panels, self.shank_items.keys(), headers)
+        self.hist_tabs.initialise(self.hist_panels, self.shank_items.keys())
 
 
-    def create_shank_docks(self, name, idx):
+    def create_shank_tabs(self, name, idx):
         shank_items = self.init_shank_figures(name, idx)
 
         shank_container = QtWidgets.QWidget()
         shank_container.setContentsMargins(0, 0, 0, 0)
 
-        shank_layout = QtWidgets.QVBoxLayout()
         shank_layout = QtWidgets.QVBoxLayout()
         shank_layout.setContentsMargins(0, 0, 0, 0)
         shank_layout.setSpacing(0)
@@ -294,7 +154,6 @@ class Setup():
             self.selection_layout.addWidget(self.data_button)
 
 
-
     def init_button_features(self):
         """
         Create all interaction widgets that will be added to the GUI
@@ -317,8 +176,6 @@ class Setup():
         self.complete_button = QtWidgets.QPushButton('Upload')
         self.complete_button.clicked.connect(self.complete_button_pressed)
 
-        # Arrange interaction features into three different layout groups
-        # Group 1
         hlayout1 = QtWidgets.QHBoxLayout()
         hlayout2 = QtWidgets.QHBoxLayout()
         hlayout1.addWidget(self.fit_button, stretch=1)
@@ -353,7 +210,7 @@ class Setup():
     def init_shank_tabs(self):
 
         self.shank_tabs = GridTabSwitcher()
-        self.shank_tabs.tab_widget.currentChanged.connect(self.tab_changed)
+        self.shank_tabs.tab_widget.currentChanged.connect(self.shank_tab_changed)
         self.shank_tabs.custom_signal.connect(self.layout_changed)
 
     def init_fit_figures(self):
@@ -372,7 +229,6 @@ class Setup():
         self.lin_fit_option.setChecked(True)
         self.lin_fit_option.stateChanged.connect(self.lin_fit_option_changed)
         self.on_fig_size_changed()
-
 
     def init_shank_figures(self, name, idx):
         """
@@ -566,13 +422,45 @@ class Setup():
 
         return items
 
-    def on_fig_size_changed(self):
-        # fig_width = self.fig_fit_exporter.getTargetRect().width()
-        # fig_height = self.fig_fit_exporter.getTargetRect().width()
-        self.lin_fit_option.move(70, 10)
+
+    def populate_menu_bar(self):
+
+        self.img_options.clear()
+        utils.remove_actions(self.img_options_group)
+        self.img_init = utils.add_actions(self.shank.img_plots.keys(), self.plot_image_panels, self.img_options, self.img_options_group)
+
+        # Attach scatter plot options to this menu bar
+        _ = utils.add_actions(
+            self.shank.scatter_plots.keys(), self.plot_scatter_panels, self.img_options, self.img_options_group, set_checked=False)
+
+        # Add menu bar for 1D line plot options
+        self.line_options.clear()
+        utils.remove_actions(self.line_options_group)
+        self.line_init = utils.add_actions(
+            self.shank.line_plots.keys(), self.plot_line_panels, self.line_options, self.line_options_group)
+
+        # Add menu bar for 2D probe plot options
+        self.probe_options.clear()
+        utils.remove_actions(self.probe_options_group)
+        self.probe_init = utils.add_actions(
+            self.shank.probe_plots.keys(), self.plot_probe_panels, self.probe_options, self.probe_options_group)
 
 
-    # TODO make it so only the options are changed menu bar stays the same
+        # Add menu bar for coronal slice plot options
+        self.slice_options.clear()
+        utils.remove_actions(self.slice_options_group)
+        self.slice_init = utils.add_actions(
+            self.shank.slice_plots.keys(),self.plot_slice_panels, self.slice_options, self.slice_options_group)
+
+
+        # Add menu bar for unit filtering options
+        # TODO get the filter options from the clusters.metrics
+        self.filter_options.clear()
+        utils.remove_actions(self.filter_options_group)
+        self.unit_init = utils.add_actions(
+        ['All', 'KS good', 'KS mua', 'IBL good'], self.filter_unit_pressed, self.filter_options, self.filter_options_group)
+
+
     def init_menubar(self):
         """
         Create menu bar and add all possible menu options. These are:
@@ -588,32 +476,29 @@ class Setup():
         # Create menubar widget and add it to the main GUI window
 
         # Add menu bar for 2D image plot options
-        self.img_options_group, img_options, self.img_init = utils.create_action_menu(
-            self.menu_bar, self.shank.img_plots.keys(), self.plot_image_panels, title='Image Plots')
-
-        # Attach scatter plot options to this menu bar
-        _ = utils.create_action_menu(
-            self.menu_bar, self.shank.scatter_plots.keys(), self.plot_scatter_panels, set_checked=False,
-            action_menu=img_options, action_group=self.img_options_group)
+        self.img_options = self.menu_bar.addMenu('Image Plots')
+        self.img_options_group = QtWidgets.QActionGroup(self.img_options)
+        self.img_options_group.setExclusive(True)
 
         # Add menu bar for 1D line plot options
-        self.line_options_group, _, self.line_init = utils.create_action_menu(
-            self.menu_bar, self.shank.line_plots.keys(), self.plot_line_panels, title='Line Plots')
+        self.line_options = self.menu_bar.addMenu('Line Plots')
+        self.line_options_group = QtWidgets.QActionGroup(self.line_options)
+        self.line_options_group.setExclusive(True)
 
         # Add menu bar for 2D probe plot options
-        self.probe_options_group, _, self.probe_init = utils.create_action_menu(
-            self.menu_bar, self.shank.probe_plots.keys(), self.plot_probe_panels, title='Probe Plots')
-
+        self.probe_options = self.menu_bar.addMenu('Probe Plots')
+        self.probe_options_group = QtWidgets.QActionGroup(self.probe_options)
+        self.probe_options_group.setExclusive(True)
 
         # Add menu bar for coronal slice plot options
-        self.slice_options_group, _, self.slice_init = utils.create_action_menu(
-            self.menu_bar, self.shank.slice_plots.keys(),self.plot_slice_panels, title='Slice Plots')
-
+        self.slice_options = self.menu_bar.addMenu('Slice Plots')
+        self.slice_options_group = QtWidgets.QActionGroup(self.slice_options)
+        self.slice_options_group.setExclusive(True)
 
         # Add menu bar for unit filtering options
-        # TODO get the filter options from the clusters.metrics
-        _, _, self.unit_init = utils.create_action_menu(
-            self.menu_bar,['All', 'KS good', 'KS mua', 'IBL good'], self.filter_unit_pressed, title='Filter Units')
+        self.filter_options = self.menu_bar.addMenu('Filter Plots')
+        self.filter_options_group = QtWidgets.QActionGroup(self.filter_options)
+        self.filter_options_group.setExclusive(True)
 
         # Add menu bar for all fitting options
         fit_options = self.menu_bar.addMenu("Fit Options")
@@ -643,16 +528,16 @@ class Setup():
                 {'shortcut': 'Shift+U', 'callback': self.complete_button_pressed, 'menu': fit_options},
             'Toggle Image Plots': # Shortcuts to toggle between plots options
                 {'shortcut': 'Alt+1', 'callback': lambda:
-                self.toggle_plots(self.img_options_group), 'menu': display_options},
+                utils.toggle_plots(self.img_options_group), 'menu': display_options},
             'Toggle Line Plots':
                 {'shortcut': 'Alt+2', 'callback': lambda:
-                self.toggle_plots(self.line_options_group), 'menu': display_options},
+                utils.toggle_plots(self.line_options_group), 'menu': display_options},
             'Toggle Probe Plots':
                 {'shortcut': 'Alt+3', 'callback': lambda:
-                self.toggle_plots(self.probe_options_group), 'menu': display_options},
+                utils.toggle_plots(self.probe_options_group), 'menu': display_options},
             'Toggle Slice Plots':
                 {'shortcut': 'Alt+4', 'callback': lambda:
-                self.toggle_plots(self.slice_options_group), 'menu': display_options},
+                utils.toggle_plots(self.slice_options_group), 'menu': display_options},
             'View 1': # Shortcuts to switch order of 3 panels in ephys plot
                 {'shortcut': 'Shift+1', 'callback': lambda: self.set_view(view=1), 'menu': display_options},
             'View 2':

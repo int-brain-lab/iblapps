@@ -3,6 +3,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from typing import Any, Union, Optional, List, Dict, Tuple, Callable
 import random
 from abc import ABC, abstractmethod
+import numpy as np
 
 
 colours = ['#cc0000', '#6aa84f', '#1155cc', '#a64d79']
@@ -13,7 +14,163 @@ kpen_solid = pg.mkPen(color='k', style=QtCore.Qt.SolidLine, width=2)
 bpen_solid = pg.mkPen(color='b', style=QtCore.Qt.SolidLine, width=3)
 
 
-@staticmethod
+selected_tab_style = """QLabel {
+                background-color: #2c3e50;
+                color: white;
+                padding: 6px;
+                font-weight: bold;
+            }
+            """
+deselected_tab_style = """
+            QLabel {
+                background-color: rgb(240, 240, 240);
+                color: black;
+                padding: 6px;
+                font-weight: bold;
+            }
+            """
+
+
+# TODO fix
+def set_view(
+        self,
+        view: int,
+        configure: bool = False
+) -> None:
+    """
+    Update the layout and visual configuration of figure panels based on the selected view mode.
+
+    Parameters
+    ----------
+    view : int
+        The layout mode to use. Supported modes are:
+            1 - img | line | probe
+            2 - img | probe | line
+            3 - probe | line | img
+    configure : bool
+        If True, update stored figure width and height dimensions before applying the layout.
+    """
+
+    if configure:
+        self.fig_ax_width = self.fig_data_ax.width()
+        self.fig_img_width = self.fig_img.width() - self.fig_ax_width
+        self.fig_line_width = self.fig_line.width()
+        self.fig_probe_width = self.fig_probe.width()
+        self.slice_width = self.fig_slice.width()
+        self.slice_height = self.fig_slice.height()
+        self.slice_rect = self.fig_slice.viewRect()
+
+    # Remove all existing layout items to start fresh
+    for item in [self.fig_img_cb, self.fig_probe_cb, self.fig_img, self.fig_line, self.fig_probe]:
+        self.fig_data_layout.removeItem(item)
+
+    # Define configurations for each view mode
+    layout_configs = {
+        1: {
+            'items': [
+                (self.fig_img_cb, 0, 0),
+                (self.fig_probe_cb, 0, 1, 1, 2),
+                (self.fig_img, 1, 0),
+                (self.fig_line, 1, 1),
+                (self.fig_probe, 1, 2),
+            ],
+            'col_stretch': [(0, 6), (1, 2), (2, 1)],
+            'row_stretch': [(0, 1), (1, 10)],
+            'axis_target': self.fig_img,
+            'sizes': lambda: (
+                self.fig_img.setPreferredWidth(self.fig_img_width + self.fig_ax_width),
+                self.fig_line.setPreferredWidth(self.fig_line_width),
+                self.fig_probe.setFixedWidth(self.fig_probe_width)
+            )
+        },
+        2: {
+            'items': [
+                (self.fig_img_cb, 0, 0),
+                (self.fig_probe_cb, 0, 1, 1, 2),
+                (self.fig_img, 1, 0),
+                (self.fig_probe, 1, 1),
+                (self.fig_line, 1, 2),
+            ],
+            'col_stretch': [(0, 6), (1, 1), (2, 2)],
+            'row_stretch': [(0, 1), (1, 10)],
+            'axis_target': self.fig_img,
+            'sizes': lambda: (
+                self.fig_img.setPreferredWidth(self.fig_img_width + self.fig_ax_width),
+                self.fig_line.setPreferredWidth(self.fig_line_width),
+                self.fig_probe.setFixedWidth(self.fig_probe_width)
+            )
+        },
+        3: {
+            'items': [
+                (self.fig_probe_cb, 0, 0, 1, 2),
+                (self.fig_img_cb, 0, 2),
+                (self.fig_probe, 1, 0),
+                (self.fig_line, 1, 1),
+                (self.fig_img, 1, 2),
+            ],
+            'col_stretch': [(0, 1), (1, 2), (2, 6)],
+            'row_stretch': [(0, 1), (1, 10)],
+            'axis_target': self.fig_probe,
+            'sizes': lambda: (
+                self.fig_probe.setFixedWidth(self.fig_probe_width + self.fig_ax_width),
+                self.fig_img.setPreferredWidth(self.fig_img_width),
+                self.fig_line.setPreferredWidth(self.fig_line_width)
+            )
+        }
+    }
+
+    # Validate view and retrieve layout config
+    config = layout_configs.get(view)
+    if not config:
+        raise ValueError(f"Unknown view mode: {view}")
+
+    # Add layout items
+    for item_args in config['items']:
+        self.fig_data_layout.addItem(*item_args)
+
+    # Apply column and row stretch factors
+    for col, factor in config['col_stretch']:
+        self.fig_data_layout.layout.setColumnStretchFactor(col, factor)
+    for row, factor in config['row_stretch']:
+        self.fig_data_layout.layout.setRowStretchFactor(row, factor)
+
+    # Configure axes: only one figure shows the axis label
+    for fig in [self.fig_img, self.fig_line, self.fig_probe]:
+        if fig == config['axis_target']:
+            utils.set_axis(fig, 'left', label='Distance from probe tip (um)')
+        else:
+            utils.set_axis(fig, 'left', show=False)
+
+    # Apply size adjustments specific to view
+    config['sizes']()
+
+    # Force updates and axis correction
+    for fig in [self.fig_img, self.fig_line, self.fig_probe]:
+        fig.update()
+    self.fig_img.setXRange(min=self.xrange[0] - 10, max=self.xrange[1] + 10, padding=0)
+    self.reset_axis_button_pressed()
+
+
+
+def toggle_plots(
+        options_group: QtWidgets.QActionGroup
+) -> None:
+    """
+    Cycle through image, line, probe and slice plots using keyboard shortcuts (Alt+1, Alt+2, Alt+3, Alt+4)
+    Parameters
+    ----------
+    options_group : QActionGroup
+        The group of QAction items representing plots to toggle through
+    """
+    current_act = options_group.checkedAction()
+    actions = options_group.actions()
+    current_idx = next(i for i, act in enumerate(actions) if act == current_act)
+    next_idx = np.mod(current_idx + 1, len(actions))
+    actions[next_idx].setChecked(True)
+    actions[next_idx].trigger()
+
+
+
 def remove_items(fig, items):
     for item in items:
         fig.removeItem(item)
@@ -150,6 +307,31 @@ def create_combobox(function, editable=False):
     combobox.activated.connect(function)
 
     return model, combobox
+
+
+def add_actions(options, function, menu, group, set_checked=True):
+
+    for i, option in enumerate(options):
+        if set_checked:
+            checked = True if i == 0 else False
+        else:
+            checked = False
+
+        action = QtWidgets.QAction(option, checkable=True, checked=checked)
+        action.triggered.connect(lambda _, o=option: function(o))
+        menu.addAction(action)
+        group.addAction(action)
+        if i == 0:
+            action_init = action
+
+    return action_init
+
+
+def remove_actions(action_group):
+    for action in list(action_group.actions()):
+        _ = action_group.removeAction(action)
+        # TODO deleteLater?
+        del _
 
 
 def create_action_menu(menubar, options, function, title=None, set_checked=True, **kwargs):
