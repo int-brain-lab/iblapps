@@ -65,7 +65,6 @@ def callback(parent):
 
     parent.label_win = RegionLookup._get_or_create('Structure Info', parent=parent)
 
-
     if idx:
         region = parent.shank.align.ephysalign.region_id[idx[0]][0]
         parent.label_win.label_selected(region)

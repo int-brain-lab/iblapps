@@ -26,17 +26,18 @@ def setup(parent):
     plugin_menu.addAction(action)
 
 
-def callback(parent, _ ,point):
+def callback(parent, items, _ ,point):
 
     point_pos = point[0].pos()
-    clust_idx = np.argwhere(parent.cluster_data == point_pos.x())[0][0]
+    clust_idx = np.argwhere(items.cluster_data == point_pos.x())[0][0]
+    shank = items.name
     data = {}
-    data['t_autocorr'] = parent.shank.plotdata.t_autocorr
-    data['autocorr'], clust_no = parent.shank.plotdata.get_autocorr(clust_idx)
-    data['t_template'] = parent.shank.plotdata.t_template
-    data['template_wf'] = parent.shank.plotdata.get_template_wf(clust_idx)
+    data['t_autocorr'] = parent.loaddata.probes[shank].plotdata.t_autocorr
+    data['autocorr'], clust_no = parent.loaddata.probes[shank].plotdata.get_autocorr(clust_idx)
+    data['t_template'] = parent.loaddata.probes[shank].plotdata.t_template
+    data['template_wf'] = parent.loaddata.probes[shank].plotdata.get_template_wf(clust_idx)
 
-    parent.plugins[PLUGIN_NAME]['loader'].add_popup(clust_no, data)
+    parent.plugins[PLUGIN_NAME]['loader'].add_popup(shank, clust_no, data)
 
 
 class ClusterPopups:
@@ -46,8 +47,8 @@ class ClusterPopups:
         self.popup_status = True
 
 
-    def add_popup(self, clust_no, data):
-        clust_popup = ClusterPopup(f'Cluster {clust_no}', data=data, parent=self.parent)
+    def add_popup(self, shank, clust_no, data):
+        clust_popup = ClusterPopup._get_or_create(f'{shank}: cluster {clust_no}', data=data, parent=self.parent)
         clust_popup.closed.connect(self.popup_closed)
         clust_popup.moved.connect(self.popup_moved)
         self.cluster_popups.append(clust_popup)

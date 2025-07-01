@@ -19,10 +19,11 @@ class DataUploader(ABC):
 
 
 class DataUploaderLocal(DataUploader):
-    def __init__(self, data_path, shank_idx, n_shanks, brain_atlas):
+    def __init__(self, data_path, shank_idx, n_shanks, brain_atlas, user=None):
         self.data_path = data_path
         self.shank_idx = shank_idx
         self.n_shanks = n_shanks
+        self.user = user
         # TODO figure this out
         self.orig_idx = None
         super().__init__(brain_atlas)
@@ -53,8 +54,9 @@ class DataUploaderLocal(DataUploader):
 
     def update_alignments(self):
         original_json = self.data['alignments']
-        date = datetime.now().replace(microsecond=0).isoformat()
-        data = {date: [self.data['feature'], self.data['track']]}
+        date = datetime.now().replace(second=0, microsecond=0).isoformat()
+        align_key = date + '_' + self.user if self.user else date
+        data = {align_key: [self.data['feature'], self.data['track']]}
         if original_json:
             original_json.update(data)
         else:
@@ -155,7 +157,7 @@ class DataUploaderONE(DataUploader):
 
         if not key_info:
             user = params.get().ALYX_LOGIN
-            date = datetime.now().replace(microsecond=0).isoformat()
+            date = datetime.now().replace(second=0, microsecond=0).isoformat()
             data = {date + '_' + user: [feature, track, self.qc_str, self.confidence_str]}
         else:
             user = key_info[20:]

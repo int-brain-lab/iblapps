@@ -171,10 +171,11 @@ def toggle_plots(
 
 
 
-def remove_items(fig, items):
+def remove_items(fig, items, delete=True):
     for item in items:
         fig.removeItem(item)
-        del item
+        if delete:
+            del item
     return []
 
 
@@ -430,6 +431,9 @@ class PopupWindow(QtWidgets.QMainWindow):
             self.popup_widget = QtWidgets.QWidget()
             self.layout = QtWidgets.QGridLayout()
             self.popup_widget.setLayout(self.layout)
+
+        # TODO figure out need to add into closeEvent of main gui based on popups open
+        self.parent.destroyed.connect(self.close)
         self.setCentralWidget(self.popup_widget)
         self.setWindowTitle(title)
         self.setup()

@@ -4,15 +4,21 @@ from typing import Dict, Optional, Any
 from qtpy import QtGui
 import atlaselectrophysiology.qt_utils.utils as utils
 import atlaselectrophysiology.qt_utils.ColorBar as cb
+from dataclasses import asdict, is_dataclass
+from atlaselectrophysiology.loaders.plot_loader import ScatterData, ImageData, LineData, ProbeData
 
 
 def set_xaxis_range(fig, data, label=True):
+    if is_dataclass(data):
+        data = asdict(data)
     fig.setXRange(min=data['xrange'][0], max=data['xrange'][1], padding=0)
     if label:
         utils.set_axis(fig, 'bottom', label=data['xaxis'])
 
 
 def set_yaxis_range(fig, data):
+    if is_dataclass(data):
+        data = asdict(data)
     fig.setYRange(min=data['yrange'][0], max=data['yrange'][1], padding=data['pad'])
 
 
@@ -124,7 +130,7 @@ def plot_scale_factor(fig_scale, fig_scale_cb, data) -> None:
     return scale_regions
 
 
-def plot_slice(fig_slice, slice_chns, data: Dict, data_chns):
+def plot_slice(fig_slice, data: Dict, data_chns):
     """
     Plot a slice image representing histology data, with optional label or intensity image.
 
@@ -172,16 +178,12 @@ def plot_slice(fig_slice, slice_chns, data: Dict, data_chns):
     traj_line.setData(x=data_chns['x'], y=data_chns['y'], pen=utils.kpen_solid)
     fig_slice.addItem(traj_line)
 
-    # Plot channels
-    fig_slice.addItem(slice_chns)
-    plot_channels(fig_slice, slice_chns, data_chns)
-
     return img, color_bar, traj_line
 
 
 
 
-def plot_channels(fig_slice, slice_chns, data) -> None:
+def plot_channels(fig_slice, data, colour='r') -> None:
     """
     Plot electrode channels and alignment lines on the histological slice.
 
@@ -192,8 +194,9 @@ def plot_channels(fig_slice, slice_chns, data) -> None:
     # If no histology we can't do alignment
 
     # Clear existing reference lines
-
-    slice_chns.setData(x=data['xyz_channels'][:, 0], y=data['xyz_channels'][:, 2], pen='r', brush='r')
+    slice_chns = pg.ScatterPlotItem()
+    slice_chns.setData(x=data['xyz_channels'][:, 0], y=data['xyz_channels'][:, 2], pen=colour, brush=colour)
+    fig_slice.addItem(slice_chns)
 
     slice_lines = []
     for ref_line in data['track_lines']:
@@ -202,7 +205,7 @@ def plot_channels(fig_slice, slice_chns, data) -> None:
         fig_slice.addItem(line)
         slice_lines.append(line)
 
-    return slice_lines
+    return slice_lines, slice_chns
 
 
 
@@ -228,7 +231,8 @@ def plot_line(fig_line, data: Optional[Dict]) -> None:
         print('data for this plot not available')
         return
     # Clear existing plots
-
+    if isinstance(data, LineData):
+        data = asdict(data)
     # Create line plot at add to figure
     line = pg.PlotCurveItem()
     line.setData(x=data['x'], y=data['y'])
@@ -270,7 +274,8 @@ def plot_probe(fig_probe, fig_probe_cb, data: Optional[Dict]) -> None:
     if not data:
         print('data for this plot not available')
         return
-
+    if isinstance(data, ProbeData):
+        data = asdict(data)
     # Create colorbar and add to figure
     color_bar = cb.ColorBar(data['cmap'])
     lut = color_bar.getColourMap()
@@ -346,7 +351,8 @@ def plot_scatter(fig_img, fig_img_cb,  data: Optional[Dict]) -> None:
     if not data:
         print('data for this plot not available')
         return
-
+    if isinstance(data, ScatterData):
+        data = asdict(data)
     # Clear existing plot
     # TODO check if I need this
     # qt_utils.set_axis(self.fig_img_cb, 'top', pen='w')
@@ -407,6 +413,9 @@ def plot_image(fig_img, fig_img_cb, data: Optional[Dict]) -> None:
     if not data:
         print('data for this plot not available')
         return
+
+    if isinstance(data, ImageData):
+        data = asdict(data)
 
     # TODO check if I need this
     # qt_utils.set_axis(self.fig_img_cb, 'top', pen='w')

@@ -7,11 +7,16 @@ from atlaselectrophysiology.loaders.data_loader import DataLoaderONE, DataLoader
 from atlaselectrophysiology.loaders.alignment_loader import AlignmentLoaderONE, AlignmentLoaderLocal
 from atlaselectrophysiology.loaders.histology_loader import NrrdSliceLoader, download_histology_data
 from atlaselectrophysiology.loaders.data_uploader import DataUploaderONE, DataUploaderLocal
-from atlaselectrophysiology.plot_data import PlotData
+from atlaselectrophysiology.loaders.plot_loader import PlotLoader
+# from atlaselectrophysiology.plot_data import PlotData
 from iblatlas.atlas import AllenAtlas
 from one.api import ONE
 from pathlib import Path
 import pandas as pd
+from collections import defaultdict
+from one import params
+
+from atlaselectrophysiology.plot_data import PlotData
 
 
 # Combinations
@@ -30,6 +35,9 @@ class ProbeLoader(ABC):
         self.brain_atlas = brain_atlas or AllenAtlas()
         self.probes = dict()
         self.probe_label = None
+        self.configs = None
+        self.selected_config=None
+        self.config = None
 
     @abstractmethod
     def get_info(self, *args):
@@ -46,6 +54,69 @@ class ProbeLoader(ABC):
 
     def get_selected_probe(self):
         return self.probes[self.probe_label]
+
+    def set_init_alignment(self):
+        self.get_selected_probe().loaders['align'].set_init_alignment()
+
+    def offset_hist_data(self, val):
+        self.get_selected_probe().loaders['align'].offset_hist_data(val)
+
+    def scale_hist_data(self, line_track, line_feature, extend_feature=1, lin_fit=True):
+        self.get_selected_probe().loaders['align'].scale_hist_data(line_track, line_feature, extend_feature=extend_feature, lin_fit=lin_fit)
+
+    def next_idx(self):
+        return self.get_selected_probe().loaders['align'].next_idx()
+
+    def prev_idx(self):
+        return self.get_selected_probe().loaders['align'].prev_idx()
+
+    @property
+    def current_idx(self):
+        return self.get_selected_probe().loaders['align'].current_idx
+    @property
+    def total_idx(self):
+        return self.get_selected_probe().loaders['align'].total_idx
+
+    def reset_features_and_tracks(self):
+        self.get_selected_probe().loaders['align'].reset_features_and_tracks()
+
+    @property
+    def chn_min(self):
+        return np.min([0, self.get_selected_probe().plotdata.chn_min])
+
+    @property
+    def chn_max(self):
+        return self.get_selected_probe().plotdata.chn_max
+
+    def get_plots(self, plot):
+        keys = []
+        for shank in self.probes:
+            keys += getattr(self.probes[shank], plot).keys()
+
+        return set(keys)
+
+    @property
+    def img_plots(self):
+        return self.get_plots('img_plots')
+
+    @property
+    def scat_plots(self):
+        return self.get_plots('scatter_plots')
+
+    @property
+    def line_plots(self):
+        return self.get_plots('line_plots')
+
+    @property
+    def probe_plots(self):
+        return self.get_plots('probe_plots')
+
+    @property
+    def slice_plots(self):
+        return self.get_plots('slice_plots')
+
+
+
 
     @abstractmethod
     def download_histology(self):
@@ -65,6 +136,9 @@ class ProbeLoader(ABC):
     def normalize_probe_name(probe_name):
         match = re.match(r'(probe\d+)', probe_name)
         return match.group(1) if match else probe_name
+
+    def data(self, shank):
+        return self.probes[shank]
 
 
 
@@ -115,7 +189,7 @@ class ProbeLoaderONE(ProbeLoader):
 
         self.initialise_shanks()
 
-        return list(shanks) + ['all']
+        return list(shanks)
 
     def download_histology(self):
         _, hist_path = download_histology_data(self.subj, self.lab)
@@ -158,52 +232,75 @@ class ProbeLoaderONE(ProbeLoader):
         self.subj = self.shanks[idx]['session_info']['subject']
         self.lab = self.shanks[idx]['session_info']['lab']
 
+    def upload_data(self):
+        return self.get_selected_probe().upload_data()
+
 
 # This is pretty bespoke to IBL situation atm
 class ProbeLoaderCSV(ProbeLoader):
     def __init__(self, csv_file='/Users/admin/int-brain-lab/quarter.csv', one=None, brain_atlas=None):
         self.df = pd.read_csv(csv_file)
-        self.sessions = self.df['session'].unique()
+        self.df['session_strip'] = self.df['session'].str.rsplit('/', n=1).str[0]
         self.one = one or ONE()
         super().__init__(brain_atlas)
+        self.configs = ['quarter', 'dense']
+        # TODO having both config and selected_config seems unnecesarily confusing
+        self.selected_config='both'
+        self.config = self.selected_config
+
+    def data(self, shank):
+        return self.probes[shank][self.config]
 
     def get_subjects(self):
-        self.subjects = self.df['session'].unique()
+        # Returns sessions
+        self.subjects = self.df['session_strip'].unique()
 
         return self.subjects
 
     def get_sessions(self, idx):
-        self.session_df = self.df.loc[self.df['session'] == self.subjects[idx]]
+        # Returns probes
+        self.session_df = self.df.loc[self.df['session_strip'] == self.subjects[idx]]
         self.sessions = np.unique([self.normalize_probe_name(pr) for pr in self.session_df['probe'].values])
         return self.sessions
 
     def get_shanks(self, idx):
+        # Returns shank
         shank = self.sessions[idx]
         self.shank_df = self.session_df.loc[self.session_df['probe'].str.contains(shank)].sort_values('probe')
 
         self.initialise_shanks()
 
-        self.shanks = self.shank_df['probe'].values
+        self.shanks = self.shank_df['probe'].unique()
 
         return self.shanks
+
+    def get_config(self, idx):
+
+        return ['quarter', 'dense', 'both']
+
 
     def get_info(self, idx):
         self.probe_label = self.shanks[idx]
         self.shank_idx = idx
+        # TODO don't harcode
         self.lab = 'steinmetzlab'
         self.subj = 'KM_027'
 
     def initialise_shanks(self):
 
-        self.probes = Bunch()
+        self.probes = defaultdict(Bunch)
+        user = params.get().ALYX_LOGIN
 
         for _, shank in self.shank_df.iterrows():
             loaders = Bunch()
+            # Quarter is offline
             if shank.is_quarter:
                 loaders['data'] = DataLoaderLocal(Path(shank.local_path), CollectionData())
-                loaders['align'] = AlignmentLoaderLocal(Path(shank.local_path), 0, 1, self.brain_atlas)
-                loaders['upload'] = DataUploaderLocal(Path(shank.local_path),0, 1, self.brain_atlas)
+                loaders['align'] = AlignmentLoaderLocal(Path(shank.local_path), 0, 1, self.brain_atlas, user=user)
+                loaders['upload'] = DataUploaderLocal(Path(shank.local_path),0, 1, self.brain_atlas, user=user)
+                self.probes[shank.probe]['quarter'] = ShankLoader(loaders)
             else:
+                # Dense is online
                 ins = self.get_insertion(shank)
                 collections = CollectionData(
                     spike_collection=f'alf/{shank.probe}/iblsorter',
@@ -212,29 +309,45 @@ class ProbeLoaderCSV(ProbeLoader):
                     raw_task_collection='raw_task_data_01')
 
                 loaders['data'] = DataLoaderLocal(Path(shank.local_path), collections)
-                loaders['align'] = AlignmentLoaderONE(ins, self.one, self.brain_atlas)
+                loaders['align'] = AlignmentLoaderONE(ins, self.one, self.brain_atlas, user=user)
                 loaders['upload'] = DataUploaderONE(ins, self.one, self.brain_atlas)
+                self.probes[shank.probe]['dense'] = ShankLoader(loaders)
 
-                quarter = self.get_quarter_density_alignment(shank)
-                if quarter:
-                    loaders['align'].add_extra_alignments(quarter)
+            # Assign previous alignments
+            # If Alyx exists this one takes over, if not and a local exists we load this one
+        for shank in self.probes.keys():
+            if self.probes[shank]['dense'].loaders['align'].alignment_keys != ['original']:
+                # Set the quarter shank to whatever is on alyx regardless if there is an original local file
+                self.probes[shank]['quarter'].loaders['align'].alignments = self.probes[shank]['dense'].loaders['align'].alignments
+                self.probes[shank]['quarter'].get_previous_alignments()
+                self.probes[shank]['quarter'].get_starting_alignment(0)
 
-            self.probes[shank.probe] = ShankLoader(loaders)
+            elif self.probes[shank]['quarter'].loaders['align'].alignment_keys != ['original']:
+                # If we have a local file, populate the dense alignment with these values
+                self.probes[shank]['dense'].loaders['align'].add_extra_alignments(self.probes[shank]['quarter'].loaders['align'].alignments)
+                self.probes[shank]['dense'].get_previous_alignments()
+                self.probes[shank]['dense'].get_starting_alignment(0)
+                # TODO should we then set the quarter to the dense to make sure names are consistent??
+                #  e should otherwise they are different when doing get_starting alignment they will be different
+                self.probes[shank]['quarter'].loaders['align'].alignments = self.probes[shank]['dense'].loaders['align'].alignments
+                self.probes[shank]['quarter'].get_previous_alignments()
+                self.probes[shank]['quarter'].get_starting_alignment(0)
+
 
     def get_insertion(self, shank):
 
         ins = self.one.alyx.rest('insertions', 'list', session=self.one.path2eid(shank.session), name=shank.probe)
         return ins[0]
 
-    def get_quarter_density_alignment(self, shank):
-        sub_date = '/'.join(shank.session.split('/')[:-1])
-        quarter = self.df.loc[self.df['session'].str.contains(sub_date) & (self.df['probe'] == shank.probe)  &
-                              (self.df['is_quarter'] == True)]
-        if len(quarter) == 1:
-            prev_align = Path(quarter.iloc[0].local_path).joinpath('prev_alignments.json')
-            if prev_align.exists():
-                print(prev_align)
-                return prev_align
+    # def get_quarter_density_alignment(self, shank):
+    #     sub_date = '/'.join(shank.session.split('/')[:-1])
+    #     quarter = self.df.loc[self.df['session'].str.contains(sub_date) & (self.df['probe'] == shank)  &
+    #                           (self.df['is_quarter'] == True)]
+    #     if len(quarter) == 1:
+    #         prev_align = Path(quarter.iloc[0].local_path).joinpath('prev_alignments.json')
+    #         if prev_align.exists():
+    #             print(prev_align)
+    #             return prev_align
 
     def download_histology(self):
         _, hist_path = download_histology_data(self.subj, self.lab)
@@ -243,8 +356,80 @@ class ProbeLoaderCSV(ProbeLoader):
     def load_data(self):
         self.download_histology()
         for probe in self.probes.keys():
-            self.probes[probe].loaders['hist'] = self.slice_loader
-            self.probes[probe].load_data()
+            for config in self.configs:
+                self.probes[probe][config].loaders['hist'] = self.slice_loader
+                self.probes[probe][config].load_data()
+
+    def get_starting_alignment(self, idx):
+        for config in self.configs:
+            self.get_selected_probe()[config].get_starting_alignment(idx)
+
+    def get_previous_alignments(self):
+        # Always return the dense alignment
+        return self.get_selected_probe()['dense'].get_previous_alignments()
+
+    def get_selected_probe(self):
+        return self.probes[self.probe_label]
+
+    def set_init_alignment(self):
+        for config in self.configs:
+            self.get_selected_probe()[config].loaders['align'].set_init_alignment()
+
+    def offset_hist_data(self, val):
+        for config in self.configs:
+            self.get_selected_probe()[config].loaders['align'].offset_hist_data(val)
+
+    def scale_hist_data(self, line_track, line_feature, extend_feature=1, lin_fit=True):
+        for config in self.configs:
+            self.get_selected_probe()[config].loaders['align'].scale_hist_data(line_track, line_feature,
+                                                                   extend_feature=extend_feature, lin_fit=lin_fit)
+
+    def next_idx(self):
+        for config in self.configs:
+            next_idx = self.get_selected_probe()[config].loaders['align'].next_idx()
+        return next_idx
+
+    def prev_idx(self):
+        for config in self.configs:
+            prev_idx = self.get_selected_probe()[config].loaders['align'].prev_idx()
+        return prev_idx
+
+    @property
+    def current_idx(self):
+        return self.get_selected_probe()[self.config].loaders['align'].current_idx
+    @property
+    def total_idx(self):
+        return self.get_selected_probe()[self.config].loaders['align'].total_idx
+
+    def reset_features_and_tracks(self):
+        for config in self.configs:
+            self.get_selected_probe()[config].loaders['align'].reset_features_and_tracks()
+
+    @property
+    def chn_min(self):
+        return np.min([0, self.get_selected_probe()[self.config].plotdata.chn_min])
+
+    @property
+    def chn_max(self):
+        # TODO this loop won't do!
+        return self.get_selected_probe()[self.config].plotdata.chn_max
+
+    def get_plots(self, plot):
+        keys = []
+        for shank in self.probes:
+            for config in self.configs:
+                keys += getattr(self.probes[shank][config], plot).keys()
+
+        return set(keys)
+
+    def upload_data(self):
+
+        for config in self.configs:
+            info = self.get_selected_probe()[config].upload_data()
+        # TODO we assume info is from alyx just because of the order of self.configs but should handle better
+        return info
+
+
 
 
 
@@ -367,7 +552,8 @@ class ShankLoader:
         self.cluster_chns = self.raw_data['clusters']['channels']
 
         # Generate plots
-        self.plotdata = PlotData(self.loaders['data'].probe_path, self.raw_data, 0)
+        self.plotdata = PlotLoader(self.raw_data, 0)
+        #self.plotdata = PlotData(self.loaders['data'].probe_path, self.raw_data, 0)
         self.get_plots()
 
         self.loaders['align'].get_align(self.chn_depths)
@@ -381,71 +567,25 @@ class ShankLoader:
         self.probe_collection =self.loaders['data'].probe_collection
 
     def get_plots(self):
-        self.img_plots = dict()
-        self.scatter_plots = dict()
-        self.probe_plots = dict()
-        self.line_plots = dict()
+        self.plotdata.get_plots()
 
-        self.img_plots.update(self.plotdata.get_fr_img())
-        self.img_plots.update(self.plotdata.get_correlation_data_img())
-        rms_img, rms_probe = self.plotdata.get_rms_data_img_probe('AP')
-        self.img_plots.update(rms_img)
-        self.probe_plots.update(rms_probe)
-        rms_img, rms_probe = self.plotdata.get_rms_data_img_probe('LF')
-        self.img_plots.update(rms_img)
-        self.probe_plots.update(rms_probe)
-        rms_img, rms_probe = self.plotdata.get_lfp_spectrum_data()
-        self.img_plots.update(rms_img)
-        self.probe_plots.update(rms_probe)
-        # TODO handle this in the data loader
-        # self.img_plots.update(self.plotdata.get_raw_data_image(self.probe_id, one=self.one))
-        self.img_plots.update(self.plotdata.get_passive_events())
+        #TODO we don't need to do this, directly get items wihtout reassigning
+        self.img_plots = self.plotdata.img_plots
+        self.scatter_plots = self.plotdata.scat_plots
+        self.probe_plots = self.plotdata.probe_plots
+        self.line_plots = self.plotdata.line_plots
 
-        self.probe_plots.update(self.plotdata.get_rfmap_data())
+    def filter_plots(self, filter_type):
 
-        self.scatter_plots.update(self.plotdata.get_depth_data_scatter())
-        self.scatter_plots.update(self.plotdata.get_fr_p2t_data_scatter())
+        self.plotdata.filter_units(filter_type)
+        self.plotdata.get_data()
+        self.plotdata.get_plots()
 
-        self.line_plots.update(self.plotdata.get_fr_amp_data_line())
+        self.img_plots = self.plotdata.img_plots
+        self.scatter_plots = self.plotdata.scat_plots
+        self.probe_plots = self.plotdata.probe_plots
+        self.line_plots = self.plotdata.line_plots
 
-    def filter_plots(self):
-        # self.scat_drift_data = self.plotdata.get_depth_data_scatter()
-        # (self.scat_fr_data, self.scat_p2t_data,
-        #  self.scat_amp_data) = self.plotdata.get_fr_p2t_data_scatter()
-        # self.img_corr_data = self.plotdata.get_correlation_data_img()
-        # self.img_fr_data = self.plotdata.get_fr_img()
-        # self.line_fr_data, self.line_amp_data = self.plotdata.get_fr_amp_data_line()
-        # self.probe_rfmap, self.rfmap_boundaries = self.plotdata.get_rfmap_data()
-        # self.img_stim_data = self.plotdata.get_passive_events()
-
-        # TODO need to make this better so that we don't get the raw ephys plots again
-
-        self.img_plots = dict()
-        self.scatter_plots = dict()
-        self.probe_plots = dict()
-        self.line_plots = dict()
-
-        self.img_plots['Firing Rate'] = self.plotdata.get_fr_img()['Firing Rate']
-        self.img_plots.update(self.plotdata.get_fr_img())
-        self.img_plots.update(self.plotdata.get_correlation_data_img())
-        rms_img, rms_probe = self.plotdata.get_rms_data_img_probe('AP')
-        self.img_plots.update(rms_img)
-        self.probe_plots.update(rms_probe)
-        rms_img, rms_probe = self.plotdata.get_rms_data_img_probe('LF')
-        self.img_plots.update(rms_img)
-        self.probe_plots.update(rms_probe)
-        rms_img, rms_probe = self.plotdata.get_lfp_spectrum_data()
-        self.img_plots.update(rms_img)
-        self.probe_plots.update(rms_probe)
-        # self.img_plots.update(self.plotdata.get_raw_data_image(self.probe_id, one=self.one))
-        self.img_plots.update(self.plotdata.get_passive_events())
-
-        self.probe_plots.update(self.plotdata.get_rfmap_data())
-
-        self.scatter_plots.update(self.plotdata.get_depth_data_scatter())
-        self.scatter_plots.update(self.plotdata.get_fr_p2t_data_scatter())
-
-        self.line_plots.update(self.plotdata.get_fr_amp_data_line())
 
     def upload_data(self):
         # TODO this is nasty, can we make it nicer (at leaset add dataclass)

@@ -4,6 +4,9 @@ from iblutil.util import Bunch
 from atlaselectrophysiology.qt_utils import utils
 from atlaselectrophysiology.qt_utils.AdaptedAxisItem import replace_axis
 from atlaselectrophysiology.qt_utils.widgets import GridTabSwitcher
+from atlaselectrophysiology.plugins.cluster_popup import setup as setup_cluster_popup
+from atlaselectrophysiology.plugins.qc_dialog import setup as setup_qc_dialog
+from collections import defaultdict
 
 pg.setConfigOption('background', 'w')
 pg.setConfigOption('foreground', 'k')
@@ -61,22 +64,53 @@ class Setup():
         self.shank_tabs.tab_widget.blockSignals(False)
         self.hist_tabs.tab_widget.blockSignals(False)
 
+    def init_shanks(self):
+        if self.loaddata.configs is not None:
+            self.shank_items = defaultdict(Bunch)
+            for i, shank in enumerate(self.all_shanks):
+                for config in self.loaddata.configs:
+                    self.shank_items[shank][config] = Bunch()
+        else:
+            self.shank_items = Bunch()
+            for i, shank in enumerate(self.all_shanks):
+                self.shank_items[shank] = Bunch()
+
 
     def init_tabs(self):
-        self.shank_items = dict()
+
         self.shank_panels = []
         self.hist_panels = []
-
         headers = []
-        for i, probe in enumerate(self.all_shanks):
-            widget, items = self.create_shank_tabs(f'{probe}', i)
-            self.shank_panels.append(widget)
-            self.shank_items[probe] = items
-            self.fig_fit.addItem(items.fit_plot)
-            self.fig_fit.addItem(items.fit_scatter)
-            self.fig_fit.addItem(items.fit_plot_lin)
-            self.hist_panels.append(items.fig_slice_area)
-            headers.append(items.header)
+        if self.loaddata.configs is not None:
+            config = 'quarter' if self.loaddata.selected_config == 'both' else self.loaddata.selected_config
+
+            for i, shank in enumerate(self.shank_items):
+                for c in self.loaddata.configs:
+                    self.init_shank_figures(self.shank_items[shank][c],f'{shank}', i, config=c)
+                if self.loaddata.selected_config == 'both':
+                    fig_area = self.setup_dual_fig_data_area(self.shank_items[shank]['dense'],self.shank_items[shank]['quarter'], i)
+                else:
+                    fig_area = self.setup_fig_data_area(self.shank_items[shank][self.loaddata.selected_config], i)
+
+                self.fig_fit.addItem(self.shank_items[shank][config].fit_plot)
+                self.fig_fit.addItem(self.shank_items[shank][config].fit_scatter)
+                self.fig_fit.addItem(self.shank_items[shank][config].fit_plot_lin)
+                self.hist_panels.append(self.shank_items[shank][config].fig_slice_area)
+                header = self.shank_items[shank][config].header
+                headers.append(header)
+
+                self.shank_panels.append(self.create_shank_tabs(fig_area, header))
+        else:
+            for i, shank in enumerate(self.shank_items):
+                self.init_shank_figures(self.shank_items[shank], f'{shank}', i)
+                fig_area = self.setup_fig_data_area(self.shank_items[shank], i)
+                self.fig_fit.addItem(self.shank_items[shank].fit_plot)
+                self.fig_fit.addItem(self.shank_items[shank].fit_scatter)
+                self.fig_fit.addItem(self.shank_items[shank].fit_plot_lin)
+                self.hist_panels.append(self.shank_items[shank].fig_slice_area)
+                header = self.shank_items[shank].header
+                headers.append(header)
+                self.shank_panels.append(self.create_shank_tabs(fig_area, header))
 
         plot = pg.PlotCurveItem()
         plot.setData(x=self.depth, y=self.depth, pen=utils.kpen_dot)
@@ -86,20 +120,23 @@ class Setup():
         self.hist_tabs.initialise(self.hist_panels, self.shank_items.keys())
 
 
-    def create_shank_tabs(self, name, idx):
-        shank_items = self.init_shank_figures(name, idx)
+
+
+
+    def create_shank_tabs(self, fig_area, header):
 
         shank_container = QtWidgets.QWidget()
         shank_container.setContentsMargins(0, 0, 0, 0)
-
         shank_layout = QtWidgets.QVBoxLayout()
         shank_layout.setContentsMargins(0, 0, 0, 0)
         shank_layout.setSpacing(0)
-        shank_layout.addWidget(shank_items.header)
-        shank_layout.addWidget(shank_items.fig_area)
+
+
+        shank_layout.addWidget(header)
+        shank_layout.addWidget(fig_area)
         shank_container.setLayout(shank_layout)
 
-        return shank_container, shank_items
+        return shank_container
 
 
     def init_session_selection(self):
@@ -124,6 +161,9 @@ class Setup():
         # Drop down list to select shank
         self.shank_list, self.shank_combobox = utils.create_combobox(self.on_shank_selected)
 
+        # Drop down list to select config
+        self.config_list, self.config_combobox = utils.create_combobox(self.on_config_selected)
+
         # Plus button to select alignment file
         self.align_extra = QtWidgets.QToolButton()
         self.align_extra.setText('+')
@@ -145,6 +185,7 @@ class Setup():
             self.selection_layout.addWidget(self.shank_combobox)
             self.selection_layout.addWidget(self.align_combobox)
             self.selection_layout.addWidget(self.data_button)
+            self.selection_layout.addWidget(self.config_combobox)
         else:
             self.selection_layout.addWidget(self.folder_line)
             self.selection_layout.addWidget(self.folder_button)
@@ -230,13 +271,14 @@ class Setup():
         self.lin_fit_option.stateChanged.connect(self.lin_fit_option_changed)
         self.on_fig_size_changed()
 
-    def init_shank_figures(self, name, idx):
+    def init_shank_figures(self, items, name, idx, config=None):
         """
         Create all figures that will be added to the GUI
         """
-        items = Bunch()
+        # items = Bunch()
         items.name = name
         items.idx = idx
+        items.config = config
 
         items.probe_top_lines = []
         items.probe_tip_lines = []
@@ -244,6 +286,7 @@ class Setup():
         # Figures to show ephys data
         # 2D scatter/ image plot
         items.fig_img = pg.PlotItem()
+        items.fig_img.name = f'{idx}_{config}_img'
         items.fig_img.setYRange(min=self.probe_tip - self.probe_extra,
                                 max=self.probe_top + self.probe_extra, padding=self.pad)
         items.probe_tip_lines.append(items.fig_img.addLine(y=self.probe_tip, pen=utils.kpen_dot, z=50))
@@ -285,29 +328,6 @@ class Setup():
         utils.set_axis(items.fig_probe_cb, 'bottom', show=False)
         utils.set_axis(items.fig_probe_cb, 'left', pen='w')
         utils.set_axis(items.fig_probe_cb, 'top', pen='w')
-
-        # Add img plot, line plot, probe plot, img colourbar and probe colourbar to a graphics
-        # layout widget so plots can be arranged and moved easily
-        items.fig_data_area = pg.GraphicsLayoutWidget(border=None)
-        items.fig_data_area.setContentsMargins(0, 0, 0, 0)
-        items.fig_data_area.ci.setContentsMargins(0, 0, 0, 0)
-        items.fig_data_area.ci.layout.setSpacing(0)
-        items.fig_data_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
-        items.fig_data_area.scene().sigMouseHover.connect(self.on_mouse_hover)
-        items.fig_data_layout = pg.GraphicsLayout()
-
-        items.fig_data_layout.addItem(items.fig_img_cb, 0, 0)
-        items.fig_data_layout.addItem(items.fig_probe_cb, 0, 1, 1, 2)
-        items.fig_data_layout.addItem(items.fig_img, 1, 0)
-        items.fig_data_layout.addItem(items.fig_line, 1, 1)
-        items.fig_data_layout.addItem(items.fig_probe, 1, 2)
-        items.fig_data_layout.layout.setColumnStretchFactor(0, 6)
-        items.fig_data_layout.layout.setColumnStretchFactor(1, 2)
-        items.fig_data_layout.layout.setColumnStretchFactor(2, 1)
-        items.fig_data_layout.layout.setRowStretchFactor(0, 1)
-        items.fig_data_layout.layout.setRowStretchFactor(1, 10)
-
-        items.fig_data_area.addItem(items.fig_data_layout)
 
         # Figures to show histology data
         # Histology figure that will be updated with user input
@@ -410,47 +430,126 @@ class Setup():
         items.header = QtWidgets.QLabel(name)
         items.header.setAlignment(QtCore.Qt.AlignCenter)
 
-        items.fig_area = QtWidgets.QWidget()
-        items.fig_area_layout = QtWidgets.QHBoxLayout()
-        items.fig_area_layout.setContentsMargins(0, 0, 0, 0)
-        items.fig_area_layout.setSpacing(0)
-        items.fig_area_layout.addWidget(items.fig_data_area)
-        items.fig_area_layout.addWidget(items.fig_hist_area)
-        items.fig_area_layout.setStretch(0, 3)
-        items.fig_area_layout.setStretch(1, 1)
-        items.fig_area.setLayout(items.fig_area_layout)
-
         return items
+
+
+
+
+
+
+    def setup_fig_data_area(self, items, idx):
+
+        items.fig_data_ax = utils.set_axis(items.fig_img, 'left', label='Distance from probe tip (uV)')
+
+        fig_data_area = pg.GraphicsLayoutWidget(border=None)
+        fig_data_area.setContentsMargins(0, 0, 0, 0)
+        fig_data_area.ci.setContentsMargins(0, 0, 0, 0)
+        fig_data_area.ci.layout.setSpacing(0)
+        fig_data_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
+        fig_data_area.scene().sigMouseHover.connect(self.on_mouse_hover)
+        fig_data_layout = pg.GraphicsLayout()
+
+        fig_data_layout.addItem(items.fig_img_cb, 0, 0)
+        fig_data_layout.addItem(items.fig_probe_cb, 0, 1, 1, 2)
+        fig_data_layout.addItem(items.fig_img, 1, 0)
+        fig_data_layout.addItem(items.fig_line, 1, 1)
+        fig_data_layout.addItem(items.fig_probe, 1, 2)
+        fig_data_layout.layout.setColumnStretchFactor(0, 6)
+        fig_data_layout.layout.setColumnStretchFactor(1, 2)
+        fig_data_layout.layout.setColumnStretchFactor(2, 1)
+        fig_data_layout.layout.setRowStretchFactor(0, 1)
+        fig_data_layout.layout.setRowStretchFactor(1, 10)
+
+        fig_data_area.addItem(fig_data_layout)
+
+        fig_area = QtWidgets.QWidget()
+        fig_area_layout = QtWidgets.QHBoxLayout()
+        fig_area_layout.setContentsMargins(0, 0, 0, 0)
+        fig_area_layout.setSpacing(0)
+        fig_area_layout.addWidget(fig_data_area)
+        fig_area_layout.addWidget(items.fig_hist_area)
+        fig_area_layout.setStretch(0, 3)
+        fig_area_layout.setStretch(1, 1)
+        fig_area.setLayout(fig_area_layout)
+
+        return fig_area
+
+    def setup_dual_fig_data_area(self, items_d, items_q, idx):
+
+        items_d.fig_data_ax = utils.set_axis(items_d.fig_img, 'left', show=False)
+        items_q.fig_data_ax = utils.set_axis(items_q.fig_img, 'left', label='Distance from probe tip (uV)')
+
+        fig_data_area = pg.GraphicsLayoutWidget(border=None)
+        fig_data_area.setContentsMargins(0, 0, 0, 0)
+        fig_data_area.ci.setContentsMargins(0, 0, 0, 0)
+        fig_data_area.ci.layout.setSpacing(0)
+        fig_data_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
+        fig_data_area.scene().sigMouseHover.connect(self.on_mouse_hover)
+        fig_data_layout = pg.GraphicsLayout()
+        fig_data_layout.setSpacing(0)
+
+        fig_data_layout.addItem(items_q.fig_img_cb, 0, 0)
+        fig_data_layout.addItem(items_d.fig_img_cb, 0, 1)
+        fig_data_layout.addItem(items_q.fig_probe_cb, 0, 2, 1, 2)
+        fig_data_layout.addItem(items_d.fig_probe_cb, 0, 4, 1, 2)
+        fig_data_layout.addItem(items_q.fig_img, 1, 0)
+        fig_data_layout.addItem(items_d.fig_img, 1, 1)
+        fig_data_layout.addItem(items_q.fig_line, 1, 2)
+        fig_data_layout.addItem(items_d.fig_line, 1, 3)
+        fig_data_layout.addItem(items_q.fig_probe, 1, 4)
+        fig_data_layout.addItem(items_d.fig_probe, 1, 5)
+        fig_data_layout.layout.setColumnStretchFactor(0, 5)
+        fig_data_layout.layout.setColumnStretchFactor(1, 5)
+        fig_data_layout.layout.setColumnStretchFactor(2, 1)
+        fig_data_layout.layout.setColumnStretchFactor(3, 1)
+        fig_data_layout.layout.setColumnStretchFactor(4, 1)
+        fig_data_layout.layout.setColumnStretchFactor(5, 1)
+        fig_data_layout.layout.setRowStretchFactor(0, 1)
+        fig_data_layout.layout.setRowStretchFactor(1, 10)
+
+        fig_data_area.addItem(fig_data_layout)
+
+        fig_area = QtWidgets.QWidget()
+        fig_area_layout = QtWidgets.QHBoxLayout()
+        fig_area_layout.setContentsMargins(0, 0, 0, 0)
+        fig_area_layout.setSpacing(0)
+        fig_area_layout.addWidget(fig_data_area)
+        fig_area_layout.addWidget(items_q.fig_hist_area)
+        fig_area_layout.setStretch(0, 3)
+        fig_area_layout.setStretch(1, 1)
+        fig_area.setLayout(fig_area_layout)
+
+        return fig_area
 
 
     def populate_menu_bar(self):
 
         self.img_options.clear()
         utils.remove_actions(self.img_options_group)
-        self.img_init = utils.add_actions(self.shank.img_plots.keys(), self.plot_image_panels, self.img_options, self.img_options_group)
+        self.img_init = utils.add_actions(self.loaddata.img_plots, self.plot_image_panels, self.img_options, self.img_options_group)
 
         # Attach scatter plot options to this menu bar
         _ = utils.add_actions(
-            self.shank.scatter_plots.keys(), self.plot_scatter_panels, self.img_options, self.img_options_group, set_checked=False)
+            self.loaddata.scat_plots, self.plot_scatter_panels, self.img_options, self.img_options_group, set_checked=False)
 
         # Add menu bar for 1D line plot options
         self.line_options.clear()
         utils.remove_actions(self.line_options_group)
         self.line_init = utils.add_actions(
-            self.shank.line_plots.keys(), self.plot_line_panels, self.line_options, self.line_options_group)
+            self.loaddata.line_plots, self.plot_line_panels, self.line_options, self.line_options_group)
 
         # Add menu bar for 2D probe plot options
         self.probe_options.clear()
         utils.remove_actions(self.probe_options_group)
         self.probe_init = utils.add_actions(
-            self.shank.probe_plots.keys(), self.plot_probe_panels, self.probe_options, self.probe_options_group)
+            self.loaddata.probe_plots, self.plot_probe_panels, self.probe_options, self.probe_options_group)
 
 
         # Add menu bar for coronal slice plot options
         self.slice_options.clear()
         utils.remove_actions(self.slice_options_group)
         self.slice_init = utils.add_actions(
-            self.shank.slice_plots.keys(),self.plot_slice_panels, self.slice_options, self.slice_options_group)
+            self.loaddata.slice_plots,self.plot_slice_panels, self.slice_options, self.slice_options_group)
 
 
         # Add menu bar for unit filtering options
@@ -552,10 +651,10 @@ class Setup():
                 {'shortcut': 'Shift+H', 'callback': self.toggle_reference_lines, 'menu': display_options},
             'Hide/Show Channels': # Shortcut to hide/show reference lines and channels on slice image
                 {'shortcut': 'Shift+C', 'callback': self.toggle_channels, 'menu': display_options},
-            'Hide/Show Nearby Boundaries': # Shortcut to change default histology reference image
-                {'shortcut': 'Shift+N', 'callback': self.toggle_histology, 'menu': display_options},
-            'Change Histology Map': # Option to change histology regions from Allen to Franklin Paxinos
-                {'shortcut': 'Shift+M', 'callback': self.toggle_histology_map, 'menu': display_options},
+            # 'Hide/Show Nearby Boundaries': # Shortcut to change default histology reference image
+            #     {'shortcut': 'Shift+N', 'callback': self.toggle_histology, 'menu': display_options},
+            # 'Change Histology Map': # Option to change histology regions from Allen to Franklin Paxinos
+            #     {'shortcut': 'Shift+M', 'callback': self.toggle_histology_map, 'menu': display_options},
             'Toggle layout':  # Option to change histology regions from Allen to Franklin Paxinos
                 {'shortcut': 'T', 'callback': self.toggle_layout, 'menu': display_options},
 
@@ -576,12 +675,12 @@ class Setup():
         self.plugins = dict()
 
         # TODO
-        # setup_cluster_popup(self)
+        setup_cluster_popup(self)
         # setup_region_tree(self)
         # setup_export_pngs(self)
-        #if not self.offline:
+        if not self.offline:
             # setup_nearby_sessions(self)
             # setup_subject_scaling(self)
             # setup_ephys_features(self)
             # setup_session_notes(self)
-            # setup_qc_dialog(self)
+            setup_qc_dialog(self)

@@ -11,10 +11,15 @@ from abc import ABC, abstractmethod
 # TODO check which logger
 logger = logging.getLogger('ibllib')
 
-#TODO dataloader directly from spike interface?
+# TODO dataloader directly from spike interface?
 # TODO raw data loader
 # TODO class that can read in the metafiles and determine the number of shanks based on this read in the appropriate
 # data for the shank in question (needs to either read from the meta file or detect from the chns.localCoordinates)
+# TODO for offline, need to prepare the data per shank in the same way: Three options
+# 1. spikesorting joined, raw data joined
+# 2. spikesorting split, raw data joined
+# 3. spikesorting split, raw data split
+
 
 @dataclass
 class CollectionData:
@@ -171,13 +176,13 @@ class DataLoader(ABC):
 
         clu_idx = clusters.metrics.firing_rate > min_fr
         exists = clusters.pop('exists')
-        clusters = Bunch({k: v[clu_idx] for k, v in clusters.items()})
+        clusters = alfio.AlfBunch({k: v[clu_idx] for k, v in clusters.items()})
         clusters['exists'] = exists
 
         spike_idx, ib = ismember(spikes.clusters, clusters.metrics.index)
         clusters.metrics.reset_index(drop=True, inplace=True)
         exists = spikes.pop('exists')
-        spikes = Bunch({k: v[spike_idx] for k, v in spikes.items()})
+        spikes = alfio.AlfBunch({k: v[spike_idx] for k, v in spikes.items()})
         spikes['exists'] = exists
         spikes.clusters = clusters.metrics.index[ib].astype(np.int32)
 

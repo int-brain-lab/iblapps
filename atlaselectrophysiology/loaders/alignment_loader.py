@@ -7,6 +7,7 @@ from typing import List, Type, Union
 from one import params
 
 
+# TODO make this cleaner
 def delegate_attributes(
     target_obj_path: str,
     attr_names: List[str],
@@ -62,13 +63,14 @@ def delegate_attributes(
 
 
 class AlignmentLoader(ABC):
-    def __init__(self, brain_atlas):
+    def __init__(self, brain_atlas, user):
         self.brain_atlas = brain_atlas
         self.alignments = dict()
         self.alignment_keys = ['original']
         self.xyz_picks = self.load_xyz_picks()
         self._delegate_alignment_attributes()
         self.extra_alignments = dict()
+        self.user = user
 
     def _delegate_alignment_attributes(self) -> None:
         """
@@ -166,14 +168,22 @@ class AlignmentLoader(ABC):
     def set_init_alignment(self):
         self.align.set_init_feature_track(self.feature_prev, self.track_prev)
 
+    def add_extra_alignments(self, extra_alignments):
+
+        for key, val in extra_alignments.items():
+            if len(key) == 19 and self.user:
+                self.extra_alignments[key + '_' + self.user] = val
+            else:
+                self.extra_alignments[key] = val
+
 
 
 class AlignmentLoaderONE(AlignmentLoader):
-    def __init__(self, insertion, one, brain_atlas):
+    def __init__(self, insertion, one, brain_atlas, user=None):
         self.insertion = insertion
         self.one = one
         self.traj_id = None
-        super().__init__(brain_atlas)
+        super().__init__(brain_atlas, user=user)
 
     def load_xyz_picks(self):
         return np.array(self.insertion['json']['xyz_picks']) / 1e6
@@ -192,28 +202,14 @@ class AlignmentLoaderONE(AlignmentLoader):
             if hist_traj[0]['x'] is not None:
                 self.traj_id = hist_traj[0]['id']
 
-    def add_extra_alignments(self, file_path):
-
-        with open(file_path, "r") as f:
-            extra_alignments = json.load(f)
-        self.extra_alignments = {}
-
-        # Add the username to the keys, required if combining and offline and online alignment
-        user = params.get().ALYX_LOGIN
-        for key, val in extra_alignments.items():
-            if len(key) == 19:
-                self.extra_alignments[key + '_' + user] = val
-            else:
-                self.extra_alignments[key] = val
-
 
 
 class AlignmentLoaderLocal(AlignmentLoader):
-    def __init__(self, data_path, shank_idx, n_shanks, brain_atlas):
+    def __init__(self, data_path, shank_idx, n_shanks, brain_atlas, user=None):
         self.data_path = data_path
         self.shank_idx = shank_idx
         self.n_shanks = n_shanks
-        super().__init__(brain_atlas)
+        super().__init__(brain_atlas, user=user)
 
     def load_xyz_picks(self):
         xyz_file_name = '*xyz_picks.json' if self.n_shanks == 1 else \

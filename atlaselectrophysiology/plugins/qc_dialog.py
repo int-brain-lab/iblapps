@@ -18,8 +18,12 @@ def callback(parent):
     align_qc = parent.qc_dialog.align_qc.currentText()
     ephys_qc = parent.qc_dialog.ephys_qc.currentText()
     ephys_desc = [btn.text() for btn in parent.qc_dialog.desc_buttons.buttons() if btn.isChecked()]
-    parent.shank.loaders['upload'].get_qc_string(align_qc, ephys_qc, ephys_desc)
+    if parent.loaddata.configs is None:
+        upload = parent.loaddata.get_selected_probe().loaders['upload']
+    else:
+        upload = parent.loaddata.get_selected_probe()['dense'].loaders['upload']
 
+    upload.get_qc_string(align_qc, ephys_qc, ephys_desc)
     return
 
 
