@@ -1,18 +1,19 @@
+from abc import ABC, abstractmethod
+import logging
 import numpy as np
 from pathlib import Path
-from abc import ABC, abstractmethod
-from typing import Dict, Union
-import logging
 import requests
 import re
-from one import params
-from one.webclient import http_download_file
+from typing import Dict, Union
 import SimpleITK as sitk
 
-
 from iblatlas.atlas import AllenAtlas
+from one import params
+from one.webclient import http_download_file
 
 logger = logging.getLogger(__name__)
+
+# TODO docstrings and typing and logging
 
 
 class SliceLoader(ABC):
@@ -70,10 +71,8 @@ class SliceLoader(ABC):
         """
         slices = {
             'CCF': self.get_slice(xyz, self.brain_atlas.image),
-            'Annotation': self.get_slice(xyz, self.brain_atlas._label2rgb(self.brain_atlas.label))
+            'Annotation': self.get_slice(xyz, self.brain_atlas.label, annotation=True)
         }
-
-        slices['Annotation']['label'] = True
 
         for key, vol_path in self.hist_paths.items():
             try:
@@ -84,7 +83,7 @@ class SliceLoader(ABC):
 
         return slices
 
-    def get_slice(self, xyz: np.ndarray, vol: np.ndarray) -> Dict[str, np.ndarray]:
+    def get_slice(self, xyz: np.ndarray, vol: np.ndarray, annotation=False) -> Dict[str, np.ndarray]:
         """
         Extract a slice from a 3D volume using given coordinates.
 
@@ -103,9 +102,10 @@ class SliceLoader(ABC):
         index = self.brain_atlas.bc.xyz2i(xyz)[:, self.brain_atlas.xyz2dims]
         width = [self.brain_atlas.bc.i2x(0), self.brain_atlas.bc.i2x(456)]
         height = [self.brain_atlas.bc.i2z(index[0, 2]), self.brain_atlas.bc.i2z(index[-1, 2])]
-
-        hist_slice = np.swapaxes(vol[index[:, 0], :, index[:, 2]], 0, 1)
-
+        hist_slice = vol[index[:, 0], :, index[:, 2]]
+        if annotation:
+            hist_slice = self.brain_atlas._label2rgb(hist_slice)
+        hist_slice = np.swapaxes(hist_slice, 0, 1)
         return {
             'slice': hist_slice,
             'scale': np.array([(width[-1] - width[0]) / hist_slice.shape[0],
@@ -154,7 +154,7 @@ class NrrdSliceLoader(SliceLoader):
         np.ndarray
             Loaded image volume.
         """
-        return AllenAtlas(hist_path=vol_path).image
+        return AllenAtlas._read_volume(vol_path)
 
 
 def download_histology_data(subject: str, laboratory: str):
@@ -165,7 +165,6 @@ def download_histology_data(subject: str, laboratory: str):
 
     if len(expected_files) >= 2:
         return expected_files, cache_dir
-
 
     # Otherwise we attempt to download files
     lab_hist = 'mrsicflogellab' if laboratory == 'hoferlab' else laboratory
@@ -182,7 +181,6 @@ def download_histology_data(subject: str, laboratory: str):
         except Exception as e:
             logger.warning(f"Failed to find path for lab={lab}, subject={subj}: {e}")
             return None
-
 
     attempts = [
         (subject, lab_hist),
@@ -242,24 +240,3 @@ def tif2nrrd(path_to_image):
         writer.Execute(new_img)
 
     return path_to_nrrd
-
-
-#TODO add factory based on file inputs
-# Factory
-# class SliceLoaderFactory:
-#     loaders = {
-#         'nrrd': IBLSliceLoader,
-#         'nii': NiiSliceLoader,
-#         'nii.gz': NiiSliceLoader,
-#         'tiff': TiffSliceLoader,
-#         'tif': TiffSliceLoader
-#     }
-#
-#     @staticmethod
-#     def create(file_path: Path, brain_atlas: AllenAtlas) -> Optional[SliceLoader]:
-#         ext = next((p.suffix.lstrip('.') for p in file_path.glob("*") if p.is_file()), None)
-#         loader_cls: Type[SliceLoader] = SliceLoaderFactory.loaders.get(ext)
-#         if loader_cls:
-#             return loader_cls(file_path, brain_atlas)
-#         logger.warning(f"No loader found for extension: {ext}")
-#         return None

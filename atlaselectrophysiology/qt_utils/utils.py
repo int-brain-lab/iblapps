@@ -14,22 +14,46 @@ kpen_solid = pg.mkPen(color='k', style=QtCore.Qt.SolidLine, width=2)
 bpen_solid = pg.mkPen(color='b', style=QtCore.Qt.SolidLine, width=3)
 
 
-selected_tab_style = """QLabel {
+tab_style = {
+    'selected': """QLabel {
                 background-color: #2c3e50;
+                border: 1px solid lightgrey;
                 color: white;
                 padding: 6px;
                 font-weight: bold;
             }
-            """
-deselected_tab_style = """
+            """,
+    'deselected': """
             QLabel {
                 background-color: rgb(240, 240, 240);
+                border: 1px solid lightgrey;
                 color: black;
                 padding: 6px;
                 font-weight: bold;
             }
             """
+}
 
+button_style = {
+    'activated': """
+    QPushButton {
+        background-color: grey;
+        border: 1px solid lightgrey;
+        color: white;
+        border-radius: 5px;  /* Rounded corners */
+        padding: 2px;
+    }
+""",
+    'deactivated': """
+    QPushButton {
+        background-color: white;
+        border: 1px solid transparent;
+        color: grey;
+        border-radius: 5px;  /* Rounded corners */
+        padding: 2px;
+    }
+"""
+}
 
 # TODO fix
 def set_view(
@@ -309,6 +333,11 @@ def create_combobox(function, editable=False):
 
     return model, combobox
 
+def find_actions(text, action_group):
+    for action in action_group.actions():
+        if action.text() == text:
+            return action
+
 
 def add_actions(options, function, menu, group, set_checked=True):
 
@@ -323,7 +352,7 @@ def add_actions(options, function, menu, group, set_checked=True):
         menu.addAction(action)
         group.addAction(action)
         if i == 0:
-            action_init = action
+            action_init = option
 
     return action_init
 

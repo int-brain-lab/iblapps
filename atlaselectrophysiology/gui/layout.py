@@ -164,14 +164,12 @@ class Setup():
         # Drop down list to select config
         self.config_list, self.config_combobox = utils.create_combobox(self.on_config_selected)
 
-        # Plus button to select alignment file
-        self.align_extra = QtWidgets.QToolButton()
-        self.align_extra.setText('+')
-        self.align_extra.clicked.connect(self.add_alignment_pressed)
 
         # Button to get data to display in GUI
         self.data_button = QtWidgets.QPushButton('Load')
         self.data_button.clicked.connect(self.data_button_pressed)
+        self.data_button.setFixedWidth(70)
+        self.data_button.setStyleSheet(utils.button_style['deactivated'])
 
         # Layout to group combo
         self.selection_widget = QtWidgets.QWidget()
@@ -191,7 +189,6 @@ class Setup():
             self.selection_layout.addWidget(self.folder_button)
             self.selection_layout.addWidget(self.shank_combobox)
             self.selection_layout.addWidget(self.align_combobox)
-            self.selection_layout.addWidget(self.align_extra)
             self.selection_layout.addWidget(self.data_button)
 
 
@@ -216,26 +213,39 @@ class Setup():
         # Button to upload final state to Alyx/ to local file
         self.complete_button = QtWidgets.QPushButton('Upload')
         self.complete_button.clicked.connect(self.complete_button_pressed)
+        # Button to go to next move
+        self.next_button = QtWidgets.QPushButton('Next')
+        self.next_button.clicked.connect(self.next_button_pressed)
+        # Button to go to previous move
+        self.prev_button = QtWidgets.QPushButton('Previous')
+        self.prev_button.clicked.connect(self.prev_button_pressed)
 
         hlayout1 = QtWidgets.QHBoxLayout()
         hlayout2 = QtWidgets.QHBoxLayout()
+        hlayout3 = QtWidgets.QHBoxLayout()
         hlayout1.addWidget(self.fit_button, stretch=1)
         hlayout1.addWidget(self.offset_button, stretch=1)
-        hlayout1.addWidget(self.tot_idx_string, stretch=2)
-        hlayout2.addWidget(self.reset_button, stretch=1)
-        hlayout2.addWidget(self.complete_button, stretch=1)
-        hlayout2.addWidget(self.idx_string, stretch=2)
+        hlayout1.addWidget(QtWidgets.QLabel(), stretch=2)
+        hlayout2.addWidget(self.prev_button, stretch=1)
+        hlayout2.addWidget(self.next_button, stretch=1)
+        hlayout2.addWidget(self.tot_idx_string, stretch=2)
+        hlayout3.addWidget(self.reset_button, stretch=1)
+        hlayout3.addWidget(self.complete_button, stretch=1)
+        hlayout3.addWidget(self.idx_string, stretch=2)
         self.button_layout = QtWidgets.QVBoxLayout()
         self.button_layout.addLayout(hlayout1)
         self.button_layout.addLayout(hlayout2)
+        self.button_layout.addLayout(hlayout3)
 
     def init_slice_figures(self):
 
         lut_area = pg.GraphicsLayoutWidget()
-        lut_layout = pg.GraphicsLayout()
+        self.lut_layout = pg.GraphicsLayout()
         self.slice_LUT = pg.HistogramLUTItem()
-        lut_layout.addItem(self.slice_LUT)
-        lut_area.addItem(lut_layout)
+        self.slice_LUT.axis.hide()
+        self.slice_LUT.sigLevelsChanged.connect(self.update_levels)
+        self.lut_layout.addItem(self.slice_LUT)
+        lut_area.addItem(self.lut_layout)
 
         self.hist_tabs = GridTabSwitcher()
         self.hist_tabs.tab_widget.currentChanged.connect(self.hist_tab_changed)
@@ -526,30 +536,30 @@ class Setup():
 
         self.img_options.clear()
         utils.remove_actions(self.img_options_group)
-        self.img_init = utils.add_actions(self.loaddata.img_plots, self.plot_image_panels, self.img_options, self.img_options_group)
+        self.img_init = utils.add_actions(self.loaddata.image_keys, self.plot_image_panels, self.img_options, self.img_options_group)
 
         # Attach scatter plot options to this menu bar
         _ = utils.add_actions(
-            self.loaddata.scat_plots, self.plot_scatter_panels, self.img_options, self.img_options_group, set_checked=False)
+            self.loaddata.scatter_keys, self.plot_scatter_panels, self.img_options, self.img_options_group, set_checked=False)
 
         # Add menu bar for 1D line plot options
         self.line_options.clear()
         utils.remove_actions(self.line_options_group)
         self.line_init = utils.add_actions(
-            self.loaddata.line_plots, self.plot_line_panels, self.line_options, self.line_options_group)
+            self.loaddata.line_keys, self.plot_line_panels, self.line_options, self.line_options_group)
 
         # Add menu bar for 2D probe plot options
         self.probe_options.clear()
         utils.remove_actions(self.probe_options_group)
         self.probe_init = utils.add_actions(
-            self.loaddata.probe_plots, self.plot_probe_panels, self.probe_options, self.probe_options_group)
+            self.loaddata.probe_keys, self.plot_probe_panels, self.probe_options, self.probe_options_group)
 
 
         # Add menu bar for coronal slice plot options
         self.slice_options.clear()
         utils.remove_actions(self.slice_options_group)
         self.slice_init = utils.add_actions(
-            self.loaddata.slice_plots,self.plot_slice_panels, self.slice_options, self.slice_options_group)
+            self.loaddata.slice_keys, self.plot_slice_panels, self.slice_options, self.slice_options_group)
 
 
         # Add menu bar for unit filtering options
@@ -657,6 +667,10 @@ class Setup():
             #     {'shortcut': 'Shift+M', 'callback': self.toggle_histology_map, 'menu': display_options},
             'Toggle layout':  # Option to change histology regions from Allen to Franklin Paxinos
                 {'shortcut': 'T', 'callback': self.toggle_layout, 'menu': display_options},
+            'Next shank':  # Option to change histology regions from Allen to Franklin Paxinos
+                {'shortcut': 'Shift+Right', 'callback': lambda: self.loop_shanks(1), 'menu': display_options},
+            'Previous shank':  # Option to change histology regions from Allen to Franklin Paxinos
+                {'shortcut': 'Shift+Left', 'callback': lambda: self.loop_shanks(-1), 'menu': display_options},
 
         }
 

@@ -239,6 +239,9 @@ def plot_line(fig_line, data: Optional[Dict]) -> None:
     line.setPen(utils.kpen_solid)
     fig_line.addItem(line)
 
+    # Set colour of xaxis
+    utils.set_axis(fig_line, 'bottom', pen='k')
+
     # Set axis ranges
     set_xaxis_range(fig_line, data)
     set_yaxis_range(fig_line, data)
@@ -378,6 +381,9 @@ def plot_scatter(fig_img, fig_img_cb,  data: Optional[Dict]) -> None:
     plot.setData(x=data['x'], y=data['y'], symbol=symbol, size=size, brush=brush, pen=data['pen'])
     fig_img.addItem(plot)
 
+    # Set colour of xaxis
+    utils.set_axis(fig_img, 'bottom', pen='k')
+
     # Set axis ranges
     set_xaxis_range(fig_img, data)
     set_yaxis_range(fig_img, data)
@@ -439,6 +445,9 @@ def plot_image(fig_img, fig_img_cb, data: Optional[Dict]) -> None:
         fig_img_cb.addItem(cbar)
     else:
         image.setLevels((1, 0))
+
+    # Set colour of xaxis
+    utils.set_axis(fig_img, 'bottom', pen='k')
 
     set_xaxis_range(fig_img, data)
     set_yaxis_range(fig_img, data)

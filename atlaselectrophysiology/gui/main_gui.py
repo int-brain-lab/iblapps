@@ -1,16 +1,16 @@
 import os
 import platform
-from typing import Union, Optional, List, Callable, Tuple, Dict, Any
+from typing import Union, Optional, List, Dict
 from dataclasses import asdict
 
 from iblutil.util import Bunch
-
 
 if platform.system() == 'Darwin':
     if platform.release().split('.')[0] >= '20':
         os.environ["QT_MAC_WANTS_LAYER"] = "1"
 
-from PyQt5 import QtWidgets
+
+from qtpy import QtWidgets
 import pyqtgraph as pg
 import pyqtgraph.exporters
 import numpy as np
@@ -30,30 +30,6 @@ import matplotlib.pyplot as mpl  # noqa  # This is needed to make qt show proper
 from functools import wraps
 from typing import Any, Callable, Sequence
 import time
-
-
-def config_loop(func: Callable) -> Callable:
-
-    # TODO maybe we don't want to necessary loop over configs and an extra argument
-    @wraps(func)
-    def wrapper(self, *args, **kwargs) -> Any:
-        # Use all_shanks if none provided
-
-        results = []
-        if self.loaddata.configs is not None:
-            for config in self.loaddata.configs:
-                self.loaddata.config = config
-                result = func(self, self.shank_items[self.selected_shank][config], *args, **kwargs)
-                results.append(result)
-        else:
-            result = func(self, self.shank_items[self.selected_shank], *args, **kwargs)
-            results.append(result)
-
-        return results
-
-    return wrapper
-
-
 
 
 def shank_loop(func: Callable) -> Callable:
@@ -77,33 +53,35 @@ def shank_loop(func: Callable) -> Callable:
         The wrapped function.
     """
 
-    # TODO maybe we don't want to necessary loop over configs and an extra argument
     @wraps(func)
-    def wrapper(self, *args, shanks: Sequence = (), **kwargs) -> Any:
+    def wrapper(self, *args, **kwargs) -> Any:
         # Use all_shanks if none provided
-        loop_config = kwargs.pop('loop_config', True)
-        shanks = shanks or self.all_shanks
+
+        shanks = kwargs.pop('shanks', self.all_shanks)
+        configs = kwargs.pop('configs', self.loaddata.configs)
+        data_only = kwargs.pop('data_only', False)
+
         results = []
-        if self.loaddata.configs is not None:
-            if loop_config:
-                for config in self.loaddata.configs:
-                    self.loaddata.config = config
-                    for shank in shanks:
-                        result = func(self, shank, self.shank_items[shank][config], *args, **kwargs)
-                        results.append(result)
-            else:
-                self.loaddata.config = self.loaddata.selected_config
+        if configs:
+            for config in configs:
+                self.loaddata.current_config = config
                 for shank in shanks:
-                    result = func(self, shank, self.shank_items[shank][self.loaddata.selected_config], *args, **kwargs)
+                    self.loaddata.current_shank = shank
+                    if not self.loaddata.get_current_shank().align_exists and not data_only:
+                        continue
+
+                    result = func(self, self.shank_items[shank][config], *args, **kwargs, shank=shank, config=config)
                     results.append(result)
         else:
             for shank in shanks:
-                result = func(self, shank, self.shank_items[shank], *args, **kwargs)
+                self.loaddata.current_shank = shank
+                if not self.loaddata.get_current_shank().align_exists and not data_only:
+                    continue
+                result = func(self, self.shank_items[shank], *args, **kwargs, shank=shank, config=None)
                 results.append(result)
-
         return results
-
     return wrapper
+
 
 
 class MainWindow(QtWidgets.QMainWindow, Setup):
@@ -142,14 +120,13 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
 
         if not offline and probe_id is None:
-            self.loaddata = ProbeLoaderONE()
+            self.loaddata = ProbeLoaderCSV()
             utils.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
             self.offline = False
         # elif not offline and probe_id is not None and loaddata is not None:
         #     self.loaddata = LoadData(probe_id=probe_id, one=one, load_histology=histology,
         #                              spike_collection=spike_collection)
         #     self.current_shank_idx = 0
-        #     _, self.histology_exists = self.loaddata.get_info(0)
         #     self.loaddata.get_starting_alignment(0)
         #     self.data_status = False
         #     self.data_button_pressed()
@@ -157,7 +134,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         elif loaddata is None:
             self.loaddata = ProbeLoaderLocal()
             self.offline = True
-            self.histology_exists = True
 
 
     def init_variables(self):
@@ -197,19 +173,17 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
         self.nearby = None
 
-        # Filter by different types of units
-        self.filter_type = 'all'
-
-
         self.all_shanks = list()
         self.shank_items = dict()
         self.docks = []
         self.selected_idx = 0
         self.grid = True
 
-    @shank_loop
-    def init_shank_items(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]):
+        self.levels = None
+        self.lut = True
 
+    @shank_loop
+    def init_shank_items(self, items: Union[Dict, Bunch], **kwargs):
         items.img_plots = list()
         items.line_plots = list()
         items.probe_plots = list()
@@ -217,7 +191,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         items.probe_cbars = list()
         items.scale_regions = np.empty((0, 1))
         items.slice_lines = list()
-        #items.slice_items = list()
         items.slice_plots = list()
         items.probe_bounds = list()
         items.hist_regions = dict()
@@ -233,13 +206,13 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         items.pad = 0.05
 
     @shank_loop
-    def init_align_items(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]):
+    def init_align_items(self, items: Union[Dict, Bunch], **kwargs):
         items.lines_features = np.empty((0, 3))
         items.lines_tracks = np.empty((0, 1))
         items.points = np.empty((0, 1))
 
     @shank_loop
-    def clear_shank_items(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]):
+    def clear_shank_items(self, items: Union[Dict, Bunch], **kwargs):
 
         utils.remove_items(items.fig_img, items.img_plots)
         utils.remove_items(items.fig_img, items.img_cbars)
@@ -247,9 +220,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         utils.remove_items(items.fig_probe, items.probe_plots)
         utils.remove_items(items.fig_probe, items.probe_cbars)
         utils.remove_items(items.fig_probe, items.probe_cbars)
-        # items.fig_slice.clear()
-        # item
-        # items.traj_line.setData()
+
         items.fig_hist.clear()
         items.ax_hist.setTicks([])
         items.fig_hist_ref.clear()
@@ -260,7 +231,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
 
     @shank_loop
-    def set_xaxis_range(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch], fig, data, label=True):
+    def set_xaxis_range(self, items: Union[Dict, Bunch], fig, label=True, **kwargs):
         """
         Set the x-axis range for a given figure for specified shank or all shanks.
 
@@ -277,10 +248,10 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         label : bool, optional
             Whether to label the x-axis (default is True).
         """
-        qt_plots.set_xaxis_range(items[fig], data, label=label)
+        qt_plots.set_xaxis_range(items[fig], items, label=label)
 
     @shank_loop
-    def set_yaxis_range(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch], fig):
+    def set_yaxis_range(self, items: Union[Dict, Bunch], fig, **kwargs):
         """
         Set the y-axis range for a given figure for specified shank or all shanks.
 
@@ -297,6 +268,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         qt_plots.set_yaxis_range(items[fig], items)
 
     def add_yrange_to_data(self, items, data):
+
         try:
             data.yrange = [items.probe_tip - items.probe_extra, items.probe_top + items.probe_extra]
             data.pad = items.pad
@@ -306,11 +278,29 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             data['pad'] = items.pad
             return data
 
+    def create_fake_data(self, items, fig, fig_cb=None, img=False):
+
+        data = dict()
+        data['yrange'] = [items.probe_tip - items.probe_extra, items.probe_top + items.probe_extra]
+        data['pad'] = items.pad
+        data['xrange'] = [0, 1]
+
+        qt_plots.set_xaxis_range(items[fig], data, label=False)
+        qt_plots.set_yaxis_range(items[fig], data)
+        utils.set_axis(items[fig], 'bottom', pen='w', label='blank')
+        if fig_cb:
+            utils.set_axis(items[fig_cb], 'top', pen='w')
+        if img:
+            items.ephys_plot = None
+            items.y_scale = None
+            items.xrange = data['xrange']
+
     # -------------------------------------------------------------------------------------------------
     # Plotting functions
     # -------------------------------------------------------------------------------------------------
     @shank_loop
-    def plot_histology_panels(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]):
+    def plot_histology_panels(self, items: Union[Dict, Bunch], **kwargs):
+
         items.fig_hist.clear()
         data = self.add_yrange_to_data(items, items.hist_data)
         hist = qt_plots.plot_histology(items.fig_hist, data)
@@ -319,12 +309,12 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         items.top_pos = pg.InfiniteLine(pos=items.probe_top, angle=0, pen=utils.kpen_dot, movable=True)
 
         offset = 1
-        items.tip_pos.setBounds((self.loaddata.data(shank).loaders['align'].track[0] * 1e6 + offset,
-                                 self.loaddata.data(shank).loaders['align'].track[-1] * 1e6 - (
+        items.tip_pos.setBounds((self.loaddata.track[0] * 1e6 + offset,
+                                 self.loaddata.track[-1] * 1e6 - (
                                                    items.probe_top + offset)))
         items.top_pos.setBounds(
-            (self.loaddata.data(shank).loaders['align'].track[0] * 1e6 + (items.probe_top + offset),
-             self.loaddata.data(shank).loaders['align'].track[-1] * 1e6 - offset))
+            (self.loaddata.track[0] * 1e6 + (items.probe_top + offset),
+             self.loaddata.track[-1] * 1e6 - offset))
         items.tip_pos.sigPositionChanged.connect(self.tip_line_moved)
         items.top_pos.sigPositionChanged.connect(self.top_line_moved)
 
@@ -334,7 +324,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.selected_region = items.hist_regions['left'][-2]
 
     @shank_loop
-    def plot_histology_ref_panels(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]):
+    def plot_histology_ref_panels(self, items: Union[Dict, Bunch], **kwargs):
+
         items.fig_hist_ref.clear()
         data = self.add_yrange_to_data(items, items.hist_data_ref)
         hist = qt_plots.plot_histology(items.fig_hist_ref, data, ax='right')
@@ -346,7 +337,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         items.fig_hist_ref.addItem(items.top_pos)
 
     @shank_loop
-    def plot_scale_factor_panels(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]):
+    def plot_scale_factor_panels(self, items: Union[Dict, Bunch], **kwargs):
 
         items.scale_data['scale_factor'] = items.scale_data['scale'] - 0.5
         items.fig_scale.clear()
@@ -355,37 +346,47 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         items.scale_regions = scale
 
     @shank_loop
-    def plot_fit_panels(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]):
+    def plot_fit_panels(self,  items: Union[Dict, Bunch], **kwargs):
+
         data = {}
-        data['x'] = self.loaddata.data(shank).loaders['align'].feature * 1e6
-        data['y'] = self.loaddata.data(shank).loaders['align'].track * 1e6
-        data['depth_lin'] = self.loaddata.data(shank).loaders['align'].align.ephysalign.feature2track_lin(
-            items.depth, data['x'], data['y'])
+        data['x'] = self.loaddata.feature * 1e6
+        data['y'] = self.loaddata.track * 1e6
+        data['depth_lin'] = self.loaddata.feature2track_lin(items.depth, data['x'], data['y'])
         data['depth'] = items.depth
         qt_plots.plot_fit(items.fit_plot, items.fit_plot_lin, items.fit_scatter, data)
 
     @shank_loop
-    def remove_fit_panels(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]):
+    def remove_fit_panels(self, items: Union[Dict, Bunch], **kwargs):
+        # TODO pass these in as arguments instead when we call this method
+        shank = kwargs.get('shank')
         if shank != self.selected_shank:
             items.fit_plot.setData()
             items.fit_scatter.setData()
             items.fit_plot_lin.setData()
 
+
+    # TODO clear up, also if for example
     def plot_slice_panels(self, plot_type, shanks=()):
 
+        if plot_type != self.slice_init:
+            self.levels = None
 
+        self.slice_init = plot_type
         self.slice_figs = Bunch()
         self.imgs = []
+
         if self.loaddata.configs is not None:
             config = 'quarter' if self.loaddata.selected_config == 'both' else self.loaddata.selected_config
             for shank in self.all_shanks:
                 self.loaddata.config = config
                 items = self.shank_items[shank][config]
                 self.slice_figs[shank] = items.fig_slice
-                data = self.loaddata.data(shank).slice_plots[plot_type]
+                data = self.loaddata.slice_plots.get(plot_type, None)
+                if data is None:
+                    continue
                 data_chns = {}
-                data_chns['x'] = self.loaddata.data(shank).loaders['align'].xyz_track[:, 0]
-                data_chns['y'] = self.loaddata.data(shank).loaders['align'].xyz_track[:, 2]
+                data_chns['x'] = self.loaddata.xyz_track[:, 0]
+                data_chns['y'] = self.loaddata.xyz_track[:, 2]
                 # self.slice_figs[shank].addItem(items.traj_line)
                 img, cb = self.plot_slice_panel(items, data, data_chns)
                 self.imgs.append(img)
@@ -397,34 +398,49 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             for shank in self.all_shanks:
                 items = self.shank_items[shank]
                 self.slice_figs[shank] = items.fig_slice
-                data = self.loaddata.data(shank).slice_plots[plot_type]
+                data = self.loaddata.slice_plots.get(plot_type, None)
+                if data is None:
+                    continue
                 data_chns = {}
-                data_chns['x'] = self.loaddata.data(shank).loaders['align'].xyz_track[:, 0]
-                data_chns['y'] = self.loaddata.data(shank).loaders['align'].xyz_track[:, 2]
+                data_chns['x'] = self.loaddata.xyz_track[:, 0]
+                data_chns['y'] = self.loaddata.xyz_track[:, 2]
 
                 img, cb = self.plot_slice_panel(items, data, data_chns)
                 self.imgs.append(img)
             self.plot_channel_panels()
 
         if cb is not None:
-            self.slice_LUT.axis.hide()
+            self.slice_LUT.blockSignals(True)
+            if not self.lut:
+                self.lut_layout.addItem(self.slice_LUT)
+                self.lut = True
             self.slice_LUT.setImageItem(img)
             self.slice_LUT.gradient.setColorMap(cb.map)
-            self.slice_LUT.autoHistogramRange()
-            self.slice_LUT.sigLevelsChanged.connect(self.update_levels)
 
-            hist_levels = self.slice_LUT.getLevels()
-            hist_val, hist_count = img.getHistogram()
-            upper_idx = np.where(hist_count > 10)[0][-1]
-            upper_val = hist_val[upper_idx]
-            if hist_levels[0] != 0:
-                self.slice_LUT.setLevels(min=hist_levels[0], max=upper_val)
+            if self.levels is None:
+                self.lut_layout.addItem(self.slice_LUT)
+                self.slice_LUT.autoHistogramRange()
+                hist_levels = self.slice_LUT.getLevels()
+                hist_val, hist_count = img.getHistogram()
+                upper_idx = np.where(hist_count > 10)[0][-1]
+                upper_val = hist_val[upper_idx]
+                if hist_levels[0] != 0:
+                    self.set_lut_levels(levels=[hist_levels[0], upper_val])
+            else:
+                self.set_lut_levels()
+            self.slice_LUT.blockSignals(False)
+
+        else:
+            if self.lut:
+                self.lut_layout.removeItem(self.slice_LUT)
+                self.lut = False
+
+    def plot_slices(self):
 
 
     def plot_slice_panel(self, items, data, data_chns):
 
         items.slice_plots = utils.remove_items(items.fig_slice, items.slice_plots)
-        #items.slice_lines = utils.remove_items(items.fig_slice, items.slice_lines)
         if items.traj_line:
             items.fig_slice.removeItem(items.traj_line)
         img, cbar, traj = qt_plots.plot_slice(items.fig_slice, data, data_chns)
@@ -433,48 +449,30 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
         return img, cbar
 
-
-    # @shank_loop
-    # def plot_slice_panel(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch], plot_type):
-    #
-    #     # TODO can I handle this better wihtout the fig.clear like we do the other ones
-    #     # items.fig_slice.clear()
-    #     # items.slice_chns = pg.ScatterPlotItem()
-    #     # items.slice_lines = []
-    #
-    #
-    #
-    #     items.slice_plots = utils.remove_items(items.fig_slice, items.slice_plots)
-    #     #items.slice_lines = utils.remove_items(items.fig_slice, items.slice_lines)
-    #
-    #     data_chns = {}
-    #     # data_chns['xyz_channels'] = self.loaddata.data(shank).loaders['align'].xyz_channels
-    #     # data_chns['track_lines'] = self.loaddata.data(shank).loaders['align'].track_lines
-    #     data_chns['x'] = self.loaddata.data(shank).loaders['align'].xyz_track[:, 0]
-    #     data_chns['y'] = self.loaddata.data(shank).loaders['align'].xyz_track[:, 2]
-    #
-    #     data = self.loaddata.data(shank).slice_plots[plot_type]
-    #
-    #     img, cbar, traj = qt_plots.plot_slice(items.fig_slice, items.slice_chns, data, data_chns)
-    #     items.slice_plots.append(img)
-    #     items.traj_line = traj
-    #
-    #     return img, cbar
-
-
-    def update_levels(self):
-        levels = self.slice_LUT.getLevels()
+    def set_lut_levels(self, levels=None):
+        levels = levels or self.levels
+        if levels is None:
+            return
 
         for img in self.imgs:
             img.setLevels(levels)
+        self.slice_LUT.setLevels(min=levels[0], max=levels[1])
+
+
+    def update_levels(self):
+        self.levels = self.slice_LUT.getLevels()
+
+        for img in self.imgs:
+            img.setLevels(self.levels)
 
     @shank_loop
-    def plot_channel_panels(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]):
+    def plot_channel_panels(self, items: Union[Dict, Bunch], **kwargs):
+        shank = kwargs.get('shank')
 
         self.channel_status = True
         data = {}
-        data['xyz_channels'] = self.loaddata.data(shank).loaders['align'].xyz_channels
-        data['track_lines'] = self.loaddata.data(shank).loaders['align'].track_lines
+        data['xyz_channels'] = self.loaddata.xyz_channels
+        data['track_lines'] = self.loaddata.track_lines
 
         c = 'g' if items.config == 'dense' else 'r'
 
@@ -486,10 +484,18 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         items.slice_lines += lines
 
     @shank_loop
-    def plot_scatter_panels(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch], plot_type):
-        data = self.add_yrange_to_data(items, self.loaddata.data(shank).scatter_plots[plot_type])
+    def plot_scatter_panels(self,  items: Union[Dict, Bunch], plot_type, data_only=True, **kwargs):
+
+        data = self.loaddata.scatter_plots.get(plot_type, None)
         items.img_plots = utils.remove_items(items.fig_img, items.img_plots)
         items.img_cbars = utils.remove_items(items.fig_img_cb, items.img_cbars)
+        self.img_init = plot_type
+
+        if data is None:
+            self.create_fake_data(items, 'fig_img', fig_cb='fig_img_cb', img=True)
+            return
+
+        data = self.add_yrange_to_data(items, data)
         scat, cbar = qt_plots.plot_scatter(items.fig_img, items.fig_img_cb, data)
         items.img_plots.append(scat)
         items.img_cbars.append(cbar)
@@ -498,61 +504,82 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             items.cluster_data = data['x']
             items.ephys_plot.sigClicked.connect(lambda plot, points: cluster_callback(self, items, plot, points))
         items.y_scale = 1
-        self.xrange = data['xrange']
+        items.xrange = data['xrange']
 
     @shank_loop
-    def plot_line_panels(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch], plot_type):
+    def plot_line_panels(self, items: Union[Dict, Bunch], plot_type, data_only=True, **kwargs):
 
-        data = self.add_yrange_to_data(items, self.loaddata.data(shank).line_plots[plot_type])
+        data = self.loaddata.line_plots.get(plot_type, None)
+        items.line_plots = utils.remove_items(items.fig_line, items.line_plots)
+        self.line_init = plot_type
+
+        if data is None:
+            self.create_fake_data(items,'fig_line')
+            return
+
+
+        data = self.add_yrange_to_data(items, data)
         items.line_plots = utils.remove_items(items.fig_line, items.line_plots)
         lin = qt_plots.plot_line(items.fig_line, data)
         items.line_plots.append(lin)
 
     @shank_loop
-    def plot_probe_panels(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch], plot_type):
+    def plot_probe_panels(self, items: Union[Dict, Bunch], plot_type, data_only=True, **kwargs):
 
-        data = self.add_yrange_to_data(items, self.loaddata.data(shank).probe_plots[plot_type])
+        data = self.loaddata.probe_plots.get(plot_type, None)
         items.probe_plots = utils.remove_items(items.fig_probe, items.probe_plots)
         items.probe_cbars = utils.remove_items(items.fig_probe_cb, items.probe_cbars)
         items.probe_bounds = utils.remove_items(items.fig_probe, items.probe_bounds)
+        self.probe_init = plot_type
+
+        if data is None:
+            self.create_fake_data(items, 'fig_probe', fig_cb='fig_probe_cb')
+            return
+
+        data = self.add_yrange_to_data(items, data)
         prbs, cbar, bnds = qt_plots.plot_probe(items.fig_probe, items.fig_probe_cb, data)
         items.probe_plots += prbs
         items.probe_bounds += bnds
         items.probe_cbars.append(cbar)
 
     @shank_loop
-    def plot_image_panels(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch], plot_type):
-
-        data = self.add_yrange_to_data(items, self.loaddata.data(shank).img_plots[plot_type])
+    def plot_image_panels(self, items: Union[Dict, Bunch], plot_type, data_only=True, **kwargs):
+        data = self.loaddata.image_plots.get(plot_type, None)
         items.img_plots = utils.remove_items(items.fig_img, items.img_plots)
         items.img_cbars = utils.remove_items(items.fig_img_cb, items.img_cbars)
+
+        self.img_init = plot_type
+
+        if data is None:
+            self.create_fake_data(items, 'fig_img', fig_cb='fig_img_cb', img=True)
+            return
+
+        data = self.add_yrange_to_data(items, data)
         img, cbar = qt_plots.plot_image(items.fig_img, items.fig_img_cb, data)
         items.img_plots.append(img)
         items.img_cbars.append(cbar)
         items.ephys_plot = img
-        # TODO should be just once but oh well
         items.y_scale = data['scale'][1]
-        items.x_scale = data['scale'][0]
-        self.xrange = data['xrange']
+        items.xrange = data['xrange']
 
 
-    def update_plots(self, shanks=(), loop_config=True) -> None:
+    def update_plots(self, shanks=()) -> None:
         """
         Refresh all plots to reflect the current alignment state.
         """
 
-        self.get_scaled_histology(shanks=shanks, loop_config=loop_config)
-        self.plot_histology_panels(shanks=shanks, loop_config=loop_config)
-        self.plot_scale_factor_panels(shanks=shanks, loop_config=loop_config)
-        self.plot_fit_panels(shanks=shanks, loop_config=loop_config)
+        self.get_scaled_histology(shanks=shanks)
+        self.plot_histology_panels(shanks=shanks)
+        self.plot_scale_factor_panels(shanks=shanks)
+        self.plot_fit_panels(shanks=shanks)
         if self.loaddata.selected_config == 'both':
-            self.plot_channel_panels(shanks=shanks, loop_config=True)
+            self.plot_channel_panels(shanks=shanks)
         else:
-            self.plot_channel_panels(shanks=shanks, loop_config=False)
-        self.remove_reference_lines_from_display(shanks=shanks, loop_config=loop_config)
-        self.add_reference_lines_to_display(shanks=shanks, loop_config=loop_config)
-        self.align_reference_lines()
-        self.set_yaxis_range('fig_hist', shanks=shanks, loop_config=loop_config)
+            self.plot_channel_panels(shanks=shanks, configs=[self.loaddata.selected_config])
+        self.remove_reference_lines_from_display(shanks=shanks)
+        self.add_reference_lines_to_display(shanks=shanks)
+        self.align_reference_lines(shanks=shanks)
+        self.set_yaxis_range('fig_hist', shanks=shanks)
         self.update_string()
 
         # for hook in self.plot_hooks:
@@ -570,12 +597,13 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         :param idx: index chosen subject (item) in drop down list
         :type idx: int
         """
-        self.shank = None
+        self.loaded = None
         self.sess_list.clear()
         sessions = self.loaddata.get_sessions(idx)
         utils.populate_lists(sessions, self.sess_list, self.sess_combobox)
-
         self.on_session_selected(0)
+
+        self.data_button.setStyleSheet(utils.button_style['activated'])
 
     def on_session_selected(self, idx):
         """
@@ -583,13 +611,13 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         :param idx: index of chosen session (item) in drop down list
         :type idx: int
         """
-        self.shank = None
+        self.loaded = None
         self.shank_list.clear()
         shanks = self.loaddata.get_shanks(idx)
         if len(shanks) > 1:
             utils.populate_lists(shanks, self.shank_list, self.shank_combobox)
-
         self.on_shank_selected(0)
+        self.data_button.setStyleSheet(utils.button_style['activated'])
 
     def on_shank_selected(self, idx):
         """
@@ -601,16 +629,15 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.prev_alignments = self.loaddata.get_previous_alignments()
         utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
         self.loaddata.get_starting_alignment(0)
-
         utils.populate_lists(['quarter', 'dense', 'both'], self.config_list, self.config_combobox)
 
-        if self.shank is not None:
+        if self.loaded is not None:
             if not self.shank_tabs.grid_layout:
                 self.set_current_tab(idx)
             self.shank_button_pressed()
 
     def on_config_selected(self, idx):
-        pass
+
         self.loaddata.selected_config = ['quarter', 'dense', 'both'][idx]
         # TODO we need to reinitialise the displays
         self.remove_reference_lines_from_display()
@@ -620,17 +647,22 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.init_tabs()
         self.init_shank_items()
 
-        self.img_init.setChecked(True)
-        self.line_init.setChecked(True)
-        self.probe_init.setChecked(True)
-        self.unit_init.setChecked(True)
-        self.slice_init.setChecked(True)
+        if self.loaddata.configs is not None:
+            config = 'quarter' if self.loaddata.selected_config == 'both' else self.loaddata.selected_config
+            self.set_probe_lims(np.min([0, self.loaddata.probes[self.selected_shank][config].plotdata.chn_min]),
+                                self.loaddata.probes[self.selected_shank][config].plotdata.chn_max)
+        else:
+            self.set_probe_lims(np.min([0, self.loaddata.probes[self.selected_shank].plotdata.chn_min]),
+                                self.loaddata.probes[self.selected_shank].plotdata.chn_max)
 
-        # Initialise ephys plots
-        self.plot_image_panels(self.img_init.text())
-        self.plot_probe_panels(self.probe_init.text())
-        self.plot_line_panels(self.line_init.text())
-        self.plot_slice_panels(self.slice_init.text())
+
+        utils.find_actions(self.img_init, self.img_options_group).trigger()
+        utils.find_actions(self.line_init, self.line_options_group).trigger()
+        utils.find_actions(self.probe_init, self.probe_options_group).trigger()
+        utils.find_actions(self.slice_init, self.slice_options_group).trigger()
+        # TODO check
+        # utils.find_actions(self.unit_init, self.filter_options_group).trigger()
+        self.set_lut_levels()
 
         # Initialise histology plots
         self.get_scaled_histology()
@@ -644,7 +676,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         # Initialise reference lines
         self.add_reference_lines_to_display()
 
-        # Add refernce points for selected shank
+        # Add reference points for selected shank
         self.remove_points_from_display()
         self.add_points_to_display()
 
@@ -659,7 +691,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         """
         Triggered in offline mode when folder button is clicked
         """
-        self.shank = None
+        self.loaded = None
         self.align_list.clear()
         self.shank_list.clear()
         folder_path = Path(QtWidgets.QFileDialog.getExistingDirectory(None, "Select Folder"))
@@ -670,25 +702,14 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
     def on_alignment_selected(self, idx):
         self.loaddata.get_starting_alignment(idx)
-        if self.shank is not None:
+        if self.loaded is not None:
             self.align_button_pressed()
-
-    def add_alignment_pressed(self):
-        file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
-        if file_path.name != 'prev_alignments.json':
-            print("Wrong file selected, must be of format prev_alignments.json")
-            return
-        else:
-            self.prev_alignments = self.loaddata.add_extra_alignments(file_path)
-            utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-            self.loaddata.get_starting_alignment(0)
 
 
     def shank_button_pressed(self):
 
-        self.shank = self.loaddata.get_selected_probe()
         self.loaddata.set_init_alignment()
-        self.selected_shank = self.loaddata.probe_label
+        self.selected_shank = self.loaddata.selected_shank
         self.selected_idx = self.loaddata.shank_idx
 
         self.remove_points_from_display()
@@ -700,24 +721,12 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         else:
             self.select_background()
 
-    #@config_loop
     def align_button_pressed(self):
 
         self.remove_reference_lines_from_display(shanks=[self.selected_shank])
-        if self.loaddata.configs is not None:
-            for config in self.loaddata.configs:
-                items = self.shank_items[self.selected_shank][config]
-                items.lines_features = np.empty((0, 3))
-                items.lines_tracks = np.empty((0, 1))
-                items.points = np.empty((0, 1))
-            else:
-                items = self.shank_items[self.selected_shank]
-                items.lines_features = np.empty((0, 3))
-                items.lines_tracks = np.empty((0, 1))
-                items.points = np.empty((0, 1))
-
+        self.init_align_items(shanks=[self.selected_shank])
         self.set_init_reference_lines(shanks=[self.selected_shank])
-        self.update_plots(shanks=[self.selected_shank])#, loop_config=False)
+        self.update_plots(shanks=[self.selected_shank])
 
     def data_button_pressed(self):
         """
@@ -729,7 +738,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         # Remove previous shanks displays
         self.clear_tabs()
         # Get the new list of shanks
-        self.all_shanks = self.loaddata.probes
+        self.all_shanks = list(self.loaddata.shanks.keys())
 
         self.init_shanks()
         self.init_shank_items()
@@ -740,36 +749,19 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
         # Load data of new selection
         self.loaddata.load_data()
-        self.shank = self.loaddata.get_selected_probe()
-        self.selected_shank = self.loaddata.probe_label
+        self.loaded = True
+        self.selected_shank = self.loaddata.selected_shank
         self.selected_idx = self.loaddata.shank_idx
 
-        if self.loaddata.configs is not None:
-            config = 'quarter' if self.loaddata.selected_config == 'both' else self.loaddata.selected_config
-            self.set_probe_lims(self.loaddata.probes[self.selected_shank][config].plotdata.chn_min, # TODO needs to be np.min
-                                self.loaddata.probes[self.selected_shank][config].plotdata.chn_max)
-        else:
-            self.set_probe_lims(self.loaddata.probes[self.selected_shank].plotdata.chn_min, # TODO needs to be np.min
-                                self.loaddata.probes[self.selected_shank].plotdata.chn_max)
-
-        # TODO fix
-        self.histology_exists = True
+        self.set_probe_lims(self.loaddata.chn_min, self.loaddata.chn_max)
 
         # Populate the menu bar with the plot options
         self.populate_menu_bar()
 
-        # Initialise checked plots
-        self.img_init.setChecked(True)
-        self.line_init.setChecked(True)
-        self.probe_init.setChecked(True)
-        self.unit_init.setChecked(True)
-        self.slice_init.setChecked(True)
-
-        # Initialise ephys plots
-        self.plot_image_panels(self.img_init.text())
-        self.plot_probe_panels(self.probe_init.text())
-        self.plot_line_panels(self.line_init.text())
-        self.plot_slice_panels(self.slice_init.text())
+        utils.find_actions(self.img_init, self.img_options_group).trigger()
+        utils.find_actions(self.line_init, self.line_options_group).trigger()
+        utils.find_actions(self.probe_init, self.probe_options_group).trigger()
+        utils.find_actions(self.slice_init, self.slice_options_group).trigger()
 
         # Initialise histology plots
         self.get_scaled_histology()
@@ -792,24 +784,21 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
         self.select_background()
         self.init_display()
+        self.data_button.setStyleSheet(utils.button_style['deactivated'])
+
         print(time.time() - start)
 
 
     def filter_unit_pressed(self, filter_type):
-        self.filter_type = filter_type
-        for shank in self.all_shanks:
-            self.loaddata.data(shank).filter_plots(self.filter_type)
+        self._filter_units(filter_type)
 
+        utils.find_actions(self.img_init, self.img_options_group).trigger()
+        utils.find_actions(self.line_init, self.line_options_group).trigger()
+        utils.find_actions(self.probe_init, self.probe_options_group).trigger()
 
-        self.img_init.setChecked(True)
-        self.line_init.setChecked(True)
-        self.probe_init.setChecked(True)
-
-        # Initialise ephys plots
-        self.plot_image_panels(self.img_init.text())
-        self.plot_probe_panels(self.probe_init.text())
-        self.plot_line_panels(self.line_init.text())
-
+    @shank_loop
+    def _filter_units(self, filter_type):
+        self.loaddata.get_current_shank().filter_plots(filter_type)
 
     # -------------------------------------------------------------------------------------------------
     # Upload/ save data
@@ -820,23 +809,17 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
         Alyx
         """
-        # If no histology we can't upload alignment
-        if not self.histology_exists:
-            return
-
-        # TODO add back in
 
         if not self.offline:
             display_qc(self)
 
-        upload = QtWidgets.QMessageBox.question(self, '', "Upload alignment?",
-                                                QtWidgets.QMessageBox.Yes |
-                                                QtWidgets.QMessageBox.No)
+        upload = QtWidgets.QMessageBox.question(
+            self, '', "Upload alignment?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
 
         if upload == QtWidgets.QMessageBox.Yes:
 
             info = self.loaddata.upload_data()
-            self.prev_alignments = self.loaddata.get_previous_alignments()
+            self.prev_alignments = self.loaddata.load_previous_alignments()
             utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
             self.loaddata.get_starting_alignment(0)
 
@@ -848,8 +831,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
     # -------------------------------------------------------------------------------------------------
     # Fitting functions
     # -------------------------------------------------------------------------------------------------
-    #@config_loop
-    def offset_hist_data(self, val: Optional[float] = None) -> None:
+    @shank_loop
+    def offset_hist_data(self, items, val: Optional[float] = None, **kwargs) -> None:
         """
         Apply an offset to brain regions based on probe tip position.
 
@@ -858,42 +841,30 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         val : float, optional
             Offset value in meters. If None, uses current value of  self.tip_pos
         """
-        # If no histology we can't do alignment
-        if not self.histology_exists:
-            return
 
         val = val or self.tip_pos.value() / 1e6
         self.loaddata.offset_hist_data(val)
 
-    #@config_loop
-    def scale_hist_data(self) -> None:
+    @shank_loop
+    def scale_hist_data(self, items, **kwargs) -> None:
         """
         Scale brain regions along the probe track based on reference lines.
         """
-        # If no histology we can't do alignment
-        if not self.histology_exists:
-            return
 
-        if self.loaddata.configs != None:
-            config = 'quarter' if self.loaddata.selected_config == 'both' else self.loaddata.selected_config
-            items = self.shank_items[self.selected_shank][config]
-            line_track = np.array([line[0].pos().y() for line in items.lines_tracks]) / 1e6
-            line_feature = np.array([line[0].pos().y() for line in items.lines_features]) / 1e6
-        else:
-            items = self.shank_items[self.selected_shank]
-            line_track = np.array([line[0].pos().y() for line in items.lines_tracks]) / 1e6
-            line_feature = np.array([line[0].pos().y() for line in items.lines_features]) / 1e6
+        line_track = np.array([line[0].pos().y() for line in items.lines_tracks]) / 1e6
+        line_feature = np.array([line[0].pos().y() for line in items.lines_features]) / 1e6
 
         # We loop here over the configs to set for both
         self.loaddata.scale_hist_data(line_track, line_feature, extend_feature=self.extend_feature, lin_fit=self.lin_fit)
 
     @shank_loop
-    def get_scaled_histology(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]) -> None:
+    def get_scaled_histology(self, items: Union[Dict, Bunch], **kwargs) -> None:
         """
         Retrieve scaled histological data after alignment operations.
-        """
 
-        items.hist_data, items.hist_data_ref, items.scale_data = self.loaddata.data(shank).loaders['align'].get_scaled_histology()
+        """
+        shank = kwargs.get('shank')
+        items.hist_data, items.hist_data_ref, items.scale_data = self.loaddata.get_scaled_histology()
 
 
     def apply_fit(self, fit_function: Callable, **kwargs) -> None:
@@ -908,10 +879,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             Additional arguments passed to `fit_function`.
         """
 
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
         fit_function(**kwargs)
 
         self.update_plots(shanks=[self.selected_shank])
@@ -922,21 +889,21 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         Called when the offset button or 'O' key is pressed.
         Applies offset based on location of the probe tip line and refreshes plots.
         """
-        self.apply_fit(self.offset_hist_data)
+        self.apply_fit(self.offset_hist_data, shanks=[self.selected_shank])
 
 
     def movedown_button_pressed(self) -> None:
         """
         Called when Shift+Down is pressed. Offsets probe tip 100µm down.
         """
-        self.apply_fit(self.offset_hist_data, val=-100/1e6)
+        self.apply_fit(self.offset_hist_data, shanks=[self.selected_shank], val=-100/1e6)
 
 
     def moveup_button_pressed(self) -> None:
         """
         Called when Shift+Up is pressed. Offsets probe tip 100µm up.
         """
-        self.apply_fit(self.offset_hist_data, val=100/1e6)
+        self.apply_fit(self.offset_hist_data, shanks=[self.selected_shank], val=100/1e6)
 
 
     def fit_button_pressed(self) -> None:
@@ -944,71 +911,52 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         Called when the fit button or Enter is pressed.
         Scales regions using reference lines and refreshes plots.
         """
-        self.apply_fit(self.scale_hist_data)
-
+        self.apply_fit(self.scale_hist_data, shanks=[self.selected_shank])
 
     def next_button_pressed(self) -> None:
         """
         Called when right key pressed.
         Updates all plots and indices with next alignment.
         Ensures user cannot go past latest move
-        """
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
 
-        # TODO to keep these in sync between the quarter and dense?
+        Note self.selected_shank is passed in already in the setup
+        """
+
         if self.loaddata.next_idx():
+            # TODO should the loop be here or in probe_loader?
             self.update_plots(shanks=[self.selected_shank])
 
-
+    #@shank_loop
     def prev_button_pressed(self) -> None:
         """
         Called when left key pressed.
         Updates all plots and indices with previous alignment.
+        Note self.selected_shank is passed in already in the setup
         """
 
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
-
-        # TODO to keep these in sync between the quarter and dense?
         if self.loaddata.prev_idx():
+            # TODO should the loop be here or in probe_loader?
             self.update_plots(shanks=[self.selected_shank])
 
-
-    #@config_loop
     def reset_button_pressed(self) -> None:
         """
         Called when Reset button or Shift+R is pressed.
         Resets feature and track alignment to original alignment and updates plots.
         """
-        # If no histology we can't plot histology
-        if not self.histology_exists:
-            return
 
-        # items= self.shank_items[self.selected_shank]
-        self.remove_reference_lines_from_display(shanks=[self.selected_shank])#, loop_config=False)
+        self.remove_reference_lines_from_display(shanks=[self.selected_shank])
 
-        if self.loaddata.configs is not None:
-            for config in self.loaddata.configs:
-                items = self.shank_items[self.selected_shank][config]
-                items.lines_features = np.empty((0, 3))
-                items.lines_tracks = np.empty((0, 1))
-                items.points = np.empty((0, 1))
-            else:
-                items = self.shank_items[self.selected_shank]
-                items.lines_features = np.empty((0, 3))
-                items.lines_tracks = np.empty((0, 1))
-                items.points = np.empty((0, 1))
+        self.init_align_items(shanks=[self.selected_shank])
 
+        self.reset_feature_and_tracks(shanks=[self.selected_shank])
 
+        self.set_init_reference_lines(shanks=[self.selected_shank])
+
+        self.update_plots(shanks=[self.selected_shank])
+
+    @shank_loop
+    def reset_feature_and_tracks(self, items, **kwargs):
         self.loaddata.reset_features_and_tracks()
-
-        self.set_init_reference_lines(shanks=[self.selected_shank])#, loop_config=False)
-
-        self.update_plots(shanks=[self.selected_shank])#, loop_config=False)
-
 
     def lin_fit_option_changed(self, state: int) -> None:
         """
@@ -1045,10 +993,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             The mouse double-click event.
         """
 
-        # If no histology no point adding lines
-        if not self.histology_exists:
-            return
-
         if event.double():
             if idx != self.selected_idx:
                 self.shank_combobox.setCurrentIndex(idx)
@@ -1067,6 +1011,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
                 items = self.shank_items[self.selected_shank]
                 pos = items.ephys_plot.mapFromScene(event.scenePos())
                 self.create_reference_line(pos.y() * items.y_scale, items)
+
+
 
     def on_mouse_hover(self, hover_items: List[pg.GraphicsObject]) -> None:
         """
@@ -1108,6 +1054,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
                     return
 
     def _get_figure(self, item, fig):
+
         return next((items for _, items in self.shank_items.items() if item == items[fig]), None)
 
 
@@ -1116,11 +1063,12 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
     # -------------------------------------------------------------------------------------------------
 
     @shank_loop
-    def select_background(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]):
+    def select_background(self, items: Union[Dict, Bunch], **kwargs):
+        shank = kwargs.get('shank')
         if shank == self.selected_shank:
-            items.header.setStyleSheet(utils.selected_tab_style)
+            items.header.setStyleSheet(utils.tab_style['selected'])
         else:
-            items.header.setStyleSheet(utils.deselected_tab_style)
+            items.header.setStyleSheet(utils.tab_style['deselected'])
 
 
     def toggle_labels(self, shanks=()) -> None:
@@ -1134,7 +1082,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.toggle_label(shanks=shanks)
 
     @shank_loop
-    def toggle_label(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]) -> None:
+    def toggle_label(self,  items: Union[Dict, Bunch], **kwargs) -> None:
 
         """
         Toggle visibility of reference lines on electrophysiology and histology plots.
@@ -1187,7 +1135,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.toggle_channel(shanks=shanks)
 
     @shank_loop
-    def toggle_channel(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]) -> None:
+    def toggle_channel(self, items: Union[Dict, Bunch], **kwargs) -> None:
         """
         Toggle between displaying histology boundaries or block regions
 
@@ -1198,9 +1146,9 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         -------
         None
         """
+        shank = kwargs.get('shank')
 
         toggleItem = self.slice_figs[shank].addItem if self.channel_status else self.slice_figs[shank].removeItem
-
 
         if items.traj_line:
             toggleItem(items.traj_line)
@@ -1262,7 +1210,13 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.set_yaxis_range('fig_hist')
         self.set_yaxis_range('fig_hist_ref')
         self.set_yaxis_range('fig_img')
-        self.set_xaxis_range('fig_img', {'xrange': [self.xrange[0], self.xrange[1]]}, label=False)
+        self.set_xaxis_range('fig_img', label=False)
+
+    def loop_shanks(self, direction:int):
+        idx = np.mod(self.selected_idx + direction, len(self.all_shanks))
+        self.shank_combobox.setCurrentIndex(idx)
+        self.on_shank_selected(idx)
+
 
     def layout_changed(self) -> None:
         """
@@ -1271,7 +1225,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         -------
         None
         """
-        # TODO figure out
         self.shank_combobox.setCurrentIndex(self.selected_idx)
         self.on_shank_selected(self.selected_idx)
 
@@ -1343,7 +1296,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
     # -------------------------------------------------------------------------------------------------
 
     @shank_loop
-    def set_probe_lims(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch], min_val, max_val) -> None:
+    def set_probe_lims(self, items: Union[Dict, Bunch], min_val, max_val, **kwargs) -> None:
         """
         Set the limits for the probe tip and probe top, and update the associated lines accordingly.
 
@@ -1357,9 +1310,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         -------
         None
         """
-        # min_val = np.min([0, self.loaddata.data(shank).plotdata.chn_min])
-        # max_val = self.loaddata.data(shank).plotdata.chn_max
-        
+
         items.probe_tip = min_val
         items.probe_top = max_val
 
@@ -1368,8 +1319,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         for tip_line in items.probe_tip_lines:
             tip_line.setY(items.probe_tip)
 
-    @config_loop
-    def tip_line_moved(self, items) -> None:
+    @shank_loop
+    def tip_line_moved(self, items, **kwargs) -> None:
         """
         Callback triggered when the probe tip line (dotted line) on the histology figure is moved.
 
@@ -1384,8 +1335,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
         items.top_pos.setPos(items.tip_pos.value() + items.probe_top)
 
-    @config_loop
-    def top_line_moved(self, items) -> None:
+    @shank_loop
+    def top_line_moved(self, items, **kwargs) -> None:
         """
         Callback triggered when the probe top line (dotted line) on the histology figure is moved.
 
@@ -1405,7 +1356,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
     # -------------------------------------------------------------------------------------------------
 
     @shank_loop
-    def set_init_reference_lines(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]) -> None:
+    def set_init_reference_lines(self, items: Union[Dict, Bunch], **kwargs) -> None:
         """
         Finds the initial alignment for specified shanks and creates reference lines
         Parameters
@@ -1419,9 +1370,9 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         -------
         None
         """
-
-        self.loaddata.data(shank).loaders['align'].set_init_alignment()
-        feature_prev = self.loaddata.data(shank).loaders['align'].feature_prev
+        shank = kwargs.get('shank')
+        self.loaddata.set_init_alignment()
+        feature_prev = self.loaddata.feature_prev
         if np.any(feature_prev):
             self.create_reference_lines(feature_prev[1:-1] * 1e6, items)
 
@@ -1569,24 +1520,17 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         line_idx = idx[0][0]
         fig_idx = np.setdiff1d(np.arange(0, 3), idx[1][0])  # Indices of two other plots
 
-        if self.loaddata.configs is not None:
-            for config in self.loaddata.configs:
-                items = self.shank_items[self.selected_shank][config]
-                # Update the other two lines to the new y-position
-                items.lines_features[line_idx][fig_idx[0]].setPos(feature_line.value())
-                items.lines_features[line_idx][fig_idx[1]].setPos(feature_line.value())
+        self._update_feature_reference_line(feature_line, line_idx, fig_idx, shanks=[self.selected_shank])
 
-                # Update scatter point on the fit figure
-                items.points[line_idx][0].setData(x=[items.lines_features[line_idx][0].pos().y()],
-                                                 y=[items.lines_tracks[line_idx][0].pos().y()])
-        else:
-            items = self.shank_items[self.selected_shank]
-            items.lines_features[line_idx][fig_idx[0]].setPos(feature_line.value())
-            items.lines_features[line_idx][fig_idx[1]].setPos(feature_line.value())
+    @shank_loop
+    def _update_feature_reference_line(self, items, feature_line, line_idx, fig_idx, **kwargs) -> None:
 
-            # Update scatter point on the fit figure
-            items.points[line_idx][0].setData(x=[items.lines_features[line_idx][0].pos().y()],
-                                              y=[items.lines_tracks[line_idx][0].pos().y()])
+        items.lines_features[line_idx][fig_idx[0]].setPos(feature_line.value())
+        items.lines_features[line_idx][fig_idx[1]].setPos(feature_line.value())
+
+        # Update scatter point on the fit figure
+        items.points[line_idx][0].setData(x=[items.lines_features[line_idx][0].pos().y()],
+                                          y=[items.lines_tracks[line_idx][0].pos().y()])
 
     def update_track_reference_line(self, track_line: pg.InfiniteLine, idx: int, config: str) -> None:
         """
@@ -1616,17 +1560,16 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
         line_idx = np.where(items.lines_tracks == track_line)[0][0]
 
+        self._update_track_reference_line(line_idx, shanks=[self.selected_shank])
 
-        if self.loaddata.configs is not None:
-            for config in self.loaddata.configs:
-                items = self.shank_items[self.selected_shank][config]
-                items.points[line_idx][0].setData(x=[items.lines_features[line_idx][0].pos().y()],
-                                                 y=[items.lines_tracks[line_idx][0].pos().y()])
-        else:
-            items.points[line_idx][0].setData(x=[items.lines_features[line_idx][0].pos().y()],
-                                             y=[items.lines_tracks[line_idx][0].pos().y()])
+    @shank_loop
+    def _update_track_reference_line(self, items, line_idx, **kwargs) -> None:
 
-    def align_reference_lines(self) -> None:
+        items.points[line_idx][0].setData(x=[items.lines_features[line_idx][0].pos().y()],
+                                          y=[items.lines_tracks[line_idx][0].pos().y()])
+
+    @shank_loop
+    def align_reference_lines(self, items, **kwargs) -> None:
         """
         Align the positions of all track reference lines and scatter points based on the new positions
         of their corresponding feature reference lines.
@@ -1636,20 +1579,12 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         None
         """
 
-        if self.loaddata.configs is not None:
-            for config in self.loaddata.configs:
-                items = self.shank_items[self.selected_shank][config]
-                for line_feature, line_track, point in zip(items.lines_features, items.lines_tracks, items.points):
-                    line_track[0].setPos(line_feature[0].getYPos())
-                    point[0].setData(x=[line_feature[0].pos().y()], y=[line_feature[0].pos().y()])
-        else:
-            items = self.shank_items[self.selected_shank]
-            for line_feature, line_track, point in zip(items.lines_features, items.lines_tracks, items.points):
-                line_track[0].setPos(line_feature[0].getYPos())
-                point[0].setData(x=[line_feature[0].pos().y()], y=[line_feature[0].pos().y()])
+        for line_feature, line_track, point in zip(items.lines_features, items.lines_tracks, items.points):
+            line_track[0].setPos(line_feature[0].getYPos())
+            point[0].setData(x=[line_feature[0].pos().y()], y=[line_feature[0].pos().y()])
 
     @shank_loop
-    def remove_points_from_display(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]):
+    def remove_points_from_display(self, items: Union[Dict, Bunch], **kwargs):
         """
         Remove all reference points from the fit plot.
 
@@ -1684,7 +1619,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             self.fig_fit.addItem(point[0])
 
     @shank_loop
-    def remove_reference_lines_from_display(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]) -> None:
+    def remove_reference_lines_from_display(self, items: Union[Dict, Bunch], **kwargs) -> None:
         """
         Remove all reference lines and scatter points from the electrophysiology, histology, and fit plots.
 
@@ -1708,7 +1643,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             self.fig_fit.removeItem(point[0])
 
     @shank_loop
-    def add_reference_lines_to_display(self, shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]) -> None:
+    def add_reference_lines_to_display(self, items: Union[Dict, Bunch], **kwargs) -> None:
         """
         Add previously created reference lines and scatter points to their respective plots.
 
@@ -1723,6 +1658,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         -------
         None
         """
+        shank = kwargs.get('shank')
+
         for line_feature, line_track, point in zip(items.lines_features, items.lines_tracks, items.points):
             items.fig_img.addItem(line_feature[0])
             items.fig_line.addItem(line_feature[1])

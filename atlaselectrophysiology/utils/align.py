@@ -105,6 +105,14 @@ class AlignData:
         return self.buffer.idx_prev
 
     @property
+    def xyz_track(self):
+        return self.ephysalign.xyz_track
+
+    @property
+    def xyz_samples(self):
+        return self.ephysalign.xyz_samples
+
+    @property
     def xyz_channels(self):
         return self.ephysalign.get_channel_locations(self.features[self.idx], self.tracks[self.idx])
 
@@ -119,6 +127,21 @@ class AlignData:
     @property
     def feature(self):
         return self.features[self.idx]
+
+    @property
+    def current_idx(self):
+        return self.buffer.current_idx
+
+    @property
+    def total_idx(self):
+        return self.buffer.total_idx
+
+    def next_idx(self):
+        return self.buffer.next_idx()
+
+    def prev_idx(self):
+        return self.buffer.prev_idx()
+
 
     def set_init_feature_track(self, feature=None, track=None):
         if feature is not None:

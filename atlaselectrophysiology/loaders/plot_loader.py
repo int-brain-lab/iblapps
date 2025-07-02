@@ -1,20 +1,29 @@
 from dataclasses import dataclass
-import numpy as np
 import logging
 from matplotlib import cm
-from iblutil.numerical import bincount2D
+import numpy as np
+from typing import Optional, Union, List
 from qtpy import QtGui
-from brainbox.task import passive
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 from brainbox.population.decode import xcorr
-import time
+from brainbox.task import passive
+from iblutil.numerical import bincount2D
+from iblutil.util import Bunch
+
+logger = logging.getLogger(__name__)
+
+# TODO docstrings and typing and logging
+# TODO make sure the cluster idx for waveforms and autocorrelogram makes sense
+# TODO decorator for when data doesn't exist
+# TODO arrange channels 2 banks when we have metadata and not channels data
+# TODO ap rms do we need to apply all this median subtraction etc?
+
 
 BNK_SIZE = 10
 AUTOCORR_BIN_SIZE = 0.25 / 1000
 AUTOCORR_WIN_SIZE = 10 / 1000
 
 FS = 30000
-
 
 
 @dataclass
@@ -61,10 +70,10 @@ class LineData:
 
 @dataclass
 class ProbeData:
-    img: np.ndarray
-    scale: np.ndarray
+    img: List[np.ndarray]
+    scale: List[np.ndarray]
     levels: np.ndarray
-    offset: np.ndarray
+    offset: List[np.ndarray]
     xrange: np.ndarray
     cmap: str
     title: str
@@ -82,8 +91,6 @@ FILTER_MATCH = {
 TBIN = 0.05
 DBIN = 5
 
-logger = logging.getLogger('ibllib')
-
 
 def compute_spike_average(spikes):
     # Hack!
@@ -98,12 +105,11 @@ def compute_spike_average(spikes):
 
 def compute_bincount(spike_times, spike_depths, spike_amps, xbin=TBIN, ybin=DBIN, xlim=None, ylim=None, **kwargs):
 
-
     count, times, depths = bincount2D(spike_times, spike_depths, xbin=xbin, ybin=ybin,
-                                         xlim=xlim, ylim=ylim, **kwargs)
+                                      xlim=xlim, ylim=ylim, **kwargs)
 
     amp, times, depths = bincount2D(spike_times, spike_depths, xbin=xbin, ybin=ybin,
-                                         xlim=xlim, ylim=ylim, weights=spike_amps)
+                                    xlim=xlim, ylim=ylim, weights=spike_amps)
 
     return count, amp, times, depths
 
@@ -157,94 +163,89 @@ def group_bincount(arr: np.ndarray, group_size: int, axis: int = 1) -> np.ndarra
     return result.T if axis == 0 else result
 
 
-
-
-
 class PlotLoader:
-    def __init__(self, data, shank_idx=0):
+    def __init__(self, data, metadata, shank_idx=0):
         self.data = data
 
-        # TODO this is a mess
+        if metadata['exists']:
+            self.chn_coords = np.c_[metadata['x'], metadata['y']]
+            self.chn_ind_raw = metadata['ind']
+            self.chn_ind = np.arange(self.chn_ind_raw.size)
 
-        self.chn_coords_all = data['channels']['localCoordinates']
-        self.chn_ind_all = data['channels']['rawInd'].astype(int)
+            self.chn_min = np.min(self.chn_coords[:, 1])
+            self.chn_max = np.max(self.chn_coords[:, 1])
+            self.chn_diff = np.min(np.abs(np.diff(np.unique(self.chn_coords[:, 1]))))
+            self.chn_full = np.arange(self.chn_min, self.chn_max + self.chn_diff, self.chn_diff)
 
-        self.chn_min = np.min(self.chn_coords_all[:, 1])
-        self.chn_max = np.max(self.chn_coords_all[:, 1])
-        self.chn_diff = np.min(np.abs(np.diff(np.unique(self.chn_coords_all[:, 1]))))
+            self.N_BNK = len(np.unique(self.chn_coords[:, 0]))
+            self.idx_full = np.where(np.isin(self.chn_full, self.chn_coords[:, 1]))[0]
 
-        self.chn_full = np.arange(self.chn_min, self.chn_max + self.chn_diff, self.chn_diff)
-
-        chn_x = np.unique(self.chn_coords_all[:, 0])
-        chn_x_diff = np.diff(chn_x)
-        n_shanks = np.sum(chn_x_diff > 100) + 1
-
-        groups = np.split(chn_x, np.where(np.diff(chn_x) > 100)[0] + 1)
-
-        if n_shanks > 1:
-            shanks = {}
-            for iShank, grp in enumerate(groups):
-                if len(grp) == 1:
-                    grp = np.array([grp[0], grp[0]])
-                shanks[iShank] = [grp[0], grp[1]]
-
-            shank_chns = np.bitwise_and(self.chn_coords_all[:, 0] >= shanks[shank_idx][0],
-                                        self.chn_coords_all[:, 0] <= shanks[shank_idx][1])
-            self.chn_coords = self.chn_coords_all[shank_chns, :]
-            self.chn_ind = self.chn_ind_all[shank_chns]
         else:
-            self.chn_coords = self.chn_coords_all
-            self.chn_ind = self.chn_ind_all
+            # TODO handle this logic in the data loading part
+            self.chn_coords_all = data['channels']['localCoordinates']
+            self.chn_ind_all = data['channels']['rawInd'].astype(int)
 
-        chn_sort = np.argsort(self.chn_coords[:, 1])
-        self.chn_coords = self.chn_coords[chn_sort]
-        self.chn_ind = self.chn_ind[chn_sort]
+            self.chn_min = np.min(self.chn_coords_all[:, 1])
+            self.chn_max = np.max(self.chn_coords_all[:, 1])
+            self.chn_diff = np.min(np.abs(np.diff(np.unique(self.chn_coords_all[:, 1]))))
 
-        self.N_BNK = len(np.unique(self.chn_coords[:, 0]))
-        self.idx_full = np.where(np.isin(self.chn_full, self.chn_coords[:, 1]))[0]
+            self.chn_full = np.arange(self.chn_min, self.chn_max + self.chn_diff, self.chn_diff)
 
+            chn_x = np.unique(self.chn_coords_all[:, 0])
+            chn_x_diff = np.diff(chn_x)
+            n_shanks = np.sum(chn_x_diff > 100) + 1
+
+            groups = np.split(chn_x, np.where(np.diff(chn_x) > 100)[0] + 1)
+
+            if n_shanks > 1:
+                shanks = {}
+                for iShank, grp in enumerate(groups):
+                    if len(grp) == 1:
+                        grp = np.array([grp[0], grp[0]])
+                    shanks[iShank] = [grp[0], grp[1]]
+
+                shank_chns = np.bitwise_and(self.chn_coords_all[:, 0] >= shanks[shank_idx][0],
+                                            self.chn_coords_all[:, 0] <= shanks[shank_idx][1])
+                self.chn_coords = self.chn_coords_all[shank_chns, :]
+                self.chn_ind = self.chn_ind_all[shank_chns]
+            else:
+                self.chn_coords = self.chn_coords_all
+                self.chn_ind = self.chn_ind_all
+
+            chn_sort = np.argsort(self.chn_coords[:, 1])
+            self.chn_coords = self.chn_coords[chn_sort]
+            self.chn_ind = self.chn_ind[chn_sort]
+
+            self.N_BNK = len(np.unique(self.chn_coords[:, 0]))
+            self.idx_full = np.where(np.isin(self.chn_full, self.chn_coords[:, 1]))[0]
 
         self.filter_units('All')
-
         self.get_data()
-        self.compute_timescales()
-
 
     def _get_plots(self, plot_prefix):
         """
-        Find all methods that begin with 'check_'.
+        Find all methods that begin with plot_prefix.
 
         Returns
         -------
         Dict[str, function]
-            A map of QC check function names and the corresponding functions that return `metric`
-            (any), `passed` (bool).
         """
 
-        results = {}
+        results = Bunch()
         for attr_name in dir(self):
             if attr_name.startswith(plot_prefix):
                 method = getattr(self, attr_name)
                 if callable(method):
-                    start = time.time()
                     results.update(method())
-                    print(f'{attr_name}: {time.time() - start}')
 
         return results
 
-        # def is_metric(x):
-        #     return isfunction(x) and x.__name__.startswith('check_')
-        #
-        # return dict(getmembers(sys.modules[__name__], is_metric))
-
     def get_plots(self):
 
-        # TODO only update the ones that need updating after filtering
-        self.img_plots = self._get_plots('image')
-        self.scat_plots = self._get_plots('scatter')
+        self.image_plots = self._get_plots('image')
+        self.scatter_plots = self._get_plots('scatter')
         self.line_plots = self._get_plots('line')
         self.probe_plots = self._get_plots('probe')
-
 
     @property
     def spike_amps(self):
@@ -262,25 +263,30 @@ class PlotLoader:
     def spike_times(self):
         return self.data['spikes']['times'][self.spike_idx][self.kp_idx]
 
-
     def get_data(self):
+
+        if not self.data['spikes']['exists']:
+            return
 
         self.clust_id, self.avg_depth, self.avg_amp, self.avg_fr = compute_spike_average(self.data['spikes'])
         self.update_data()
-
-
+        self.compute_timescales()
 
     def update_data(self):
 
-        chn_min = np.min(np.r_[self.chn_min, self.spike_depths])
-        chn_max = np.max(np.r_[self.chn_max, self.spike_depths])
+        if not self.data['spikes']['exists']:
+            return
 
-        self.fr, self.amp, self.times, self.depths = compute_bincount(self.spike_times, self.spike_depths, self.spike_amps,
-                                                                        ylim=[chn_min, chn_max])
+        self.chn_min_bc = np.min(np.r_[self.chn_min, self.spike_depths])
+        self.chn_max_bc = np.max(np.r_[self.chn_max, self.spike_depths])
 
+        self.fr, self.amp, self.times, self.depths = compute_bincount(
+            self.spike_times, self.spike_depths, self.spike_amps, ylim=[self.chn_min_bc, self.chn_max_bc])
 
     def filter_units(self, filter_type):
 
+        if not self.data['spikes']['exists']:
+            return
         try:
             if filter_type == "All":
                 self.cluster_idx = np.arange(self.data['clusters'].channels.size)
@@ -292,11 +298,9 @@ class PlotLoader:
 
             self.kp_idx = np.where(~np.isnan(self.data['spikes']['depths'][self.spike_idx]) &
                                    ~np.isnan(self.data['spikes']['amps'][self.spike_idx]))[0]
-        # TODO raise this?
         except Exception:
             logger.warning(f'{filter_type} metrics not found will return all units instead')
             self.filter_units('All')
-
 
     # -------------------------------------------------------------------------------------------------
     # Scatter plots
@@ -424,19 +428,8 @@ class PlotLoader:
         if not self.data['spikes']['exists']:
             return {}
 
-        # tbin = 0.05
-        # dbin = 5
-        # bincount, times, depths = bincount2D(self.spike_times, self.spike_depths,
-        #                               tbin, dbin, ylim=[self.chn_min, self.chn_max])
-
-        # tbin = 0.05
-        # factor = int(tbin / TBIN)
-        # bincount = group_bincount(self.fr, factor, axis=1)
-        # times = self.times[::factor]
-
         xscale = (self.times[-1] - self.times[0]) / self.fr.shape[1]
         yscale = (self.depths[-1] - self.depths[0]) / self.fr.shape[0]
-        #yscale = (depths[-1] - depths[0]) / bincount.shape[0]
 
         img = ImageData(
             img=self.fr.T,
@@ -459,14 +452,6 @@ class PlotLoader:
         factor = int(dbin / DBIN)
         bincount = group_bincount(self.fr, factor, axis=0)
         depths = self.depths[::factor]
-        # tbin = 0.05
-        # factor = int(tbin / TBIN)
-        # bincount = group_bincount(bincount, factor, axis=1)
-
-        # tbin = 0.05
-        # dbin = 40
-        # bincount, times, depths = bincount2D(self.spike_times, self.spike_depths,
-        #                               tbin, dbin, ylim=[self.chn_min, self.chn_max])
 
         corr = np.corrcoef(bincount)
         corr[np.isnan(corr)] = 0
@@ -492,7 +477,7 @@ class PlotLoader:
 
     def _image_rms(self, format):
         # Finds channels that are at equivalent depth on probe and averages rms values for each
-        # time point at same depth togehter
+        # time point at same depth together
 
         if not self.data[f'rms_{format}']['exists']:
             return {}
@@ -542,7 +527,6 @@ class PlotLoader:
 
         return {f'rms {format}': img}
 
-
     def image_lfp_spectrum(self):
         if not self.data['psd_lf']['exists']:
             return {}
@@ -582,11 +566,9 @@ class PlotLoader:
 
         return {'LF spectrum': img}
 
-
-
     def image_passive_events(self):
         stim_keys = ['valveOn', 'toneOn', 'noiseOn', 'leftGabor', 'rightGabor']
-        data_img = dict()
+        data_img = {}
         if not self.data['pass_stim']['exists'] and not self.data['gabor']['exists']:
             return data_img
         elif not self.data['pass_stim']['exists'] and self.data['gabor']['exists']:
@@ -600,7 +582,7 @@ class PlotLoader:
             stims = {stim_type: self.data['pass_stim'][stim_type] for stim_type in stim_types[0:3]}
             stims.update({stim_type: self.data['gabor'][stim_type] for stim_type in stim_types[3:]})
 
-        passive_imgs = dict()
+        passive_imgs = {}
 
         base_stim = 1
         pre_stim = 0.4
@@ -626,10 +608,39 @@ class PlotLoader:
                 title='Firing rate (z score)'
             )
 
-
             passive_imgs.update({stim_type: img})
 
         return passive_imgs
+
+    def image_raw_data(self):
+        if not self.data['raw_snippets']['exists']:
+            return {}
+
+        def gain2level(gain):
+            return 10 ** (gain / 20) * 4 * np.array([-1, 1])
+
+        levels = gain2level(-90)
+
+        raw_imgs = {}
+
+        for t, raw_img in self.data['raw_snippets']['images'].items():
+            x_range = np.array([0, raw_img.shape[0] - 1]) / self.data['raw_snippets']['fs'] * 1e3
+            xscale = (x_range[1] - x_range[0]) / raw_img.shape[0]
+            yscale = (self.chn_max - self.chn_min) / raw_img.shape[1]
+
+            img = ImageData(
+                img=raw_img,
+                scale=np.array([xscale, yscale]),
+                levels=levels,
+                offset=np.array([0, self.chn_min]),
+                cmap='bone',
+                xrange=x_range,
+                xaxis='Time (ms)',
+                title='Power (uV)'
+            )
+            raw_imgs[f'Raw ap t={t}'] = img
+
+        return raw_imgs
 
     # -------------------------------------------------------------------------------------------------
     # Line plots
@@ -638,12 +649,6 @@ class PlotLoader:
     def line_firing_rate(self):
         if not self.data['spikes']['exists']:
             return {}
-
-
-        # tbin = self.spike_times.max()
-        # dbin = 10
-        # bincount, times, depths = bincount2D(self.spike_times, self.spike_depths,
-        #                               tbin, dbin, ylim=[self.chn_min, self.chn_max])
 
         dbin = 10
         factor = int(dbin / DBIN)
@@ -661,18 +666,10 @@ class PlotLoader:
 
         return {'Firing Rate': line}
 
-
     def line_amplitude(self):
         if not self.data['spikes']['exists']:
             return {}
 
-
-        # tbin = self.spike_times.max()
-        # dbin = 10
-        # bincount, times, depths = bincount2D(self.spike_times, self.spike_depths,
-        #                               tbin, dbin, ylim=[self.chn_min, self.chn_max], weights=self.spike_amps)
-
-        # TODO check do I need all the extra remove_bin logic that I had before?
         dbin = 10
         factor = int(dbin / DBIN)
         bincount = group_bincount(self.amp, factor, axis=0)
@@ -688,7 +685,6 @@ class PlotLoader:
         )
 
         return {'Amplitude': line}
-
 
     # -------------------------------------------------------------------------------------------------
     # Probe plots
@@ -724,8 +720,7 @@ class PlotLoader:
             title=format + ' RMS (uV)'
         )
 
-        return  {f'rms {format}': probe}
-
+        return {f'rms {format}': probe}
 
     def probe_lfp_spectrum(self):
         if not self.data['psd_lf']['exists']:
@@ -756,7 +751,6 @@ class PlotLoader:
         return data_probe
 
     def probe_rfmap(self):
-        data_img = dict()
         if not self.data['rf_map']['exists']:
             return {}
 
@@ -767,31 +761,33 @@ class PlotLoader:
             passive.get_rf_map_over_depth(rf_map_times, rf_map_pos, rf_stim_frames,
                                           self.spike_times,
                                           self.spike_depths,
-                                          d_bin=160, y_lim=[self.chn_min, self.chn_max])
+                                          d_bin=160, y_lim=[self.chn_min_bc, self.chn_max_bc])
         rfs_svd = passive.get_svd_map(rf_map)
-        img = dict()
+        img = {}
         img['on'] = np.vstack(rfs_svd['on'])
         img['off'] = np.vstack(rfs_svd['off'])
-        yscale = ((self.chn_max - self.chn_min) / img['on'].shape[0])
 
+        yscale = ((self.chn_max - self.chn_min) / img['on'].shape[0])
         xscale = 1
         levels = np.quantile(np.c_[img['on'], img['off']], [0, 1])
 
         depths = np.linspace(self.chn_min, self.chn_max, len(rfs_svd['on']) + 1)
-
+        data_img = {}
         sub_type = ['on', 'off']
         for sub in sub_type:
-            sub_data = {f'RF Map - {sub}':
-                ProbeData(
-                img=[sub.T],
-                scale=[np.array([xscale, yscale])],
-                levels=levels,
-                offset=[np.array([0, self.chn_min])],
-                cmap='viridis',
-                xrange=np.array([0, 15]),
-                title='rfmap (dB)',
-                boundaries=depths
-            )}
+            sub_data = {
+                f'RF Map - {sub}':
+                    ProbeData(
+                        img=[img[sub].T],
+                        scale=[np.array([xscale, yscale])],
+                        levels=levels,
+                        offset=[np.array([0, self.chn_min])],
+                        cmap='viridis',
+                        xrange=np.array([0, 15]),
+                        title='rfmap (dB)',
+                        boundaries=depths
+                    )
+            }
             data_img.update(sub_data)
 
         return data_img
@@ -843,12 +839,14 @@ class PlotLoader:
         return bnk_data, bnk_scale, bnk_offset
 
     def compute_timescales(self):
+        if not self.data['spikes']['exists']:
+            return
+
         self.t_autocorr = 1e3 * np.arange((AUTOCORR_WIN_SIZE / 2) - AUTOCORR_WIN_SIZE,
                                           (AUTOCORR_WIN_SIZE / 2) + AUTOCORR_BIN_SIZE,
                                           AUTOCORR_BIN_SIZE)
         n_template = self.data['clusters']['waveforms'][0, :, 0].size
         self.t_template = 1e3 * (np.arange(n_template)) / FS
-
 
     def get_autocorr(self, clust_idx):
         idx = np.where(self.data['spikes']['clusters'] == self.clust_id[clust_idx])[0]
@@ -865,4 +863,3 @@ class PlotLoader:
     def get_template_wf(self, clust_idx):
         template_wf = (self.data['clusters']['waveforms'][self.clust_id[clust_idx], :, 0])
         return template_wf * 1e6
-
