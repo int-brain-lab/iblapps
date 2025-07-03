@@ -71,13 +71,13 @@ class ColorBar(pg.GraphicsWidget):
         self.levels = levels
         self.ticks = self.get_ticks(nticks)
         self.label = label
-        self.setAxis(label=label)
+        self.setAxis(ticks=self.ticks, label=label)
 
     def setAxis(self, ticks=None, label=None, loc=None, extent=30):
 
         if loc is None:
             loc = 'top' if self.orientation == 'horizontal' else 'left'
-        ticks = ticks or self.ticks
+        ticks = ticks
         ax = self.plot.getAxis(loc)
         ax.setStyle(stopAxisAtTick=((True, True)), autoExpandTextSpace=True)
         if self.orientation == 'horizontal':

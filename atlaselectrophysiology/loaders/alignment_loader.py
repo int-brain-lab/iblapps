@@ -10,12 +10,12 @@ from iblutil.util import Bunch
 
 
 class AlignmentLoader(ABC):
-    def __init__(self, brain_atlas, user):
+    def __init__(self, brain_atlas, user, xyz_picks=None):
         self.brain_atlas = brain_atlas
 
         self.alignments = Bunch()
         self.alignment_keys = ['original']
-        self.xyz_picks = self.load_xyz_picks()
+        self.xyz_picks = self.load_xyz_picks() if xyz_picks is None else xyz_picks
 
         self.user = user
 

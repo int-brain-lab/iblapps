@@ -18,13 +18,13 @@ def callback(parent):
     align_qc = parent.qc_dialog.align_qc.currentText()
     ephys_qc = parent.qc_dialog.ephys_qc.currentText()
     ephys_desc = [btn.text() for btn in parent.qc_dialog.desc_buttons.buttons() if btn.isChecked()]
-    resolve = parent.qc_dialog.resolve.currentText()
+    resolve = parent.qc_dialog.resolve.currentData()
     if parent.loaddata.configs is None:
-        upload = parent.loaddata.get_selected_probe().loaders['upload']
+        upload = parent.loaddata.get_selected_shank().loaders['upload']
     else:
-        upload = parent.loaddata.get_selected_probe()['dense'].loaders['upload']
+        upload = parent.loaddata.get_selected_shank()['dense'].loaders['upload']
 
-    upload.get_qc_string(align_qc, ephys_qc, ephys_desc)
+    upload.get_qc_string(align_qc, ephys_qc, ephys_desc, resolve)
     return
 
 
@@ -63,13 +63,8 @@ class QCDialog(QtWidgets.QDialog):
         # Force upload option
         self.resolve_label = QtWidgets.QLabel("Do you want to resolve this alignment with the current alignment?:")
         self.resolve = QtWidgets.QComboBox()
-        self.resolve.addItems(["No", "Yes"])
-
-        for i, label in enumerate(CriticalInsertionNote.descriptions_gui):
-            checkbox = QtWidgets.QCheckBox(label)
-            self.desc_buttons.addButton(checkbox, i)
-            self.desc_layout.addWidget(checkbox)
-        self.desc_group.setLayout(self.desc_layout)
+        self.resolve.addItem("No", False)
+        self.resolve.addItem("Yes", True)
 
         # Dialog buttons
         self.button_box = QtWidgets.QDialogButtonBox(
@@ -85,6 +80,8 @@ class QCDialog(QtWidgets.QDialog):
         dialog_layout.addWidget(self.ephys_qc_label)
         dialog_layout.addWidget(self.ephys_qc)
         dialog_layout.addWidget(self.desc_group)
+        dialog_layout.addWidget(self.resolve_label)
+        dialog_layout.addWidget(self.resolve)
         dialog_layout.addWidget(self.button_box)
         self.setLayout(dialog_layout)
 

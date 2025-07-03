@@ -12,6 +12,8 @@ from iblutil.util import Bunch
 
 logger = logging.getLogger(__name__)
 
+np.seterr(divide='ignore', invalid='ignore')
+
 # TODO docstrings and typing and logging
 # TODO make sure the cluster idx for waveforms and autocorrelogram makes sense
 # TODO decorator for when data doesn't exist
@@ -311,7 +313,7 @@ class PlotLoader:
             return {}
 
         A_BIN = 10
-        subsample = 100
+        subsample = 500
 
         times = self.spike_times[0:-1:subsample]
         depths = self.spike_depths[0:-1:subsample]

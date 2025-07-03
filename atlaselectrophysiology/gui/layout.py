@@ -146,7 +146,7 @@ class Setup():
         if not self.offline:
             # If offline mode is False, read in Subject and Session options from Alyx
             # Drop down list to choose subject
-            self.subj_list, self.subj_combobox, self.subj_edit, self.subj_completer = utils.create_combobox(self.on_subject_selected, editable=True)
+            self.subj_list, self.subj_combobox = utils.create_combobox(self.on_subject_selected, editable=False)
 
             # Drop down list to choose session
             self.sess_list, self.sess_combobox = utils.create_combobox(self.on_session_selected)
@@ -165,7 +165,6 @@ class Setup():
 
         # Drop down list to select config
         self.config_list, self.config_combobox = utils.create_combobox(self.on_config_selected)
-
 
         # Button to get data to display in GUI
         self.data_button = QtWidgets.QPushButton('Load')
@@ -453,6 +452,7 @@ class Setup():
     def setup_fig_data_area(self, items, idx):
 
         items.fig_data_ax = utils.set_axis(items.fig_img, 'left', label='Distance from probe tip (uV)')
+        utils.set_axis(items.fig_scale_cb, 'bottom', show=False)
 
         fig_data_area = pg.GraphicsLayoutWidget(border=None)
         fig_data_area.setContentsMargins(0, 0, 0, 0)
@@ -492,6 +492,7 @@ class Setup():
 
         items_d.fig_data_ax = utils.set_axis(items_d.fig_img, 'left', show=False)
         items_q.fig_data_ax = utils.set_axis(items_q.fig_img, 'left', label='Distance from probe tip (uV)')
+        utils.set_axis(items_q.fig_scale_cb, 'bottom')
 
 
         fig_data_area = pg.GraphicsLayoutWidget(border=None)
@@ -590,7 +591,7 @@ class Setup():
         # TODO get the filter options from the clusters.metrics
         self.filter_options.clear()
         utils.remove_actions(self.filter_options_group)
-        self.unit_init = utils.add_actions(
+        self.filter_init = utils.add_actions(
         ['All', 'KS good', 'KS mua', 'IBL good'], self.filter_unit_pressed, self.filter_options, self.filter_options_group, data_only=True)
 
 
@@ -633,6 +634,12 @@ class Setup():
         self.filter_options_group = QtWidgets.QActionGroup(self.filter_options)
         self.filter_options_group.setExclusive(True)
 
+        # # Add menu bar for all fitting options
+        # fit_options = self.menu_bar.addMenu("Fit Options")
+        #
+        # # Add menu bar for all display options
+        # display_options = self.menu_bar.addMenu('Display Options')
+
         # Add menu bar for all fitting options
         fit_options = self.menu_bar.addMenu("Fit Options")
 
@@ -671,12 +678,6 @@ class Setup():
             'Toggle Slice Plots':
                 {'shortcut': 'Alt+4', 'callback': lambda:
                 utils.toggle_plots(self.slice_options_group), 'menu': display_options},
-            # 'View 1': # Shortcuts to switch order of 3 panels in ephys plot
-            #     {'shortcut': 'Shift+1', 'callback': lambda: self.set_view(view=1), 'menu': display_options},
-            # 'View 2':
-            #     {'shortcut': 'Shift+2', 'callback': lambda: self.set_view(view=2), 'menu': display_options},
-            # 'View 3':
-            #     {'shortcut': 'Shift+3', 'callback': lambda: self.set_view(view=3), 'menu': display_options},
             'Reset Axis': # Shortcut to reset axis on figures
                 {'shortcut': 'Shift+A', 'callback': self.reset_axis_button_pressed, 'menu': display_options},
             'Hide/Show Labels': # Shortcut to hide/show region labels
@@ -685,10 +686,6 @@ class Setup():
                 {'shortcut': 'Shift+H', 'callback': self.toggle_reference_lines, 'menu': display_options},
             'Hide/Show Channels': # Shortcut to hide/show reference lines and channels on slice image
                 {'shortcut': 'Shift+C', 'callback': self.toggle_channels, 'menu': display_options},
-            # 'Hide/Show Nearby Boundaries': # Shortcut to change default histology reference image
-            #     {'shortcut': 'Shift+N', 'callback': self.toggle_histology, 'menu': display_options},
-            # 'Change Histology Map': # Option to change histology regions from Allen to Franklin Paxinos
-            #     {'shortcut': 'Shift+M', 'callback': self.toggle_histology_map, 'menu': display_options},
             'Toggle layout':  # Option to change histology regions from Allen to Franklin Paxinos
                 {'shortcut': 'T', 'callback': self.toggle_layout, 'menu': display_options},
             'Next shank':  # Option to change histology regions from Allen to Franklin Paxinos

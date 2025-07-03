@@ -108,7 +108,7 @@ def plot_scale_factor(fig_scale, fig_scale_cb, data) -> None:
 
     cbar = cb.ColorBar('seismic', plot_item=fig_scale_cb)
     colours = cbar.map.mapToQColor(data['scale_factor'])
-    cbar.setLevels((0, 1.5), label='Scale Factor')
+    cbar.setLevels((0, 1.5), label='Scale')
 
     # color_bar = cb.ColorBar('seismic')
     # cbar = color_bar.makeColourBar(20, 5, fig_scale_cb, min=0.5, max=1.5, label='Scale Factor')
@@ -131,7 +131,7 @@ def plot_scale_factor(fig_scale, fig_scale_cb, data) -> None:
     set_yaxis_range(fig_scale, data)
     utils.set_axis(fig_scale, 'bottom', pen='w', label='blank')
 
-    return scale_regions
+    return scale_regions, cbar
 
 
 def plot_slice(fig_slice, data: Dict, data_chns):

@@ -27,6 +27,7 @@ class ProbeLoader(ABC):
         self.shanks = Bunch()
 
         self.configs = None
+        self.possible_configs = []
         self.selected_config = None
         self.current_config = None
 
@@ -116,7 +117,18 @@ class ProbeLoader(ABC):
     def chn_max(self):
         return self.get_current_shank().loaders['plots'].chn_max
 
-    def get_plots(self, plot):
+    @property
+    def y_min(self):
+        return self.chn_min
+
+    @property
+    def y_max(self):
+        return self.chn_max
+
+    def get_plot(self, shank, plot, key, *args):
+        return getattr(self.shanks[shank].loaders['plots'], plot).get(key, None)
+
+    def get_plot_keys(self, plot):
         keys = []
         for shank in self.shanks:
             keys += getattr(self.shanks[shank].loaders['plots'], plot).keys()
@@ -129,7 +141,7 @@ class ProbeLoader(ABC):
 
     @property
     def image_keys(self):
-        return self.get_plots('image_plots')
+        return self.get_plot_keys('image_plots')
 
     @property
     def scatter_plots(self):
@@ -137,7 +149,7 @@ class ProbeLoader(ABC):
 
     @property
     def scatter_keys(self):
-        return self.get_plots('scatter_plots')
+        return self.get_plot_keys('scatter_plots')
 
     @property
     def line_plots(self):
@@ -145,7 +157,7 @@ class ProbeLoader(ABC):
 
     @property
     def line_keys(self):
-        return self.get_plots('line_plots')
+        return self.get_plot_keys('line_plots')
 
     @property
     def probe_plots(self):
@@ -153,7 +165,7 @@ class ProbeLoader(ABC):
 
     @property
     def probe_keys(self):
-        return self.get_plots('probe_plots')
+        return self.get_plot_keys('probe_plots')
 
     @property
     def slice_plots(self):
@@ -161,7 +173,7 @@ class ProbeLoader(ABC):
 
     @property
     def slice_keys(self):
-        return self.get_plots('slice_plots')
+        return self.get_plot_keys('slice_plots')
 
     def upload_data(self):
         return self.get_selected_shank().upload_data()
@@ -281,15 +293,19 @@ class ProbeLoaderONE(ProbeLoader):
 
 # This is pretty bespoke to IBL situation atm
 class ProbeLoaderCSV(ProbeLoader):
-    def __init__(self, csv_file='/Users/admin/int-brain-lab/quarter.csv', one=None, brain_atlas=None):
+    def __init__(self, csv_file, one=None, brain_atlas=None):
         super().__init__(brain_atlas)
+
+        csv_file = Path(csv_file)
+        assert csv_file.exists()
 
         self.df = pd.read_csv(csv_file)
         self.df['session_strip'] = self.df['session'].str.rsplit('/', n=1).str[0]
         self.one = one or ONE()
 
+        self.possible_configs = ['quarter', 'dense', 'both']
         self.configs = ['quarter', 'dense']
-        self.selected_config = 'both'
+        self.selected_config = 'quarter'
         self.current_config = self.selected_config
 
     def get_subjects(self):
@@ -312,8 +328,8 @@ class ProbeLoaderCSV(ProbeLoader):
         return self.shank_labels
 
     def get_config(self, idx):
-
-        return ['quarter', 'dense', 'both']
+        self.selected_config = self.possible_configs[idx]
+        self.current_config = self.selected_config
 
     def get_info(self, idx):
         self.selected_shank = self.shank_labels[idx]
@@ -354,25 +370,25 @@ class ProbeLoaderCSV(ProbeLoader):
                 self.shanks[shank.probe]['dense'] = ShankLoader(loaders)
 
 
-        for shank in self.shanks.keys():
-            if self.shanks[shank]['dense'].loaders['align'].alignment_keys != ['original']:
-                # Set the quarter shank to whatever is on alyx regardless if there is an original local file
-                self.shanks[shank]['quarter'].loaders['align'].alignments = self.shanks[shank]['dense'].loaders['align'].alignments
-                self.shanks[shank]['quarter'].loaders['align'].get_previous_alignments()
-                self.shanks[shank]['quarter'].loaders['align'].get_starting_alignment(0)
+        # for shank in self.shanks.keys():
+        #     if self.shanks[shank]['dense'].loaders['align'].alignment_keys != ['original']:
+        #         # Set the quarter shank to whatever is on alyx regardless if there is an original local file
+        #         self.shanks[shank]['quarter'].loaders['align'].alignments = self.shanks[shank]['dense'].loaders['align'].alignments
+        #         self.shanks[shank]['quarter'].loaders['align'].get_previous_alignments()
+        #         self.shanks[shank]['quarter'].loaders['align'].get_starting_alignment(0)
+        #
+        #     elif self.shanks[shank]['quarter'].loaders['align'].alignment_keys != ['original']:
+        #         # If we have a local file, populate the dense alignment with these values
+        #         self.shanks[shank]['dense'].loaders['align'].add_extra_alignments(self.shanks[shank]['quarter'].loaders['align'].alignments)
+        #         self.shanks[shank]['dense'].loaders['align'].get_previous_alignments()
+        #         self.shanks[shank]['dense'].loaders['align'].get_starting_alignment(0)
+        #         # TODO should we then set the quarter to the dense to make sure names are consistent??
+        #         #  e should otherwise they are different when doing get_starting alignment they will be different
+        #         self.shanks[shank]['quarter'].loaders['align'].alignments = self.shanks[shank]['dense'].loaders['align'].alignments
+        #         self.shanks[shank]['quarter'].loaders['align'].get_previous_alignments()
+        #         self.shanks[shank]['quarter'].loaders['align'].get_starting_alignment(0)
 
-            elif self.shanks[shank]['quarter'].loaders['align'].alignment_keys != ['original']:
-                # If we have a local file, populate the dense alignment with these values
-                self.shanks[shank]['dense'].loaders['align'].add_extra_alignments(self.shanks[shank]['quarter'].loaders['align'].alignments)
-                self.shanks[shank]['dense'].loaders['align'].get_previous_alignments()
-                self.shanks[shank]['dense'].loaders['align'].get_starting_alignment(0)
-                # TODO should we then set the quarter to the dense to make sure names are consistent??
-                #  e should otherwise they are different when doing get_starting alignment they will be different
-                self.shanks[shank]['quarter'].loaders['align'].alignments = self.shanks[shank]['dense'].loaders['align'].alignments
-                self.shanks[shank]['quarter'].loaders['align'].get_previous_alignments()
-                self.shanks[shank]['quarter'].loaders['align'].get_starting_alignment(0)
-
-        #self._sync_alignments()
+        self._sync_alignments()
 
     def _sync_alignments(self):
         """Synchronize alignments between dense and quarter loaders."""
@@ -399,7 +415,8 @@ class ProbeLoaderCSV(ProbeLoader):
 
     def get_insertion(self, shank):
 
-        ins = self.one.alyx.rest('insertions', 'list', session=self.one.path2eid(shank.session), name=shank.probe, expires=timedelta(days=1))
+        ins = self.one.alyx.rest('insertions', 'list', session=self.one.path2eid(shank.session),
+                                 name=shank.probe, expires=timedelta(days=1))
         return ins[0]
 
     def download_histology(self):
@@ -469,8 +486,10 @@ class ProbeLoaderCSV(ProbeLoader):
         config = 'quarter' if self.selected_config == 'both' else self.selected_config
         return self.get_selected_shank()[config].loaders['plots'].chn_max
 
+    def get_plot(self, shank, plot, key, config):
+        return getattr(self.shanks[shank][config].loaders['plots'], plot).get(key, None)
 
-    def get_plots(self, plot):
+    def get_plot_keys(self, plot):
         keys = []
         for shank in self.shanks:
             for config in self.configs:
@@ -599,9 +618,9 @@ class ShankLoader:
     def upload_data(self):
         # TODO use a dataclass
         data = {'chn_coords': self.chn_coords,
-                'xyz_channels': self.loaders['align'].xyz_channels,
-                'feature': self.loaders['align'].feature.tolist(),
-                'track': self.loaders['align'].track.tolist(),
+                'xyz_channels': self.loaders['align'].align.xyz_channels,
+                'feature': self.loaders['align'].align.feature.tolist(),
+                'track': self.loaders['align'].align.track.tolist(),
                 'alignments': self.loaders['align'].alignments,
                 'cluster_chns': self.cluster_chns,
                 'probe_collection': self.loaders['data'].probe_collection,
