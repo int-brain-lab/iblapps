@@ -353,7 +353,26 @@ class ProbeLoaderCSV(ProbeLoader):
                 loaders['ephys'] = SpikeGLXLoaderONE(ins, self.one)
                 self.shanks[shank.probe]['dense'] = ShankLoader(loaders)
 
-        self._sync_alignments()
+
+        for shank in self.shanks.keys():
+            if self.shanks[shank]['dense'].loaders['align'].alignment_keys != ['original']:
+                # Set the quarter shank to whatever is on alyx regardless if there is an original local file
+                self.shanks[shank]['quarter'].loaders['align'].alignments = self.shanks[shank]['dense'].loaders['align'].alignments
+                self.shanks[shank]['quarter'].loaders['align'].get_previous_alignments()
+                self.shanks[shank]['quarter'].loaders['align'].get_starting_alignment(0)
+
+            elif self.shanks[shank]['quarter'].loaders['align'].alignment_keys != ['original']:
+                # If we have a local file, populate the dense alignment with these values
+                self.shanks[shank]['dense'].loaders['align'].add_extra_alignments(self.shanks[shank]['quarter'].loaders['align'].alignments)
+                self.shanks[shank]['dense'].loaders['align'].get_previous_alignments()
+                self.shanks[shank]['dense'].loaders['align'].get_starting_alignment(0)
+                # TODO should we then set the quarter to the dense to make sure names are consistent??
+                #  e should otherwise they are different when doing get_starting alignment they will be different
+                self.shanks[shank]['quarter'].loaders['align'].alignments = self.shanks[shank]['dense'].loaders['align'].alignments
+                self.shanks[shank]['quarter'].loaders['align'].get_previous_alignments()
+                self.shanks[shank]['quarter'].loaders['align'].get_starting_alignment(0)
+
+        #self._sync_alignments()
 
     def _sync_alignments(self):
         """Synchronize alignments between dense and quarter loaders."""
@@ -370,6 +389,7 @@ class ProbeLoaderCSV(ProbeLoader):
             elif quarter_align.alignment_keys != ['original']:
                 # Local alignment exists: add to online
                 dense_align.add_extra_alignments(quarter_align.alignments)
+                dense_align.get_previous_alignments()
                 dense_align.get_starting_alignment(0)
 
                 # Ensure consistency by syncing quarter with updated dense
@@ -379,7 +399,7 @@ class ProbeLoaderCSV(ProbeLoader):
 
     def get_insertion(self, shank):
 
-        ins = self.one.alyx.rest('insertions', 'list', session=self.one.path2eid(shank.session), name=shank.probe)
+        ins = self.one.alyx.rest('insertions', 'list', session=self.one.path2eid(shank.session), name=shank.probe, expires=timedelta(days=1))
         return ins[0]
 
     def download_histology(self):
@@ -428,7 +448,6 @@ class ProbeLoaderCSV(ProbeLoader):
 
     def prev_idx(self):
         for config in self.configs:
-            self.config = config
             la = self.get_selected_shank()[config].loaders['align'].align.prev_idx()
         return la
 
@@ -441,14 +460,15 @@ class ProbeLoaderCSV(ProbeLoader):
         return self.get_selected_shank()[self.current_config].loaders['align'].align.total_idx
 
     @property
-    def chn_min(self):
+    def y_min(self):
         config = 'quarter' if self.selected_config == 'both' else self.selected_config
         return np.min([0, self.get_selected_shank()[config].loaders['plots'].chn_min])
 
     @property
-    def chn_max(self):
+    def y_max(self):
         config = 'quarter' if self.selected_config == 'both' else self.selected_config
         return self.get_selected_shank()[config].loaders['plots'].chn_max
+
 
     def get_plots(self, plot):
         keys = []
@@ -557,7 +577,7 @@ class ShankLoader:
         self.loaders['plots'] = PlotLoader(self.raw_data, self.meta_data, 0)
         self.loaders['plots'].get_plots()
 
-        if self.chn_coords is not None:
+        if self.chn_coords is not None and self.loaders['align'].xyz_picks is not None:
             # Load the alignment handler
             # TODO Also need to set align_exists here based on presence of xyz_picks
             self.loaders['align'].load_align(self.chn_depths)
@@ -566,6 +586,7 @@ class ShankLoader:
                 self.loaders['align'].align.xyz_samples)
         else:
             self.align_exists = False
+            self.loaders['plots'].slice_plots = Bunch()
 
         self.data_loaded = True
 

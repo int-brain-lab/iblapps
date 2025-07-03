@@ -7,12 +7,35 @@ from pyqtgraph.functions import makeARGB
 
 class ColorBar(pg.GraphicsWidget):
 
-    def __init__(self, cmap_name, cbin=256, parent=None, data=None):
+    def __init__(self, cmap_name, width=20, height=5, plot_item=None, cbin=256, orientation='horizontal'):
         pg.GraphicsWidget.__init__(self)
+
+        # Set dimensions
+        self.width = width
+        self.height = height
+
+        # Set orientation
+        self.orientation = orientation
 
         # Create colour map from matplotlib colourmap name
         self.cmap_name = cmap_name
-        cmap = matplotlib.cm.get_cmap(self.cmap_name)
+        self.map, self.lut, self.grad = self.getColor(self.cmap_name, cbin=cbin)
+
+        # Create plot item to place the colorbar
+        self.plot = plot_item
+        if self.plot:
+            self.plot.setXRange(0, self.width)
+            self.plot.setYRange(0, self.height)
+            self.plot.addItem(self)
+
+        QtGui.QPainter()
+
+        self.ticks = None
+
+
+    @staticmethod
+    def getColor(cmap_name, cbin=256):
+        cmap = matplotlib.cm.get_cmap(cmap_name)
         if type(cmap) == matplotlib.colors.LinearSegmentedColormap:
             cbins = np.linspace(0.0, 1.0, cbin)
             colors = (cmap(cbins)[np.newaxis, :, :3][0]).tolist()
@@ -20,9 +43,19 @@ class ColorBar(pg.GraphicsWidget):
             colors = cmap.colors
         colors = [(np.array(c) * 255).astype(int).tolist() + [255.] for c in colors]
         positions = np.linspace(0, 1, len(colors))
-        self.map = pg.ColorMap(positions, colors)
-        self.lut = self.map.getLookupTable()
-        self.grad = self.map.getGradient()
+        map = pg.ColorMap(positions, colors)
+        lut = map.getLookupTable()
+        grad = map.getGradient()
+
+        return map, lut, grad
+
+
+    def paint(self, p, *args):
+        p.setPen(QtCore.Qt.NoPen)
+        self.grad.setStart(0, self.height / 2)
+        self.grad.setFinalStop(self.width, self.height / 2)
+        p.setBrush(pg.QtGui.QBrush(self.grad))
+        p.drawRect(QtCore.QRectF(0, 0, self.width, self.height))
 
     def getBrush(self, data, levels=None):
         if levels is None:
@@ -34,56 +67,52 @@ class ColorBar(pg.GraphicsWidget):
     def getColourMap(self):
         return self.lut
 
-    def makeColourBar(self, width, height, fig, min=0, max=1, label='', lim=False):
-        self.cbar = HorizontalBar(width, height, self.grad)
-        ax = fig.getAxis('top')
-        ax.setPen('k')
-        ax.setTextPen('k')
-        ax.setStyle(stopAxisAtTick=((True, True)))
-        # labelStyle = {'font-size': '8pt'}
-        ax.setLabel(label)
-        ax.setHeight(30)
-        if lim:
-            ax.setTicks([[(0, str(np.around(min, 2))), (width, str(np.around(max, 2)))]])
+    def setLevels(self, levels, label=None, nticks=2):
+        self.levels = levels
+        self.ticks = self.get_ticks(nticks)
+        self.label = label
+        self.setAxis(label=label)
+
+    def setAxis(self, ticks=None, label=None, loc=None, extent=30):
+
+        if loc is None:
+            loc = 'top' if self.orientation == 'horizontal' else 'left'
+        ticks = ticks or self.ticks
+        ax = self.plot.getAxis(loc)
+        ax.setStyle(stopAxisAtTick=((True, True)), autoExpandTextSpace=True)
+        if self.orientation == 'horizontal':
+            ax.setHeight(extent)
         else:
-            ax.setTicks([[(0, str(np.around(min, 2))), (width / 2,
-                        str(np.around(min + (max - min) / 2, 2))),
-                       (width, str(np.around(max, 2)))],
-                [(width / 4, str(np.around(min + (max - min) / 4, 2))),
-                 (3 * width / 4, str(np.around(min + (3 * (max - min) / 4), 2)))]])
-        fig.setXRange(0, width)
-        fig.setYRange(0, height)
+            ax.setWidth(extent)
+        if ticks:
+            ax.setPen('k')
+            ax.setTextPen('k')
+            ax.setTicks([ticks])
+        else:
+            ax.setTextPen('w')
+            ax.setPen('w')
+        # Note this has to come after the setPen above otherwise overwritten
+        ax.setLabel(label, color='k')
 
-        return self.cbar
+    def get_ticks(self, n=3):
+        """
+        Set ticks on a given axis, either with just min/max if `lim` is True,
+        or evenly spaced `n` ticks otherwise.
+        """
+        extent = self.width if self.orientation == 'horizontal' else self.height
+        offset = (0.005 * extent)
 
+        # Set n number of ticks
+        ticks = []
+        for i in range(n):
+            frac = i / (n - 1)
+            pos = frac * extent
+            val = self.levels[0] + frac * (self.levels[1] - self.levels[0])
+            val = int(val) if np.abs(val) > 1 else np.round(val, 1)
+            if i == 0:
+                pos += offset
+            elif i == n-1:
+                pos -= offset
+            ticks.append((pos, str(val)))
 
-class HorizontalBar(pg.GraphicsWidget):
-    def __init__(self, width, height, grad):
-        pg.GraphicsWidget.__init__(self)
-        self.width = width
-        self.height = height
-        self.grad = grad
-        QtGui.QPainter()
-
-    def paint(self, p, *args):
-        p.setPen(QtCore.Qt.NoPen)
-        self.grad.setStart(0, self.height / 2)
-        self.grad.setFinalStop(self.width, self.height / 2)
-        p.setBrush(pg.QtGui.QBrush(self.grad))
-        p.drawRect(QtCore.QRectF(0, 0, self.width, self.height))
-
-
-class VerticalBar(pg.GraphicsWidget):
-    def __init__(self, width, height, grad):
-        pg.GraphicsWidget.__init__(self)
-        self.width = width
-        self.height = height
-        self.grad = grad
-        QtGui.QPainter()
-
-    def paint(self, p, *args):
-        p.setPen(QtCore.Qt.NoPen)
-        self.grad.setStart(self.width / 2, self.height)
-        self.grad.setFinalStop(self.width / 2, 0)
-        p.setBrush(pg.QtGui.QBrush(self.grad))
-        p.drawRect(QtCore.QRectF(0, 0, self.width, self.height))
+        return ticks

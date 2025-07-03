@@ -18,6 +18,7 @@ def callback(parent):
     align_qc = parent.qc_dialog.align_qc.currentText()
     ephys_qc = parent.qc_dialog.ephys_qc.currentText()
     ephys_desc = [btn.text() for btn in parent.qc_dialog.desc_buttons.buttons() if btn.isChecked()]
+    resolve = parent.qc_dialog.resolve.currentText()
     if parent.loaddata.configs is None:
         upload = parent.loaddata.get_selected_probe().loaders['upload']
     else:
@@ -52,6 +53,17 @@ class QCDialog(QtWidgets.QDialog):
         self.desc_buttons.setExclusive(False)
         self.desc_group = QtWidgets.QGroupBox("Describe problem with recording:")
         self.desc_layout = QtWidgets.QVBoxLayout()
+
+        for i, label in enumerate(CriticalInsertionNote.descriptions_gui):
+            checkbox = QtWidgets.QCheckBox(label)
+            self.desc_buttons.addButton(checkbox, i)
+            self.desc_layout.addWidget(checkbox)
+        self.desc_group.setLayout(self.desc_layout)
+
+        # Force upload option
+        self.resolve_label = QtWidgets.QLabel("Do you want to resolve this alignment with the current alignment?:")
+        self.resolve = QtWidgets.QComboBox()
+        self.resolve.addItems(["No", "Yes"])
 
         for i, label in enumerate(CriticalInsertionNote.descriptions_gui):
             checkbox = QtWidgets.QCheckBox(label)

@@ -197,6 +197,7 @@ class AlignData:
         Scale brain regions along probe track
         """
         self.buffer.next_idx_to_fill()
+
         depths_track = np.sort(np.r_[self.tracks[self.idx_prev][[0, -1]], line_track])
 
         self.tracks[self.idx] = self.ephysalign.feature2track(depths_track,
@@ -211,8 +212,7 @@ class AlignData:
                 self.ephysalign.adjust_extremes_linear(self.features[self.idx], self.tracks[self.idx], extend_feature)
 
         else:
-            self.tracks[self.idx] = self.ephysalign.adjust_extremes_uniform(self.features[self.idx],
-                                                                           self.tracks[self.idx])
+            self.tracks[self.idx] = self.ephysalign.adjust_extremes_uniform(self.features[self.idx], self.tracks[self.idx])
 
     def compute_nearby_boundaries(self):
 

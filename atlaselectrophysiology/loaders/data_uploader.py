@@ -84,7 +84,8 @@ class DataUploaderONE(DataUploader):
         if not key_info:
             user = params.get().ALYX_LOGIN
             date = datetime.now().replace(second=0, microsecond=0).isoformat()
-            data = {date + '_' + user: [feature, track, self.qc_str, self.confidence_str]}
+            self.key_info = date + '_' + user
+            data = {self.key_info: [feature, track, self.qc_str, self.confidence_str]}
         else:
             user = key_info[20:]
             if user_eval:
@@ -108,7 +109,7 @@ class DataUploaderONE(DataUploader):
         patch_dict = {'probe_insertion': self.pid, 'json': json_data}
         self.one.alyx.rest('trajectories', 'partial_update', id=traj[0]['id'], data=patch_dict)
 
-    def get_qc_string(self, align_qc, ephys_qc, ephys_desc):
+    def get_qc_string(self, align_qc, ephys_qc, ephys_desc, force_resolve):
 
         if len(ephys_desc) == 0:
             ephys_desc_str = 'None'
@@ -117,6 +118,7 @@ class DataUploaderONE(DataUploader):
 
         self.qc_str = ephys_qc.upper() + ': ' + ephys_desc_str
         self.confidence_str = f'Confidence: {align_qc}'
+        self.force_resolve = force_resolve
 
         if ephys_qc.upper() == 'CRITICAL':
             critical_note.main_gui(self.pid, reasons_selected=ephys_desc, alyx=self.one.alyx)
@@ -128,11 +130,16 @@ class DataUploaderONE(DataUploader):
         align_qc.load_data(prev_alignments=self.data['alignments'], xyz_picks=self.data['xyz_picks'],
                            depths=self.data['chn_depths'], cluster_chns=self.data['cluster_chns'],
                            chn_coords=self.data['chn_coords'])
-        results = align_qc.run(update=True, upload_alyx=upload_alyx,
-                               upload_flatiron=upload_flatiron)
-        align_qc.update_experimenter_evaluation(prev_alignments=self.data['alignments'])
 
-        self.resolved = results['alignment_resolved']
+        if self.force_resolve:
+            align_qc.resolve_manual(self.key_info, force=True, upload_flatiron=False)
+            self.resolved = True
+        else:
+            results = align_qc.run(update=True, upload_alyx=upload_alyx,
+                                   upload_flatiron=upload_flatiron)
+            self.resolved = results['alignment_resolved']
+
+        align_qc.update_experimenter_evaluation(prev_alignments=self.data['alignments'])
 
         return self.resolved
 

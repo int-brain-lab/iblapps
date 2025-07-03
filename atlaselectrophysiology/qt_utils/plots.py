@@ -106,10 +106,14 @@ def plot_scale_factor(fig_scale, fig_scale_cb, data) -> None:
 
     scale_regions = np.empty((0, 1))
 
-    color_bar = cb.ColorBar('seismic')
-    cbar = color_bar.makeColourBar(20, 5, fig_scale_cb, min=0.5, max=1.5, label='Scale Factor')
-    colours = color_bar.map.mapToQColor(data['scale_factor'])
-    fig_scale_cb.addItem(cbar)
+    cbar = cb.ColorBar('seismic', plot_item=fig_scale_cb)
+    colours = cbar.map.mapToQColor(data['scale_factor'])
+    cbar.setLevels((0, 1.5), label='Scale Factor')
+
+    # color_bar = cb.ColorBar('seismic')
+    # cbar = color_bar.makeColourBar(20, 5, fig_scale_cb, min=0.5, max=1.5, label='Scale Factor')
+    # colours = color_bar.map.mapToQColor(data['scale_factor'])
+    # fig_scale_cb.addItem(cbar)
 
     for ir, reg in enumerate(data['region']):
         region = pg.LinearRegionItem(values=(reg[0], reg[1]),
@@ -249,7 +253,7 @@ def plot_line(fig_line, data: Optional[Dict]) -> None:
     return line
 
 
-def plot_probe(fig_probe, fig_probe_cb, data: Optional[Dict]) -> None:
+def plot_probe(fig_probe, fig_probe_cb, data: Optional[Dict], levels=None) -> None:
     """
     Plot a 2D image representing the probe geometry, including individual channel banks and optional boundaries.
 
@@ -280,11 +284,20 @@ def plot_probe(fig_probe, fig_probe_cb, data: Optional[Dict]) -> None:
     if isinstance(data, ProbeData):
         data = asdict(data)
     # Create colorbar and add to figure
-    color_bar = cb.ColorBar(data['cmap'])
-    lut = color_bar.getColourMap()
-    cbar = color_bar.makeColourBar(20, 5, fig_probe_cb, min=data['levels'][0],
-                                   max=data['levels'][1], label=data['title'], lim=False)
-    fig_probe_cb.addItem(cbar)
+    # color_bar = cb.ColorBar(data['cmap'])
+    # lut = color_bar.getColourMap()
+    # cbar = color_bar.makeColourBar(20, 5, fig_probe_cb, min=data['levels'][0],
+    #                                max=data['levels'][1], label=data['title'], lim=False)
+    # fig_probe_cb.addItem(cbar)
+
+    if levels is None:
+        levels = data['levels']
+    else:
+        levels = levels
+
+    cbar = cb.ColorBar(data['cmap'], plot_item=fig_probe_cb)
+    cbar.setLevels(levels, label=data['title'])
+    lut = cbar.getColourMap()
 
     # Create image plots per shank and add to figure
     image_items = []
@@ -294,7 +307,7 @@ def plot_probe(fig_probe, fig_probe_cb, data: Optional[Dict]) -> None:
         transform = [scale[0], 0., 0., 0., scale[1], 0., offset[0], offset[1], 1.]
         image.setTransform(QtGui.QTransform(*transform))
         image.setLookupTable(lut)
-        image.setLevels((data['levels'][0], data['levels'][1]))
+        image.setLevels((levels[0], levels[1]))
         fig_probe.addItem(image)
         image_items.append(image)
 
@@ -317,7 +330,7 @@ def plot_probe(fig_probe, fig_probe_cb, data: Optional[Dict]) -> None:
 
 
 
-def plot_scatter(fig_img, fig_img_cb,  data: Optional[Dict]) -> None:
+def plot_scatter(fig_img, fig_img_cb,  data: Optional[Dict], levels=None) -> None:
     """
     Plot a 2D scatter plot of electrophysiological data on the figure.
 
@@ -364,17 +377,26 @@ def plot_scatter(fig_img, fig_img_cb,  data: Optional[Dict]) -> None:
     symbol = data['symbol'].tolist()
 
     # Create colorbar and add to figure
-    color_bar = cb.ColorBar(data['cmap'])
-    cbar = color_bar.makeColourBar(20, 5, fig_img_cb, min=np.min(data['levels'][0]),
-                                   max=np.max(data['levels'][1]), label=data['title'])
-    fig_img_cb.addItem(cbar)
+    # color_bar = cb.ColorBar(data['cmap'])
+    # cbar = color_bar.makeColourBar(20, 5, fig_img_cb, min=np.min(data['levels'][0]),
+    #                                max=np.max(data['levels'][1]), label=data['title'])
+    # fig_img_cb.addItem(cbar)
+
+    if levels is None:
+        levels = data['levels']
+    else:
+        levels = levels
+
+    cbar = cb.ColorBar( data['cmap'], plot_item=fig_img_cb)
+    cbar.setLevels(levels, label=data['title'])
 
 
     # Determine brush type based on given data
     if isinstance(np.any(data['colours']), QtGui.QColor):
         brush = data['colours'].tolist()
     else:
-        brush = color_bar.getBrush(data['colours'], levels=list(data['levels']))
+        #brush = color_bar.getBrush(data['colours'], levels=list(data['levels']))
+        brush = cbar.getBrush(data['colours'], levels=list(levels))
 
     # Create scatter plot and add to figure
     plot = pg.ScatterPlotItem()
@@ -391,7 +413,7 @@ def plot_scatter(fig_img, fig_img_cb,  data: Optional[Dict]) -> None:
     return plot, cbar
 
 
-def plot_image(fig_img, fig_img_cb, data: Optional[Dict]) -> None:
+def plot_image(fig_img, fig_img_cb, data: Optional[Dict], levels=None) -> None:
     """
     Plot a 2D image of electrophysiology data
 
@@ -425,6 +447,10 @@ def plot_image(fig_img, fig_img_cb, data: Optional[Dict]) -> None:
 
     # TODO check if I need this
     # qt_utils.set_axis(self.fig_img_cb, 'top', pen='w')
+    if levels is None:
+        levels = data['levels']
+    else:
+        levels = levels
 
     # Create image item and add to figure
     image = pg.ImageItem()
@@ -436,13 +462,20 @@ def plot_image(fig_img, fig_img_cb, data: Optional[Dict]) -> None:
     # If applicable create colorbar and add to figure
     cmap = data.get('cmap', [])
     if cmap:
-        color_bar = cb.ColorBar(data['cmap'])
-        lut = color_bar.getColourMap()
+        # color_bar = cb.ColorBar(data['cmap'])
+        # lut = color_bar.getColourMap()
+        # image.setLookupTable(lut)
+        # image.setLevels((data['levels'][0], data['levels'][1]))
+        # cbar = color_bar.makeColourBar(20, 5, fig_img_cb, min=data['levels'][0],
+        #                                max=data['levels'][1], label=data['title'])
+        # fig_img_cb.addItem(cbar)
+
+        cbar = cb.ColorBar( data['cmap'], plot_item=fig_img_cb)
+        lut = cbar.getColourMap()
         image.setLookupTable(lut)
-        image.setLevels((data['levels'][0], data['levels'][1]))
-        cbar = color_bar.makeColourBar(20, 5, fig_img_cb, min=data['levels'][0],
-                                       max=data['levels'][1], label=data['title'])
-        fig_img_cb.addItem(cbar)
+        image.setLevels((levels[0], levels[1]))
+        cbar.setLevels(levels, label=data['title'])
+
     else:
         image.setLevels((1, 0))
 

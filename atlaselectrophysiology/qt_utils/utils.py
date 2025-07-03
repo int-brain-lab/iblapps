@@ -14,9 +14,10 @@ kpen_solid = pg.mkPen(color='k', style=QtCore.Qt.SolidLine, width=2)
 bpen_solid = pg.mkPen(color='b', style=QtCore.Qt.SolidLine, width=3)
 
 
+#2c3e50
 tab_style = {
     'selected': """QLabel {
-                background-color: #2c3e50;
+                background-color: #c92d0e;
                 border: 1px solid lightgrey;
                 color: white;
                 padding: 6px;
@@ -322,14 +323,16 @@ def create_combobox(function, editable=False):
     model = QtGui.QStandardItemModel()
     combobox = QtWidgets.QComboBox()
     combobox.setModel(model)
+    combobox.activated.connect(function)
     if editable:
-        combobox.setLineEdit(QtWidgets.QLineEdit())
+        line_edit = QtWidgets.QLineEdit()
+        combobox.setLineEdit(line_edit)
         completer = QtWidgets.QCompleter()
         completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
         combobox.setCompleter(completer)
         combobox.completer().setModel(model)
 
-    combobox.activated.connect(function)
+        return model, combobox, line_edit, completer
 
     return model, combobox
 
@@ -339,8 +342,8 @@ def find_actions(text, action_group):
             return action
 
 
-def add_actions(options, function, menu, group, set_checked=True):
-
+def add_actions(options, function, menu, group, set_checked=True, **kwargs):
+    data_only = kwargs.get('data_only', False)
     for i, option in enumerate(options):
         if set_checked:
             checked = True if i == 0 else False
@@ -348,7 +351,10 @@ def add_actions(options, function, menu, group, set_checked=True):
             checked = False
 
         action = QtWidgets.QAction(option, checkable=True, checked=checked)
-        action.triggered.connect(lambda _, o=option: function(o))
+        if data_only:
+            action.triggered.connect(lambda _, o=option: function(o, data_only=data_only))
+        else:
+            action.triggered.connect(lambda _, o=option: function(o))
         menu.addAction(action)
         group.addAction(action)
         if i == 0:

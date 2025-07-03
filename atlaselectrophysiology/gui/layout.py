@@ -5,6 +5,7 @@ from atlaselectrophysiology.qt_utils import utils
 from atlaselectrophysiology.qt_utils.AdaptedAxisItem import replace_axis
 from atlaselectrophysiology.qt_utils.widgets import GridTabSwitcher
 from atlaselectrophysiology.plugins.cluster_popup import setup as setup_cluster_popup
+from atlaselectrophysiology.plugins.region_tree import setup as setup_region_tree
 from atlaselectrophysiology.plugins.qc_dialog import setup as setup_qc_dialog
 from collections import defaultdict
 
@@ -48,12 +49,13 @@ class Setup():
         self.main_splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         self.main_splitter.addWidget(self.shank_tabs)
         self.main_splitter.addWidget(container)
-        self.main_splitter.setStretchFactor(0, 3)
+        self.main_splitter.setStretchFactor(0, 2)
         self.main_splitter.setStretchFactor(1, 1)
-
 
     def init_display(self):
         self.setCentralWidget(self.main_splitter)
+        total_width = self.main_splitter.width()
+        self.main_splitter.setSizes([int(total_width * 0.7), int(total_width * 0.3)])
 
     # TODO
     def clear_tabs(self):
@@ -144,7 +146,7 @@ class Setup():
         if not self.offline:
             # If offline mode is False, read in Subject and Session options from Alyx
             # Drop down list to choose subject
-            self.subj_list, self.subj_combobox = utils.create_combobox(self.on_subject_selected, editable=True)
+            self.subj_list, self.subj_combobox, self.subj_edit, self.subj_completer = utils.create_combobox(self.on_subject_selected, editable=True)
 
             # Drop down list to choose session
             self.sess_list, self.sess_combobox = utils.create_combobox(self.on_session_selected)
@@ -243,7 +245,7 @@ class Setup():
         self.lut_layout = pg.GraphicsLayout()
         self.slice_LUT = pg.HistogramLUTItem()
         self.slice_LUT.axis.hide()
-        self.slice_LUT.sigLevelsChanged.connect(self.update_levels)
+        self.slice_LUT.sigLevelsChanged.connect(self.update_lut_levels)
         self.lut_layout.addItem(self.slice_LUT)
         lut_area.addItem(self.lut_layout)
 
@@ -391,7 +393,8 @@ class Setup():
         items.fig_hist_area.ci.layout.setSpacing(0)
         items.fig_hist_area.setMouseTracking(True)
         items.fig_hist_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
-        items.fig_hist_area.scene().sigMouseHover.connect(self.on_mouse_hover)
+        items.fig_hist_area.scene().sigMouseHover.connect(lambda hover_items, n=name, i=idx, c=config:
+                                                          self.on_mouse_hover(hover_items, n, i, c))
 
         items.fig_hist_extra_yaxis = pg.PlotItem()
         items.fig_hist_extra_yaxis.setMouseEnabled(x=False, y=False)
@@ -456,7 +459,8 @@ class Setup():
         fig_data_area.ci.setContentsMargins(0, 0, 0, 0)
         fig_data_area.ci.layout.setSpacing(0)
         fig_data_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
-        fig_data_area.scene().sigMouseHover.connect(self.on_mouse_hover)
+        fig_data_area.scene().sigMouseHover.connect(lambda hover_items, n=items.name, i=idx, c=items.config:
+                                                    self.on_mouse_hover(hover_items, n, i, c))
         fig_data_layout = pg.GraphicsLayout()
 
         fig_data_layout.addItem(items.fig_img_cb, 0, 0)
@@ -489,19 +493,37 @@ class Setup():
         items_d.fig_data_ax = utils.set_axis(items_d.fig_img, 'left', show=False)
         items_q.fig_data_ax = utils.set_axis(items_q.fig_img, 'left', label='Distance from probe tip (uV)')
 
+
         fig_data_area = pg.GraphicsLayoutWidget(border=None)
         fig_data_area.setContentsMargins(0, 0, 0, 0)
         fig_data_area.ci.setContentsMargins(0, 0, 0, 0)
         fig_data_area.ci.layout.setSpacing(0)
         fig_data_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
-        fig_data_area.scene().sigMouseHover.connect(self.on_mouse_hover)
+        fig_data_area.scene().sigMouseHover.connect(lambda hover_items, n=items_q.name, i=idx, c='both':
+                                                    self.on_mouse_hover(hover_items, n, i, c))
         fig_data_layout = pg.GraphicsLayout()
         fig_data_layout.setSpacing(0)
 
-        fig_data_layout.addItem(items_q.fig_img_cb, 0, 0)
-        fig_data_layout.addItem(items_d.fig_img_cb, 0, 1)
-        fig_data_layout.addItem(items_q.fig_probe_cb, 0, 2, 1, 2)
-        fig_data_layout.addItem(items_d.fig_probe_cb, 0, 4, 1, 2)
+        # TODO maybe in future look into this
+        # fig_dual_img_cb = pg.ColorBarItem(orientation='horizontal')
+        fig_dual_img_cb = pg.PlotItem()
+        fig_dual_img_cb.setMouseEnabled(x=False, y=False)
+        fig_dual_img_cb.setMaximumHeight(70)
+        utils.set_axis(fig_dual_img_cb, 'left', pen='w')
+        utils.set_axis(fig_dual_img_cb, 'top', pen='w')
+        items_d.fig_dual_img_cb = fig_dual_img_cb
+        items_q.fig_dual_img_cb = fig_dual_img_cb
+
+        fig_dual_probe_cb = pg.PlotItem()
+        fig_dual_probe_cb.setMouseEnabled(x=False, y=False)
+        fig_dual_probe_cb.setMaximumHeight(70)
+        utils.set_axis(fig_dual_probe_cb, 'left', pen='w')
+        utils.set_axis(fig_dual_probe_cb, 'top', pen='w')
+        items_d.fig_dual_probe_cb = fig_dual_probe_cb
+        items_q.fig_dual_probe_cb = fig_dual_probe_cb
+
+        fig_data_layout.addItem(fig_dual_img_cb, 0, 0, 1, 2)
+        fig_data_layout.addItem(fig_dual_probe_cb, 0, 3, 1, 3)
         fig_data_layout.addItem(items_q.fig_img, 1, 0)
         fig_data_layout.addItem(items_d.fig_img, 1, 1)
         fig_data_layout.addItem(items_q.fig_line, 1, 2)
@@ -536,30 +558,32 @@ class Setup():
 
         self.img_options.clear()
         utils.remove_actions(self.img_options_group)
-        self.img_init = utils.add_actions(self.loaddata.image_keys, self.plot_image_panels, self.img_options, self.img_options_group)
+        self.img_init = utils.add_actions(self.loaddata.image_keys, self.plot_image_panels, self.img_options, self.img_options_group,
+                                          data_only=True)
 
         # Attach scatter plot options to this menu bar
         _ = utils.add_actions(
-            self.loaddata.scatter_keys, self.plot_scatter_panels, self.img_options, self.img_options_group, set_checked=False)
+            self.loaddata.scatter_keys, self.plot_scatter_panels, self.img_options, self.img_options_group, set_checked=False,
+            data_only=True)
 
         # Add menu bar for 1D line plot options
         self.line_options.clear()
         utils.remove_actions(self.line_options_group)
         self.line_init = utils.add_actions(
-            self.loaddata.line_keys, self.plot_line_panels, self.line_options, self.line_options_group)
+            self.loaddata.line_keys, self.plot_line_panels, self.line_options, self.line_options_group, data_only=True)
 
         # Add menu bar for 2D probe plot options
         self.probe_options.clear()
         utils.remove_actions(self.probe_options_group)
         self.probe_init = utils.add_actions(
-            self.loaddata.probe_keys, self.plot_probe_panels, self.probe_options, self.probe_options_group)
+            self.loaddata.probe_keys, self.plot_probe_panels, self.probe_options, self.probe_options_group, data_only=True)
 
 
         # Add menu bar for coronal slice plot options
         self.slice_options.clear()
         utils.remove_actions(self.slice_options_group)
         self.slice_init = utils.add_actions(
-            self.loaddata.slice_keys, self.plot_slice_panels, self.slice_options, self.slice_options_group)
+            self.loaddata.slice_keys, self.plot_slice_panels, self.slice_options, self.slice_options_group, data_only=True)
 
 
         # Add menu bar for unit filtering options
@@ -567,7 +591,7 @@ class Setup():
         self.filter_options.clear()
         utils.remove_actions(self.filter_options_group)
         self.unit_init = utils.add_actions(
-        ['All', 'KS good', 'KS mua', 'IBL good'], self.filter_unit_pressed, self.filter_options, self.filter_options_group)
+        ['All', 'KS good', 'KS mua', 'IBL good'], self.filter_unit_pressed, self.filter_options, self.filter_options_group, data_only=True)
 
 
     def init_menubar(self):
@@ -647,12 +671,12 @@ class Setup():
             'Toggle Slice Plots':
                 {'shortcut': 'Alt+4', 'callback': lambda:
                 utils.toggle_plots(self.slice_options_group), 'menu': display_options},
-            'View 1': # Shortcuts to switch order of 3 panels in ephys plot
-                {'shortcut': 'Shift+1', 'callback': lambda: self.set_view(view=1), 'menu': display_options},
-            'View 2':
-                {'shortcut': 'Shift+2', 'callback': lambda: self.set_view(view=2), 'menu': display_options},
-            'View 3':
-                {'shortcut': 'Shift+3', 'callback': lambda: self.set_view(view=3), 'menu': display_options},
+            # 'View 1': # Shortcuts to switch order of 3 panels in ephys plot
+            #     {'shortcut': 'Shift+1', 'callback': lambda: self.set_view(view=1), 'menu': display_options},
+            # 'View 2':
+            #     {'shortcut': 'Shift+2', 'callback': lambda: self.set_view(view=2), 'menu': display_options},
+            # 'View 3':
+            #     {'shortcut': 'Shift+3', 'callback': lambda: self.set_view(view=3), 'menu': display_options},
             'Reset Axis': # Shortcut to reset axis on figures
                 {'shortcut': 'Shift+A', 'callback': self.reset_axis_button_pressed, 'menu': display_options},
             'Hide/Show Labels': # Shortcut to hide/show region labels
@@ -671,6 +695,8 @@ class Setup():
                 {'shortcut': 'Shift+Right', 'callback': lambda: self.loop_shanks(1), 'menu': display_options},
             'Previous shank':  # Option to change histology regions from Allen to Franklin Paxinos
                 {'shortcut': 'Shift+Left', 'callback': lambda: self.loop_shanks(-1), 'menu': display_options},
+            'Normalize':  # Option to change histology regions from Allen to Franklin Paxinos
+                {'shortcut': 'Shift+N', 'callback': self.on_config_level_changed, 'menu': display_options},
 
         }
 
@@ -690,7 +716,7 @@ class Setup():
 
         # TODO
         setup_cluster_popup(self)
-        # setup_region_tree(self)
+        setup_region_tree(self)
         # setup_export_pngs(self)
         if not self.offline:
             # setup_nearby_sessions(self)

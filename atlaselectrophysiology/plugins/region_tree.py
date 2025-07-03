@@ -56,17 +56,26 @@ def get_region_description(allen_tree, region_idx):
 
 def callback(parent):
 
-    if parent.selected_region:
-        idx = np.where(parent.hist_regions['left'] == parent.selected_region)[0]
+    if parent.hover_region:
+        if parent.hover_config:
+            items = parent.shank_items[parent.hover_shank][parent.hover_config]
+        else:
+            items = parent.shank_items[parent.hover_shank]
+
+        idx = np.where(items.hist_regions['left'] == parent.hover_region)[0]
         if not np.any(idx):
-            idx = np.where(parent.hist_regions['right'] == parent.selected_region)[0]
+            idx = np.where(items.hist_regions['right'] == parent.hover_region)[0]
         if not np.any(idx):
             idx = np.array([0])
 
     parent.label_win = RegionLookup._get_or_create('Structure Info', parent=parent)
 
     if idx:
-        region = parent.shank.align.ephysalign.region_id[idx[0]][0]
+        if parent.hover_config:
+            region = parent.loaddata.shanks[parent.hover_shank][parent.hover_config].loaders['align'].align.ephysalign.region_id[idx[0]][0]
+        else:
+            region = parent.loaddata.shanks[parent.hover_shank].loaders['align'].align.ephysalign.region_id[idx[0]][0]
+
         parent.label_win.label_selected(region)
 
 

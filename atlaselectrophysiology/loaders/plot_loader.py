@@ -744,7 +744,7 @@ class PlotLoader:
                 levels=probe_levels,
                 cmap='viridis',
                 xrange=np.array([0 * BNK_SIZE, (self.N_BNK) * BNK_SIZE]),
-                title=f"{freq[0]} - {freq[1]} Hz (dB)"
+                title=f"{freq[0]}-{freq[1]} Hz (dB)"
             )
             data_probe.update({f"{freq[0]} - {freq[1]} Hz": probe})
 

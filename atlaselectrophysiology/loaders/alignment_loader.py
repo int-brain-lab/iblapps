@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from datetime import timedelta
 import json
 import numpy as np
 
@@ -90,7 +91,7 @@ class AlignmentLoaderONE(AlignmentLoader):
 
     def load_alignments(self):
         traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.insertion['id'],
-                                  provenance='Ephys aligned histology track', no_cache=True)
+                                  provenance='Ephys aligned histology track', expires=timedelta(days=1))# no_cache=True) #TODO put back
         if traj:
             return traj[0]['json']
 
@@ -115,7 +116,9 @@ class AlignmentLoaderLocal(AlignmentLoader):
             f'*xyz_picks_shank{self.shank_idx + 1}.json'
         xyz_file = sorted(self.data_path.glob(xyz_file_name))
 
-        assert (len(xyz_file) == 1)
+        #assert (len(xyz_file) == 1)
+        if len(xyz_file) == 0:
+            return
 
         with open(xyz_file[0], "r") as f:
             user_picks = json.load(f)

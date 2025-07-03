@@ -74,6 +74,8 @@ class SliceLoader(ABC):
             'Annotation': self.get_slice(xyz, self.brain_atlas.label, annotation=True)
         }
 
+        slices['Annotation']['label'] = True
+
         for key, vol_path in self.hist_paths.items():
             try:
                 vol = self.load_volume(vol_path)
