@@ -1,4 +1,4 @@
-from atlaselectrophysiology.qt_utils.utils import PopupWindow
+from atlaselectrophysiology.qt_utils.widgets import PopupWindow
 from qtpy import QtWidgets
 
 PLUGIN_NAME = "Session Notes"

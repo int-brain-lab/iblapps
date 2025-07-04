@@ -109,23 +109,22 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             av.setWindowTitle(title)
         return av
 
-    def __init__(self, offline=False, csv=False):
+    def __init__(self, offline=False, csv=None):
         super(MainWindow, self).__init__()
 
+        self.csv = False if csv is None else csv
+        self.offline = offline
         self.init_variables()
-        self.init_layout(offline=offline)
+        self.init_layout()
 
         if offline:
             self.loaddata = ProbeLoaderLocal()
-            self.offline = True
         elif csv:
             self.loaddata = ProbeLoaderCSV(csv)
             utils.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
-            self.offline = False
         else:
             self.loaddata = ProbeLoaderONE()
             utils.populate_lists(self.loaddata.get_subjects(), self.subj_list, self.subj_combobox)
-            self.offline = False
 
     def init_variables(self):
         """
@@ -168,8 +167,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
         # TODO make sure this works as expected
         # Keep track of normalization
-        self.level_config = 'both'
-        self.level_idx = 0
 
     @shank_loop
     def init_shank_items(self, items: Union[Dict, Bunch], data_only=True, **kwargs):
@@ -587,16 +584,16 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
 
     def get_normalised_levels(self, plot_group, plot_type):
-        if self.level_config == 'both' or self.level_config is None:
+        if self.normalise_levels == 'both' or self.normalise_levels is None:
             return Bunch.fromkeys(self.all_shanks, None)
         levels = Bunch()
         for shank in self.all_shanks:
             # Try to get data from the primary config
-            data = self.loaddata.get_plot(shank, plot_group, plot_type, self.level_config)
+            data = self.loaddata.get_plot(shank, plot_group, plot_type, self.normalise_levels)
             # If no data found, fallback to the other config
             if not data:
-                other_config = next(c for c in self.loaddata.configs if c != self.level_config)
-                data = self.loaddata.get_plot(shank, plot_group, plot_type, self.level_config)
+                other_config = next(c for c in self.loaddata.configs if c != self.normalise_levels)
+                data = self.loaddata.get_plot(shank, plot_group, plot_type, other_config)
 
             levels[shank] = data.levels if data else None
 
@@ -679,8 +676,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.config_list.clear()
         self.loaddata.get_config(0)
         shanks = self.loaddata.get_shanks(idx)
-        if len(shanks) > 1:
-            utils.populate_lists(shanks, self.shank_list, self.shank_combobox)
+        # if len(shanks) > 1:
+        utils.populate_lists(shanks, self.shank_list, self.shank_combobox)
         self.on_shank_selected(0)
         self.data_button.setStyleSheet(utils.button_style['activated'])
 
@@ -708,8 +705,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
     def on_config_selected(self, idx, init=False):
 
         self.loaddata.get_config(idx)
-        self.level_idx = 0
-        self.level_config = self.loaddata.selected_config
+        self.normalise_idx = 0
+        self.normalise_levels = self.loaddata.selected_config
         self.setup(init=init)
 
     def on_folder_selected(self):
@@ -740,7 +737,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.selected_shank = self.loaddata.selected_shank
         self.selected_idx = self.loaddata.shank_idx
         self.populate_menu_bar()
-        utils.populate_lists(self.loaddata.possible_configs, self.config_list, self.config_combobox)
+        if self.csv:
+            utils.populate_lists(self.loaddata.possible_configs, self.config_list, self.config_combobox)
 
         self.fix_reference_colours = True if len(self.all_shanks) > 1 else False
 
@@ -748,6 +746,9 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
         self.init_display()
         self.data_button.setStyleSheet(utils.button_style['deactivated'])
+
+        self.raise_()
+        self.activateWindow()
 
         print(time.time() - start)
 
@@ -1253,8 +1254,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         None
         """
         # Change the display of the histology slices
-        print('toggling')
-        print(self.shank_tabs.grid_layout)
         self.hist_tabs.toggle_layout()
         self.hist_tabs.tab_widget.setCurrentIndex(self.selected_idx)
         # Change the display of the shank displays
@@ -1279,13 +1278,13 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.hist_tabs.tab_widget.setCurrentIndex(idx)
         self.shank_tabs.tab_widget.blockSignals(False)
 
-    # TODO clean up
-    def on_config_level_changed(self):
 
-        self.level_idx += 1
-        idx = np.mod(self.level_idx, len(self.loaddata.possible_configs))
-        self.level_config = self.loaddata.possible_configs[idx]
-        print(self.level_config)
+    def on_normalise_levels(self):
+        if len(self.loaddata.possible_configs) == 0:
+            return
+        self.normalise_idx += 1
+        idx = np.mod(self.normalise_idx, len(self.loaddata.possible_configs))
+        self.normalise_levels = self.loaddata.possible_configs[idx]
         utils.find_actions(self.img_init, self.img_options_group).trigger()
         utils.find_actions(self.probe_init, self.probe_options_group).trigger()
 

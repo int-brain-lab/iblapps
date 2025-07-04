@@ -247,6 +247,9 @@ class ProbeLoaderONE(ProbeLoader):
 
         return list(shanks)
 
+    def get_config(self, idx):
+        return
+
     def download_histology(self):
         _, hist_path = download_histology_data(self.subj, self.lab)
         self.slice_loader = NrrdSliceLoader(hist_path, self.brain_atlas)
@@ -556,6 +559,7 @@ class ProbeLoaderLocal(ProbeLoader):
             loaders['data'] = DataLoaderLocal(self.folder_path, CollectionData())
             loaders['align'] = AlignmentLoaderLocal(self.folder_path, ishank, self.n_shanks, self.brain_atlas)
             loaders['upload'] = DataUploaderLocal(self.folder_path, ishank, self.n_shanks, self.brain_atlas)
+            loaders['ephys'] = SpikeGLXLoaderLocal(self.folder_path, '')
 
             self.shanks[f'shank_{ishank}'] = ShankLoader(loaders)
 

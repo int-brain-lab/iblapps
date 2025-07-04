@@ -15,11 +15,10 @@ pg.setConfigOption('foreground', 'k')
 
 class Setup():
 
-    def init_layout(self, offline=False):
+    def init_layout(self):
         self.resize(1600, 800)
         self.setWindowTitle('Electrophysiology Atlas')
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        self.offline = offline
 
         self.menu_bar = QtWidgets.QMenuBar(self)
         self.menu_bar.setNativeMenuBar(False)
@@ -146,7 +145,7 @@ class Setup():
         if not self.offline:
             # If offline mode is False, read in Subject and Session options from Alyx
             # Drop down list to choose subject
-            self.subj_list, self.subj_combobox = utils.create_combobox(self.on_subject_selected, editable=False)
+            self.subj_list, self.subj_combobox, _, _ = utils.create_combobox(self.on_subject_selected, editable=True)
 
             # Drop down list to choose session
             self.sess_list, self.sess_combobox = utils.create_combobox(self.on_session_selected)
@@ -184,7 +183,8 @@ class Setup():
             self.selection_layout.addWidget(self.shank_combobox)
             self.selection_layout.addWidget(self.align_combobox)
             self.selection_layout.addWidget(self.data_button)
-            self.selection_layout.addWidget(self.config_combobox)
+            if self.csv:
+                self.selection_layout.addWidget(self.config_combobox)
         else:
             self.selection_layout.addWidget(self.folder_line)
             self.selection_layout.addWidget(self.folder_button)
@@ -350,12 +350,12 @@ class Setup():
         utils.set_axis(items.fig_hist, 'bottom', pen='w')
 
         # This is the solution from pyqtgraph people, but doesn't show ticks
-        # self.fig_hist.showGrid(False, True, 0)
+        items.fig_hist.showGrid(False, True, 0)
 
         replace_axis(items.fig_hist)
         items.ax_hist = utils.set_axis(items.fig_hist, 'left', pen=None)
         items.ax_hist.setWidth(0)
-        items.ax_hist.setStyle(tickTextOffset=-70)
+        items.ax_hist.setStyle(tickTextOffset=-60)
 
         items.fig_scale = pg.PlotItem()
         items.fig_scale.setMaximumWidth(50)
@@ -381,10 +381,11 @@ class Setup():
                                      max=self.probe_top + self.probe_extra, padding=self.pad)
         utils.set_axis(items.fig_hist_ref, 'bottom', pen='w')
         utils.set_axis(items.fig_hist_ref, 'left', show=False)
+        items.fig_hist_ref.showGrid(False, True, 0)
         replace_axis(items.fig_hist_ref, orientation='right', pos=(2, 2))
         items.ax_hist_ref = utils.set_axis(items.fig_hist_ref, 'right', pen=None)
         items.ax_hist_ref.setWidth(0)
-        items.ax_hist_ref.setStyle(tickTextOffset=-70)
+        items.ax_hist_ref.setStyle(tickTextOffset=-60)
 
         items.fig_hist_area = pg.GraphicsLayoutWidget(border=None)
         items.fig_hist_area.setContentsMargins(0, 0, 0, 0)
@@ -417,6 +418,7 @@ class Setup():
         items.fig_hist_layout.layout.setColumnStretchFactor(3, 4)
         items.fig_hist_layout.layout.setRowStretchFactor(0, 1)
         items.fig_hist_layout.layout.setRowStretchFactor(1, 10)
+        items.fig_hist_layout.setSpacing(0)
         items.fig_hist_area.addItem(items.fig_hist_layout)
 
         # Figure to show coronal slice through the brain
@@ -686,14 +688,14 @@ class Setup():
                 {'shortcut': 'Shift+H', 'callback': self.toggle_reference_lines, 'menu': display_options},
             'Hide/Show Channels': # Shortcut to hide/show reference lines and channels on slice image
                 {'shortcut': 'Shift+C', 'callback': self.toggle_channels, 'menu': display_options},
-            'Toggle layout':  # Option to change histology regions from Allen to Franklin Paxinos
+            'Toggle layout':
                 {'shortcut': 'T', 'callback': self.toggle_layout, 'menu': display_options},
-            'Next shank':  # Option to change histology regions from Allen to Franklin Paxinos
+            'Next shank':
                 {'shortcut': 'Shift+Right', 'callback': lambda: self.loop_shanks(1), 'menu': display_options},
-            'Previous shank':  # Option to change histology regions from Allen to Franklin Paxinos
+            'Previous shank':
                 {'shortcut': 'Shift+Left', 'callback': lambda: self.loop_shanks(-1), 'menu': display_options},
-            'Normalize':  # Option to change histology regions from Allen to Franklin Paxinos
-                {'shortcut': 'Shift+N', 'callback': self.on_config_level_changed, 'menu': display_options},
+            'Normalize':
+                {'shortcut': 'Shift+N', 'callback': self.on_normalise_levels, 'menu': display_options},
 
         }
 

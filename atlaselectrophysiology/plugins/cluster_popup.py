@@ -1,4 +1,5 @@
-from atlaselectrophysiology.qt_utils.utils import PopupWindow, set_axis
+from atlaselectrophysiology.qt_utils.utils import set_axis
+from atlaselectrophysiology.qt_utils.widgets import PopupWindow
 import pyqtgraph as pg
 from qtpy import QtCore, QtGui, QtWidgets
 import numpy as np
@@ -17,11 +18,14 @@ def setup(parent):
 
     action = QtWidgets.QAction(f'Minimise/Show {PLUGIN_NAME}', parent)
     action.setShortcut('M')
+    action.setShortcutContext(QtCore.Qt.ApplicationShortcut)
+
     action.triggered.connect(parent.plugins[PLUGIN_NAME]['loader'].minimise_popups)
     plugin_menu.addAction(action)
 
     action = QtWidgets.QAction(f'Close {PLUGIN_NAME}', parent)
     action.setShortcut('Alt+X')
+    action.setShortcutContext(QtCore.Qt.ApplicationShortcut)
     action.triggered.connect(parent.plugins[PLUGIN_NAME]['loader'].close_popups)
     plugin_menu.addAction(action)
 
@@ -56,20 +60,18 @@ class ClusterPopups:
         name = f'{shank}_{config}' if config else shank
         clust_popup = ClusterPopup._get_or_create(f'{name}: cluster {clust_no}', data=data, parent=self.parent)
         clust_popup.closed.connect(self.popup_closed)
-        clust_popup.moved.connect(self.popup_moved)
+        clust_popup.leaveWidget.connect(self.popup_left)
+        clust_popup.enterWidget.connect(self.popup_entered)
         self.cluster_popups.append(clust_popup)
-        self.parent.activateWindow()
 
     def minimise_popups(self):
         self.popup_status = not self.popup_status
         if self.popup_status:
             for pop in self.cluster_popups:
                 pop.showNormal()
-                pop.activateWindow()
         else:
             for pop in self.cluster_popups:
                 pop.showMinimized()
-        self.parent.activateWindow()
 
     def close_popups(self):
         for pop in self.cluster_popups:
@@ -78,11 +80,17 @@ class ClusterPopups:
         self.cluster_popups = []
 
     def popup_closed(self, popup):
-        popup_idx = [iP for iP, pop in enumerate(self.cluster_popups) if pop == popup][0]
-        self.cluster_popups.pop(popup_idx)
+        if len(self.cluster_popups) > 0:
+            popup_idx = [iP for iP, pop in enumerate(self.cluster_popups) if pop == popup][0]
+            self.cluster_popups.pop(popup_idx)
 
-    def popup_moved(self):
+    def popup_left(self):
+        self.parent.raise_()
         self.parent.activateWindow()
+
+    def popup_entered(self, pop):
+        pop.raise_()
+        pop.activateWindow()
 
     def reset(self):
         self.close_popups()

@@ -1,9 +1,7 @@
+from abc import ABC, abstractmethod
 from qtpy import QtCore, QtGui, QtWidgets
-
-
-
-
-
+import pyqtgraph as pg
+import random
 
 
 class GridTabSwitcher(QtWidgets.QWidget):
@@ -144,3 +142,69 @@ class GridTabSwitcher(QtWidgets.QWidget):
 
         self.grid_layout = not self.grid_layout
         self.tab_widget.blockSignals(False)
+
+
+
+class PopupWindow(QtWidgets.QWidget):
+    closed = QtCore.Signal(QtWidgets.QWidget)
+    leaveWidget = QtCore.Signal(QtWidgets.QWidget)
+    enterWidget = QtCore.Signal(QtWidgets.QWidget)
+
+    @classmethod
+    def _instances(cls):
+        app = QtWidgets.QApplication.instance()
+        return [w for w in app.topLevelWidgets() if isinstance(w, cls)]
+
+    @classmethod
+    def _get_or_create(cls, title: str, **kwargs):
+        window = next((w for w in cls._instances() if w.isVisible() and w.windowTitle() == title), None)
+        if window is None:
+            window = cls(title, **kwargs)
+        else:
+            window.showNormal()
+            window.activateWindow()
+        return window
+
+    def __init__(self, title, parent=None, size=(300, 300), graphics=True):
+        super(PopupWindow, self).__init__(parent)
+        self.setWindowFlags(QtCore.Qt.Window | QtCore.Qt.WindowStaysOnTopHint)
+        self.resize(*size)
+        self.move(random.randrange(30) + 1000, random.randrange(30) + 200)
+
+        if graphics:
+            self.popup_widget = pg.GraphicsLayoutWidget()
+        else:
+            self.popup_widget = QtWidgets.QWidget()
+            self.layout = QtWidgets.QGridLayout()
+            self.popup_widget.setLayout(self.layout)
+
+        # Top-level layout for the whole popup window
+        self.main_layout = QtWidgets.QVBoxLayout()
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.addWidget(self.popup_widget)
+        self.setLayout(self.main_layout)
+
+        # If parent is destroyed, close this popup
+        if parent is not None:
+            parent.destroyed.connect(self.close)
+
+        self.setWindowTitle(title)
+        self.setup()
+        self.show()
+
+    @abstractmethod
+    def setup(self):
+        """Abstract method to be implemented by subclasses."""
+        pass
+
+    def closeEvent(self, event):
+        self.closed.emit(self)
+        super().closeEvent(event)
+
+    def leaveEvent(self, event):
+        self.leaveWidget.emit(self)
+        super().leaveEvent(event)
+
+    def enterEvent(self, event):
+        self.enterWidget.emit(self)
+        super().leaveEvent(event)
