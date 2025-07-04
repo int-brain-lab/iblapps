@@ -183,6 +183,9 @@ class ProbeLoader(ABC):
         match = re.match(r'(probe\d+)', shank_label)
         return match.group(1) if match else shank_label
 
+    def get_config(self, idx):
+        pass
+
     # Methods that must be implemented
     @abstractmethod
     def get_info(self, *args):
@@ -512,7 +515,8 @@ class ProbeLoaderLocal(ProbeLoader):
         super().__init__(brain_atlas)
 
     def get_info(self, idx):
-        self.probe_label = f'shank_{self.shank_labels[idx]}'
+        self.selected_shank = f'shank_{self.shank_labels[idx]}'
+        self.current_shank = self.selected_shank
         self.shank_idx = idx
 
     def get_shanks(self, folder_path):

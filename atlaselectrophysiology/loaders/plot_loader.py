@@ -15,15 +15,14 @@ logger = logging.getLogger(__name__)
 np.seterr(divide='ignore', invalid='ignore')
 
 # TODO docstrings and typing and logging
-# TODO make sure the cluster idx for waveforms and autocorrelogram makes sense
 # TODO decorator for when data doesn't exist
 # TODO arrange channels 2 banks when we have metadata and not channels data
 # TODO ap rms do we need to apply all this median subtraction etc?
 
 
 BNK_SIZE = 10
-AUTOCORR_BIN_SIZE = 0.25 / 1000
-AUTOCORR_WIN_SIZE = 10 / 1000
+AUTOCORR_BIN_SIZE = 0.5 / 1000
+AUTOCORR_WIN_SIZE = 20 / 1000
 
 FS = 30000
 
@@ -94,24 +93,36 @@ TBIN = 0.05
 DBIN = 5
 
 
-def compute_spike_average(spikes):
-    # Hack!
+def compute_spike_average(spikes, clusters):
 
+    # Remove exists key for pandas operation
     exists = spikes.pop('exists')
     spike_df = spikes.to_df().groupby('clusters')
     avgs = spike_df.agg(['mean', 'count'])
-    fr = avgs['depths']['count'].values / spikes['times'].max()
+    # Add back in for use elsewhere
     spikes['exists'] = exists
-    return avgs.index.values, avgs['depths']['mean'].values, avgs['amps']['mean'].values * 1e6, fr
+
+    # Some clusters don't have any spikes so we need to reindex into the original clusters data
+    idx = avgs.index.values
+    clust_idx = np.arange(clusters.channels.size)
+
+    avg_amps = np.full(clust_idx.size, np.nan)
+    avg_amps[idx] = avgs['amps']['mean'].values * 1e6
+
+    avg_fr = np.full(clust_idx.size, np.nan)
+    avg_fr[idx] = avgs['depths']['count'].values / spikes['times'].max()
+
+    avg_depths = np.full(clust_idx.size, np.nan)
+    avg_depths[idx] = avgs['depths']['mean'].values
+
+    return clust_idx, avg_amps, avg_depths, avg_fr
 
 
-def compute_bincount(spike_times, spike_depths, spike_amps, xbin=TBIN, ybin=DBIN, xlim=None, ylim=None, **kwargs):
+def compute_bincount(spike_times, spike_depths, spike_amps, xbin=TBIN, ybin=DBIN, **kwargs):
 
-    count, times, depths = bincount2D(spike_times, spike_depths, xbin=xbin, ybin=ybin,
-                                      xlim=xlim, ylim=ylim, **kwargs)
+    count, times, depths = bincount2D(spike_times, spike_depths, xbin=xbin, ybin=ybin, **kwargs)
 
-    amp, times, depths = bincount2D(spike_times, spike_depths, xbin=xbin, ybin=ybin,
-                                    xlim=xlim, ylim=ylim, weights=spike_amps)
+    amp, times, depths = bincount2D(spike_times, spike_depths, xbin=xbin, ybin=ybin, weights=spike_amps, **kwargs)
 
     return count, amp, times, depths
 
@@ -270,7 +281,7 @@ class PlotLoader:
         if not self.data['spikes']['exists']:
             return
 
-        self.clust_id, self.avg_depth, self.avg_amp, self.avg_fr = compute_spike_average(self.data['spikes'])
+        self.clust_id, self.avg_amp, self.avg_depth, self.avg_fr = compute_spike_average(self.data['spikes'], self.data['clusters'])
         self.update_data()
         self.compute_timescales()
 
@@ -366,12 +377,12 @@ class PlotLoader:
         scatter = ScatterData(
             x=self.avg_amp[self.cluster_idx],
             y=self.avg_depth[self.cluster_idx],
-            levels=np.quantile(self.avg_fr[self.cluster_idx], [0, 1]),
+            levels=np.nanquantile(self.avg_fr[self.cluster_idx], [0, 1]),
             colours=self.avg_fr[self.cluster_idx],
             pen='k',
             size=np.array(8),
             symbol=np.array('o'),
-            xrange=np.array([0.9 * self.avg_amp[self.cluster_idx].min(), 1.1 * self.avg_amp[self.cluster_idx].max()]),
+            xrange=np.array([0.9 * np.nanmin(self.avg_amp[self.cluster_idx]), 1.1 * np.nanmax(self.avg_amp[self.cluster_idx])]),
             xaxis='Amplitude (uV)',
             title='Firing Rate (Sp/s)',
             cmap='hot',
@@ -393,7 +404,7 @@ class PlotLoader:
             pen='k',
             size=np.array(8),
             symbol=np.array('o'),
-            xrange=np.array([0.9 * self.avg_amp[self.cluster_idx].min(), 1.1 * self.avg_amp[self.cluster_idx].max()]),
+            xrange=np.array([0.9 * np.nanmin(self.avg_amp[self.cluster_idx]), 1.1 * np.nanmax(self.avg_amp[self.cluster_idx])]),
             xaxis='Amplitude (uV)',
             title='Peak to Trough duration (ms)',
             cmap='RdYlGn',
@@ -409,12 +420,12 @@ class PlotLoader:
         scatter = ScatterData(
             x=self.avg_fr[self.cluster_idx],
             y=self.avg_depth[self.cluster_idx],
-            levels=np.quantile(self.avg_amp[self.cluster_idx], [0, 1]),
+            levels=np.nanquantile(self.avg_amp[self.cluster_idx], [0, 1]),
             colours=self.avg_amp[self.cluster_idx],
             pen='k',
             size=np.array(8),
             symbol=np.array('o'),
-            xrange=np.array([0.9 * self.avg_fr[self.cluster_idx].min(), 1.1 * self.avg_fr[self.cluster_idx].max()]),
+            xrange=np.array([0.9 * np.nanmin(self.avg_fr[self.cluster_idx]), 1.1 * np.nanmax(self.avg_fr[self.cluster_idx])]),
             xaxis='Firing Rate (Sp/s)',
             title='Amplitude (uV)',
             cmap='magma',
@@ -851,17 +862,19 @@ class PlotLoader:
         self.t_template = 1e3 * (np.arange(n_template)) / FS
 
     def get_autocorr(self, clust_idx):
-        idx = np.where(self.data['spikes']['clusters'] == self.clust_id[clust_idx])[0]
-        autocorr = xcorr(self.data['spikes']['times'][idx], self.data['spikes']['clusters'][idx],
-                         AUTOCORR_BIN_SIZE, AUTOCORR_WIN_SIZE)
 
+        idx = self.spike_clusters == self.cluster_idx[clust_idx]
+        autocorr = xcorr(self.spike_times[idx], self.spike_clusters[idx], AUTOCORR_BIN_SIZE, AUTOCORR_WIN_SIZE)
         if self.data['clusters'].get('metrics', {}).get('cluster_id', None) is None:
-            clust_id = self.clust_id[clust_idx]
+            clust_id = self.cluster_idx[clust_idx]
         else:
-            clust_id = self.data['clusters'].metrics.cluster_id[self.clust_id[clust_idx]]
+            clust_id = self.data['clusters'].metrics.cluster_id[self.cluster_idx[clust_idx]]
+
 
         return autocorr[0, 0, :], clust_id
 
     def get_template_wf(self, clust_idx):
-        template_wf = (self.data['clusters']['waveforms'][self.clust_id[clust_idx], :, 0])
+
+        template_wf = (self.data['clusters']['waveforms'][self.cluster_idx[clust_idx], :, 0])
+
         return template_wf * 1e6
