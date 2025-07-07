@@ -305,7 +305,8 @@ class ProbeLoaderCSV(ProbeLoader):
         csv_file = Path(csv_file)
         assert csv_file.exists()
 
-        self.df = pd.read_csv(csv_file)
+        self.root_path = csv_file.parent
+        self.df = pd.read_csv(csv_file, keep_default_na=False)
         self.df['session_strip'] = self.df['session'].str.rsplit('/', n=1).str[0]
         self.one = one or ONE()
 
@@ -341,9 +342,6 @@ class ProbeLoaderCSV(ProbeLoader):
         self.selected_shank = self.shank_labels[idx]
         self.current_shank = self.selected_shank
         self.shank_idx = idx
-        # TODO don't harcode
-        self.lab = 'steinmetzlab'
-        self.subj = 'KM_027'
 
     def initialise_shanks(self):
 
@@ -352,49 +350,47 @@ class ProbeLoaderCSV(ProbeLoader):
 
         for _, shank in self.shank_df.iterrows():
             loaders = Bunch()
+            collections = CollectionData(
+                spike_collection=shank.spike_collection or '',
+                ephys_collection=shank.ephys_collection or '',
+                task_collection=shank.task_collection or '',
+                raw_task_collection=shank.raw_task_collection or '',
+                meta_collection=shank.meta_collection or '')
+
+            local_path = self.root_path.joinpath(shank.local_path)
+
+            ins = self.get_insertion(shank)
+            xyz_picks = ins['json'].get('xyz_picks', None)
+            xyz_picks = np.array(xyz_picks) / 1e6 if xyz_picks is not None else None
+
             # Quarter is offline
             if shank.is_quarter:
-                loaders['data'] = DataLoaderLocal(Path(shank.local_path), CollectionData())
-                loaders['align'] = AlignmentLoaderLocal(Path(shank.local_path), 0, 1, self.brain_atlas, user=user)
-                loaders['upload'] = DataUploaderLocal(Path(shank.local_path), 0, 1, self.brain_atlas, user=user)
-                loaders['ephys'] = SpikeGLXLoaderLocal(Path(shank.local_path), '')
+
+                loaders['data'] = DataLoaderLocal(local_path, collections)
+                loaders['align'] = AlignmentLoaderLocal(local_path, 0, 1, self.brain_atlas, user=user,
+                                                        xyz_picks=xyz_picks)
+                loaders['upload'] = DataUploaderLocal(local_path, 0, 1, self.brain_atlas, user=user)
+                loaders['ephys'] = SpikeGLXLoaderLocal(local_path, collections.meta_collection)
                 self.shanks[shank.probe]['quarter'] = ShankLoader(loaders)
             else:
                 # Dense is online
                 ins = self.get_insertion(shank)
-                collections = CollectionData(
-                    spike_collection=f'alf/{shank.probe}/iblsorter',
-                    ephys_collection=f'raw_ephys_data/{shank.probe}',
-                    task_collection='alf/task_01',
-                    raw_task_collection='raw_task_data_01',
-                    meta_collection=f'raw_ephys_data/{shank.probe}')
 
-                loaders['data'] = DataLoaderLocal(Path(shank.local_path), collections)
+                # If we don't have the data locally we download it
+                if collections.spike_collection == '':
+                    loaders['data'] = DataLoaderONE(ins, self.one)
+                # Otherwise we load from local
+                else:
+                    loaders['data'] = DataLoaderLocal(local_path, collections)
+
                 loaders['align'] = AlignmentLoaderONE(ins, self.one, self.brain_atlas, user=user)
                 loaders['upload'] = DataUploaderONE(ins, self.one, self.brain_atlas)
                 loaders['ephys'] = SpikeGLXLoaderONE(ins, self.one)
                 self.shanks[shank.probe]['dense'] = ShankLoader(loaders)
 
-
-        # for shank in self.shanks.keys():
-        #     if self.shanks[shank]['dense'].loaders['align'].alignment_keys != ['original']:
-        #         # Set the quarter shank to whatever is on alyx regardless if there is an original local file
-        #         self.shanks[shank]['quarter'].loaders['align'].alignments = self.shanks[shank]['dense'].loaders['align'].alignments
-        #         self.shanks[shank]['quarter'].loaders['align'].get_previous_alignments()
-        #         self.shanks[shank]['quarter'].loaders['align'].get_starting_alignment(0)
-        #
-        #     elif self.shanks[shank]['quarter'].loaders['align'].alignment_keys != ['original']:
-        #         # If we have a local file, populate the dense alignment with these values
-        #         self.shanks[shank]['dense'].loaders['align'].add_extra_alignments(self.shanks[shank]['quarter'].loaders['align'].alignments)
-        #         self.shanks[shank]['dense'].loaders['align'].get_previous_alignments()
-        #         self.shanks[shank]['dense'].loaders['align'].get_starting_alignment(0)
-        #         # TODO should we then set the quarter to the dense to make sure names are consistent??
-        #         #  e should otherwise they are different when doing get_starting alignment they will be different
-        #         self.shanks[shank]['quarter'].loaders['align'].alignments = self.shanks[shank]['dense'].loaders['align'].alignments
-        #         self.shanks[shank]['quarter'].loaders['align'].get_previous_alignments()
-        #         self.shanks[shank]['quarter'].loaders['align'].get_starting_alignment(0)
-
         self._sync_alignments()
+        self.subj = shank['subject']
+        self.lab = shank['lab']
 
     def _sync_alignments(self):
         """Synchronize alignments between dense and quarter loaders."""
@@ -421,8 +417,7 @@ class ProbeLoaderCSV(ProbeLoader):
 
     def get_insertion(self, shank):
 
-        ins = self.one.alyx.rest('insertions', 'list', session=self.one.path2eid(shank.session),
-                                 name=shank.probe, expires=timedelta(days=1))
+        ins = self.one.alyx.rest('insertions', 'list', id=shank.pid, expires=timedelta(days=1))
         return ins[0]
 
     def download_histology(self):
@@ -440,9 +435,9 @@ class ProbeLoaderCSV(ProbeLoader):
         return self.shanks[self.current_shank][self.current_config]
 
     def get_selected_shank(self):
-        # TODO CHANGE THIS ONCE WE ARE HAPPY IT WORKS!
         return self.shanks[self.selected_shank]
 
+    # TODO fix me
     def get_starting_alignment(self, idx):
         for config in self.configs:
             self.get_selected_shank()[config].loaders['align'].get_starting_alignment(idx)
@@ -597,8 +592,10 @@ class ShankLoader:
 
         if self.raw_data['clusters']['exists']:
             self.cluster_chns = self.raw_data['clusters']['channels']
-        else:
+        elif self.chn_depths is not None:
             self.cluster_chns = np.arange(self.chn_depths.size)
+        else:
+            self.cluster_chns = None
 
         # Generate plots
         self.loaders['plots'] = PlotLoader(self.raw_data, self.meta_data, 0)

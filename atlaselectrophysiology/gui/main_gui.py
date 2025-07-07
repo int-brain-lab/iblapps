@@ -68,6 +68,7 @@ def shank_loop(func: Callable) -> Callable:
         shanks = kwargs.pop('shanks', self.all_shanks)
         shanks = self.all_shanks if shanks is None else shanks
         configs = kwargs.pop('configs', self.loaddata.configs)
+        configs = self.loaddata.configs if configs is None else configs
         data_only = kwargs.pop('data_only', False)
 
         results = []
@@ -709,6 +710,10 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.normalise_levels = self.loaddata.selected_config
         self.setup(init=init)
 
+        if not init:
+            self.raise_()
+            self.activateWindow()
+
     def on_folder_selected(self):
         """
         Triggered in offline mode when folder button is clicked
@@ -787,7 +792,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             self.init_shanks()
             self.init_align_items()
 
-        self.init_shank_items()
+        self.init_shank_items(data_only=True)
         self.init_tabs()
 
         self.set_probe_lims(data_only=True)
@@ -1361,7 +1366,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         -------
         None
         """
-        shank = kwargs.get('shank')
         self.loaddata.set_init_alignment()
         feature_prev = self.loaddata.feature_prev
         if np.any(feature_prev):
