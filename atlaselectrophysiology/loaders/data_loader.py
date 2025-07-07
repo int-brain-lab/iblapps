@@ -35,7 +35,9 @@ class CollectionData:
 
 
 class DataLoader(ABC):
-    def __init__(self):
+    def __init__(self, geometry, shank_idx):
+        self.geometry = geometry
+        self.shank_chns = self.geometry.get_chns_for_shank(shank_idx)
         self.filter = False
 
     def get_data(self):
@@ -174,6 +176,39 @@ class DataLoader(ABC):
 
         return spikes, clusters, channels
 
+    def filter_spikes_by_chns(self, spikes, clusters, channels):
+
+        spikes_idx = np.isin(channels['rawInd'][clusters['channels'][spikes['clusters']]], self.shank_chns['orig_ind'])
+        for key in spikes.keys():
+            if key == 'exists':
+                continue
+            spikes[key] = spikes[key][spikes_idx]
+
+        clusters_idx = np.isin(channels['rawInd'][clusters['channels']], self.shank_chns['orig_ind'])
+        for key in clusters.keys():
+            if key == 'exists':
+                continue
+            clusters[key] = clusters[key][clusters_idx]
+
+        channels_idx = np.isin(channels['rawInd'], self.shank_chns['orig_ind'])
+        for key in channels.keys():
+            if key == 'exists':
+                continue
+            channels[key] = channels[key][channels_idx]
+
+        return spikes, clusters, channels
+
+    def filter_raw_by_chns(self, data):
+        for key in data.keys():
+            if key == 'exists':
+                continue
+            elif len(data[key].shape) == 1:
+                data[key] = data[key]
+            else:
+                data[key] = data[key][:, self.shank_chns['orig_ind']]
+
+        return data
+
     @staticmethod
     def filter_spikes_and_clusters(spikes, clusters, min_fr=50 / 3600):
         """
@@ -185,6 +220,7 @@ class DataLoader(ABC):
         clusters = alfio.AlfBunch({k: v[clu_idx] for k, v in clusters.items()})
         clusters['exists'] = exists
 
+        # TODO need to check this still applies after filtering
         spike_idx, ib = ismember(spikes.clusters, clusters.metrics.index)
         clusters.metrics.reset_index(drop=True, inplace=True)
         exists = spikes.pop('exists')
