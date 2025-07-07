@@ -399,7 +399,8 @@ def create_action_menu(menubar, options, function, title=None, set_checked=True,
 def populate_lists(
         data: List[str],
         list_name: QtGui.QStandardItemModel,
-        combobox: QtWidgets.QComboBox
+        combobox: QtWidgets.QComboBox,
+        init=True
 ) -> None:
     """
     Populate a combo box and its associated model with a list of string options.
@@ -426,4 +427,5 @@ def populate_lists(
     combobox.view().setMinimumWidth(min_width)
 
     # Set the default selected item to the first option, if available
-    combobox.setCurrentIndex(0)
+    if init:
+        combobox.setCurrentIndex(0)

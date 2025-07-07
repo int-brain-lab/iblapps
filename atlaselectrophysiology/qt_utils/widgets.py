@@ -124,7 +124,8 @@ class GridTabSwitcher(QtWidgets.QWidget):
 
         self.main_layout.removeWidget(self.tab_widget)
         self.tab_widget.hide()
-        self.grid_layout = not self.grid_layout
+        if delete:
+            self.grid_layout = not self.grid_layout
 
     def toggle_layout(self):
         self.tab_widget.blockSignals(True)

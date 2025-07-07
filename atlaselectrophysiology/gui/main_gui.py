@@ -780,7 +780,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
 
     def setup(self, init=True):
-        print(init)
         if not init:
             self.remove_reference_lines_from_display()
 
