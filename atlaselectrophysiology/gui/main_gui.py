@@ -249,7 +249,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         fig : str
             Key to access the desired figure within items.
         """
-        items['yrange'] = [items.probe_tip - items.probe_extra, items.probe_top + items.probe_extra]
         qt_plots.set_yaxis_range(items[fig], items)
 
     def add_yrange_to_data(self, items, data):
@@ -781,7 +780,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
 
     def setup(self, init=True):
-
+        print(init)
         if not init:
             self.remove_reference_lines_from_display()
 

@@ -23,7 +23,7 @@ class GridTabSwitcher(QtWidgets.QWidget):
         # TODO add rounded corners
         self.tab_widget.setStyleSheet("""
         QTabBar::tab:selected {
-            background-color: #2c3e50;
+            background-color: #c92d0e;
             color: white;
             font-weight: bold;
         }
@@ -124,6 +124,7 @@ class GridTabSwitcher(QtWidgets.QWidget):
 
         self.main_layout.removeWidget(self.tab_widget)
         self.tab_widget.hide()
+        self.grid_layout = not self.grid_layout
 
     def toggle_layout(self):
         self.tab_widget.blockSignals(True)

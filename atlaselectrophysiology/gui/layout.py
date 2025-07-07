@@ -350,7 +350,7 @@ class Setup():
         utils.set_axis(items.fig_hist, 'bottom', pen='w')
 
         # This is the solution from pyqtgraph people, but doesn't show ticks
-        items.fig_hist.showGrid(False, True, 0)
+        #items.fig_hist.showGrid(False, True, 0)
 
         replace_axis(items.fig_hist)
         items.ax_hist = utils.set_axis(items.fig_hist, 'left', pen=None)
@@ -371,8 +371,8 @@ class Setup():
         items.fig_scale_cb.setMaximumHeight(70)
         utils.set_axis(items.fig_scale_cb, 'bottom', show=False)
         utils.set_axis(items.fig_scale_cb, 'left', show=False)
-        items.fig_scale_ax = utils.set_axis(items.fig_scale_cb, 'top', pen='w')
         utils.set_axis(items.fig_scale_cb, 'right', show=False)
+        items.fig_scale_ax = utils.set_axis(items.fig_scale_cb, 'top', pen='w')
 
         # Histology figure that will remain at initial state for reference
         items.fig_hist_ref = pg.PlotItem()
@@ -381,7 +381,7 @@ class Setup():
                                      max=self.probe_top + self.probe_extra, padding=self.pad)
         utils.set_axis(items.fig_hist_ref, 'bottom', pen='w')
         utils.set_axis(items.fig_hist_ref, 'left', show=False)
-        items.fig_hist_ref.showGrid(False, True, 0)
+        # items.fig_hist_ref.showGrid(False, True, 0)
         replace_axis(items.fig_hist_ref, orientation='right', pos=(2, 2))
         items.ax_hist_ref = utils.set_axis(items.fig_hist_ref, 'right', pen=None)
         items.ax_hist_ref.setWidth(0)
@@ -390,7 +390,7 @@ class Setup():
         items.fig_hist_area = pg.GraphicsLayoutWidget(border=None)
         items.fig_hist_area.setContentsMargins(0, 0, 0, 0)
         items.fig_hist_area.ci.setContentsMargins(0, 0, 0, 0)
-        items.fig_hist_area.ci.layout.setSpacing(0)
+        #items.fig_hist_area.ci.layout.setSpacing(0)
         items.fig_hist_area.setMouseTracking(True)
         items.fig_hist_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
         items.fig_hist_area.scene().sigMouseHover.connect(lambda hover_items, n=name, i=idx, c=config:
@@ -407,6 +407,7 @@ class Setup():
         items.ax_hist2.setWidth(10)
 
         items.fig_hist_layout = pg.GraphicsLayout()
+        items.fig_hist_layout.setSpacing(0)
         items.fig_hist_layout.addItem(items.fig_scale_cb, 0, 0, 1, 4)
         items.fig_hist_layout.addItem(items.fig_hist_extra_yaxis, 1, 0)
         items.fig_hist_layout.addItem(items.fig_hist, 1, 1)
@@ -418,7 +419,7 @@ class Setup():
         items.fig_hist_layout.layout.setColumnStretchFactor(3, 4)
         items.fig_hist_layout.layout.setRowStretchFactor(0, 1)
         items.fig_hist_layout.layout.setRowStretchFactor(1, 10)
-        items.fig_hist_layout.setSpacing(0)
+        items.fig_hist_layout.layout.setHorizontalSpacing(0)
         items.fig_hist_area.addItem(items.fig_hist_layout)
 
         # Figure to show coronal slice through the brain
@@ -447,10 +448,6 @@ class Setup():
         return items
 
 
-
-
-
-
     def setup_fig_data_area(self, items, idx):
 
         items.fig_data_ax = utils.set_axis(items.fig_img, 'left', label='Distance from probe tip (uV)')
@@ -459,11 +456,12 @@ class Setup():
         fig_data_area = pg.GraphicsLayoutWidget(border=None)
         fig_data_area.setContentsMargins(0, 0, 0, 0)
         fig_data_area.ci.setContentsMargins(0, 0, 0, 0)
-        fig_data_area.ci.layout.setSpacing(0)
+        #fig_data_area.ci.layout.setSpacing(0)
         fig_data_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
         fig_data_area.scene().sigMouseHover.connect(lambda hover_items, n=items.name, i=idx, c=items.config:
                                                     self.on_mouse_hover(hover_items, n, i, c))
         fig_data_layout = pg.GraphicsLayout()
+        fig_data_layout.setSpacing(0)
 
         fig_data_layout.addItem(items.fig_img_cb, 0, 0)
         fig_data_layout.addItem(items.fig_probe_cb, 0, 1, 1, 2)
@@ -496,11 +494,10 @@ class Setup():
         items_q.fig_data_ax = utils.set_axis(items_q.fig_img, 'left', label='Distance from probe tip (uV)')
         utils.set_axis(items_q.fig_scale_cb, 'bottom')
 
-
         fig_data_area = pg.GraphicsLayoutWidget(border=None)
         fig_data_area.setContentsMargins(0, 0, 0, 0)
         fig_data_area.ci.setContentsMargins(0, 0, 0, 0)
-        fig_data_area.ci.layout.setSpacing(0)
+        #fig_data_area.ci.layout.setSpacing(0)
         fig_data_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
         fig_data_area.scene().sigMouseHover.connect(lambda hover_items, n=items_q.name, i=idx, c='both':
                                                     self.on_mouse_hover(hover_items, n, i, c))

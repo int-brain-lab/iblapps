@@ -79,6 +79,7 @@ class ColorBar(pg.GraphicsWidget):
             loc = 'top' if self.orientation == 'horizontal' else 'left'
         ticks = ticks
         ax = self.plot.getAxis(loc)
+        ax.show()
         ax.setStyle(stopAxisAtTick=((True, True)), autoExpandTextSpace=True)
         if self.orientation == 'horizontal':
             ax.setHeight(extent)
