@@ -145,7 +145,7 @@ class Setup():
         if not self.offline:
             # If offline mode is False, read in Subject and Session options from Alyx
             # Drop down list to choose subject
-            self.subj_list, self.subj_combobox, _, _ = utils.create_combobox(self.on_subject_selected, editable=True)
+            self.subj_list, self.subj_combobox, self.subj_line, _ = utils.create_combobox(self.on_subject_selected, editable=True)
 
             # Drop down list to choose session
             self.sess_list, self.sess_combobox = utils.create_combobox(self.on_session_selected)
@@ -658,9 +658,9 @@ class Setup():
             'Remove Line': # Shortcut to remove a reference line
                 {'shortcut': 'Shift+D', 'callback': self.delete_reference_line, 'menu': fit_options},
             'Next': # Shortcut to move between previous/next moves
-                {'shortcut': 'Right', 'callback': self.next_button_pressed, 'menu': fit_options},
+                {'shortcut': 'Shift+Right', 'callback': self.next_button_pressed, 'menu': fit_options},
             'Previous':
-                {'shortcut': 'Left', 'callback': self.prev_button_pressed, 'menu': fit_options},
+                {'shortcut': 'Shift+Left', 'callback': self.prev_button_pressed, 'menu': fit_options},
             'Reset': # Shortcut to reset GUI to initial state
                 {'shortcut': 'Shift+R', 'callback': self.reset_button_pressed, 'menu': fit_options},
             'Upload': # Shortcut to upload final state to Alyx/to local file
@@ -688,9 +688,9 @@ class Setup():
             'Toggle layout':
                 {'shortcut': 'T', 'callback': self.toggle_layout, 'menu': display_options},
             'Next shank':
-                {'shortcut': 'Shift+Right', 'callback': lambda: self.loop_shanks(1), 'menu': display_options},
+                {'shortcut': 'Right', 'callback': lambda: self.loop_shanks(1), 'menu': display_options},
             'Previous shank':
-                {'shortcut': 'Shift+Left', 'callback': lambda: self.loop_shanks(-1), 'menu': display_options},
+                {'shortcut': 'Left', 'callback': lambda: self.loop_shanks(-1), 'menu': display_options},
             'Normalize':
                 {'shortcut': 'Shift+N', 'callback': self.on_normalise_levels, 'menu': display_options},
 

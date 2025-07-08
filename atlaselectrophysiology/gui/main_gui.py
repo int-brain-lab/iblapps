@@ -710,6 +710,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.setup(init=init)
 
         if not init:
+            self.setFocus()
             self.raise_()
             self.activateWindow()
 
@@ -751,10 +752,15 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.init_display()
         self.data_button.setStyleSheet(utils.button_style['deactivated'])
 
+        self.subj_line.clearFocus()
+        self.subj_combobox.clearFocus()
+
+        self.setFocus()
         self.raise_()
         self.activateWindow()
 
         print(time.time() - start)
+
 
     def shank_button_pressed(self):
 
