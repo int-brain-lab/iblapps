@@ -378,6 +378,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
     def plot_slice_panels(self, plot_type, data_only=True):
 
         if plot_type != self.slice_init:
+            if not self.channel_status:
+                self.toggle_channels()
             self.lut_levels = None
         self.slice_figs = Bunch()
         self.imgs = []
