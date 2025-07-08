@@ -802,9 +802,9 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.set_probe_lims(data_only=True)
         self.set_yaxis_lims(self.loaddata.y_min, self.loaddata.y_max, data_only=True)
 
-        utils.find_actions(self.img_init, self.img_options_group).trigger()
-        utils.find_actions(self.line_init, self.line_options_group).trigger()
-        utils.find_actions(self.probe_init, self.probe_options_group).trigger()
+        utils.find_actions(self.img_init, self.img_options_group).trigger() if self.img_init else None
+        utils.find_actions(self.line_init, self.line_options_group).trigger() if self.line_init else None
+        utils.find_actions(self.probe_init, self.probe_options_group).trigger() if self.probe_init else None
         utils.find_actions(self.slice_init, self.slice_options_group).trigger()
         # TODO check
         # utils.find_actions(self.unit_init, self.filter_options_group).trigger()
@@ -840,9 +840,9 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             return
 
         self._filter_units(filter_type, data_only=data_only)
-        utils.find_actions(self.img_init, self.img_options_group).trigger()
-        utils.find_actions(self.line_init, self.line_options_group).trigger()
-        utils.find_actions(self.probe_init, self.probe_options_group).trigger()
+        utils.find_actions(self.img_init, self.img_options_group).trigger() if self.img_init else None
+        utils.find_actions(self.line_init, self.line_options_group).trigger() if self.line_init else None
+        utils.find_actions(self.probe_init, self.probe_options_group).trigger() if self.probe_init else None
         self.filter_init = filter_type
 
     @shank_loop
@@ -1215,6 +1215,19 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.set_yaxis_range('fig_hist_ref')
         self.set_yaxis_range('fig_img')
         self.set_xaxis_range('fig_img', label=False)
+        if self.loaddata.configs is not None:
+            if self.loaddata.selected_config == 'both':
+                configs = ['quarter']
+            else:
+                configs = [self.loaddata.selected_config]
+            self.reset_slice_axis(configs=configs)
+        else:
+            self.reset_slice_axis()
+
+    @shank_loop
+    def reset_slice_axis(self, items: Union[Dict, Bunch], **kwargs) -> None:
+        items.fig_slice.autoRange()
+
 
     def loop_shanks(self, direction:int):
         idx = np.mod(self.selected_idx + direction, len(self.all_shanks))
@@ -1294,8 +1307,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.normalise_idx += 1
         idx = np.mod(self.normalise_idx, len(self.loaddata.possible_configs))
         self.normalise_levels = self.loaddata.possible_configs[idx]
-        utils.find_actions(self.img_init, self.img_options_group).trigger()
-        utils.find_actions(self.probe_init, self.probe_options_group).trigger()
+        utils.find_actions(self.img_init, self.img_options_group).trigger() if self.img_init else None
+        utils.find_actions(self.probe_init, self.probe_options_group).trigger() if self.probe_init else None
 
     def on_fig_size_changed(self) -> None:
         """

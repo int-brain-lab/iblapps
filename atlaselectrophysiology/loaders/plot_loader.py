@@ -580,6 +580,9 @@ class PlotLoader:
         return {'LF spectrum': img}
 
     def image_passive_events(self):
+        if not self.data['spikes']['exists']:
+            return {}
+
         stim_keys = ['valveOn', 'toneOn', 'noiseOn', 'leftGabor', 'rightGabor']
         data_img = {}
         if not self.data['pass_stim']['exists'] and not self.data['gabor']['exists']:
@@ -764,7 +767,7 @@ class PlotLoader:
         return data_probe
 
     def probe_rfmap(self):
-        if not self.data['rf_map']['exists']:
+        if not self.data['rf_map']['exists'] or not self.data['spikes']['exists']:
             return {}
 
         (rf_map_times, rf_map_pos,

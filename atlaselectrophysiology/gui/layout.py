@@ -97,6 +97,11 @@ class Setup():
                 self.fig_fit.addItem(self.shank_items[shank][config].fit_scatter)
                 self.fig_fit.addItem(self.shank_items[shank][config].fit_plot_lin)
                 self.hist_panels.append(self.shank_items[shank][config].fig_slice_area)
+                if i == 0:
+                    slice_link = self.shank_items[shank][config].fig_slice
+                if i > 0:
+                    self.shank_items[shank][config].fig_slice.setYLink(slice_link)
+                    self.shank_items[shank][config].fig_slice.setXLink(slice_link)
                 header = self.shank_items[shank][config].header
                 headers.append(header)
 
@@ -109,6 +114,12 @@ class Setup():
                 self.fig_fit.addItem(self.shank_items[shank].fit_scatter)
                 self.fig_fit.addItem(self.shank_items[shank].fit_plot_lin)
                 self.hist_panels.append(self.shank_items[shank].fig_slice_area)
+                if i == 0:
+                    slice_link = self.shank_items[shank].fig_slice
+                if i > 0:
+                    self.shank_items[shank].fig_slice.setYLink(slice_link)
+                    self.shank_items[shank].fig_slice.setXLink(slice_link)
+
                 header = self.shank_items[shank].header
                 headers.append(header)
                 self.shank_panels.append(self.create_shank_tabs(fig_area, header))
@@ -558,25 +569,35 @@ class Setup():
 
         self.img_options.clear()
         utils.remove_actions(self.img_options_group)
-        self.img_init = utils.add_actions(self.loaddata.image_keys, self.plot_image_panels, self.img_options, self.img_options_group,
-                                          data_only=True)
+        if self.loaddata.image_keys:
+            self.img_init = utils.add_actions(self.loaddata.image_keys, self.plot_image_panels, self.img_options, self.img_options_group,
+                                              data_only=True)
+        else:
+            self.img_init = None
 
         # Attach scatter plot options to this menu bar
-        _ = utils.add_actions(
-            self.loaddata.scatter_keys, self.plot_scatter_panels, self.img_options, self.img_options_group, set_checked=False,
-            data_only=True)
+        if self.loaddata.scatter_keys:
+            _ = utils.add_actions(
+                self.loaddata.scatter_keys, self.plot_scatter_panels, self.img_options, self.img_options_group, set_checked=False,
+                data_only=True)
 
         # Add menu bar for 1D line plot options
         self.line_options.clear()
         utils.remove_actions(self.line_options_group)
-        self.line_init = utils.add_actions(
-            self.loaddata.line_keys, self.plot_line_panels, self.line_options, self.line_options_group, data_only=True)
+        if self.loaddata.line_keys:
+            self.line_init = utils.add_actions(
+                self.loaddata.line_keys, self.plot_line_panels, self.line_options, self.line_options_group, data_only=True)
+        else:
+            self.line_init = None
 
         # Add menu bar for 2D probe plot options
         self.probe_options.clear()
         utils.remove_actions(self.probe_options_group)
-        self.probe_init = utils.add_actions(
-            self.loaddata.probe_keys, self.plot_probe_panels, self.probe_options, self.probe_options_group, data_only=True)
+        if self.loaddata.probe_keys:
+            self.probe_init = utils.add_actions(
+                self.loaddata.probe_keys, self.plot_probe_panels, self.probe_options, self.probe_options_group, data_only=True)
+        else:
+            self.probe_init = None
 
 
         # Add menu bar for coronal slice plot options
