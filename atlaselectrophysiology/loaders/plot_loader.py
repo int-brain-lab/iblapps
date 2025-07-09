@@ -72,6 +72,7 @@ class LineData:
 @dataclass
 class ProbeData:
     img: List[np.ndarray]
+    idx: List[np.ndarray]
     scale: List[np.ndarray]
     levels: np.ndarray
     offset: List[np.ndarray]
@@ -580,6 +581,9 @@ class PlotLoader:
         return {'LF spectrum': img}
 
     def image_passive_events(self):
+        if not self.data['spikes']['exists']:
+            return {}
+
         stim_keys = ['valveOn', 'toneOn', 'noiseOn', 'leftGabor', 'rightGabor']
         data_img = {}
         if not self.data['pass_stim']['exists'] and not self.data['gabor']['exists']:
@@ -716,7 +720,7 @@ class PlotLoader:
         # Probe data
         rms_avg = (np.mean(self.data[f'rms_{format}']['rms'], axis=0)[self.chn_ind]) * 1e6
         probe_levels = np.quantile(rms_avg, [0.1, 0.9])
-        probe_img, probe_scale, probe_offset = self.arrange_channels2banks(rms_avg)
+        probe_img, probe_scale, probe_offset, probe_idx = self.arrange_channels2banks(rms_avg)
 
         if format == 'AP':
             cmap = 'plasma'
@@ -725,6 +729,7 @@ class PlotLoader:
 
         probe = ProbeData(
             img=probe_img,
+            idx=probe_idx,
             scale=probe_scale,
             offset=probe_offset,
             levels=probe_levels,
@@ -747,11 +752,12 @@ class PlotLoader:
             freq_idx = np.where((self.data['psd_lf']['freqs'] >= freq[0]) & (self.data['psd_lf']['freqs'] < freq[1]))[0]
             lfp_avg = np.mean(self.data['psd_lf']['power'][freq_idx], axis=0)[self.chn_ind]
             lfp_avg_dB = 10 * np.log10(lfp_avg)
-            probe_img, probe_scale, probe_offset = self.arrange_channels2banks(lfp_avg_dB)
+            probe_img, probe_scale, probe_offset, probe_idx = self.arrange_channels2banks(lfp_avg_dB)
             probe_levels = np.quantile(lfp_avg_dB, [0.1, 0.9])
 
             probe = ProbeData(
                 img=probe_img,
+                idx=probe_idx,
                 scale=probe_scale,
                 offset=probe_offset,
                 levels=probe_levels,
@@ -764,7 +770,7 @@ class PlotLoader:
         return data_probe
 
     def probe_rfmap(self):
-        if not self.data['rf_map']['exists']:
+        if not self.data['rf_map']['exists'] or not self.data['spikes']['exists']:
             return {}
 
         (rf_map_times, rf_map_pos,
@@ -792,6 +798,7 @@ class PlotLoader:
                 f'RF Map - {sub}':
                     ProbeData(
                         img=[img[sub].T],
+                        idx = [np.arange(img[sub].shape[0])],
                         scale=[np.array([xscale, yscale])],
                         levels=levels,
                         offset=[np.array([0, self.chn_min])],
@@ -809,6 +816,7 @@ class PlotLoader:
         bnk_data = []
         bnk_scale = np.empty((self.N_BNK, 2))
         bnk_offset = np.empty((self.N_BNK, 2))
+        bnk_index = []
         for iX, x in enumerate(np.unique(self.chn_coords[:, 0])):
             bnk_idx = np.where(self.chn_coords[:, 0] == x)[0]
 
@@ -845,11 +853,12 @@ class PlotLoader:
                 _bnk_yoffset = self.chn_min
                 _bnk_xoffset = BNK_SIZE * iX
 
+            bnk_index.append(bnk_idx)
             bnk_data.append(_bnk_data)
             bnk_scale[iX, :] = np.array([_bnk_xscale, _bnk_yscale])
             bnk_offset[iX, :] = np.array([_bnk_xoffset, _bnk_yoffset])
 
-        return bnk_data, bnk_scale, bnk_offset
+        return bnk_data, bnk_scale, bnk_offset, bnk_index
 
     def compute_timescales(self):
         if not self.data['spikes']['exists']:

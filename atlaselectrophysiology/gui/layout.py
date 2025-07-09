@@ -97,6 +97,11 @@ class Setup():
                 self.fig_fit.addItem(self.shank_items[shank][config].fit_scatter)
                 self.fig_fit.addItem(self.shank_items[shank][config].fit_plot_lin)
                 self.hist_panels.append(self.shank_items[shank][config].fig_slice_area)
+                if i == 0:
+                    slice_link = self.shank_items[shank][config].fig_slice
+                if i > 0:
+                    self.shank_items[shank][config].fig_slice.setYLink(slice_link)
+                    self.shank_items[shank][config].fig_slice.setXLink(slice_link)
                 header = self.shank_items[shank][config].header
                 headers.append(header)
 
@@ -109,6 +114,12 @@ class Setup():
                 self.fig_fit.addItem(self.shank_items[shank].fit_scatter)
                 self.fig_fit.addItem(self.shank_items[shank].fit_plot_lin)
                 self.hist_panels.append(self.shank_items[shank].fig_slice_area)
+                if i == 0:
+                    slice_link = self.shank_items[shank].fig_slice
+                if i > 0:
+                    self.shank_items[shank].fig_slice.setYLink(slice_link)
+                    self.shank_items[shank].fig_slice.setXLink(slice_link)
+
                 header = self.shank_items[shank].header
                 headers.append(header)
                 self.shank_panels.append(self.create_shank_tabs(fig_area, header))
@@ -145,7 +156,7 @@ class Setup():
         if not self.offline:
             # If offline mode is False, read in Subject and Session options from Alyx
             # Drop down list to choose subject
-            self.subj_list, self.subj_combobox, _, _ = utils.create_combobox(self.on_subject_selected, editable=True)
+            self.subj_list, self.subj_combobox, self.subj_line, _ = utils.create_combobox(self.on_subject_selected, editable=True)
 
             # Drop down list to choose session
             self.sess_list, self.sess_combobox = utils.create_combobox(self.on_session_selected)
@@ -350,7 +361,7 @@ class Setup():
         utils.set_axis(items.fig_hist, 'bottom', pen='w')
 
         # This is the solution from pyqtgraph people, but doesn't show ticks
-        items.fig_hist.showGrid(False, True, 0)
+        #items.fig_hist.showGrid(False, True, 0)
 
         replace_axis(items.fig_hist)
         items.ax_hist = utils.set_axis(items.fig_hist, 'left', pen=None)
@@ -371,8 +382,8 @@ class Setup():
         items.fig_scale_cb.setMaximumHeight(70)
         utils.set_axis(items.fig_scale_cb, 'bottom', show=False)
         utils.set_axis(items.fig_scale_cb, 'left', show=False)
-        items.fig_scale_ax = utils.set_axis(items.fig_scale_cb, 'top', pen='w')
         utils.set_axis(items.fig_scale_cb, 'right', show=False)
+        items.fig_scale_ax = utils.set_axis(items.fig_scale_cb, 'top', pen='w')
 
         # Histology figure that will remain at initial state for reference
         items.fig_hist_ref = pg.PlotItem()
@@ -381,7 +392,7 @@ class Setup():
                                      max=self.probe_top + self.probe_extra, padding=self.pad)
         utils.set_axis(items.fig_hist_ref, 'bottom', pen='w')
         utils.set_axis(items.fig_hist_ref, 'left', show=False)
-        items.fig_hist_ref.showGrid(False, True, 0)
+        # items.fig_hist_ref.showGrid(False, True, 0)
         replace_axis(items.fig_hist_ref, orientation='right', pos=(2, 2))
         items.ax_hist_ref = utils.set_axis(items.fig_hist_ref, 'right', pen=None)
         items.ax_hist_ref.setWidth(0)
@@ -390,7 +401,7 @@ class Setup():
         items.fig_hist_area = pg.GraphicsLayoutWidget(border=None)
         items.fig_hist_area.setContentsMargins(0, 0, 0, 0)
         items.fig_hist_area.ci.setContentsMargins(0, 0, 0, 0)
-        items.fig_hist_area.ci.layout.setSpacing(0)
+        #items.fig_hist_area.ci.layout.setSpacing(0)
         items.fig_hist_area.setMouseTracking(True)
         items.fig_hist_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
         items.fig_hist_area.scene().sigMouseHover.connect(lambda hover_items, n=name, i=idx, c=config:
@@ -407,6 +418,7 @@ class Setup():
         items.ax_hist2.setWidth(10)
 
         items.fig_hist_layout = pg.GraphicsLayout()
+        items.fig_hist_layout.setSpacing(0)
         items.fig_hist_layout.addItem(items.fig_scale_cb, 0, 0, 1, 4)
         items.fig_hist_layout.addItem(items.fig_hist_extra_yaxis, 1, 0)
         items.fig_hist_layout.addItem(items.fig_hist, 1, 1)
@@ -418,7 +430,7 @@ class Setup():
         items.fig_hist_layout.layout.setColumnStretchFactor(3, 4)
         items.fig_hist_layout.layout.setRowStretchFactor(0, 1)
         items.fig_hist_layout.layout.setRowStretchFactor(1, 10)
-        items.fig_hist_layout.setSpacing(0)
+        items.fig_hist_layout.layout.setHorizontalSpacing(0)
         items.fig_hist_area.addItem(items.fig_hist_layout)
 
         # Figure to show coronal slice through the brain
@@ -447,10 +459,6 @@ class Setup():
         return items
 
 
-
-
-
-
     def setup_fig_data_area(self, items, idx):
 
         items.fig_data_ax = utils.set_axis(items.fig_img, 'left', label='Distance from probe tip (uV)')
@@ -459,11 +467,12 @@ class Setup():
         fig_data_area = pg.GraphicsLayoutWidget(border=None)
         fig_data_area.setContentsMargins(0, 0, 0, 0)
         fig_data_area.ci.setContentsMargins(0, 0, 0, 0)
-        fig_data_area.ci.layout.setSpacing(0)
+        #fig_data_area.ci.layout.setSpacing(0)
         fig_data_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
         fig_data_area.scene().sigMouseHover.connect(lambda hover_items, n=items.name, i=idx, c=items.config:
                                                     self.on_mouse_hover(hover_items, n, i, c))
         fig_data_layout = pg.GraphicsLayout()
+        fig_data_layout.setSpacing(0)
 
         fig_data_layout.addItem(items.fig_img_cb, 0, 0)
         fig_data_layout.addItem(items.fig_probe_cb, 0, 1, 1, 2)
@@ -496,11 +505,10 @@ class Setup():
         items_q.fig_data_ax = utils.set_axis(items_q.fig_img, 'left', label='Distance from probe tip (uV)')
         utils.set_axis(items_q.fig_scale_cb, 'bottom')
 
-
         fig_data_area = pg.GraphicsLayoutWidget(border=None)
         fig_data_area.setContentsMargins(0, 0, 0, 0)
         fig_data_area.ci.setContentsMargins(0, 0, 0, 0)
-        fig_data_area.ci.layout.setSpacing(0)
+        #fig_data_area.ci.layout.setSpacing(0)
         fig_data_area.scene().sigMouseClicked.connect(lambda event, i=idx: self.on_mouse_double_clicked(event, i))
         fig_data_area.scene().sigMouseHover.connect(lambda hover_items, n=items_q.name, i=idx, c='both':
                                                     self.on_mouse_hover(hover_items, n, i, c))
@@ -561,25 +569,35 @@ class Setup():
 
         self.img_options.clear()
         utils.remove_actions(self.img_options_group)
-        self.img_init = utils.add_actions(self.loaddata.image_keys, self.plot_image_panels, self.img_options, self.img_options_group,
-                                          data_only=True)
+        if self.loaddata.image_keys:
+            self.img_init = utils.add_actions(self.loaddata.image_keys, self.plot_image_panels, self.img_options, self.img_options_group,
+                                              data_only=True)
+        else:
+            self.img_init = None
 
         # Attach scatter plot options to this menu bar
-        _ = utils.add_actions(
-            self.loaddata.scatter_keys, self.plot_scatter_panels, self.img_options, self.img_options_group, set_checked=False,
-            data_only=True)
+        if self.loaddata.scatter_keys:
+            _ = utils.add_actions(
+                self.loaddata.scatter_keys, self.plot_scatter_panels, self.img_options, self.img_options_group, set_checked=False,
+                data_only=True)
 
         # Add menu bar for 1D line plot options
         self.line_options.clear()
         utils.remove_actions(self.line_options_group)
-        self.line_init = utils.add_actions(
-            self.loaddata.line_keys, self.plot_line_panels, self.line_options, self.line_options_group, data_only=True)
+        if self.loaddata.line_keys:
+            self.line_init = utils.add_actions(
+                self.loaddata.line_keys, self.plot_line_panels, self.line_options, self.line_options_group, data_only=True)
+        else:
+            self.line_init = None
 
         # Add menu bar for 2D probe plot options
         self.probe_options.clear()
         utils.remove_actions(self.probe_options_group)
-        self.probe_init = utils.add_actions(
-            self.loaddata.probe_keys, self.plot_probe_panels, self.probe_options, self.probe_options_group, data_only=True)
+        if self.loaddata.probe_keys:
+            self.probe_init = utils.add_actions(
+                self.loaddata.probe_keys, self.plot_probe_panels, self.probe_options, self.probe_options_group, data_only=True)
+        else:
+            self.probe_init = None
 
 
         # Add menu bar for coronal slice plot options
@@ -661,9 +679,9 @@ class Setup():
             'Remove Line': # Shortcut to remove a reference line
                 {'shortcut': 'Shift+D', 'callback': self.delete_reference_line, 'menu': fit_options},
             'Next': # Shortcut to move between previous/next moves
-                {'shortcut': 'Right', 'callback': self.next_button_pressed, 'menu': fit_options},
+                {'shortcut': 'Shift+Right', 'callback': self.next_button_pressed, 'menu': fit_options},
             'Previous':
-                {'shortcut': 'Left', 'callback': self.prev_button_pressed, 'menu': fit_options},
+                {'shortcut': 'Shift+Left', 'callback': self.prev_button_pressed, 'menu': fit_options},
             'Reset': # Shortcut to reset GUI to initial state
                 {'shortcut': 'Shift+R', 'callback': self.reset_button_pressed, 'menu': fit_options},
             'Upload': # Shortcut to upload final state to Alyx/to local file
@@ -691,9 +709,9 @@ class Setup():
             'Toggle layout':
                 {'shortcut': 'T', 'callback': self.toggle_layout, 'menu': display_options},
             'Next shank':
-                {'shortcut': 'Shift+Right', 'callback': lambda: self.loop_shanks(1), 'menu': display_options},
+                {'shortcut': 'Right', 'callback': lambda: self.loop_shanks(1), 'menu': display_options},
             'Previous shank':
-                {'shortcut': 'Shift+Left', 'callback': lambda: self.loop_shanks(-1), 'menu': display_options},
+                {'shortcut': 'Left', 'callback': lambda: self.loop_shanks(-1), 'menu': display_options},
             'Normalize':
                 {'shortcut': 'Shift+N', 'callback': self.on_normalise_levels, 'menu': display_options},
 

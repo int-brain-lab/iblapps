@@ -68,6 +68,7 @@ def shank_loop(func: Callable) -> Callable:
         shanks = kwargs.pop('shanks', self.all_shanks)
         shanks = self.all_shanks if shanks is None else shanks
         configs = kwargs.pop('configs', self.loaddata.configs)
+        configs = self.loaddata.configs if configs is None else configs
         data_only = kwargs.pop('data_only', False)
 
         results = []
@@ -248,7 +249,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         fig : str
             Key to access the desired figure within items.
         """
-        items['yrange'] = [items.probe_tip - items.probe_extra, items.probe_top + items.probe_extra]
         qt_plots.set_yaxis_range(items[fig], items)
 
     def add_yrange_to_data(self, items, data):
@@ -378,6 +378,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
     def plot_slice_panels(self, plot_type, data_only=True):
 
         if plot_type != self.slice_init:
+            if not self.channel_status:
+                self.toggle_channels()
             self.lut_levels = None
         self.slice_figs = Bunch()
         self.imgs = []
@@ -709,6 +711,11 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.normalise_levels = self.loaddata.selected_config
         self.setup(init=init)
 
+        if not init:
+            self.setFocus()
+            self.raise_()
+            self.activateWindow()
+
     def on_folder_selected(self):
         """
         Triggered in offline mode when folder button is clicked
@@ -747,10 +754,15 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.init_display()
         self.data_button.setStyleSheet(utils.button_style['deactivated'])
 
+        self.subj_line.clearFocus()
+        self.subj_combobox.clearFocus()
+
+        self.setFocus()
         self.raise_()
         self.activateWindow()
 
         print(time.time() - start)
+
 
     def shank_button_pressed(self):
 
@@ -776,7 +788,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
 
     def setup(self, init=True):
-
         if not init:
             self.remove_reference_lines_from_display()
 
@@ -787,15 +798,15 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             self.init_shanks()
             self.init_align_items()
 
-        self.init_shank_items()
+        self.init_shank_items(data_only=True)
         self.init_tabs()
 
         self.set_probe_lims(data_only=True)
         self.set_yaxis_lims(self.loaddata.y_min, self.loaddata.y_max, data_only=True)
 
-        utils.find_actions(self.img_init, self.img_options_group).trigger()
-        utils.find_actions(self.line_init, self.line_options_group).trigger()
-        utils.find_actions(self.probe_init, self.probe_options_group).trigger()
+        utils.find_actions(self.img_init, self.img_options_group).trigger() if self.img_init else None
+        utils.find_actions(self.line_init, self.line_options_group).trigger() if self.line_init else None
+        utils.find_actions(self.probe_init, self.probe_options_group).trigger() if self.probe_init else None
         utils.find_actions(self.slice_init, self.slice_options_group).trigger()
         # TODO check
         # utils.find_actions(self.unit_init, self.filter_options_group).trigger()
@@ -831,9 +842,9 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             return
 
         self._filter_units(filter_type, data_only=data_only)
-        utils.find_actions(self.img_init, self.img_options_group).trigger()
-        utils.find_actions(self.line_init, self.line_options_group).trigger()
-        utils.find_actions(self.probe_init, self.probe_options_group).trigger()
+        utils.find_actions(self.img_init, self.img_options_group).trigger() if self.img_init else None
+        utils.find_actions(self.line_init, self.line_options_group).trigger() if self.line_init else None
+        utils.find_actions(self.probe_init, self.probe_options_group).trigger() if self.probe_init else None
         self.filter_init = filter_type
 
     @shank_loop
@@ -1206,6 +1217,19 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.set_yaxis_range('fig_hist_ref')
         self.set_yaxis_range('fig_img')
         self.set_xaxis_range('fig_img', label=False)
+        if self.loaddata.configs is not None:
+            if self.loaddata.selected_config == 'both':
+                configs = ['quarter']
+            else:
+                configs = [self.loaddata.selected_config]
+            self.reset_slice_axis(configs=configs)
+        else:
+            self.reset_slice_axis()
+
+    @shank_loop
+    def reset_slice_axis(self, items: Union[Dict, Bunch], **kwargs) -> None:
+        items.fig_slice.autoRange()
+
 
     def loop_shanks(self, direction:int):
         idx = np.mod(self.selected_idx + direction, len(self.all_shanks))
@@ -1285,8 +1309,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.normalise_idx += 1
         idx = np.mod(self.normalise_idx, len(self.loaddata.possible_configs))
         self.normalise_levels = self.loaddata.possible_configs[idx]
-        utils.find_actions(self.img_init, self.img_options_group).trigger()
-        utils.find_actions(self.probe_init, self.probe_options_group).trigger()
+        utils.find_actions(self.img_init, self.img_options_group).trigger() if self.img_init else None
+        utils.find_actions(self.probe_init, self.probe_options_group).trigger() if self.probe_init else None
 
     def on_fig_size_changed(self) -> None:
         """
@@ -1361,7 +1385,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         -------
         None
         """
-        shank = kwargs.get('shank')
         self.loaddata.set_init_alignment()
         feature_prev = self.loaddata.feature_prev
         if np.any(feature_prev):

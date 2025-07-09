@@ -91,7 +91,7 @@ class AlignmentLoaderONE(AlignmentLoader):
 
     def load_alignments(self):
         traj = self.one.alyx.rest('trajectories', 'list', probe_insertion=self.insertion['id'],
-                                  provenance='Ephys aligned histology track', expires=timedelta(days=1))# no_cache=True) #TODO put back
+                                  provenance='Ephys aligned histology track', no_cache=True)
         if traj:
             return traj[0]['json']
 
@@ -104,12 +104,12 @@ class AlignmentLoaderONE(AlignmentLoader):
 
 
 class AlignmentLoaderLocal(AlignmentLoader):
-    def __init__(self, data_path, shank_idx, n_shanks, brain_atlas, user=None):
+    def __init__(self, data_path, shank_idx, n_shanks, brain_atlas, user=None, xyz_picks=None):
         self.data_path = data_path
         self.shank_idx = shank_idx
         self.n_shanks = n_shanks
 
-        super().__init__(brain_atlas, user=user)
+        super().__init__(brain_atlas, user, xyz_picks=xyz_picks)
 
     def load_xyz_picks(self):
         xyz_file_name = '*xyz_picks.json' if self.n_shanks == 1 else \
