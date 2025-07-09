@@ -429,3 +429,58 @@ def populate_lists(
     # Set the default selected item to the first option, if available
     if init:
         combobox.setCurrentIndex(0)
+
+from functools import wraps
+
+def shank_loop(func: Callable) -> Callable:
+    """
+    Decorator to loop over shanks and call the function with (shank: Union[List[str], Tuple[str, ...]], items: Union[Dict, Bunch]).
+
+    This decorator automatically defaults 'shanks' to self.all_shanks if none are provided.
+    It then iterates over each shank, fetching the corresponding items from self.shank_items,
+    and calls the decorated function with shank and items as extra arguments.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to decorate. It should have a signature where the first two arguments
+        after 'self' are 'shank' (the current shank from the loop) and 'items'
+        (self.shank_items[shank]).
+
+    Returns
+    -------
+    Callable
+        The wrapped function.
+    """
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs) -> Any:
+        # Use all_shanks if none provided
+
+        shanks = kwargs.pop('shanks', self.all_shanks)
+        shanks = self.all_shanks if shanks is None else shanks
+        configs = kwargs.pop('configs', self.loaddata.configs)
+        configs = self.loaddata.configs if configs is None else configs
+        data_only = kwargs.pop('data_only', False)
+
+        results = []
+        if configs:
+            for config in configs:
+                self.loaddata.current_config = config
+                for shank in shanks:
+                    self.loaddata.current_shank = shank
+                    if not self.loaddata.get_current_shank().align_exists and not data_only:
+                        continue
+
+                    result = func(self, self.shank_items[shank][config], *args, **kwargs, shank=shank, config=config)
+                    results.append(result)
+        else:
+            for shank in shanks:
+                self.loaddata.current_shank = shank
+                if not self.loaddata.get_current_shank().align_exists and not data_only:
+                    continue
+                result = func(self, self.shank_items[shank], *args, **kwargs, shank=shank, config=None)
+                results.append(result)
+        return results
+    return wrapper
+

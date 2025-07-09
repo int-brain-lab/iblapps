@@ -101,6 +101,10 @@ class ProbeLoader(ABC):
         return self.get_current_shank().loaders['align'].align.xyz_channels
 
     @property
+    def xyz_clusters(self):
+        return self.xyz_channels[self.get_current_shank().raw_data['clusters']['channels']]
+
+    @property
     def xyz_track(self):
         return self.get_current_shank().loaders['align'].align.xyz_track
 
