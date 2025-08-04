@@ -169,6 +169,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         # TODO make sure this works as expected
         # Keep track of normalization
 
+        self.blockPlugins = False
+
     @shank_loop
     def init_shank_items(self, items: Union[Dict, Bunch], data_only=True, **kwargs):
         items.img_plots = list()
@@ -278,6 +280,18 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             items.ephys_plot = None
             items.y_scale = None
             items.xrange = data['xrange']
+
+
+    def execute_plugins(self, func, *args, **kwargs):
+
+        if self.blockPlugins:
+            return
+
+        for _, plug in self.plugins.items():
+            plug_func = plug.get(func, None)
+            if plug_func is not None:
+                plug_func(self, *args, **kwargs)
+
 
     # -------------------------------------------------------------------------------------------------
     # Plotting functions
@@ -469,6 +483,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             self.scatter_levels = Bunch.fromkeys(self.all_shanks, None)
             self._plot_scatter_panels(plot_type, data_only=data_only, **kwargs)
 
+        self.execute_plugins('plot_scatter_panels', plot_type)
+
 
     @shank_loop
     def _plot_scatter_panels(self,  items: Union[Dict, Bunch], plot_type, data_only=True, **kwargs):
@@ -523,6 +539,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             self.probe_levels = Bunch.fromkeys(self.all_shanks, None)
             self._plot_probe_panels(plot_type, data_only=data_only, **kwargs)
 
+        self.execute_plugins('plot_probe_panels', plot_type)
 
     @shank_loop
     def _plot_probe_panels(self, items: Union[Dict, Bunch], plot_type, data_only=True, **kwargs):
@@ -644,6 +661,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.set_yaxis_range('fig_hist', shanks=shanks)
         self.update_string()
 
+        self.execute_plugins('update_plots')
+
         # for hook in self.plot_hooks:
         #     hook(self)
         # def register_hook(self, func):
@@ -712,6 +731,7 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.setup(init=init)
 
         if not init:
+            self.execute_plugins('on_config_selected')
             self.setFocus()
             self.raise_()
             self.activateWindow()
@@ -750,6 +770,9 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.fix_reference_colours = True if len(self.all_shanks) > 1 else False
 
         self.on_config_selected(0, init=True)
+
+
+        self.execute_plugins('data_button_pressed')
 
         self.init_display()
         self.data_button.setStyleSheet(utils.button_style['deactivated'])
@@ -804,10 +827,13 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.set_probe_lims(data_only=True)
         self.set_yaxis_lims(self.loaddata.y_min, self.loaddata.y_max, data_only=True)
 
+        # TODO is this generic enough?
+        self.blockPlugins = True
         utils.find_actions(self.img_init, self.img_options_group).trigger() if self.img_init else None
         utils.find_actions(self.line_init, self.line_options_group).trigger() if self.line_init else None
         utils.find_actions(self.probe_init, self.probe_options_group).trigger() if self.probe_init else None
         utils.find_actions(self.slice_init, self.slice_options_group).trigger()
+        self.blockPlugins = False
         # TODO check
         # utils.find_actions(self.unit_init, self.filter_options_group).trigger()
 
@@ -841,11 +867,16 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         if filter_type == self.filter_init:
             return
 
+        self.blockPlugins = True
         self._filter_units(filter_type, data_only=data_only)
         utils.find_actions(self.img_init, self.img_options_group).trigger() if self.img_init else None
         utils.find_actions(self.line_init, self.line_options_group).trigger() if self.line_init else None
         utils.find_actions(self.probe_init, self.probe_options_group).trigger() if self.probe_init else None
         self.filter_init = filter_type
+        self.blockPlugins = False
+
+        self.execute_plugins('filter_unit_pressed')
+
 
     @shank_loop
     def _filter_units(self, items, filter_type, data_only=True, **kwargs):

@@ -7,6 +7,7 @@ from atlaselectrophysiology.qt_utils.widgets import GridTabSwitcher
 from atlaselectrophysiology.plugins.cluster_popup import setup as setup_cluster_popup
 from atlaselectrophysiology.plugins.region_tree import setup as setup_region_tree
 from atlaselectrophysiology.plugins.qc_dialog import setup as setup_qc_dialog
+from atlaselectrophysiology.plugins.unity_3d import setup as setup_unity_3d
 from collections import defaultdict
 
 pg.setConfigOption('background', 'w')
@@ -734,6 +735,7 @@ class Setup():
         # TODO
         setup_cluster_popup(self)
         setup_region_tree(self)
+        setup_unity_3d(self)
         # setup_export_pngs(self)
         if not self.offline:
             # setup_nearby_sessions(self)
