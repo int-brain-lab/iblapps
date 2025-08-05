@@ -102,7 +102,8 @@ class ProbeLoader(ABC):
 
     @property
     def xyz_clusters(self):
-        return self.xyz_channels[self.get_current_shank().raw_data['clusters']['channels']]
+        clust = self.get_current_shank().raw_data['clusters']['channels'][self.get_current_shank().loaders['plots'].cluster_idx]
+        return self.xyz_channels[clust]
 
     @property
     def xyz_track(self):
