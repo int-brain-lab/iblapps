@@ -735,7 +735,7 @@ class Setup():
         # TODO
         setup_cluster_popup(self)
         setup_region_tree(self)
-        setup_unity_3d(self)
+        # setup_unity_3d(self)
         # setup_export_pngs(self)
         if not self.offline:
             # setup_nearby_sessions(self)

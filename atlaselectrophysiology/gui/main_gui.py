@@ -777,8 +777,8 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         self.init_display()
         self.data_button.setStyleSheet(utils.button_style['deactivated'])
 
-        self.subj_line.clearFocus()
-        self.subj_combobox.clearFocus()
+        # self.subj_line.clearFocus()
+        # self.subj_combobox.clearFocus()
 
         self.setFocus()
         self.raise_()
@@ -1394,6 +1394,9 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
         -------
         None
         """
+
+        min_val = self.loaddata.chn_min
+        max_val = self.loaddata.chn_max
 
         items.yrange = [min_val - items.probe_extra, max_val + items.probe_extra]
 

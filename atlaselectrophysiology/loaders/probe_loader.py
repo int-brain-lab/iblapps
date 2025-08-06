@@ -6,16 +6,19 @@ import pandas as pd
 from pathlib import Path
 import re
 
+import spikeglx
 from atlaselectrophysiology.loaders.alignment_loader import AlignmentLoaderONE, AlignmentLoaderLocal
 from atlaselectrophysiology.loaders.data_loader import (DataLoaderONE, DataLoaderLocal, CollectionData,
                                                         SpikeGLXLoaderLocal, SpikeGLXLoaderONE)
 from atlaselectrophysiology.loaders.data_uploader import DataUploaderONE, DataUploaderLocal
 from atlaselectrophysiology.loaders.histology_loader import NrrdSliceLoader, download_histology_data
 from atlaselectrophysiology.loaders.plot_loader import PlotLoader
+from atlaselectrophysiology.loaders.geometry_loader import GeometryLoaderLocal, GeometryLoaderONE
 from iblatlas.atlas import AllenAtlas
 from iblutil.util import Bunch
 from one import params
 from one.api import ONE
+import one.alf.io as alfio
 
 # TODO docstrings and typing and logging
 # TODO local implementation dealing with multi shanks
@@ -124,6 +127,7 @@ class ProbeLoader(ABC):
 
     @property
     def y_min(self):
+        # TODO figure out
         return self.chn_min
 
     @property
@@ -274,12 +278,13 @@ class ProbeLoaderONE(ProbeLoader):
 
         for ins in self.shank_labels:
             loaders = Bunch()
-            loaders['data'] = DataLoaderONE(ins, self.one, spike_collection=self.spike_collection)
+            loaders['geom'] = GeometryLoaderONE(ins, self.one)
+            loaders['data'] = DataLoaderONE(ins, self.one, loaders['geom'], 0, spike_collection=self.spike_collection)
             loaders['align'] = AlignmentLoaderONE(ins, self.one, self.brain_atlas)
             loaders['upload'] = DataUploaderONE(ins, self.one, self.brain_atlas)
             loaders['ephys'] = SpikeGLXLoaderONE(ins, self.one)
 
-            self.shanks[ins['name']] = ShankLoader(loaders)
+            self.shanks[ins['name']] = ShankLoader(loaders, 0)
 
     def get_session_probe_name(self, ins):
         return ins['session_info']['start_time'][:10] + ' ' + self.normalize_shank_label(ins['name'])
@@ -368,30 +373,33 @@ class ProbeLoaderCSV(ProbeLoader):
             xyz_picks = ins['json'].get('xyz_picks', None)
             xyz_picks = np.array(xyz_picks) / 1e6 if xyz_picks is not None else None
 
+
             # Quarter is offline
             if shank.is_quarter:
-
-                loaders['data'] = DataLoaderLocal(local_path, collections)
+                print('quarter')
+                loaders['geom'] = GeometryLoaderLocal(local_path, collections)
+                loaders['data'] = DataLoaderLocal(local_path, collections, loaders['geom'], 0)
                 loaders['align'] = AlignmentLoaderLocal(local_path, 0, 1, self.brain_atlas, user=user,
                                                         xyz_picks=xyz_picks)
                 loaders['upload'] = DataUploaderLocal(local_path, 0, 1, self.brain_atlas, user=user)
                 loaders['ephys'] = SpikeGLXLoaderLocal(local_path, collections.meta_collection)
-                self.shanks[shank.probe]['quarter'] = ShankLoader(loaders)
+                self.shanks[shank.probe]['quarter'] = ShankLoader(loaders, 0)
             else:
                 # Dense is online
-                ins = self.get_insertion(shank)
-
+                print('dense')
                 # If we don't have the data locally we download it
                 if collections.spike_collection == '':
-                    loaders['data'] = DataLoaderONE(ins, self.one)
+                    loaders['geom'] = GeometryLoaderONE(ins, self.one)
+                    loaders['data'] = DataLoaderONE(ins, self.one, loaders['geom'], 0)
                 # Otherwise we load from local
                 else:
-                    loaders['data'] = DataLoaderLocal(local_path, collections)
+                    loaders['geom'] =  GeometryLoaderLocal(local_path, collections)
+                    loaders['data'] = DataLoaderLocal(local_path, collections, loaders['geom'], 0)
 
                 loaders['align'] = AlignmentLoaderONE(ins, self.one, self.brain_atlas, user=user)
                 loaders['upload'] = DataUploaderONE(ins, self.one, self.brain_atlas)
                 loaders['ephys'] = SpikeGLXLoaderONE(ins, self.one)
-                self.shanks[shank.probe]['dense'] = ShankLoader(loaders)
+                self.shanks[shank.probe]['dense'] = ShankLoader(loaders, 0)
 
         self._sync_alignments()
         self.subj = shank['subject']
@@ -525,10 +533,12 @@ class ProbeLoaderLocal(ProbeLoader):
         """
         self.folder_path = Path(folder_path)
 
-        self.chn_coords_all = np.load(self.folder_path.joinpath('channels.localCoordinates.npy'))
-        chn_x = np.unique(self.chn_coords_all[:, 0])
-        chn_x_diff = np.diff(chn_x)
-        self.n_shanks = np.sum(chn_x_diff > 100) + 1
+        collections = CollectionData()
+
+        self.geom = GeometryLoaderLocal(self.folder_path, collections)
+        self.geom.get_geometry()
+
+        self.n_shanks = self.geom.geometry.n_shanks
 
         if self.n_shanks == 1:
             shank_list = ['1/1']
@@ -558,18 +568,21 @@ class ProbeLoaderLocal(ProbeLoader):
 
         self.shanks = Bunch()
 
-        for ishank in self.shank_labels:
+        for ish, ishank in enumerate(self.shank_labels):
             loaders = Bunch()
-            loaders['data'] = DataLoaderLocal(self.folder_path, CollectionData())
-            loaders['align'] = AlignmentLoaderLocal(self.folder_path, ishank, self.n_shanks, self.brain_atlas)
-            loaders['upload'] = DataUploaderLocal(self.folder_path, ishank, self.n_shanks, self.brain_atlas)
+            loaders['geom'] = self.geom
+            loaders['data'] = DataLoaderLocal(self.folder_path, CollectionData(), loaders['geom'], ish)
+            loaders['align'] = AlignmentLoaderLocal(self.folder_path, ish, self.n_shanks, self.brain_atlas)
+            loaders['upload'] = DataUploaderLocal(self.folder_path, ish, self.n_shanks, self.brain_atlas)
             loaders['ephys'] = SpikeGLXLoaderLocal(self.folder_path, '')
 
-            self.shanks[f'shank_{ishank}'] = ShankLoader(loaders)
+            self.shanks[f'shank_{ishank}'] = ShankLoader(loaders, ish)
 
 
 class ShankLoader:
-    def __init__(self, loaders):
+    def __init__(self, loaders, shank_idx):
+
+        self.shank_idx = shank_idx
         self.loaders = loaders
         self.loaders['align'].load_previous_alignments()
         self.loaders['align'].get_starting_alignment(0)
@@ -581,19 +594,27 @@ class ShankLoader:
             return
 
         # Load data
-        self.meta_data = self.loaders['ephys'].get_meta_data()
+        #self.meta_data = self.loaders['ephys'].get_meta_data()
+        if self.loaders['geom'].geometry is None:
+            self.loaders['geom'].get_geometry()
+
         self.raw_data = self.loaders['data'].get_data()
         self.raw_data['raw_snippets'] = self.loaders['ephys'].load_ap_snippets()
 
-        if self.meta_data['exists']:
-            self.chn_coords = np.c_[self.meta_data['x'], self.meta_data['y']]
-            self.chn_depths = self.chn_coords[:, 1]
-        elif self.raw_data['channels']['exists']:
-            self.chn_coords = self.raw_data['channels']['localCoordinates']
-            self.chn_depths = self.chn_coords[:, 1]
-        else:
-            self.chn_coords = None
-            self.chn_depths = None
+        meta = self.loaders['geom'].geometry.get_chns_for_shank(self.shank_idx)
+        self.chn_coords = meta.chn_coords
+        self.chn_depths = self.chn_coords[:, 1]
+
+        # TODO change to geom
+        # if self.meta_data['exists']:
+        #     self.chn_coords = np.c_[self.meta_data['x'], self.meta_data['y']]
+        #     self.chn_depths = self.chn_coords[:, 1]
+        # elif self.raw_data['channels']['exists']:
+        #     self.chn_coords = self.raw_data['channels']['localCoordinates']
+        #     self.chn_depths = self.chn_coords[:, 1]
+        # else:
+        #     self.chn_coords = None
+        #     self.chn_depths = None
 
         if self.raw_data['clusters']['exists']:
             self.cluster_chns = self.raw_data['clusters']['channels']
@@ -603,7 +624,7 @@ class ShankLoader:
             self.cluster_chns = None
 
         # Generate plots
-        self.loaders['plots'] = PlotLoader(self.raw_data, self.meta_data, 0)
+        self.loaders['plots'] = PlotLoader(self.raw_data, meta, 0)
         self.loaders['plots'].get_plots()
 
         if self.chn_coords is not None and self.loaders['align'].xyz_picks is not None:

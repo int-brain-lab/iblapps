@@ -43,8 +43,9 @@ class GridTabSwitcher(QtWidgets.QWidget):
         self.panels = panels
         self.panel_names = list(names)
 
-        if len(self.panels) == 4:
+        if len(self.panels) > 1:
             self.splitter_main.addWidget(self.splitter_top)
+        if len(self.panels) > 2:
             self.splitter_main.addWidget(self.splitter_bottom)
 
         self.add_splitter_layout()
@@ -55,6 +56,16 @@ class GridTabSwitcher(QtWidgets.QWidget):
 
         if len(self.panels) == 1:
             self.splitter_main.addWidget(self.panels[0])
+        elif len(self.panels) == 2:
+            self.splitter_top.addWidget(self.panels[0])
+            self.splitter_top.addWidget(self.panels[1])
+            self.splitter_top.setSizes([1] * self.splitter_top.count())
+        elif len(self.panels) == 3:
+            self.splitter_top.addWidget(self.panels[0])
+            self.splitter_top.addWidget(self.panels[1])
+            self.splitter_bottom.addWidget(self.panels[2])
+            self.splitter_top.setSizes([1] * self.splitter_top.count())
+            self.splitter_bottom.setSizes([1] * 2)
         elif len(self.panels) == 4:
             self.splitter_top.addWidget(self.panels[0])
             self.splitter_top.addWidget(self.panels[1])
@@ -92,10 +103,11 @@ class GridTabSwitcher(QtWidgets.QWidget):
 
         if len(self.panels) == 1:
             splitters = [self.splitter_main]
-        elif len(self.panels) == 4:
-            splitters = [self.splitter_top, self.splitter_bottom]
+        elif len(self.panels) == 2:
+            splitters = [self.splitter_top]
         else:
-            return
+            splitters = [self.splitter_top, self.splitter_bottom]
+
 
         for splitter in splitters:
             for i in reversed(range(splitter.count())):

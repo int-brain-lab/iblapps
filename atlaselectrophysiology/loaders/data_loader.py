@@ -34,16 +34,20 @@ class CollectionData:
     meta_collection: Optional[str] = ''
 
 
+
+
 class DataLoader(ABC):
-    def __init__(self, geometry, shank_idx):
+    def __init__(self, geometry=None, shank_idx=None):
         self.geometry = geometry
-        self.shank_chns = self.geometry.get_chns_for_shank(shank_idx)
+        self.shank_idx = shank_idx
         self.filter = False
 
     def get_data(self):
         """
         Load/ Download all data associated with probe
         """
+        # TODO better naming
+        self.shank_chns = self.geometry.geometry.get_chns_for_shank(self.shank_idx)
 
         data = Bunch()
         # Load in spike sorting data
@@ -131,6 +135,8 @@ class DataLoader(ABC):
 
         rms_data = self.load_ephys_data(f'ephysTimeRms{band}')
 
+        rms_data = self.filter_raw_by_chns(rms_data)
+
         if rms_data['exists']:
             if 'amps' in rms_data.keys():
                 rms_data['rms'] = rms_data.pop('amps')
@@ -148,6 +154,8 @@ class DataLoader(ABC):
         """
 
         psd_data = self.load_ephys_data(f'ephysSpectralDensity{band}')
+
+        psd_data = self.filter_raw_by_chns(psd_data)
 
         if psd_data['exists']:
             if 'amps' in psd_data.keys():
@@ -174,27 +182,32 @@ class DataLoader(ABC):
             # Remove low firing rate clusters
             spikes, clusters = self.filter_spikes_and_clusters(spikes, clusters)
 
+        spikes, clusters, channels = self.filter_spikes_by_chns(spikes, clusters, channels)
+
         return spikes, clusters, channels
 
     def filter_spikes_by_chns(self, spikes, clusters, channels):
 
-        spikes_idx = np.isin(channels['rawInd'][clusters['channels'][spikes['clusters']]], self.shank_chns['orig_ind'])
+
+        #spikes_idx = np.isin(channels['rawInd'][clusters['channels'][spikes['clusters']]], self.shank_chns['orig_ind'])
+        # Maybe?
+        spikes_idx = np.isin(channels['rawInd'][clusters['channels'][spikes['clusters']]], channels['rawInd'][self.shank_chns['spikes_ind']])
         for key in spikes.keys():
             if key == 'exists':
                 continue
             spikes[key] = spikes[key][spikes_idx]
 
-        clusters_idx = np.isin(channels['rawInd'][clusters['channels']], self.shank_chns['orig_ind'])
-        for key in clusters.keys():
-            if key == 'exists':
-                continue
-            clusters[key] = clusters[key][clusters_idx]
+        # clusters_idx = np.isin(channels['rawInd'][clusters['channels']], self.shank_chns['orig_ind'])
+        # for key in clusters.keys():
+        #     if key == 'exists':
+        #         continue
+        #     clusters[key] = clusters[key][clusters_idx]
 
-        channels_idx = np.isin(channels['rawInd'], self.shank_chns['orig_ind'])
-        for key in channels.keys():
-            if key == 'exists':
-                continue
-            channels[key] = channels[key][channels_idx]
+        # channels_idx = np.isin(channels['rawInd'], self.shank_chns['orig_ind'])
+        # for key in channels.keys():
+        #     if key == 'exists':
+        #         continue
+        #     channels[key] = channels[key][channels_idx]
 
         return spikes, clusters, channels
 
@@ -205,7 +218,7 @@ class DataLoader(ABC):
             elif len(data[key].shape) == 1:
                 data[key] = data[key]
             else:
-                data[key] = data[key][:, self.shank_chns['orig_ind']]
+                data[key] = data[key][:, self.shank_chns['spikes_ind']]
 
         return data
 
@@ -232,7 +245,7 @@ class DataLoader(ABC):
 
 
 class DataLoaderONE(DataLoader):
-    def __init__(self, insertion, one, session_path=None, spike_collection=None):
+    def __init__(self, insertion, one, geometry, shank_idx, session_path=None, spike_collection=None):
         self.one = one
         self.eid = insertion['session']
         self.session_path = session_path or one.eid2path(self.eid)
@@ -242,7 +255,7 @@ class DataLoaderONE(DataLoader):
         self.probe_collection = str(self.probe_path.relative_to(self.session_path))
         self.filter = True
 
-        super().__init__()
+        super().__init__(geometry, shank_idx)
 
     def get_spike_sorting_path(self):
         """
@@ -281,7 +294,7 @@ class DataLoaderONE(DataLoader):
 
 
 class DataLoaderLocal(DataLoader):
-    def __init__(self, probe_path, collections: CollectionData):
+    def __init__(self, probe_path, collections: CollectionData, geom, shank_idx):
 
         self.probe_path = probe_path
         self.spike_path = probe_path.joinpath(collections.spike_collection)
@@ -291,7 +304,7 @@ class DataLoaderLocal(DataLoader):
         self.meta_path = probe_path.joinpath(collections.meta_collection)
         self.probe_collection = collections.spike_collection
 
-        super().__init__()
+        super().__init__(geom, shank_idx)
 
     def load_passive_data(self, alf_object, **kwargs):
         return self.load_data(alfio.load_object, self.task_path, alf_object, **kwargs)

@@ -107,6 +107,8 @@ def compute_spike_average(spikes, clusters):
     idx = avgs.index.values
     clust_idx = np.arange(clusters.channels.size)
 
+    # Fix this so we can filter by the channels and clusters
+
     avg_amps = np.full(clust_idx.size, np.nan)
     avg_amps[idx] = avgs['amps']['mean'].values * 1e6
 
@@ -181,57 +183,68 @@ class PlotLoader:
     def __init__(self, data, metadata, shank_idx=0):
         self.data = data
 
-        if metadata['exists']:
-            self.chn_coords = np.c_[metadata['x'], metadata['y']]
-            self.chn_ind_raw = metadata['ind']
-            self.chn_ind = np.arange(self.chn_ind_raw.size)
+        self.chn_coords = metadata.chn_coords
+        self.chn_ind = metadata.chn_ind
+        self.chn_min = metadata.chn_min
+        self.chn_max = metadata.chn_max
+        self.idx_full = metadata.idx_full
+        self.chn_full = metadata.chn_full
+        self.chn_diff = metadata.chn_diff
 
-            self.chn_min = np.min(self.chn_coords[:, 1])
-            self.chn_max = np.max(self.chn_coords[:, 1])
-            self.chn_diff = np.min(np.abs(np.diff(np.unique(self.chn_coords[:, 1]))))
-            self.chn_full = np.arange(self.chn_min, self.chn_max + self.chn_diff, self.chn_diff)
+        self.N_BNK = len(np.unique(self.chn_coords[:, 0]))
 
-            self.N_BNK = len(np.unique(self.chn_coords[:, 0]))
-            self.idx_full = np.where(np.isin(self.chn_full, self.chn_coords[:, 1]))[0]
 
-        else:
-            # TODO handle this logic in the data loading part
-            self.chn_coords_all = data['channels']['localCoordinates']
-            self.chn_ind_all = data['channels']['rawInd'].astype(int)
-
-            self.chn_min = np.min(self.chn_coords_all[:, 1])
-            self.chn_max = np.max(self.chn_coords_all[:, 1])
-            self.chn_diff = np.min(np.abs(np.diff(np.unique(self.chn_coords_all[:, 1]))))
-
-            self.chn_full = np.arange(self.chn_min, self.chn_max + self.chn_diff, self.chn_diff)
-
-            chn_x = np.unique(self.chn_coords_all[:, 0])
-            chn_x_diff = np.diff(chn_x)
-            n_shanks = np.sum(chn_x_diff > 100) + 1
-
-            groups = np.split(chn_x, np.where(np.diff(chn_x) > 100)[0] + 1)
-
-            if n_shanks > 1:
-                shanks = {}
-                for iShank, grp in enumerate(groups):
-                    if len(grp) == 1:
-                        grp = np.array([grp[0], grp[0]])
-                    shanks[iShank] = [grp[0], grp[1]]
-
-                shank_chns = np.bitwise_and(self.chn_coords_all[:, 0] >= shanks[shank_idx][0],
-                                            self.chn_coords_all[:, 0] <= shanks[shank_idx][1])
-                self.chn_coords = self.chn_coords_all[shank_chns, :]
-                self.chn_ind = self.chn_ind_all[shank_chns]
-            else:
-                self.chn_coords = self.chn_coords_all
-                self.chn_ind = self.chn_ind_all
-
-            chn_sort = np.argsort(self.chn_coords[:, 1])
-            self.chn_coords = self.chn_coords[chn_sort]
-            self.chn_ind = self.chn_ind[chn_sort]
-
-            self.N_BNK = len(np.unique(self.chn_coords[:, 0]))
-            self.idx_full = np.where(np.isin(self.chn_full, self.chn_coords[:, 1]))[0]
+        # if metadata['exists']:
+        #     self.chn_coords = np.c_[metadata['x'], metadata['y']]
+        #     self.chn_ind_raw = metadata['ind']
+        #     self.chn_ind = np.arange(self.chn_ind_raw.size)
+        #
+        #     self.chn_min = np.min(self.chn_coords[:, 1])
+        #     self.chn_max = np.max(self.chn_coords[:, 1])
+        #     self.chn_diff = np.min(np.abs(np.diff(np.unique(self.chn_coords[:, 1]))))
+        #     self.chn_full = np.arange(self.chn_min, self.chn_max + self.chn_diff, self.chn_diff)
+        #
+        #     self.N_BNK = len(np.unique(self.chn_coords[:, 0]))
+        #     self.idx_full = np.where(np.isin(self.chn_full, self.chn_coords[:, 1]))[0]
+        #
+        # else:
+        #     # TODO handle this logic in the data loading part
+        #     self.chn_coords_all = data['channels']['localCoordinates']
+        #     self.chn_ind_all = data['channels']['rawInd'].astype(int)
+        #
+        #     self.chn_min = np.min(self.chn_coords_all[:, 1])
+        #     self.chn_max = np.max(self.chn_coords_all[:, 1])
+        #     self.chn_diff = np.min(np.abs(np.diff(np.unique(self.chn_coords_all[:, 1]))))
+        #
+        #     self.chn_full = np.arange(self.chn_min, self.chn_max + self.chn_diff, self.chn_diff)
+        #
+        #     chn_x = np.unique(self.chn_coords_all[:, 0])
+        #     chn_x_diff = np.diff(chn_x)
+        #     n_shanks = np.sum(chn_x_diff > 100) + 1
+        #
+        #     groups = np.split(chn_x, np.where(np.diff(chn_x) > 100)[0] + 1)
+        #
+        #     if n_shanks > 1:
+        #         shanks = {}
+        #         for iShank, grp in enumerate(groups):
+        #             if len(grp) == 1:
+        #                 grp = np.array([grp[0], grp[0]])
+        #             shanks[iShank] = [grp[0], grp[1]]
+        #
+        #         shank_chns = np.bitwise_and(self.chn_coords_all[:, 0] >= shanks[shank_idx][0],
+        #                                     self.chn_coords_all[:, 0] <= shanks[shank_idx][1])
+        #         self.chn_coords = self.chn_coords_all[shank_chns, :]
+        #         self.chn_ind = self.chn_ind_all[shank_chns]
+        #     else:
+        #         self.chn_coords = self.chn_coords_all
+        #         self.chn_ind = self.chn_ind_all
+        #
+        #     chn_sort = np.argsort(self.chn_coords[:, 1])
+        #     self.chn_coords = self.chn_coords[chn_sort]
+        #     self.chn_ind = self.chn_ind[chn_sort]
+        #
+        #     self.N_BNK = len(np.unique(self.chn_coords[:, 0]))
+        #     self.idx_full = np.where(np.isin(self.chn_full, self.chn_coords[:, 1]))[0]
 
         self.filter_units('All')
         self.get_data()
