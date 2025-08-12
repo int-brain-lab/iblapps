@@ -789,7 +789,6 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
 
     def shank_button_pressed(self):
 
-        self.loaddata.set_init_alignment()
         self.selected_shank = self.loaddata.selected_shank
         self.selected_idx = self.loaddata.shank_idx
 
