@@ -887,28 +887,34 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
     # Upload/ save data
     # -------------------------------------------------------------------------------------------------
 
-    def complete_button_pressed(self):
+    def complete_button_pressed(self, upload_all=None):
         """
         Triggered when complete button or Shift+F key pressed. Uploads final channel locations to
         Alyx
         """
 
-        if not self.offline:
-            display_qc(self)
+        shanks = [self.selected_shank] if not upload_all else self.all_shanks
 
-        upload = QtWidgets.QMessageBox.question(
-            self, '', "Upload alignment?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        for shank in shanks:
+            self.loaddata.selected_shank = shank
+            self.loaddata.current_shank = shank
 
-        if upload == QtWidgets.QMessageBox.Yes:
+            if not self.offline:
+                display_qc(self, shank)
 
-            info = self.loaddata.upload_data()
-            self.prev_alignments = self.loaddata.load_previous_alignments()
-            utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
-            self.loaddata.get_starting_alignment(0)
+            upload = QtWidgets.QMessageBox.question(
+                self, '', f"Upload alignment for {shank}?", QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
 
-            QtWidgets.QMessageBox.information(self, 'Status', info)
-        else:
-            QtWidgets.QMessageBox.information(self, 'Status', "Channels not saved")
+            if upload == QtWidgets.QMessageBox.Yes:
+
+                info = self.loaddata.upload_data()
+                self.prev_alignments = self.loaddata.load_previous_alignments()
+                utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+                self.loaddata.get_starting_alignment(0)
+
+                QtWidgets.QMessageBox.information(self, 'Status', info)
+            else:
+                QtWidgets.QMessageBox.information(self, 'Status', f"Channels for {self.selected_shank} not saved")
 
 
     # -------------------------------------------------------------------------------------------------

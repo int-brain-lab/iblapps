@@ -26,6 +26,7 @@ class DataUploaderONE(DataUploader):
     def __init__(self, insertion, one, brain_atlas):
         self.one = one
         self.pid = insertion['id']
+        self.pname = insertion['name']
         self.resolved = insertion['json'].get('extended_qc', {}).get('alignment_resolved', False)
         self.qc_str = None
         self.confidence_str = None
@@ -46,19 +47,18 @@ class DataUploaderONE(DataUploader):
 
         return upload_info
 
-    @staticmethod
-    def get_upload_info(channels, resolved):
+    def get_upload_info(self, channels, resolved):
         if channels and resolved == 0:
             # Channels saved alignment not resolved
-            info = "Channels locations saved to Alyx. \nAlignment not resolved"
+            info = f"Channels locations for {self.pname} saved to Alyx. \nAlignment not resolved"
 
         if channels and resolved == 1:
             # channels saved alignment resolved, writen to flatiron
-            info = "Channel locations saved to Alyx. \nAlignment resolved and channels datasets written to flatiron"
+            info = f"Channel locations for {self.pname} saved to Alyx. \nAlignment resolved and channels datasets written to flatiron"
 
         if not channels and resolved == 1:
             # alignment already resolved, save alignment but channels not written
-            info = ("Channel locations not saved to Alyx as alignment has already been resolved. "
+            info = (f"Channel locations for {self.pname} not saved to Alyx as alignment has already been resolved. "
                     "\nNew user reference lines have been saved")
 
         return info

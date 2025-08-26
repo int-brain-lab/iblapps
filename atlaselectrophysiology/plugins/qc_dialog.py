@@ -9,7 +9,8 @@ def setup(parent):
     parent.qc_dialog.accepted.connect(lambda: callback(parent))
 
 
-def display(parent):
+def display(parent, shank):
+    parent.qc_dialog.setWindowTitle(f"QC assessment {shank}")
     parent.qc_dialog.exec_()
 
 
