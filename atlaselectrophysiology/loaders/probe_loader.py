@@ -183,6 +183,10 @@ class ProbeLoader(ABC):
     def upload_data(self):
         return self.get_selected_shank().upload_data()
 
+    @property
+    def hemisphere(self):
+        return self.get_selected_shank().hemisphere
+
     @staticmethod
     def normalize_shank_label(shank_label):
         match = re.match(r'(probe\d+)', shank_label)
@@ -372,9 +376,11 @@ class ProbeLoaderCSV(ProbeLoader):
             if shank.is_quarter:
 
                 loaders['data'] = DataLoaderLocal(local_path, collections)
-                loaders['align'] = AlignmentLoaderLocal(local_path, 0, 1, self.brain_atlas, user=user,
+                loaders['align'] = AlignmentLoaderLocal(local_path.joinpath(collections.spike_collection),
+                                                        0, 1, self.brain_atlas, user=user,
                                                         xyz_picks=xyz_picks)
-                loaders['upload'] = DataUploaderLocal(local_path, 0, 1, self.brain_atlas, user=user)
+                loaders['upload'] = DataUploaderLocal(local_path.joinpath(collections.spike_collection),
+                                                      0, 1, self.brain_atlas, user=user)
                 loaders['ephys'] = SpikeGLXLoaderLocal(local_path, collections.meta_collection)
                 self.shanks[shank.probe]['quarter'] = ShankLoader(loaders)
             else:
@@ -509,6 +515,9 @@ class ProbeLoaderCSV(ProbeLoader):
             info[config] = self.get_selected_shank()[config].upload_data()
         return info['dense']
 
+    def hemisphere(self):
+        return self.get_selected_shank()['dense'].hemisphere
+
 
 class ProbeLoaderLocal(ProbeLoader):
     def __init__(self, brain_atlas=None):
@@ -575,6 +584,7 @@ class ShankLoader:
         self.loaders['align'].get_starting_alignment(0)
         self.align_exists = True
         self.data_loaded = False
+        self.hemisphere = -1
 
     def load_data(self):
         if self.data_loaded:
@@ -618,6 +628,8 @@ class ShankLoader:
             self.loaders['plots'].slice_plots = Bunch()
 
         self.data_loaded = True
+        self.hemisphere = np.sign(np.mean(self.loaders['align'].align.xyz_channels[:, 0]))
+        print(self.hemisphere)
 
     def filter_plots(self, filter_type):
 

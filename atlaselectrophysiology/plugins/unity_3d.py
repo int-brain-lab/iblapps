@@ -89,6 +89,8 @@ def plot_probe_panels(parent, plot_type):
 
 
 def plot_scatter_panels(parent, plot_type):
+    if plot_type == 'Amplitude':
+        return
     parent.plugins[PLUGIN_NAME]['loader'].plot_clusters(plot_type)
 
 
@@ -99,7 +101,7 @@ def data_button_pressed(parent):
     parent.plugins[PLUGIN_NAME]['loader'].init()
     regions = get_regions(parent)
     regions = np.unique(np.concatenate(regions))
-    parent.plugins[PLUGIN_NAME]['loader'].add_regions(regions)
+    parent.plugins[PLUGIN_NAME]['loader'].add_regions(regions, parent.loaddata.hemisphere)
     parent.plugins[PLUGIN_NAME]['loader'].plot_channels(parent.probe_init)
     parent.plugins[PLUGIN_NAME]['toggle_action'].setChecked(True)
 
@@ -131,17 +133,20 @@ class Unity3d:
         urchin.ccf25.root.set_material('transparent-lit')
         urchin.ccf25.root.set_alpha(0.5)
 
-    def add_regions(self, regions):
+    def add_regions(self, regions, hemisphere):
 
         regions = [r for r in regions if r not in ['void', 'root']]
         self.regions = urchin.ccf25.get_areas(regions)
-        urchin.ccf25.set_visibilities(self.regions, True, urchin.utils.Side.LEFT)
-        urchin.ccf25.set_materials(self.regions, 'transparent-lit', 'left')
-        urchin.ccf25.set_alphas(self.regions, 0.25, 'left')
+        self.side = urchin.utils.Side.LEFT if hemisphere == -1 else urchin.utils.Side.RIGHT
+
+        urchin.ccf25.set_visibilities(self.regions, True, self.side)
+        urchin.ccf25.set_materials(self.regions, 'transparent-lit')
+        urchin.ccf25.set_alphas(self.regions, 0.25)
+
 
     def toggle_regions(self, display):
         if len(self.regions) > 0:
-            urchin.ccf25.set_visibilities(self.regions, display, urchin.utils.Side.LEFT)
+            urchin.ccf25.set_visibilities(self.regions, display, self.side)
 
     def delete_text(self):
         for text in self.text_list:
