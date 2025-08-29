@@ -30,7 +30,7 @@ def rmsmap(fbin, spectra=True):
      and frequency scales
     """
     if not isinstance(fbin, spikeglx.Reader):
-        sglx = spikeglx.Reader(fbin)
+        sglx = spikeglx.Reader(fbin, sort=False)
         sglx.open()
     rms_win_length_samples = 2 ** np.ceil(np.log2(sglx.fs * RMS_WIN_LENGTH_SECS))
     # the window generator will generates window indices
@@ -80,7 +80,7 @@ def extract_rmsmap(fbin, out_folder=None, spectra=True):
     :return: None
     """
     _logger.info(f"Computing QC for {fbin}")
-    sglx = spikeglx.Reader(fbin)
+    sglx = spikeglx.Reader(fbin, sort=False)
     # check if output ALF files exist already:
     if out_folder is None:
         out_folder = Path(fbin).parent
