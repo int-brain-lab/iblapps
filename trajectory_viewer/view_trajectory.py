@@ -162,19 +162,21 @@ class TrajectoryViewer(QtWidgets.QMainWindow):
 
             picks = np.array(ins['json']['xyz_picks']) / 1e6
 
-            ins_micro = Insertion.from_dict(micro, brain_atlas=ba)
-            mlapdv_micro = ba.xyz2ccf(ins_micro.tip)
             micro_info = dict()
-            micro_info['position'] = [mlapdv_micro[1], mlapdv_micro[0], mlapdv_micro[2]]
-            micro_info['angle'] = [ins_micro.phi - 90, 90 - ins_micro.theta, ins_micro.beta]
-            micro_info['color'] = probe2shank[shank2probe[ins['id']]]
+            if micro is not None:
+                ins_micro = Insertion.from_dict(micro, brain_atlas=ba)
+                mlapdv_micro = ba.xyz2ccf(ins_micro.tip)
+                micro_info['position'] = [mlapdv_micro[1], mlapdv_micro[0], mlapdv_micro[2]]
+                micro_info['angle'] = [90 - ins_micro.phi, 90 + ins_micro.theta, ins_micro.beta]
+                micro_info['color'] = probe2shank[shank2probe[ins['id']]]
 
             # Update the hist info
-            ins_hist = Insertion.from_dict(hist, brain_atlas=ba)
+            #ins_hist = Insertion.from_dict(hist, brain_atlas=ba)
+            ins_hist = Insertion.from_track(picks, brain_atlas=ba)
             mlapdv_hist = ba.xyz2ccf(ins_hist.tip)
             hist_info = dict()
             hist_info['position'] = [mlapdv_hist[1], mlapdv_hist[0], mlapdv_hist[2]]
-            hist_info['angle'] = [ins_hist.phi - 90, 90 - ins_hist.theta, ins_hist.beta]
+            hist_info['angle'] = [90 - ins_hist.phi, 90 + ins_hist.theta, ins_hist.beta]
             hist_info['color'] = probe2shank[shank2probe[ins['id']]]
 
             mlapdv_picks = ba.xyz2ccf(picks)
@@ -226,7 +228,9 @@ class TrajectoryViewer(QtWidgets.QMainWindow):
     def on_data_changed(self, _, __):
 
         if self.probes:
-            urchin.probes.delete(self.probes)
+            for p in self.probes:
+                p.delete()
+            #urchin.probes.delete(self.probes)
         if self.clusters:
             urchin.particles.clear()
 
@@ -238,9 +242,10 @@ class TrajectoryViewer(QtWidgets.QMainWindow):
             key = info.key
             for prov in ['micro', 'hist']:
                 if info[prov]:
-                    positions.append(self.data[key][prov]['position'])
-                    angles.append(self.data[key][prov]['angle'])
-                    colors.append(self.data[key][prov]['color'])
+                    if self.data[key][prov]:
+                        positions.append(self.data[key][prov]['position'])
+                        angles.append(self.data[key][prov]['angle'])
+                        colors.append(self.data[key][prov]['color'])
 
         self.probes = urchin.probes.create(len(positions))
         urchin.probes.set_positions(self.probes, positions)
