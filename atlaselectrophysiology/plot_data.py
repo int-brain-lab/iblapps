@@ -619,11 +619,19 @@ class PlotData:
         bnk_data = []
         bnk_scale = np.empty((self.N_BNK, 2))
         bnk_offset = np.empty((self.N_BNK, 2))
+
+        x_coords = np.unique(self.chn_coords[:, 0])
+        bnk_diff = []
+        for x in x_coords:
+            bnk_idx = np.where(self.chn_coords[:, 0] == x)[0]
+            bnk_ycoords = self.chn_coords[bnk_idx, 1]
+            bnk_diff.append(np.min(np.abs(np.diff(bnk_ycoords))))
+
+        bnk_diff = np.min(bnk_diff)
+
         for iX, x in enumerate(np.unique(self.chn_coords[:, 0])):
             bnk_idx = np.where(self.chn_coords[:, 0] == x)[0]
-
             bnk_ycoords = self.chn_coords[bnk_idx, 1]
-            bnk_diff = np.min(np.abs(np.diff(bnk_ycoords)))
 
             # NP1.0 checkerboard
             if bnk_diff != self.chn_diff:
@@ -635,11 +643,12 @@ class PlotData:
                 # Detect where the nans are, whether it is odd or even
                 _bnk_data = _bnk_vals[np.newaxis, :]
 
-                _bnk_yscale = ((self.chn_max -
-                                self.chn_min) / _bnk_data.shape[1])
+                _bnk_yscale = ((np.max(bnk_ycoords) - np.min(bnk_ycoords)) / _bnk_data.shape[1])
+
                 _bnk_xscale = BNK_SIZE / _bnk_data.shape[0]
 
                 _bnk_yoffset = np.min(bnk_ycoords)
+
                 _bnk_xoffset = BNK_SIZE * iX
 
             else:  # NP2.0
