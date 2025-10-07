@@ -604,9 +604,11 @@ class PlotLoader:
         base_stim = 1
         pre_stim = 0.4
         post_stim = 1
+
         stim_events = passive.get_stim_aligned_activity(stims, self.spike_times, self.spike_depths,
                                                         pre_stim=pre_stim, post_stim=post_stim,
-                                                        base_stim=base_stim, y_lim=[self.chn_min, self.chn_max])
+                                                        base_stim=base_stim,
+                                                        y_lim=[self.chn_min_bc, self.chn_max_bc])
 
         for stim_type, aligned_img in stim_events.items():
             xscale = (post_stim + pre_stim) / aligned_img.shape[1]

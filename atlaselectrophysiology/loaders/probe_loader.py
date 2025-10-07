@@ -515,6 +515,7 @@ class ProbeLoaderCSV(ProbeLoader):
             info[config] = self.get_selected_shank()[config].upload_data()
         return info['dense']
 
+    @property
     def hemisphere(self):
         return self.get_selected_shank()['dense'].hemisphere
 
@@ -629,7 +630,6 @@ class ShankLoader:
 
         self.data_loaded = True
         self.hemisphere = np.sign(np.mean(self.loaders['align'].align.xyz_channels[:, 0]))
-        print(self.hemisphere)
 
     def filter_plots(self, filter_type):
 

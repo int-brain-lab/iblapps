@@ -134,7 +134,6 @@ class Unity3d:
         urchin.ccf25.root.set_alpha(0.5)
 
     def add_regions(self, regions, hemisphere):
-
         regions = [r for r in regions if r not in ['void', 'root']]
         self.regions = urchin.ccf25.get_areas(regions)
         self.side = urchin.utils.Side.LEFT if hemisphere == -1 else urchin.utils.Side.RIGHT
@@ -215,6 +214,10 @@ class Unity3d:
         probes = []
 
         for res in results:
+
+            if res['xyz'] is None:
+                continue
+
             cols = res['values']
             xyz = res['xyz']
             mlapdv = ba.xyz2ccf(xyz, mode='clip')
@@ -239,10 +242,11 @@ class Unity3d:
 
 
         urchin.particles.clear()
-        self.set_points({'pos': positions, 'col': colours})
-        self.set_point_size(self.point_size)
-        self.set_probes(probes)
-        self.set_text(probes)
+        if len(positions) > 0:
+            self.set_points({'pos': positions, 'col': colours})
+            self.set_point_size(self.point_size)
+            self.set_probes(probes)
+            self.set_text(probes)
 
 
 
@@ -263,6 +267,8 @@ def update_clusters(parent, items, plot_type, **kwargs):
 
     xyz = parent.loaddata.xyz_clusters
     data = parent.loaddata.scatter_plots.get(plot_type, None)
+    if data is None:
+        return {'xyz': None, 'values': None, 'shank': kwargs['shank'], 'config': kwargs['config']}
 
     values = data_to_colors(data.colours, data.cmap, data.levels[0], data.levels[1])
 
@@ -273,6 +279,9 @@ def update_channels(parent, items, plot_type, **kwargs):
 
     xyz = parent.loaddata.xyz_channels
     data = parent.loaddata.probe_plots.get(plot_type, None)
+    if data is None:
+        return {'xyz': None, 'values': None, 'shank': kwargs['shank'], 'config': kwargs['config']}
+
     vals = np.concatenate(data.img, axis=1)[0]
 
     # We need to do this because the probe plots are split by bank
