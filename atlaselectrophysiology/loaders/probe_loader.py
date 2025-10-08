@@ -331,14 +331,15 @@ class ProbeLoaderCSV(ProbeLoader):
 
     def get_sessions(self, idx):
         # Returns probes
-        self.session_df = self.df.loc[self.df['session_strip'] == self.subjects[idx]]
+        self.chosen_sess = self.subjects[idx]
+        self.session_df = self.df.loc[self.df['session_strip'] == self.chosen_sess]
         self.sessions = np.unique([self.normalize_shank_label(pr) for pr in self.session_df['probe'].values])
         return self.sessions
 
     def get_shanks(self, idx):
         # Returns shank
-        shank = self.sessions[idx]
-        self.shank_df = self.session_df.loc[self.session_df['probe'].str.contains(shank)].sort_values('probe')
+        self.chosen_probe = self.sessions[idx]
+        self.shank_df = self.session_df.loc[self.session_df['probe'].str.contains(self.chosen_probe)].sort_values('probe')
         self.initialise_shanks()
         self.shank_labels = self.shank_df['probe'].unique()
         return self.shank_labels
@@ -436,6 +437,7 @@ class ProbeLoaderCSV(ProbeLoader):
         self.slice_loader = NrrdSliceLoader(hist_path, self.brain_atlas)
 
     def load_data(self):
+        print(f'******** Loading session {self.chosen_sess} {self.chosen_probe} ********')
         self.download_histology()
         for probe in self.shanks.keys():
             for config in self.configs:

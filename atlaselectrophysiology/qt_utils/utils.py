@@ -178,7 +178,8 @@ def set_view(
 
 
 def toggle_plots(
-        options_group: QtWidgets.QActionGroup
+        options_group: QtWidgets.QActionGroup,
+        dir=1
 ) -> None:
     """
     Cycle through image, line, probe and slice plots using keyboard shortcuts (Alt+1, Alt+2, Alt+3, Alt+4)
@@ -190,7 +191,7 @@ def toggle_plots(
     current_act = options_group.checkedAction()
     actions = options_group.actions()
     current_idx = next(i for i, act in enumerate(actions) if act == current_act)
-    next_idx = np.mod(current_idx + 1, len(actions))
+    next_idx = np.mod(current_idx + dir, len(actions))
     actions[next_idx].setChecked(True)
     actions[next_idx].trigger()
 

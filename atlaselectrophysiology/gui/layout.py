@@ -692,18 +692,30 @@ class Setup():
                 {'shortcut': 'Shift+R', 'callback': self.reset_button_pressed, 'menu': fit_options},
             'Upload': # Shortcut to upload final state to Alyx/to local file
                 {'shortcut': 'Shift+U', 'callback': self.complete_button_pressed, 'menu': fit_options},
-            'Toggle Image Plots': # Shortcuts to toggle between plots options
+            'Toggle Image Plots ->': # Shortcuts to toggle between plots options
                 {'shortcut': 'Alt+1', 'callback': lambda:
-                utils.toggle_plots(self.img_options_group), 'menu': display_options},
-            'Toggle Line Plots':
+                utils.toggle_plots(self.img_options_group, 1), 'menu': display_options},
+            'Toggle Line Plots ->':
                 {'shortcut': 'Alt+2', 'callback': lambda:
-                utils.toggle_plots(self.line_options_group), 'menu': display_options},
-            'Toggle Probe Plots':
+                utils.toggle_plots(self.line_options_group, 1), 'menu': display_options},
+            'Toggle Probe Plots ->':
                 {'shortcut': 'Alt+3', 'callback': lambda:
-                utils.toggle_plots(self.probe_options_group), 'menu': display_options},
-            'Toggle Slice Plots':
+                utils.toggle_plots(self.probe_options_group, 1), 'menu': display_options},
+            'Toggle Slice Plots ->':
                 {'shortcut': 'Alt+4', 'callback': lambda:
-                utils.toggle_plots(self.slice_options_group), 'menu': display_options},
+                utils.toggle_plots(self.slice_options_group, 1), 'menu': display_options},
+            'Toggle Image Plots <-':  # Shortcuts to toggle between plots options
+                {'shortcut': 'Shift+Alt+1', 'callback': lambda:
+                utils.toggle_plots(self.img_options_group, -1), 'menu': display_options},
+            'Toggle Line Plots <-':
+                {'shortcut': 'Shift+Alt+2', 'callback': lambda:
+                utils.toggle_plots(self.line_options_group, -1), 'menu': display_options},
+            'Toggle Probe Plots <-':
+                {'shortcut': 'Shift+Alt+3', 'callback': lambda:
+                utils.toggle_plots(self.probe_options_group, -1), 'menu': display_options},
+            'Toggle Slice Plots <-':
+                {'shortcut': 'Shift+Alt+4', 'callback': lambda:
+                utils.toggle_plots(self.slice_options_group, -1), 'menu': display_options},
             'Reset Axis': # Shortcut to reset axis on figures
                 {'shortcut': 'Shift+A', 'callback': self.reset_axis_button_pressed, 'menu': display_options},
             'Hide/Show Labels': # Shortcut to hide/show region labels
