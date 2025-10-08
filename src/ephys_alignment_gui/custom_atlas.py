@@ -13,7 +13,6 @@ _logger = logging.getLogger(__name__)
 class CustomAtlas(BrainAtlas):
     image = None
     label = None
-    read_string = 'IRP' # Works, but not what it should be.
 
     def __init__(self,
                  atlas_image_file =None,
@@ -69,7 +68,6 @@ class CustomAtlas(BrainAtlas):
             # Reads the 
             IMG = sitk.ReadImage(self.atlas_image_file)
             # Convert sitk to the (ap, ml, dv) np array needed by BrainAtlas
-            #IMG2 = sitk.DICOMOrient(IMG,self.read_string) 
             self.original_image = IMG
             self.image = np.flip(sitk.GetArrayFromImage(IMG).T, axis=(0, 2))
             print('Shape', self.image.shape)
@@ -88,5 +86,4 @@ class CustomAtlas(BrainAtlas):
     def read_atlas_labels(self):
         IMG = sitk.ReadImage(self.atlas_labels_file)
         # Convert sitk to the (ap, ml, dv) np array needed by BrainAtlas
-        #IMG2 = sitk.DICOMOrient(IMG,self.read_string)
         self.label = np.flip(sitk.GetArrayFromImage(IMG).astype(np.int32).T, axis=(0, 2))
