@@ -141,3 +141,6 @@ scratch/
 
 # Store atlas files locally to avoid download every time
 atlas_data/
+
+# emacs
+.dir-locals.el
