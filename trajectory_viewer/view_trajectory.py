@@ -1,6 +1,6 @@
 import oursin as urchin
 from one.api import ONE
-from iblatlas.atlas import AllenAtlas, Insertion
+from iblatlas.atlas import AllenAtlas, Insertion, tilt_spherical
 from ibllib.plots import color_cycle
 
 from PyQt5 import QtWidgets
@@ -62,7 +62,16 @@ class TrajectoryViewer(QtWidgets.QMainWindow):
         p.setColor(QPalette.HighlightedText, Qt.white)
         self.tableView.setPalette(p)
 
-        self.setCentralWidget(self.tableView)
+        self.in_vivo_checkbox = QtWidgets.QCheckBox("Qiu 2018", self)
+        self.in_vivo_checkbox.setChecked(False)
+
+        widget = QtWidgets.QWidget(self)
+        self.vbox = QtWidgets.QVBoxLayout()
+        self.vbox.addWidget(self.in_vivo_checkbox)
+        self.vbox.addWidget(self.tableView)
+        widget.setLayout(self.vbox)
+
+        self.setCentralWidget(widget)
 
         # Sizing
         self.setMinimumSize(800, 400)
@@ -72,6 +81,8 @@ class TrajectoryViewer(QtWidgets.QMainWindow):
         self.tableView.horizontalHeader().sectionClicked.connect(self.on_column_header_clicked)
         self.tableView.verticalHeader().sectionClicked.connect(self.on_row_header_clicked)
         self.tableModel.dataChanged.connect(self.on_data_changed)
+
+        self.in_vivo_checkbox.clicked.connect(lambda: self.on_data_changed(0, 0))
 
     def setup(self):
 
@@ -130,6 +141,7 @@ class TrajectoryViewer(QtWidgets.QMainWindow):
 
         return dataFrame
 
+
     def getData(self, subject):
 
         def _get_key(ins):
@@ -163,12 +175,22 @@ class TrajectoryViewer(QtWidgets.QMainWindow):
             picks = np.array(ins['json']['xyz_picks']) / 1e6
 
             micro_info = dict()
+            micro_info_qiu = dict()
             if micro is not None:
                 ins_micro = Insertion.from_dict(micro, brain_atlas=ba)
+                ins_micro_qiu = Insertion.from_dict(micro, brain_atlas=ba)
+
+                ins_micro_qiu.theta, ins_micro_qiu.phi = tilt_spherical(ins_micro_qiu.theta,ins_micro_qiu.phi, tilt_angle=-5)
+
                 mlapdv_micro = ba.xyz2ccf(ins_micro.tip)
                 micro_info['position'] = [mlapdv_micro[1], mlapdv_micro[0], mlapdv_micro[2]]
                 micro_info['angle'] = [90 - ins_micro.phi, 90 + ins_micro.theta, ins_micro.beta]
                 micro_info['color'] = probe2shank[shank2probe[ins['id']]]
+
+                mlapdv_micro_qiu = ba.xyz2ccf(ins_micro_qiu.tip)
+                micro_info_qiu['position'] = [mlapdv_micro_qiu[1] / 1.031, mlapdv_micro_qiu[0] / 0.952, mlapdv_micro_qiu[2] / 0.885]
+                micro_info_qiu['angle'] = [90 - ins_micro_qiu.phi, 90 + ins_micro_qiu.theta, ins_micro_qiu.beta]
+                micro_info_qiu['color'] = probe2shank[shank2probe[ins['id']]]
 
             # Update the hist info
             #ins_hist = Insertion.from_dict(hist, brain_atlas=ba)
@@ -184,7 +206,7 @@ class TrajectoryViewer(QtWidgets.QMainWindow):
             picks_info['position'] = list(np.c_[mlapdv_picks[:, 1], mlapdv_picks[:, 0], mlapdv_picks[:, 2]])
             picks_info['color'] = [probe2shank[shank2probe[ins['id']]]] * len(mlapdv_picks)
 
-            insertion_info[_get_key(ins)] = {'micro': micro_info, 'hist': hist_info, 'picks': picks_info,
+            insertion_info[_get_key(ins)] = {'micro': micro_info, 'micro_qiu': micro_info_qiu, 'hist': hist_info, 'picks': picks_info,
                                              'eid': ins['session_info']['id'], 'pid': ins['id'], 'name': ins['name']}
 
         return insertion_info
@@ -242,10 +264,14 @@ class TrajectoryViewer(QtWidgets.QMainWindow):
             key = info.key
             for prov in ['micro', 'hist']:
                 if info[prov]:
-                    if self.data[key][prov]:
-                        positions.append(self.data[key][prov]['position'])
-                        angles.append(self.data[key][prov]['angle'])
-                        colors.append(self.data[key][prov]['color'])
+                    if prov == 'micro':
+                        key_prov = 'micro_qiu' if self.in_vivo_checkbox.isChecked() else 'micro'
+                    else:
+                        key_prov = prov
+                    if self.data[key][key_prov]:
+                        positions.append(self.data[key][key_prov]['position'])
+                        angles.append(self.data[key][key_prov]['angle'])
+                        colors.append(self.data[key][key_prov]['color'])
 
         self.probes = urchin.probes.create(len(positions))
         urchin.probes.set_positions(self.probes, positions)
@@ -344,7 +370,6 @@ class BoolDataFrameTableModel(DataFrameTableModel):
 
         # Handle the checkbox change in column 1
         if role == Qt.CheckStateRole and self._dataFrame.columns[column] in self.bool_columns:
-            print('in the place where I should change')
             # Toggle the boolean value
             self._dataFrame.iloc[row, column] = value == Qt.Checked
             # Emit dataChanged signal to update the view
