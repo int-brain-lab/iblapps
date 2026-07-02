@@ -20,6 +20,7 @@ def download_histology_data(subject, lab):
         FLAT_IRON_HIST_REL_PATH = Path('histology', lab_temp, subject,
                                        'downsampledStacks_25', 'sample2ARA')
         baseurl = (par.HTTP_DATA_SERVER + '/' + '/'.join(FLAT_IRON_HIST_REL_PATH.parts))
+        baseurl = (par.HTTP_DATA_SERVER + '/' + '/'.join(FLAT_IRON_HIST_REL_PATH.parts) + '/')
         r = requests.get(baseurl, auth=(par.HTTP_DATA_SERVER_LOGIN, par.HTTP_DATA_SERVER_PWD))
         r.raise_for_status()
     except Exception as err:
@@ -29,6 +30,7 @@ def download_histology_data(subject, lab):
             FLAT_IRON_HIST_REL_PATH = Path('histology', lab_temp, subject_rem,
                                            'downsampledStacks_25', 'sample2ARA')
             baseurl = (par.HTTP_DATA_SERVER + '/' + '/'.join(FLAT_IRON_HIST_REL_PATH.parts))
+            baseurl = (par.HTTP_DATA_SERVER + '/' + '/'.join(FLAT_IRON_HIST_REL_PATH.parts) + '/')
             r = requests.get(baseurl, auth=(par.HTTP_DATA_SERVER_LOGIN, par.HTTP_DATA_SERVER_PWD))
             r.raise_for_status()
         except Exception as err:
@@ -38,6 +40,7 @@ def download_histology_data(subject, lab):
                     FLAT_IRON_HIST_REL_PATH = Path('histology', lab_temp, subject,
                                                    'downsampledStacks_25', 'sample2ARA')
                     baseurl = (par.HTTP_DATA_SERVER + '/' + '/'.join(FLAT_IRON_HIST_REL_PATH.parts))
+                    baseurl = (par.HTTP_DATA_SERVER + '/' + '/'.join(FLAT_IRON_HIST_REL_PATH.parts) + '/')
                     r = requests.get(baseurl, auth=(par.HTTP_DATA_SERVER_LOGIN, par.HTTP_DATA_SERVER_PWD))
                     r.raise_for_status()
                 except Exception as err:
@@ -63,6 +66,7 @@ def download_histology_data(subject, lab):
         path_to_image = Path(CACHE_DIR, file)
         if not path_to_image.exists():
             url = (baseurl + '/' + file)
+            url = (baseurl + file)
             http_download_file(url, target_dir=CACHE_DIR,
                                username=par.HTTP_DATA_SERVER_LOGIN,
                                password=par.HTTP_DATA_SERVER_PWD)
