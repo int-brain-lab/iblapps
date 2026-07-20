@@ -229,6 +229,12 @@ class Setup():
         # Button to upload all final state to Alyx/ to local file
         self.complete_button_all = QtWidgets.QPushButton('Upload all')
         self.complete_button_all.clicked.connect(lambda: self.complete_button_pressed(upload_all=True))
+        # Buttons to save/load alignments to/from a local file without touching Alyx (online modes)
+        if not self.offline:
+            self.save_file_button = QtWidgets.QPushButton('Save to File')
+            self.save_file_button.clicked.connect(lambda: self.save_to_file_button_pressed())
+            self.load_file_button = QtWidgets.QPushButton('Load from File')
+            self.load_file_button.clicked.connect(self.load_alignment_button_pressed)
         # Button to go to next move
         self.next_button = QtWidgets.QPushButton('Next')
         self.next_button.clicked.connect(self.next_button_pressed)
@@ -254,6 +260,11 @@ class Setup():
         self.button_layout.addLayout(hlayout1)
         self.button_layout.addLayout(hlayout2)
         self.button_layout.addLayout(hlayout3)
+        if not self.offline:
+            hlayout4 = QtWidgets.QHBoxLayout()
+            hlayout4.addWidget(self.save_file_button, stretch=1)
+            hlayout4.addWidget(self.load_file_button, stretch=1)
+            self.button_layout.addLayout(hlayout4)
 
     def init_slice_figures(self):
 
@@ -734,6 +745,13 @@ class Setup():
                 {'shortcut': 'Shift+N', 'callback': self.on_normalise_levels, 'menu': display_options},
 
         }
+
+        # Save/load an alignment to/from a local file without uploading to Alyx (online modes only)
+        if not self.offline:
+            keyboard['Save to File'] = {
+                'shortcut': 'Shift+S', 'callback': self.save_to_file_button_pressed, 'menu': fit_options}
+            keyboard['Load from File'] = {
+                'shortcut': 'Shift+O', 'callback': self.load_alignment_button_pressed, 'menu': fit_options}
 
         # Add all these shortcuts and options onto the relevant menu bar
         for key, val in keyboard.items():

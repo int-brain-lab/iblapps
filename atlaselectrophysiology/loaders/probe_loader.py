@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from datetime import timedelta
+import json
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -183,6 +184,32 @@ class ProbeLoader(ABC):
     def upload_data(self):
         return self.get_selected_shank().upload_data()
 
+    def get_local_save_dir(self):
+        """
+        Default directory to save alignments to when saving locally (no upload to Alyx).
+        Overridden by loaders that know the subject/session/probe identifiers.
+        """
+        return Path.home().joinpath('alignments')
+
+    def save_data_local(self, output_dir=None):
+        """
+        Save the selected shank's channel locations and alignment to local json files WITHOUT
+        uploading to Alyx.
+        """
+        user = params.get().ALYX_LOGIN or 'unknown_user'
+        output_dir = Path(output_dir) if output_dir is not None else self.get_local_save_dir()
+        return self.get_selected_shank().save_data_local(output_dir, user=user)
+
+    def load_alignments_from_file(self, file_path):
+        """
+        Load alignment reference points from a local prev_alignments.json file and merge them into
+        the selected shank's previous alignments so they can be chosen as a starting alignment.
+        """
+        with open(file_path, "r") as f:
+            loaded = json.load(f)
+
+        return self.get_selected_shank().loaders['align'].add_extra_alignments(loaded)
+
     @property
     def hemisphere(self):
         return self.get_selected_shank().hemisphere
@@ -304,6 +331,13 @@ class ProbeLoaderONE(ProbeLoader):
         self.shank_idx = idx
         self.subj = self.shank_labels[idx]['session_info']['subject']
         self.lab = self.shank_labels[idx]['session_info']['lab']
+
+    def get_local_save_dir(self):
+        user = params.get().ALYX_LOGIN or 'unknown_user'
+        ins = next(i for i in self.shank_labels if i['name'] == self.selected_shank)
+        date = ins['session_info']['start_time'][:10]
+        folder_name = f"{self.subj}_{date}_{ins['name']}"
+        return Path.home().joinpath('alignments', str(user), folder_name)
 
 
 # This is pretty bespoke to IBL situation atm
@@ -517,6 +551,32 @@ class ProbeLoaderCSV(ProbeLoader):
             info[config] = self.get_selected_shank()[config].upload_data()
         return info['dense']
 
+    def get_local_save_dir(self):
+        user = params.get().ALYX_LOGIN or 'unknown_user'
+        sess = str(self.chosen_sess).replace('/', '_')
+        folder_name = f'{sess}_{self.selected_shank}'
+        return Path.home().joinpath('alignments', str(user), folder_name)
+
+    def save_data_local(self, output_dir=None):
+        # Save the dense (online) config; the quarter config already saves locally on upload
+        user = params.get().ALYX_LOGIN or 'unknown_user'
+        output_dir = Path(output_dir) if output_dir is not None else self.get_local_save_dir()
+        return self.get_selected_shank()['dense'].save_data_local(output_dir, user=user)
+
+    def load_alignments_from_file(self, file_path):
+        with open(file_path, "r") as f:
+            loaded = json.load(f)
+
+        # Merge into the dense loader, then keep the quarter loader in sync (mirrors
+        # load_previous_alignments / _sync_alignments)
+        dense_align = self.get_selected_shank()['dense'].loaders['align']
+        dense_align.add_extra_alignments(loaded)
+        quarter_align = self.get_selected_shank()['quarter'].loaders['align']
+        quarter_align.alignments = dense_align.alignments
+        quarter_align.get_previous_alignments()
+
+        return dense_align.get_previous_alignments()
+
     @property
     def hemisphere(self):
         return self.get_selected_shank()['dense'].hemisphere
@@ -639,9 +699,9 @@ class ShankLoader:
         self.loaders['plots'].get_data()
         self.loaders['plots'].get_plots()
 
-    def upload_data(self):
+    def _get_upload_dict(self):
         # TODO use a dataclass
-        data = {'chn_coords': self.chn_coords,
+        return {'chn_coords': self.chn_coords,
                 'xyz_channels': self.loaders['align'].align.xyz_channels,
                 'feature': self.loaders['align'].align.feature.tolist(),
                 'track': self.loaders['align'].align.track.tolist(),
@@ -652,4 +712,33 @@ class ShankLoader:
                 'chn_depths': self.chn_depths,
                 'xyz_picks': self.loaders['align'].xyz_picks,
                 }
-        return self.loaders['upload'].upload_data(data)
+
+    def upload_data(self):
+        return self.loaders['upload'].upload_data(self._get_upload_dict())
+
+    def save_data_local(self, data_path, user=None, n_shanks=1, shank_idx=0):
+        """
+        Save this shank's channel locations and alignment to local json files WITHOUT uploading
+        to Alyx, reusing the offline DataUploaderLocal writer.
+        """
+        from atlaselectrophysiology.loaders.data_uploader import DataUploaderLocal
+
+        data_path = Path(data_path)
+        data_path.mkdir(parents=True, exist_ok=True)
+        brain_atlas = self.loaders['upload'].brain_atlas
+        uploader = DataUploaderLocal(data_path, shank_idx, n_shanks, brain_atlas, user=user)
+
+        data = self._get_upload_dict()
+        # Base the merge on any alignments already saved to this local folder (2-element
+        # [feature, track] entries), not the Alyx alignments which have a different value format
+        prev_align_filename = 'prev_alignments.json' if n_shanks == 1 else \
+            f'prev_alignments_shank{shank_idx + 1}.json'
+        prev_align_file = data_path.joinpath(prev_align_filename)
+        if prev_align_file.exists():
+            with open(prev_align_file, "r") as f:
+                data['alignments'] = json.load(f)
+        else:
+            data['alignments'] = {}
+
+        info = uploader.upload_data(data)
+        return f'{info}\n{data_path}'

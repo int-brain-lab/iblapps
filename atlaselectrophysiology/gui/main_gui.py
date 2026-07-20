@@ -916,6 +916,58 @@ class MainWindow(QtWidgets.QMainWindow, Setup):
             else:
                 QtWidgets.QMessageBox.information(self, 'Status', f"Channels for {self.selected_shank} not saved")
 
+    def save_to_file_button_pressed(self, save_all=None):
+        """
+        Triggered by the 'Save to File' button or Shift+S in online / csv mode. Saves the current
+        channel locations and alignment to local json files WITHOUT uploading anything to Alyx.
+        """
+        # Offline mode already writes files on upload, so this is only for the online modes
+        if self.offline:
+            return
+        if not self.loaded:
+            QtWidgets.QMessageBox.information(self, 'Status', "Load data before saving to file")
+            return
+
+        shanks = [self.selected_shank] if not save_all else self.all_shanks
+        infos = []
+        for shank in shanks:
+            self.loaddata.selected_shank = shank
+            self.loaddata.current_shank = shank
+            infos.append(str(self.loaddata.save_data_local()))
+
+        # Restore the originally selected shank
+        self.loaddata.selected_shank = self.selected_shank
+        self.loaddata.current_shank = self.selected_shank
+
+        QtWidgets.QMessageBox.information(self, 'Status', "\n\n".join(infos))
+
+    def load_alignment_button_pressed(self, *args):
+        """
+        Triggered by the 'Load from File' button or Shift+O in online / csv mode. Loads alignment
+        reference points from a local prev_alignments.json file and merges them into the previous
+        alignment drop-down for the selected shank so they can be used as a starting alignment.
+        """
+        if self.offline:
+            return
+
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            None, "Select alignment file", str(Path.home()),
+            "Alignment files (*.json);;All files (*)")
+        if not file_path:
+            return
+
+        self.prev_alignments = self.loaddata.load_alignments_from_file(file_path)
+        utils.populate_lists(self.prev_alignments, self.align_list, self.align_combobox)
+        self.loaddata.get_starting_alignment(0)
+
+        # If data is already loaded, apply the loaded alignment straight away
+        if self.loaded:
+            self.align_button_pressed()
+
+        QtWidgets.QMessageBox.information(
+            self, 'Status', "Alignment loaded. Choose it from the drop-down list; if data is not "
+                            "loaded yet press 'Load' to apply it.")
+
 
     # -------------------------------------------------------------------------------------------------
     # Fitting functions
